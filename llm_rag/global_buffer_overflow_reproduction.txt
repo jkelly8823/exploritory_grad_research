@@ -1,0 +1,133 @@
+# Step-by-step guide to reproduce global-buffer-overflow errors
+
+## Example 1: Multiple type definitions in 'C'
+
+### Source Code:
+
+// file: a.c
+int x;
+
+// file: b.c
+char* x;
+
+// file: c.c
+float* x[3];
+
+// file: example1-main.c
+// global-buffer-overflow error
+
+// AddressSanitizer reports a buffer overflow at the first line
+// in function main() in all cases, REGARDLESS of the order in 
+// which the object files: a.obj, b.obj, and c.obj are linked.
+  
+double x[5];
+ 
+int main() { 
+    int rc = (int) x[5];  // Boom!
+    return rc; 
+}
+
+### Reproduction Steps:
+1. Open a Visual Studio 2019 version 16.9 or later developer command prompt.
+2. Run the following command to compile the example:
+   cl a.c b.c c.c example1-main.c /fsanitize=address /Zi
+3. Run the compiled executable using Visual Studio Debugger:
+   devenv /debugexe example1-main.exe
+4. Observe the AddressSanitizer output for global-buffer-overflow error.
+
+Expected Output:
+   AddressSanitizer: global-buffer-overflow on address 0x...
+
+---
+
+## Example 2: Simple function-level static in C++
+
+### Source Code:
+
+// example2.cpp
+// global-buffer-overflow error
+#include <string.h>
+
+int main(int argc, char **argv) {
+    static char XXX[10];
+    static char YYY[10];
+    static char ZZZ[10];
+
+    memset(XXX, 0, 10); 
+    memset(YYY, 0, 10); 
+    memset(ZZZ, 0, 10);
+
+    int res = YYY[argc * 10];  // Boom!
+    res += XXX[argc] + ZZZ[argc];
+    return res;
+}
+
+### Reproduction Steps:
+1. Open a Visual Studio 2019 version 16.9 or later developer command prompt.
+2. Run the following command to compile the example:
+   cl example2.cpp /fsanitize=address /Zi
+3. Run the compiled executable using Visual Studio Debugger:
+   devenv /debugexe example2.exe
+4. Observe the AddressSanitizer output for global-buffer-overflow error.
+
+Expected Output:
+   AddressSanitizer: global-buffer-overflow on address 0x...
+
+---
+
+## Example 3: All global scopes in C++
+
+### Source Code:
+
+// example3.cpp
+// global-buffer-overflow error
+
+// Run 4 different ways with the choice of one of these options:
+//
+// -g : Global
+// -c : File static
+// -f : Function static
+// -l : String literal
+
+#include <string.h>
+
+struct C {
+    static int array[10];
+};
+
+// normal global
+int global[10];
+
+// class static
+int C::array[10];
+
+int main(int argc, char **argv) {
+
+    int one = argc - 1;
+
+    switch (argv[1][1]) {
+    case 'g': return global[one * 11];     // Boom! simple global
+    case 'c': return C::array[one * 11];   // Boom! class static
+    case 'f':
+    {
+        static int array[10] = {};
+        return array[one * 11];            // Boom! function static
+    }
+    case 'l':
+        // literal global ptr created by compiler
+        const char *str = "0123456789";
+        return str[one * 11];              // Boom! .rdata string literal allocated by compiler
+    }
+    return 0;
+}
+
+### Reproduction Steps:
+1. Open a Visual Studio 2019 version 16.9 or later developer command prompt.
+2. Run the following command to compile the example:
+   cl example3.cpp /fsanitize=address /Zi
+3. Run the compiled executable using Visual Studio Debugger:
+   devenv /debugexe example3.exe -l
+4. Observe the AddressSanitizer output for global-buffer-overflow error.
+
+Expected Output:
+   AddressSanitizer: global-buffer-overflow on address 0x...
