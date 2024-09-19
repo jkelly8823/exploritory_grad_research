@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to XPath injection attacks, allowing an attacker to inject malicious XPath expressions.
+
+EXPLANATION:
+The vulnerability exists in the line of code where the XPath expression is compiled. The expression is constructed by concatenating user input (login.getUserName() and login.getPassword()) directly into the XPath string. This allows an attacker to inject malicious XPath expressions by manipulating the input values. For instance, an attacker could inject a login name or password that includes XPath syntax, potentially allowing them to access unauthorized data or execute XPath functions.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should always avoid directly concatenating user input into XPath expressions. Instead, you can use XPath variables or parameterized expressions to safely inject user input. Here is an example of how to use XPath variables:
+
+    XPath xpath = XPathFactory.newInstance().newXPath();
+    XPathExpression xlogin = xpath.compile("//users/user[login/text()=$login and password/text()=$password]/home_dir/text()");
+    Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+    String loginName = login.getUserName();
+    String password = login.getPassword();
+    Object result = xlogin.evaluate(d, new NamespaceContext() {
+        public Iterator getNamespaceURIs() {
+            return null;
+        }
+        public String getNamespaceURI(String prefix) {
+            return null;
+        }
+        public String getPrefix(String namespaceURI) {
+            return null;
+        }
+    }, XPathConstants.STRING);
+    result = xlogin.evaluate(d, new NamespaceContext() {
+        public Iterator getNamespaceURIs() {
+            return null;
+        }
+        public String getNamespaceURI(String prefix) {
+            return null;
+        }
+        public String getPrefix(String namespaceURI) {
+            return null;
+        }
+    }, new XPathVariableResolver() {
+        public Object resolveVariable(XMLNamespaceManager namespaceManager) {
+            return null;
+        }
+        public Object resolveVariable(QName variable) {
+            String variableName = variable.getLocalPart();
+            if ("login".equals(variableName)) {
+                return loginName;
+            } else if ("password".equals(variableName)) {
+                return password;
+            } else {
+                return null;
+            }
+        }
+    });
+    String homedir = (String) result;
+
+However, you should be aware that in production a more effective solution would be to avoid XPath expressions and use a more standard way to query the XML database, like XQuery or a library that supports DOM or SAX parsing and has a secure query mechanism. 
+
+ORIGINAL CODE:
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();XPathExpression xlogin = xpath.compile("//users/user[login/text()='" + login.getUserName() + "' and password/text() = '" + login.getPassword() + "']/home_dir/text()");Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));String homedir = xlogin.evaluate(d);
+```

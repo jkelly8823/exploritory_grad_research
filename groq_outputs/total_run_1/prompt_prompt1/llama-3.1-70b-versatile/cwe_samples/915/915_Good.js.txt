@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a variant of the Prototype Pollution vulnerability. This occurs when user-controlled data is used to update a deeply nested object property.
+
+EXPLANATION:
+The code checks for some specific attributes like "__proto__", "constructor", and "prototype", but it does not check if the path starts with one of these attributes. This can lead to a situation where an attacker can pollute the object's prototype by defining the first part of the path to be a property that they can control. For example, if the attacker provides a path like "__proto__.name" and an object with a method that calls `Object.prototype.toString.call()`, it can result in an unexpected behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should also prevent properties that start with the forbidden attributes.
+
+```javascript
+if (Object.prototype.hasOwnProperty.call(objectToModify, attr)) {
+  if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+    throw new Error(`Forbidden property name: ${attr}`);
+  }
+  if (typeof objectToModify[attr] !== "object") {
+    objectToModify[attr] = {};
+  }
+  objectToModify = objectToModify[attr];
+}
+else {
+  if (attr.startsWith("__proto__") || attr.startsWith("constructor") || attr.startsWith("prototype")) {
+    throw new Error(`Forbidden property name: ${attr}`);
+  }
+  objectToModify[attr] = {};
+  objectToModify = objectToModify[attr];
+}
+```
+
+ORIGINAL CODE:
+```javascript
+function setValueByPath (object, path, value) {
+  const pathArray = path.split(".");
+  const attributeToSet = pathArray.pop();
+  let objectToModify = object;
+  for (const attr of pathArray) {
+    if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+      continue;
+    }
+    if (typeof objectToModify[attr] !== "object") {
+      objectToModify[attr] = {};
+    }
+    objectToModify = objectToModify[attr];
+  }
+  objectToModify[attributeToSet] = value;
+  return object;
+}
+```

@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 126, 132, 140, 147, 153, 161
+VULNERABILITY_DESCRIPTION:
+ Hardcoded SSLContext Protocol and cipher version
+
+EXPLANATION:
+ The code defines multiple instances of ssl.SSLContext with hardcoded protocols such as ssl.PROTOCOL_TLS_CLIENT, ssl.PROTOCOL_TLS_SERVER, and ssl.PROTOCOL_TLS. 
+This may lead to security vulnerabilities if the protocols used are deprecated or prone to known attacks. 
+Additionally, some of the test cases use hardcoded cipher suites that may be insecure. For instance, RC4 and 3DES are considered insecure.
+
+However, there is one insecure usage here. 
+With warnings_helper.check_warnings(), we can suppress the warnings. However, when ctx is initialized without any protocol, it defaults to ssl.PROTOCOL_TLS and no warning is given. This is insecure and it is seen in the following test cases.
+
+    with warnings_helper.check_warnings():
+        ctx = ssl.SSLContext(protocol)
+    ...
+    with warnings_helper.check_warnings():
+        ctx = ssl.SSLContext()
+
+RECOMMENDATIONS:
+ The code should use the latest and secure TLS protocols and cipher suites. Here are the recommendations:
+
+1.  Use the latest version of the TLS protocol. This can be achieved by setting the protocol version explicitly to the latest available version, which is currently TLS 1.3.
+
+    ```python
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_3)
+```
+
+2.  Use secure cipher suites. The recommended cipher suites are AES-256-GCM-SHA384 and AES-128-GCM-SHA256. The following is an example of how to set these cipher suites:
+
+    ```python
+ctx.set_ciphers('AES256-GCM-SHA384:AES128-GCM-SHA256')
+```
+
+3.  Verify the server's identity and hostname in the SSLContext. This can be achieved by setting the verify_mode to CERT_REQUIRED and check_hostname to True.
+
+    ```python
+ctx.verify_mode = ssl.CERT_REQUIRED
+ctx.check_hostname = True
+```
+
+4.  Remove the ssl.PROTOCOL_TLS initialization and replace it with a secure protocol initialization as mentioned in the previous recommendations.
+
+5.  Ensure to upgrade the security protocols whenever new secure versions are released.
+
+ORIGINAL CODE:
+ ```python
+    def test_constructor(self):
+        for protocol in PROTOCOLS:
+            if has_tls_protocol(protocol):
+                with warnings_helper.check_warnings():
+                    ctx = ssl.SSLContext(protocol)
+                self.assertEqual(ctx.protocol, protocol)
+        with warnings_helper.check_warnings():
+            ctx = ssl.SSLContext()
+```
+```python
+    with warnings_helper.check_warnings():
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+```
+```python
+    def test_verify_mode_protocol(self):
+        with warnings_helper.check_warnings():
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+```

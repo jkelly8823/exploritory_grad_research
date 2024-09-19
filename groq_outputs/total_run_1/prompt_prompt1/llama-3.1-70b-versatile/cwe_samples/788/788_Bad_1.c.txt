@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-5
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability.
+
+EXPLANATION:
+The function `returnChunkSize(void *)` is used to get the size of the memory block. However, when this size is passed to `memcpy`, off-by-one is subtracted, suggesting an attempt to account for a null character. However, there is still a risk of integer overflow because there is no validation on the `returnChunkSize` output that it is actually greater than zero. This could lead to a large number being passed to `memcpy`, potentially causing a buffer overflow.
+
+Additionally, when an unexpected small value is returned, it may cause an integer underflow when subtracting one from the return value in `memcpy`, again possibly causing an unexpected behavior that leads to an exploitable situation. It is essential to verify that the value returned from `returnChunkSize` is indeed valid and checked before passing it to `memcpy`.
+
+RECOMMENDATIONS:
+To address the vulnerability, the return value should be validated before passing it to `memcpy`. Also, it is better to return `size_t` instead of `int` to ensure that the function can return the actual size of memory block:
+
+```c
+size_t returnChunkSize(void *) {
+    size_t size;
+    // ...
+    return size;
+}
+```
+
+It's better to use `snprintf` instead of `memcpy` since you need a null-terminated string:
+
+```c
+snprintf(destBuf, returnChunkSize(destBuf), "%s", srcBuf);
+```
+However, using `snprintf` does not eliminate the vulnerability completely because `snprintf` will write `returnChunkSize(destBuf)` number of bytes, still risking an integer overflow.
+
+Alternatively, always use `memset` or `strcpy` for such cases because it is safer to limit the amount of bytes being copied:
+
+```c
+memset(destBuf, 0, returnChunkSize(destBuf));
+strcpy(destBuf, srcBuf);
+```
+
+Always verify that the return value from the size-acquiring functions like `returnChunkSize` are greater than zero and smaller than `MAX_SIZE` for a string operation to prevent an integer overflow:
+
+```c
+size_t size = returnChunkSize(destBuf);
+if (size <= 0 || size > MAX_SIZE) {
+    // Trigger an error for incorrect size;
+}
+```
+
+ORIGINAL CODE:
+
+
+```c
+int returnChunkSize(void *) {
+    /* if chunk info is valid, return the size of usable memory,
+    * else, return -1 to indicate an error
+    */
+    ...
+}int main() {...memcpy(destBuf, srcBuf, (returnChunkSize(destBuf)-1));...}
+```

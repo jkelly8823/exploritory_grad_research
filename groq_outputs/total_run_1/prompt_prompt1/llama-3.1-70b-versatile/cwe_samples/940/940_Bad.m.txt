@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 9-11
+VULNERABILITY_DESCRIPTION:
+Unauthorized Access and Data Exposure through Insufficient Input Validation.
+
+EXPLANATION:
+The provided segment of code is vulnerable to unauthorized access and data exposure due to insufficient input validation. The function is intended to handle custom URL schemes and call specific functions based on the URL's scheme and resource specifier. However, the function fails to properly validate and sanitize the input received from the URL. Specifically, the code uses unsanitized input from [URL query] to directly write data to the webview, which can lead to data injection and potential code execution by an attacker.
+
+The code does not validate whether the [URL query] is properly encoded or if it contains any malicious data. This makes it possible for an attacker to manipulate the data written to the webview and potentially execute malicious code.
+
+Furthermore, the function does not check for null or empty values of [URL query], which can cause unexpected behavior or crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to properly validate and sanitize the input received from the URL.
+
+1. Validate and sanitize the input received from [URL query]. This can be done by using encoding functions to ensure that the input is properly encoded and checking for null or empty values.
+
+2. Use a more secure method to process the input data. Instead of directly writing data to the webview using [self writeDataToView:[URL query]], use a method that properly handles and sanitizes the input data.
+
+Here is an example of how the code can be modified to fix the vulnerability:
+
+```objc
+-(BOOL) webView:(UIWebView *)exWebView shouldStartLoadWithRequest:(NSURLRequest *)exRequest navigationType:(UIWebViewNavigationType)exNavigationType{
+    NSURL *URL = [exRequest URL];if ([[URL scheme] isEqualToString:@"exampleScheme"]){
+       NSString *functionString = [URL resourceSpecifier];if ([functionString hasPrefix:@"specialFunction"]){
+           // Get and sanitize the query string
+           NSString *queryString = [URL query];
+           if (queryString != nil && [queryString length] > 0) {
+               // Sanitize the query string
+               NSString *sanitizedQueryString = [queryString stringByReplacingOccurrencesOfString:@"%" withString:@"%25"];
+               sanitizedQueryString = [sanitizedQueryString stringByReplacingOccurrencesOfString:@"&" withString:@"%26"];
+
+               // Make data available back in webview using sanitized query string
+               UIWebView *webView = [self writeDataToView:sanitizedQueryString];
+           } else {
+               // Handle null or empty query string
+               // For example, you can log an error or display an error message to the user
+           }
+           return NO;
+       }return YES;
+    }
+}
+```
+
+ORIGINAL CODE:
+```objc
+// iOS
+-(BOOL) webView:(UIWebView *)exWebView shouldStartLoadWithRequest:(NSURLRequest *)exRequest navigationType:(UIWebViewNavigationType)exNavigationType{
+    NSURL *URL = [exRequest URL];if ([[URL scheme] isEqualToString:@"exampleScheme"]){
+       NSString *functionString = [URL resourceSpecifier];if ([functionString hasPrefix:@"specialFunction"]){
+           // Make data available back in webview.
+           UIWebView *webView = [self writeDataToView:[URL query]];
+           return NO;
+       }return YES;
+    }
+}
+```

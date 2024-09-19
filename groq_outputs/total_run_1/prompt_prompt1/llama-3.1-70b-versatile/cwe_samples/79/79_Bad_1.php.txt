@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+SQL injection vulnerability due to the use of sprintf and direct user input in query string.
+
+EXPLANATION:
+The use of sprintf to directly include user input into a SQL query string creates a SQL injection vulnerability. Even though the input is being sanitized with mysql_real_escape_string, this alone does not prevent SQL injection. An attacker could inject malicious SQL code as a username or password. The issue stems from incorporating user input into the SQL query string via sprintf. This is particularly concerning due to the use of direct input from variables that are not sanitized with regards to function injection, although it appears they have tried to stop certain characters being input. Furthermore, mysql_real_escape_string has been deprecated from PHP since PHP 5.5 and completely removed in PHP 7.0 due to potential security issues of its own.
+
+Additional issues include potential for code injection when using crypt() without specifying the algorithm, although this may not be applicable here depending on server configuration as some setup correctly specify default values. There also appears to be incorrect usage of the query string, the INSERT statement is expecting only two values, for 'username' and 'password', but the provided values are 'username', 'password', and 'fullName'. The FULLNAME should likely go back into another field.
+
+
+RECOMMENDATIONS:
+To address this issue, use prepared statements instead of directly including user input in your SQL query. Prepared statements allow for a clear separation between SQL code and user input, which greatly reduces the risk of SQL injection.
+
+Here's an updated version of the vulnerable code, using MySQLi prepared statements:
+
+```php
+$mysqli = new mysqli($server, $username, $password, $database);
+
+// check connection
+if ($mysqli->connect_errno) {
+    echo "Connection failed: " . $mysqli->connect_error;
+    exit();
+}
+
+$stmt = $mysqli->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+$stmt->bind_param("ss", $username, crypt($password, $salt));
+$stmt->execute();
+```

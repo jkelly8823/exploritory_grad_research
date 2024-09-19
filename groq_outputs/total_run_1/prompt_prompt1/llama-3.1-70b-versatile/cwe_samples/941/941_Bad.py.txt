@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 6
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a combination of an infinite loop that lacks any exception handling or timeout and a potential DoS (Denial of Service) attack by an unbounded receive buffer size.
+
+EXPLANATION:
+The code contains an infinite loop (`while true`) that continuously listens for incoming UDP packets without any form of interruption or exception handling. If the loop were to encounter an unhandled exception, it could potentially cause the program to crash or become unresponsive. Moreover, since UDP doesn't guarantee packet delivery, if a packet is lost, the loop might continue indefinitely without waiting for a packet that will never arrive. Additionally, an attacker could flood the UDP socket with packets, potentially crashing the server by exceeding the maximum buffer size. Another potential issue arises at line 4 as well, where the `data = sock.recvfrom(1024)` line doesn't check for any specific conditions that could occur, which would terminate the operation abrubtly and the loop breaks.
+
+
+RECOMMENDATIONS:
+To address these issues, consider implementing the following:
+- Use a finite loop or add a mechanism to break out of the loop under certain conditions (e.g., after a specified number of iterations or based on external events).
+- Implement exception handling to catch and handle potential errors that may occur within the loop.
+- Set a timeout for the socket's receive method to prevent waiting indefinitely for incoming packets.
+- Use a try-except block when receiving data to catch and handle socket-related exceptions.
+- Limit the maximum buffer size for the receive method to prevent potential buffer overflow attacks.
+
+ORIGINAL CODE:
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind( (UDP_IP,UDP_PORT) )
+while true:
+    data = sock.recvfrom(1024)
+    if not data:
+        break
+    (requestIP, nameToResolve) = parseUDPpacket(data)
+    record = resolveName(nameToResolve)
+    sendResponse(requestIP,record)

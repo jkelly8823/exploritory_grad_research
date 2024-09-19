@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Signal handler functions do not guarantee asynchronous signal-safe behavior.
+
+EXPLANATION:
+The problem lies in the fact that the signal handler function is not specified to be asynchronous signal-safe. When a signal is caught, the handler function is executed asynchronously with respect to the main program flow. If the handler function is not specifically designed to handle this asynchronous execution, it can lead to unpredictable behavior, including data corruption or crashes.
+
+Additionally, the use of signal() is not thread-safe and the function signature is incorrect. The correct function signature for a signal handler is `void signal_handler(int signum, siginfo_t *info, void *context)` when using SA_SIGINFO flag, else it can be `void signal_handler(int sig_num)`.
+
+RECOMMENDATIONS:
+To fix the vulnerability, consider using the `sigaction` function instead of `signal`, and ensure that the signal handler function is designed to be asynchronous signal-safe. This can be achieved by:
+
+1. Using `sigaction` to set up signal handlers with the SA_SIGINFO flag to ensure the function gets all necessary information.
+
+```c
+struct sigaction sa;
+
+void handler(int sigNum, siginfo_t* info, void* context) {...}
+
+int main(int argc, char* argv[]) {
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = handler;
+    sigaction(SIGUSR1, &sa, NULL);
+    sigaction(SIGUSR2, &sa, NULL);
+}
+```
+
+2. Making the signal handler function reentrant by avoiding the use of global variables or dynamic memory allocation.
+
+3. Using a signal-safe interface to access shared resources.
+
+ORIGINAL CODE:
+```c
+void handler (int sigNum) {...}
+
+int main (int argc, char* argv[]) {
+    signal(SIGUSR1, handler)
+    signal(SIGUSR2, handler)
+}
+```

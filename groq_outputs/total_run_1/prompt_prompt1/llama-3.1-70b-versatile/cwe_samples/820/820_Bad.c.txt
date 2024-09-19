@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-16
+VULNERABILITY_DESCRIPTION:
+Unintended Information Disclosure through Timing Side Channel.
+
+EXPLANATION:
+The code appears to be vulnerable to timing attacks. The `print` function iterates over each character in the string and prints it to the console with a 1-second delay between each character. This introduces timing differences that can potentially be exploited by an attacker to infer information about the input string. The delay in the loop functionally acts like a disclosure of the execution time it takes from processing the strings.
+
+Moreover, the variable `counter` is assigned a value without being initialized, potentially leading to a garbage value. This value is used as a condition in the for loop, which can lead to undefined behavior when the value is zero (end of string) or out of range for the character type.
+
+Additionally, the `sleep(1)` function call introduces a significant delay between printing each character, making the program slow and potentially vulnerable to Denial of Service attacks.
+
+Lastly, the child process does not handle unknown characters properly. Characters other than printable ones may cause the system to hang up during their output in conjunction with the handling from the stdout file descriptor.
+
+RECOMMENDATIONS:
+1. Remove the sleep call to eliminate the potential for information disclosure through timing side channel vulnerabilities.
+2. Initialize the counter variable to prevent potential garbage values.
+3. Check if the character to be printed is printable before calling putc to prevent hanging and other issues with unknown characters.
+4. Consider using functions that handle timing and I/O securely and efficiently.
+
+ORIGINAL CODE:
+```c
+static void print (char * string) {
+    char * word;int counter;for (word = string; counter = *word++; ) {
+        putc(counter, stdout);fflush(stdout);
+        /* Make timing window a little larger... */
+        sleep(1);
+    }
+}
+int main(void) {
+    pid_t pid;
+    pid = fork();if (pid == -1) {exit(-2);}else if (pid == 0) {print("child\n");}else {print("PARENT\n");}exit(0);
+}
+```

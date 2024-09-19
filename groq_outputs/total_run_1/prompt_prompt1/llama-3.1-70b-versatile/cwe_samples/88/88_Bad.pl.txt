@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+Command Injection Vulnerability
+EXPLANATION:
+The sub do_listing function calls the system function with a command that includes user input ($fname) from the GetArgument function, which could come from an untrusted source, such as user input or a network request. An attacker could potentially inject malicious commands as part of the filename, which would then be executed by the system function. The validate_name function attempts to restrict the input to only alphanumeric characters, hyphens, and underscores; however, this is not sufficient to prevent a sophisticated attacker. Even with the restricted input, certain characters like '-' and '\' can potentially be used to manipulate the command.
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a safer method to list files instead of the system function. One option is to use the opendir and readdir functions in Perl to directly access the directory listing without invoking an external command. Another approach is to use the qx or backticks to execute the ls command while ensuring proper escaping or validation of the user input. Additionally, perform more thorough validation on the filename to prevent any potential command injection attacks.
+
+Here is an example of using opendir and readdir functions to list files:
+
+```perl
+sub do_listing {
+    my ($fname) = @_;
+    if (! validate_name($fname)) {
+        print "Error: name is not well-formed!\n";
+        return;
+    }
+    if (opendir(my $dh, $fname)) {
+        while (readdir($dh)) {
+            print "$_\n";
+        }
+        closedir($dh);
+    } else {
+        print "Error: failed to open directory $fname\n";
+    }
+}
+```
+
+ORIGINAL CODE:
+```perl
+my $arg = GetArgument("filename");
+do_listing($arg);
+
+sub do_listing {
+    my($fname) = @_;
+    if (! validate_name($fname)) {
+        print "Error: name is not well-formed!\n";
+        return;
+    }
+    # build command
+    my $cmd = "/bin/ls -l $fname";
+    system($cmd);
+}
+
+sub validate_name {
+    my($name) = @_;
+    if ($name =~ /^[\w\-]+$/) {
+        return(1);
+    }
+    else {
+        return(0);
+    }
+}
+```

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4,5
+VULNERABILITY_DESCRIPTION:
+The code has a buffer overflow vulnerability when copying the hostname into the fixed-size 'hostname' array. It also does not validate the output of 'gethostbyaddr' before using it.
+
+EXPLANATION:
+The vulnerability arises from the use of 'strcpy' to copy the hostname into a fixed-size array. This function does not perform any bounds checking and will continue to copy characters until it encounters a null terminator, potentially overflowing the buffer. Additionally, 'gethostbyaddr' may return NULL, which is dereferenced without any checks. 
+
+The 'validate_addr_form' function, whose implementation is not shown, is called before 'inet_addr', but this does not address the potential buffer overflow when copying the hostname.
+
+RECOMMENDATIONS:
+1. Use 'strncpy' instead of 'strcpy' and ensure that the length of the hostname array is respected to prevent buffer overflow. For instance: 'strncpy(hostname, hp->h_name, sizeof(hostname)); hostname[sizeof(hostname)-1] = '\0';'.
+
+2. Validate the output of 'gethostbyaddr' to avoid dereferencing NULL: 'if (hp != NULL) { ... } else { ... error handling ... }'.
+
+3. Validate the hostname pointer returned by 'hp->h_name' before using it: 'if (hp->h_name != NULL) { ... } else { ... error handling ... }'.
+
+ORIGINAL CODE:
+
+
+                  void host_lookup(char *user_supplied_addr){
+                        struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+                           
+                           /*routine that ensures user_supplied_addr is in the right format for conversion */
+                           
+                           validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+                     }
+               
+               

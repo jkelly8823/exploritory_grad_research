@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an Insecure Direct Object Reference (idor). This vulnerability is present when user input is directly used to access sensitive data without proper validation or access control.
+
+EXPLANATION:
+The vulnerability exists because the function `DisplayPrivateMessage` directly accesses the message with the id provided by the user, without any validation or access control. The function `LookupMessageObject` is called with the `$id` parameter, which comes from the user input of `$q->param('id')`, and it is not clear if this function validates or sanitizes the input id. This allows an attacker to access any message by guessing or manipulating the message id.
+
+RECOMMENDATIONS:
+To fix the vulnerability, proper validation and access control should be implemented. This could include checking the ownership of the message or validating the id against a whitelist or enum. It is recommended to implement additional checks to ensure the user is authorized to access the message. Here is an example of how the code could be modified:
+
+- Add a check for the ownership of the message in the `DisplayPrivateMessage` function:
+
+  ```perl
+  sub DisplayPrivateMessage {
+    my ($id) = @_;
+    my $Message = LookupMessageObject($id);
+    my $username = AuthenticateUser($q->param('username'), $q->param('password'));
+    if ($Message->{owner} eq $username) {
+      print "From: " . encodeHTML($Message->{from}) . "<br>\n";
+      print "Subject: " . encodeHTML($Message->{subject}) . "\n";
+      print "<hr>\n";
+      print "Body: " . encodeHTML($Message->{body}) . "\n";
+    } else {
+      ExitError("Access denied");
+    }
+  }
+  ```
+
+- Implement validation for the `$id` in the `LookupMessageObject` function to prevent direct object access. For example:
+
+  ```perl
+  sub LookupMessageObject {
+    my ($id) = @_;
+    # validate id here
+    if (validate_id($id)) {
+      # get message object
+    } else {
+      ExitError("Invalid id");
+    }
+  }
+  ```
+
+- Or validate the `$id` in the `DisplayPrivateMessage` function before calling `LookupMessageObject` function:
+
+  ```perl
+  sub DisplayPrivateMessage {
+    my ($id) = @_;
+    if (validate_id($id)) {
+      my $Message = LookupMessageObject($id);
+      # ...
+    } else {
+      ExitError("Invalid id");
+    }
+  }
+  ```
+
+ORIGINAL CODE:
+
+```perl
+sub DisplayPrivateMessage {
+  my ($id) = @_;
+  my $Message = LookupMessageObject($id);
+  print "From: " . encodeHTML($Message->{from}) . "<br>\n";
+  print "Subject: " . encodeHTML($Message->{subject}) . "\n";
+  print "<hr>\n";
+  print "Body: " . encodeHTML($Message->{body}) . "\n";
+}
+
+my $q = new CGI;
+# For purposes of this example, assume that CWE-309 and
+# CWE-523 do not apply.
+if (!AuthenticateUser($q->param('username'), $q->param('password'))) {
+  ExitError("invalid username or password");
+}
+my $id = $q->param('id');
+DisplayPrivateMessage($id);
+```

@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a DNS spoofing attack and also to a potential buffer overflow due to the use of the `gethostbyaddr` function and the `strncmp` function.
+
+EXPLANATION:
+The `gethostbyaddr` function returns a pointer to a static structure, which may be overwritten in subsequent calls. This can cause the DNS response to be spoofed, allowing an attacker to manipulate the DNS response and potentially bypass security checks.
+
+Moreover, the `strncmp` function is used with the size of the `tHost` pointer as the third argument, which is incorrect. The size of the `tHost` string should be used instead. This could potentially cause a buffer overflow if the DNS response contains a longer hostname.
+
+Additionally, the use of `gethostbyaddr` is deprecated and can return NULL if the DNS query fails, but it does not check for this case. It also does not handle the case where the DNS response is truncated.
+
+Lastly, `inet_addr` can return -1 if the IP address string is invalid. However, in this code, there is no check for this case.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following recommendations:
+
+- Use the `getaddrinfo` function instead of `gethostbyaddr`, as it is safer and provides more features.
+- Use a secure DNS library that can handle DNSSEC and also validates the DNS responses.
+- Check the return value of `gethostbyaddr` and `inet_addr` for errors.
+- Use `strcmp` or `strcasecmp` instead of `strncmp` and pass the correct length of the string as the third argument.
+- Validate the length of the hostname returned by `gethostbyaddr` to prevent buffer overflow attacks.
+- Consider using a more modern DNS library that can handle DNS queries in a safer way.
+
+ORIGINAL CODE:
+(struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";myaddr.s_addr=inet_addr(ip_addr_string);
+                    hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {trusted = true;} else {trusted = false;})

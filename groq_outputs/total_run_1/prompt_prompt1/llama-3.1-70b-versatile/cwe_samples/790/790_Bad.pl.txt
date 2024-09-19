@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 4
+VULNERABILITY_DESCRIPTION:
+Directory Traversal Vulnerability
+
+EXPLANATION:
+The provided code allows an untrusted input ($Username) to be concatenated with a directory path, without proper sanitization. Although the code attempts to remove '../' sequences from the input, it is not sufficient to prevent directory traversal attacks. A malicious user could still provide an input that traverses the directory tree, potentially allowing them to access sensitive files. Furthermore, the code does not check if the resulting file path is within the intended directory, making it vulnerable to exploitation.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+
+- Use a whitelist approach to validate the input data, ensuring it only contains allowed characters.
+- Use a more robust method to sanitize the input, such as using regular expressions to match only valid filenames.
+- Implement a directory canonicalization step to remove any '../' or './' sequences from the input.
+- Use a real path resolution function (e.g., realpath) to ensure the resulting file path is within the intended directory.
+- Validate the resulting file path against a whitelist of allowed files and directories.
+
+ORIGINAL CODE:
+```
+my $Username = GetUntrustedInput();
+$Username =~ s/\.\.\///;
+my $filename = "/home/user/" . $Username;
+ReadAndSendFile($filename);
+```
+
+EXAMPLE OF SECURE CODE:
+```perl
+use File::Spec;
+
+my $username = GetUntrustedInput();
+my $base_dir = "/home/user/";
+
+# Sanitize input using regular expressions
+my ($file_name) = ($username =~ /^([a-zA-Z0-9._-]+)$/);
+
+unless (defined $file_name) {
+    # Handle invalid input
+    die "Invalid input";
+}
+
+# Construct file path using File::Spec
+my $file_path = File::Spec->catfile($base_dir, $file_name);
+
+# Validate file path against a whitelist or directory permissions
+if (-f $file_path && -r $file_path) {
+    ReadAndSendFile($file_path);
+} else {
+    # Handle unauthorized access or file not found
+    die "Unauthorized access or file not found";
+}
+```

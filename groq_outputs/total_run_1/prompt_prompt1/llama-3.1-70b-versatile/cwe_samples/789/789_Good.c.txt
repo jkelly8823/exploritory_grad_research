@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack. The buffer `buf` is declared with a size that is calculated based on the input `msg_len`, which can be negative, causing a buffer overflow when the size of the buffer is assigned a negative value.
+
+EXPLANATION:
+In the function `proc_msg`, the buffer `buf` is declared with a size that is calculated as `pre_len - msg_len`. However, if `msg_len` is greater than `pre_len`, this calculation results in a negative value, causing a buffer overflow. This can occur because the function `proc_msg` assumes that the input `msg_len` is always less than or equal to `pre_len`, but this assumption is not checked. The code also calculates the input `msg_len` as the length of the string up to the colon (:) character, which can be less than the length of the preamble.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check that the input `msg_len` is not greater than `pre_len` before calculating the size of the buffer `buf`. Additionally, the code should validate the input `msg_len` to ensure that it is not negative. Here's an example of how the code can be fixed:
+
+```c
+int proc_msg(char *s, int msg_len)
+{
+    int pre_len = sizeof("preamble: ") - 1; // Note space at the end of the string - assume all strings have preamble with space
+    if (msg_len < 0 || msg_len > pre_len) { 
+        // Error handling code here
+        return error_code;
+    }
+    char buf[pre_len - msg_len]; // Now this line will not cause a buffer overflow
+    ... Do processing here and set status
+    return status;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+int proc_msg(char *s, int msg_len)
+{
+    int pre_len = sizeof("preamble: ");    // Note space at the end of the string - assume all strings have preamble with space
+    if (pre_len <= msg_len) { // Log error; return error_code; }
+    char buf[pre_len - msg_len];
+    ... Do processing here and set status
+    return status;
+}
+
+char *s = "preamble: message\n";
+char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack
+```

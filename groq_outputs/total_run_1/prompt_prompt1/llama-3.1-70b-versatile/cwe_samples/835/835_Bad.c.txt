@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The vulnerability is the failure to handle the return value of the socket() function, which can cause the program to use an invalid socket descriptor.
+
+EXPLANATION:
+The code creates a socket using the socket() function and assigns the result to the servsock variable. However, it does not check the return value of the socket() function. If the socket() function fails, it returns -1, which is an invalid socket descriptor. In this case, the program will use an invalid socket descriptor to connect to the server, which may lead to undefined behavior.
+
+Additionally, the error handling of the connect() function is also incomplete. While the program checks if the connection was successful, it does not handle the case where the connection() function returns an error.
+
+RECOMMENDATIONS:
+Check the return value of the socket() function and handle any errors that may occur. If the socket() function returns an error, close the socket descriptor (if it was successful) and exit the function with an error.
+
+Here's how you can modify the code to address this vulnerability:
+
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    int servsock; int connected; struct sockaddr_in servaddr;
+    int n = 0;
+   
+    // create socket to connect to server
+    servsock = socket( AF_INET, SOCK_STREAM, 0);
+    if (servsock < 0) {
+        // Handle error: unable to create socket
+        return -1;
+    }
+   
+    memset( &servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+    servaddr.sin_addr.s_addr = inet_addr(hostaddr);
+   
+    do {
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        if (connected < 0) {
+            if (errno != EINTR) {
+                // Handle error: unable to connect to server
+                close(servsock);
+                return -1;
+            }
+            n++;
+            // Optional: Introduce a delay before retrying the connection
+            sleep(1);
+        } else {
+            break;
+        }
+    } while (n < 5);  // Optional: Set a limit to the number of retries
+   
+    // Check if the connection was successful
+    if (connected < 0) {
+        // Handle error: unable to connect to server
+        close(servsock);
+        return -1;
+    }
+   
+    // If connected then read and process messages from server
+    if (connected > -1) {
+        // read and process messages
+    }
+   
+    // close socket and return success or failure
+    close(servsock);
+    return 0;
+}
+
+ORIGINAL CODE:
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...int servsock;int connected;struct sockaddr_in servaddr;
+    // create socket to connect to server
+    servsock = socket( AF_INET, SOCK_STREAM, 0);memset( &servaddr, 0, sizeof(servaddr));servaddr.sin_family = AF_INET;servaddr.sin_port = htons(port);servaddr.sin_addr.s_addr = inet_addr(hostaddr);
+    do {
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        // if connected then read and process messages from server
+        if (connected > -1) {
+           
+            // read and process messages
+            ...
+        }
+    } while (connected < 0);
+   
+    // close socket and return success or failure
+    ...
+}

@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-8
+VULNERABILITY_DESCRIPTION:
+The provided Perl code is vulnerable to a command injection attack.
+
+EXPLANATION:
+The code uses the `param` function from the CGI module to retrieve user input from the 'name' parameter, which is then fed directly into a system command. The input is not sanitized or validated before being used to construct the command. An attacker could exploit this by injecting malicious system commands or arguments to execute unauthorized actions.
+
+In this case, the `nslookup` command is executed with the user-provided input as an argument, potentially allowing an attacker to inject arbitrary system commands. For example, if an attacker passes a string like `; rm -rf /;`, it would execute the `rm` command, posing a significant security risk.
+
+RECOMMENDATIONS:
+To fix this vulnerability, follow these steps:
+
+1. **Validate user input**: Use regular expressions to limit the 'name' parameter to a specific pattern (e.g., domain names, IP addresses, or alphanumeric characters).
+2. **Use a safe wrapper**: Instead of directly executing the `nslookup` command, use the `Net::Nslookup` Perl module or a similar safe wrapper to execute the query.
+3. **Escape shell metacharacters**: If you must execute a system command, use a library like `IPC::System::Safe` to safely execute external commands, which will prevent the injection of malicious shell metacharacters.
+
+Here is a rough example of how the updated code might look:
+
+```perl
+use CGI qw(:standard);
+use Net::Nslookup;
+
+my $name = param('name');
+my $nslookup = Net::Nslookup->new;
+my $results = $nslookup->query($name);
+for my $answer (@$results) {
+    print escapeHTML($answer . "\n<br>");
+}
+```
+
+ORIGINAL CODE:
+```perl
+use CGI qw(:standard);
+$name = param('name');
+$nslookup = "/path/to/nslookup";
+print header;
+if (open($fh, "$nslookup $name|")) {
+    while (<$fh>) {
+        print escapeHTML($_);
+        print "<br>\n";
+    }
+    close($fh);
+}
+```

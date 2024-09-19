@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+The vulnerability in this code is a double allocation of memory for the 'message' variable.
+
+EXPLANATION:
+In the given function `trimTrailingWhitespace`, memory is first allocated for the variable 'message' using `malloc` on line 3. However, immediately following this, on lines 4 and 5, another 'message' variable is declared with the same name. This second 'message' variable is an array and has block scope, and it shadows the 'message' variable declared earlier with `malloc`. This means the originally allocated 'message' variable is never used in the function.
+
+The `malloc` call is unnecessary as it is not used elsewhere in the function, and the use of a variable with the same name for a different purpose can be confusing. Additionally, this could lead to memory leaks because the memory allocated using `malloc` is not freed.
+
+Moreover, when the 'retMessage' variable is returned from the function on line 9, it points to a local object ('message') which is invalid once the function returns. This will cause undefined behavior when the returned pointer is accessed from the caller.
+
+RECOMMENDATIONS:
+1. To fix this vulnerability, the unnecessary `malloc` call should be removed, and the 'message' variable should be a single array as it is reusing the same variable name for different declarations which is unnecessary and can be confusing.
+
+2. Alternatively, if the intention of the function is to allocate memory for the 'message' using `malloc` and return it, then the second declaration of 'message' should be removed and the first 'message' should be used for the entire function.
+
+3. It's crucial to check for buffer overflows and other potential issues when using pointer arithmetic and when dealing with strings.
+
+4. If dynamic memory allocation is desired, it should be matched with the corresponding call to free the allocated memory once it's no longer needed to prevent memory leaks.
+
+Here's an example of how to rewrite the code:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char* retMessage = (char*) malloc(sizeof(char) * (length + 1));
+    
+    // copy input string to a new string and null-terminate it
+    for (int index = 0; index < length; index++) {
+        retMessage[index] = strMessage[index];
+    }
+    retMessage[length] = '\0';
+
+    // trim trailing whitespace
+    int len = length - 1;
+    while (len >= 0 && isspace(retMessage[len])) {
+        retMessage[len] = '\0';
+        len--;
+    }
+
+    // return string without trailing whitespace
+    return retMessage;
+}
+```
+
+In the fixed code above, `malloc` is used to allocate memory for 'retMessage', this allocated memory is used through out the function. This prevents the memory leak. Still it is recommended to free this memory once it's not needed.
+
+ORIGINAL CODE:
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage; char *message = malloc(sizeof(char)*(length+1));
+
+    // copy input string to a temporary string
+    char message[length+1]; int index; for (index = 0; index < length; index++) {message[index] = strMessage[index];}message[index] = '\0';
+
+    // trim trailing whitespace
+    int len = index-1; while (isspace(message[len])) {message[len] = '\0'; len--;}
+
+    // return string without trailing whitespace
+    retMessage = message; return retMessage;
+}
+```

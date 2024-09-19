@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 14-17
+VULNERABILITY_DESCRIPTION:
+This vulnerability exposes a memory leak and an invalid use of a stack variable. 
+Additionally, this function also contains an incorrect handling of dynamic memory.
+
+EXPLANATION:
+Upon analysis of the provided code, several issues were identified. The first issue is the allocation of memory for the `message` variable using `malloc` (line 3) but then immediately re-declaring a variable with the same name on the stack (line 4). The variable `message` declared with `malloc` is not used and its memory is not released, causing a memory leak.
+
+Moreover, the function attempts to return a pointer to a stack variable `message` (line 14-17). When the function returns, this memory location goes out of scope, resulting in undefined behavior. 
+
+Additionally, there is an alternate way to solve this problem which involves iterating through the input string from the end to the beginning until a non-whitespace character is encountered. This method avoids multiple loops and excessive memory allocation and copying.
+
+RECOMMENDATIONS:
+To address these issues, the function should be rewritten to avoid memory leaks and invalid use of stack variables. Here's a revised version of the function:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *message = (char*)malloc(length + 1);
+    strcpy(message, strMessage);
+    
+    int len = length - 1;
+    while (len >= 0 && isspace(message[len])) {
+        message[len] = '\0';
+        len--;
+    }
+    
+    return message;
+}
+```
+
+Note: The caller is responsible for freeing the memory allocated by `malloc` in this function. This revised version still has its own issues (it only allocates the same amount of memory as before but copies into it again) and the suggested way above should ideally be used instead of modifying this one.
+
+Alternatively, here is a revised function that instead creates a new buffer just large enough to hold the trimmed string, avoiding the over allocation:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *message;
+    int new_len = length;
+    int len = length - 1;
+    while (len >= 0 && isspace(strMessage[len])) {
+        len--;
+        new_len--;
+    }
+    message = (char*)malloc(new_len + 1);
+    strncpy(message, strMessage, new_len);
+    message[new_len] = '\0';
+    return message;
+}
+```
+
+ORIGINAL CODE:
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage;
+    char *message = malloc(sizeof(char)*(length+1));
+    char message[length+1]; 
+    int index;
+    for (index = 0; index < length; index++) {
+        message[index] = strMessage[index];
+    }
+    message[index] = '\0';
+    int len = index-1;
+    while (isspace(message[len])) {
+        message[len] = '\0';
+        len--;
+    }
+    retMessage = message;
+    return retMessage;
+}
+```

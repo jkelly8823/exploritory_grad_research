@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to insecure use of `MultiByteToWideChar`.
+
+EXPLANATION:
+The `MultiByteToWideChar` function is used to convert a multi-byte character string to a wide character string. However, in this case, the `MultiByteToWideChar` function is called with the last argument set to `sizeof(unicodeUser)`, which is the total size of the `unicodeUser` buffer in bytes, but the `sizeof(unicodeUser)` is of type `wchar_t` (2 bytes per character on most platforms), not `char`. This can lead to an incorrect size calculation, potentially resulting in a buffer overflow when the converted string is larger than the buffer can accommodate. Furthermore, the loop that iterates over the input data does not check if the converted string exceeds the buffer size, allowing an attacker to potentially overflow the buffer.
+
+Another potential vulnerability is present in `NetUserGetInfo` which does not validate the size of the buffer pointed to by `(LPBYTE *)&info` and a remote buffer overflow can occur if an attacker is able to send data that results in `(LPBYTE *)&info` pointing to a location with insufficient space to store the requested data.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, ensure the size of `unicodeUser` buffer matches the expected size. Validate the size of `unicodeUser` before copying the converted string to it, and consider using safer conversions like `mbstowcs_s`. Also ensure the `NetUserGetInfo` function does not receive data that it is not able to handle.
+
+Here is an updated code segment that reflects these recommendations:
+
+```c
+void getUserInfo(char *username, struct _USER_INFO_2 info)
+{
+    WCHAR unicodeUser[UNLEN+1];
+    int unicode_length = MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, sizeof(unicodeUser)/sizeof(unicodeUser[0]));
+
+    if (unicode_length >= sizeof(unicodeUser)/sizeof(unicodeUser[0]))
+    {
+        // Handle buffer overflow error
+        return;
+    }
+
+    // Validate the sizeof(info) before calling NetUserGetInfo
+    int info_length = sizeof(info);
+
+    PBYTE pInfo = (PBYTE)&info;
+
+    // Limit the amount of data received by NetUserGetInfo to fit in the buffer
+    DWORD result = NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE)&info, sizeof(info), &info_length);
+    // Validate whether the received data exceeds the size of info or not
+    if (result == ERROR_MORE_DATA)
+    {
+        // Handle error - buffer too small
+    }
+}
+```
+ORIGINAL CODE:
+```c
+void getUserInfo(char *username, struct _USER_INFO_2 info){
+    WCHAR unicodeUser[UNLEN+1];
+    MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, sizeof(unicodeUser));
+    NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);
+}
+```

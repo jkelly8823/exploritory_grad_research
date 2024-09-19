@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-15
+VULNERABILITY_DESCRIPTION:
+Use-After-Free Vulnerability: Accessing freed memory in signal handler.
+
+EXPLANATION:
+The vulnerability exists because the signal handlers `sh` access and free global variables `global1` and `global2` after calling `sleep(10)`, which introduces a timing window for a potential Use-After-Free vulnerability. 
+
+In this code, `main` sets up signal handlers for `SIGHUP` and `SIGTERM` and then sleeps for 10 seconds. If the program receives either signal during this time, the signal handler `sh` will be called, logging a message with the contents of `what` and freeing `global1` and `global2`. 
+
+However, since the signal handlers can be called asynchronously during the sleep period, there's a risk that `global1` or `global2` might have been freed before their contents are accessed in the signal handler, leading to a Use-After-Free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following recommendations:
+
+1. Restructure the code to avoid accessing and freeing global variables in signal handlers.
+2. Use `volatile sig_atomic_t` type for global variables that are accessed within signal handlers to avoid undefined behavior due to concurrent access.
+3. Use a synchronization mechanism, like locks or atomic operations, to protect access to shared variables in signal handlers.
+4. Consider using an asynchronous-safe alternative to `syslog` and `free`.
+5. Remove the `sleep(10)` statement in both `main` and the `sh` signal handler to minimize the time window for potential race conditions.
+
+ORIGINAL CODE:
+```c
+#include <signal.h>#include <syslog.h>#include <string.h>#include <stdlib.h>
+
+void *global1, *global2;char *what;void sh (int dummy) {
+    syslog(LOG_NOTICE,"%s\n",what);free(global2);free(global1);
+    /* Sleep statements added to expand timing window for race condition */
+    sleep(10);exit(0);
+}
+int main (int argc,char* argv[]) {
+    what=argv[1];global1=strdup(argv[2]);global2=malloc(340);signal(SIGHUP,sh);signal(SIGTERM,sh);
+    /* Sleep statements added to expand timing window for race condition */
+    sleep(10);exit(0);
+}
+```

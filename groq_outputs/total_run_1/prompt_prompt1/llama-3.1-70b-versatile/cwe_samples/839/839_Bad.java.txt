@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-19
+VULNERABILITY_DESCRIPTION:
+The `withdraw` method contains a race condition vulnerability. This is because it checks the withdrawal amount, retrieves the current balance, and then updates the balance, all in separate steps. This leaves a window where another thread can modify the balance between these steps, potentially resulting in incorrect or inconsistent state.
+
+EXPLANATION:
+In the given `withdraw` method, the operations to check the withdrawal amount, retrieve the current balance, and update the balance are not atomic. This means that a context switch between threads can occur at any point during these operations, potentially resulting in unexpected behavior. For example, if two threads call the `withdraw` method concurrently, they might both pass the initial check, but then one thread updates the balance before the other. This can cause the account balance to be reduced by the wrong amount or even go into overdraft.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to synchronize the withdrawal operation using `synchronized` keyword or a lock, so that only one thread can perform the withdrawal operation at a time. Here is an example of how the `withdraw` method can be modified:
+
+```java
+public synchronized void withdraw(double withdrawAmount) {
+    if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+        accountBalance -= withdrawAmount;
+    } else {
+        System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");
+    }
+}
+```
+
+Alternatively, you can use a `ReentrantLock` or `Lock` object to provide more fine-grained control over synchronization.
+
+```java
+private final ReentrantLock lock = new ReentrantLock();
+
+public void withdraw(double withdrawAmount) {
+    lock.lock();
+    try {
+        if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+            accountBalance -= withdrawAmount;
+        } else {
+            System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");
+        }
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+public class BankAccount {
+    public final int MAXIMUM_WITHDRAWAL_LIMIT = 350;
+    
+    // variable for bank account balance
+    private double accountBalance;
+    
+    // constructor for BankAccount
+    public BankAccount() {accountBalance = 0;}
+    
+    // method to deposit amount into BankAccount
+    public void deposit(double depositAmount) {...}
+    
+    // method to withdraw amount from BankAccount
+    public void withdraw(double withdrawAmount) {
+        
+        if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+            
+            double newBalance = accountBalance - withdrawAmount;accountBalance = newBalance;
+        }else {System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");...}
+    }
+    
+    // other methods for accessing the BankAccount object
+    ...
+}
+```

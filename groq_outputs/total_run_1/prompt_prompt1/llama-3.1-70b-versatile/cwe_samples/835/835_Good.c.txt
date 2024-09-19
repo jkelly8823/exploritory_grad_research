@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines containing the connection attempt (starting from the `do` loop condition) and the variable declaration for the `count`/NA
+VULNERABILITY_DESCRIPTION:
+This code has a denial-of-service (DoS) vulnerability. Specifically, a resource leak due to a lack of proper error handling and a potential loop that could cause infinite resource consumption.
+
+EXPLANATION:
+The primary issue with this code is its failure to handle connection errors properly. Although a limit has been set for the maximum number of attempts (MAX_ATTEMPTS), there is still no mechanism to release resources when connections fail. This could cause memoryLeaks and other resource-related issues if the connecting IP or port becomes unresponsive and the function never accesses the connection point.
+
+Moreover, despite establishing an upper bound for the reconnection attempts, the code does not take care of timeout cases when trying to establish the connection. This results in an infinite loop in which the process continuously tries to reconnect to the server even after the maximum number of attempts have been exceeded.
+
+RECOMMENDATIONS:
+To improve this code, we should set up timeout intervals for each connection attempt. Incorporate code to properly close and release socket resources after each failed connection attempt. Adjustments to this code should resemble the following:
+
+ ORIGINAL CODE:
+ 
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...
+    // initialize number of attempts counter
+    int count = 0;
+    do {
+        // establish connection to server with a timeout
+        struct timeval tv;
+        tv.tv_sec = 10;  // set 10-second timeout
+        tv.tv_usec = 0;
+        setsockopt(servsock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        
+        // close socket if connection attempt fails
+        if (connected < 0) {
+            close(servsock);  // cleanup and close resources
+            // optionally, log the connection error
+        } else {
+            // increment counter only when connection is successful
+            count++;
+        }
+        
+        // if connected then read and process messages from server
+        if (connected > -1) {
+            // read and process messages
+            ...
+        }
+        
+        // optional logging logic...
+        
+    // keep trying to establish connection to the server up to a maximum number of attempts
+    } while (connected < 0 && count < MAX_ATTEMPTS);
+    
+    // finally close socket and return success or failure
+    ...
+}
+```

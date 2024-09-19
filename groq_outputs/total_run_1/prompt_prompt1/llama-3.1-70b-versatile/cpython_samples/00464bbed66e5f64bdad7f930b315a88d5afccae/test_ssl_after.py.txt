@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 145-153, 164
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to insecure ciphers and protocols.
+
+EXPLANATION:
+The `test_ciphers` method sets the ciphers to "ALL" and "DEFAULT" using the `set_ciphers` method. However, in the `test_python_ciphers` method, it checks if the ciphers contain any insecure protocols or ciphers such as PSK, SRP, MD5, RC4, or 3DES. This suggests that the test is trying to avoid using insecure ciphers, but the earlier method sets the ciphers to insecure values.
+
+In addition, the `test_options` method enables various flags that disable insecure protocols and ciphers, such as `OP_NO_SSLv2`, `OP_NO_SSLv3`, `OP_NO_COMPRESSION`, and `OP_CIPHER_SERVER_PREFERENCE`. However, it does not disable TLS 1.0 or 1.1, which are considered insecure.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+1. Set the ciphers to secure values using the `set_ciphers` method, such as `ECDHE_ECDSA_AES_256_GCM_SHA384`.
+2. Disable insecure protocols and ciphers, such as TLS 1.0 and 1.1, by adding the `OP_NO_TLSv1` and `OP_NO_TLSv1_1` flags to the `options` attribute.
+
+Here is an example of how to fix the vulnerability:
+
+```python
+def test_ciphers(self):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.set_ciphers("ECDHE_ECDSA_AES_256_GCM_SHA384")
+    # ... (rest of the test)
+
+def test_options(self):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.options |= ssl.OP_NO_TLSv1
+    ctx.options |= ssl.OP_NO_TLSv1_1
+    # ... (rest of the test)
+```
+
+ORIGINAL CODE:
+
+```python
+def test_ciphers(self):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.set_ciphers("ALL")
+    ctx.set_ciphers("DEFAULT")
+    with self.assertRaisesRegex(ssl.SSLError, "No cipher can be selected"):
+        ctx.set_ciphers("^$:,;?*'dorothyx")
+
+def test_options(self):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    # OP_ALL | OP_NO_SSLv2 | OP_NO_SSLv3 is the default value
+    default = (ssl.OP_ALL | ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3)
+    # SSLContext also enables these by default
+    default |= (OP_NO_COMPRESSION | OP_CIPHER_SERVER_PREFERENCE |
+                OP_SINGLE_DH_USE | OP_SINGLE_ECDH_USE |
+                OP_ENABLE_MIDDLEBOX_COMPAT |
+                OP_IGNORE_UNEXPECTED_EOF)
+    self.assertEqual(default, ctx.options)
+    with warnings_helper.check_warnings():
+        ctx.options |= ssl.OP_NO_TLSv1
+    self.assertEqual(default | ssl.OP_NO_TLSv1, ctx.options)
+    with warnings_helper.check_warnings():
+        ctx.options = (ctx.options & ~ssl.OP_NO_TLSv1)
+    self.assertEqual(default, ctx.options)
+    ctx.options = 0
+    # Ubuntu has OP_NO_SSLv3 forced on by default
+    self.assertEqual(0, ctx.options & ~ssl.OP_NO_SSLv3)
+```

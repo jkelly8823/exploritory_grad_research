@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+Arbitrary Code Execution via Eval Injection
+
+EXPLANATION:
+The provided Perl code is vulnerable to Arbitrary Code Execution via Eval Injection. The `handleConfigAction` subroutine takes user input from the `param('action')` function, concatenates it with other variables, and then executes the resulting string as code using the `eval` function. This allows an attacker to inject arbitrary Perl code, potentially leading to remote code execution or other security breaches.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the use of `eval` should be avoided. Instead, consider using a hash table or dispatch table to map the `action` parameter to the corresponding function. This way, even if an attacker can manipulate the `action` parameter, they will only be able to invoke one of the predefined functions.
+
+Here is an example of how the `handleConfigAction` subroutine could be modified:
+
+```perl
+sub handleConfigAction {
+    my ($fname, $action) = @_;
+    my $key = param('key');
+    my $val = param('val');
+    
+    my %dispatch = (
+        'add_key' => \&config_file_add_key,
+        'set_key' => \&config_file_set_key,
+        'delete_key' => \&config_file_delete_key,
+    );
+    
+    if (exists $dispatch{$action}) {
+        $dispatch{$action}->($fname, $key, $val);
+    } else {
+        print "Invalid action!\n";
+    }
+}
+```
+
+ORIGINAL CODE:
+
+
+use CGI qw(:standard);
+sub config_file_add_key {
+    my ($fname, $key, $arg) = @_;
+    # code to add a field/key to a file goes here
+}
+sub config_file_set_key {
+    my ($fname, $key, $arg) = @_;
+    # code to set key to a particular file goes here
+}
+sub config_file_delete_key {
+    my ($fname, $key, $arg) = @_;
+    # code to delete key from a particular file goes here
+}
+sub handleConfigAction {
+    my ($fname, $action) = @_;my $key = param('key');my $val = param('val');
+    
+    # this is super-efficient code, especially if you have to invoke
+    # any one of dozens of different functions!
+    my $code = "config_file_$action_key(\$fname, \$key, \$val);";eval($code);
+}
+$configfile = "/home/cwe/config.txt";print header;if (defined(param('action'))) {handleConfigAction($configfile, param('action'));}else {print "No action specified!\n";}

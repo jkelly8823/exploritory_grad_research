@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+The vulnerability is the use of a static IV with the OAEP padding scheme and the use of a relatively insecure hash function, MD5, with the MG1 hashing operation in the OpenSSL-style RSA/ECB/OAEPWithMD5AndMGF1Padding encryption mode.
+
+EXPLANATION:
+The use of a static initialization vector (IV) is not inherently problematic for the RSA encryption class as RSA itself is a public key cryptosystem, and does not make use of an IV. However, the current MGF (mask generation function) implementation includes MD5 hashing which might present an indirect weakness, as MD5 has long been considered insecure against certain types of attacks, such as collisions. Furthermore, the availability of this configuration (i.e., OAEP padding, along with an insecure MD5 algorithm) can open it up to vulnerability from potential cryptanalysis. 
+
+While the probability of successful exploitation might be considered "low" by several analyses and metrics published so far, potentially high severity exists should MD5-based digital signatures eventually work their way to compromised systems, under the best practices that can otherwise adequately mitigate risk of MD5 vulnerability, but in best practices OAEP is better secured when paired with SHA1 at the minimum and a mode other than ebcdic is optional, for production environments.  
+
+We'll choose the conservative defensive coding practices to prevent any adverse outcomes.
+
+RECOMMENDATIONS:
+To address the preceding cryptographic weaknesses with possible higher entropy requirements; swap MD5 as the padding method for a safe alternative, first consider replacing this "RSA/ECB/OAEPWithMD5AndMGF1Padding" cipher for newer encryption protocols at default configurations such as "RSA/ECB/OAEPWithSHA-256AndMGF1Padding" or a much larger hash method if you anticipate, are involved, or will interact with, higher entropy system elements.
+
+
+
+ORIGINAL CODE:
+```
+public Cipher getRSACipher() {
+    Cipher rsa = null;
+    try {
+        rsa = javax.crypto.Cipher.getInstance("RSA/ECB/OAEPWithMD5AndMGF1Padding");
+    } catch (java.security.NoSuchAlgorithmException e) {
+        log("this should never happen", e);
+    } catch (javax.crypto.NoSuchPaddingException e) {
+        log("this should never happen", e);
+    }
+    return rsa;
+}
+```

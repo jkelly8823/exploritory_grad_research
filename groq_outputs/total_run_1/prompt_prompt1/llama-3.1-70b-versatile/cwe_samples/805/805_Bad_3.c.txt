@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-13
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability is present in the `outputFilenameToLog` function where `strncpy` is used to copy the filename to the buffer `buf`. The `strncpy` function does not guarantee null-termination of the destination buffer if the source string is longer than or equal to the specified length. This can cause undefined behavior and a buffer overflow if the resulting string is not null-terminated and used as a string later (for example, when passed to the `saveToLogFile` function).
+
+Additionally, `strncpy` does not prevent writing beyond the specified length. If the length of the filename is exactly LOG_INPUT_SIZE, the null-termination will be missing, potentially causing issues with the `saveToLogFile` function if it expects a null-terminated string.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the buffer is null-terminated after copying the filename to it. This can be done by adding a manual null-termination check after the strncpy call:
+
+```c
+strncpy(buf, filename, LOG_INPUT_SIZE - 1);  // Leave space for null-termination
+buf[LOG_INPUT_SIZE - 1] = '\0';  // Ensure null-termination
+```
+
+Also, you should validate the length of the filename to ensure it is within the allowed range:
+
+```c
+if (length >= LOG_INPUT_SIZE) {
+    // Handle error condition
+    return -1;
+}
+```
+
+ORIGINAL CODE:
+```c
+#define LOG_INPUT_SIZE 40
+                     
+// saves the file name to a log file
+int outputFilenameToLog(char *filename, int length) {
+    int success;
+       
+    // buffer with size set to maximum size for input to log file
+    char buf[LOG_INPUT_SIZE];
+       
+    // copy filename to buffer
+    strncpy(buf, filename, length);
+       
+    // save to log file
+    success = saveToLogFile(buf);
+    return success;
+}
+```

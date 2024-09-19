@@ -10,6 +10,9 @@ dotenv.load_dotenv()
 client = Groq(
     api_key = os.getenv('groq_key')
 )
+client2 = Groq(
+    api_key = os.getenv('groq_key2')
+)
 
 def write_resp(pth,resp):
     try:
@@ -20,9 +23,13 @@ def write_resp(pth,resp):
 
 def call_groq(msg_content, model_name):
 
+    use_client_1 = True
+    use_client_2 = False
+
     for i in msg_content:
         # Skip files already ran in this test, with this prompt
         if (os.path.exists(f'groq_outputs/{os.getenv("test_dir")}/prompt_{i[3]}/{model_name}/{i[0]}/{i[1]}.txt')):
+            # print(f'SKIPPING: groq_outputs/{os.getenv("test_dir")}/prompt_{i[3]}/{model_name}/{i[0]}/{i[1]}.txt')
             continue
 
         msg = []
@@ -37,7 +44,6 @@ def call_groq(msg_content, model_name):
             model=model_name,
             )
         except Exception as e:
-            print(f'Exception on file: {i[0]}/{i[1]}')
             # Check if the error indicates a rate limit issue
             error_message = str(e).lower()
             if 'rate limit' in error_message or '429' in error_message:
@@ -45,6 +51,7 @@ def call_groq(msg_content, model_name):
                 # Implement any retry logic or alternative handling here
             else:
                 print("An error occurred:", e)
+            print(f'Exception on file: {i[0]}/{i[1]}')
             return False
         
 
