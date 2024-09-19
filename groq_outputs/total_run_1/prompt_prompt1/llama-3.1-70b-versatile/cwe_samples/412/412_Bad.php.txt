@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-8, 9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a File Inclusion and TOCTOU (Time-of-Check to Time-of-Use) vulnerability in the fopen function. Additionally, there is a Resource Leak vulnerability if flock or fwrite fail.
+
+EXPLANATION:
+The fopen function is used to open a file. However, it does not check if the file was successfully opened before attempting to write to it. If the file does not exist, or the program does not have the necessary permissions to open it, fopen will return false and attempting to write to it will lead to an error. This is a TOCTOU (Time-of-Check to Time-of-Use) vulnerability because flock is used to lock the file, but if the file cannot be locked (possibly due to permissions), the error message reveals that the file is being written to, potentially giving an attacker the location of the file.
+
+Another potential issue is the potential Resource Leak if flock or fwrite fail, because in those cases, the file is not properly unlocked. This could potentially lead to other users being unable to access the file due to file permission conflicts.
+
+RECOMMENDATIONS:
+To fix these issues, it is recommended that error checking be performed after the fopen and flock calls, and a best practice of closing the file and freeing resources in a finally block be used to prevent resource leaks. 
+
+The below recommendations include updating the code to handle potential error cases.
+
+ORIGINAL CODE:
+```php
+function writeToLog($message){$logfile = fopen("logFile.log", "a");
+    //attempt to get logfile lock
+    if (flock($logfile, LOCK_EX)) {fwrite($logfile,$message);
+       // unlock logfile
+       flock($logfile, LOCK_UN);}else {print "Could not obtain lock on logFile.log, message not recorded\n";}
+}fclose($logFile);
+```
+Recommended Fix example using PHP 7 or later's try-catch block.
+
+```php
+function writeToLog($message) {
+    $logfile = fopen("logFile.log", "a");
+    if (!$logfile) {
+        print "Could not open logFile.log, message not recorded\n";
+        return;
+    }
+    
+    try {
+        if (!flock($logfile, LOCK_EX)) {
+            print "Could not obtain lock on logFile.log, message not recorded\n";
+            return;
+        }
+        fwrite($logfile, $message);
+    } finally {
+        flock($logfile, LOCK_UN);
+    }
+    
+    if (!fclose($logfile)) {
+        print "Unable to close logFile.log\n";
+    }
+}
+```

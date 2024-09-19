@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Unintended behavior in inventory update due to incorrect logic.
+EXPLANATION:
+In this code segment, there is an unintended behavior that can lead to data inconsistency. After checking if a product is available in the store or warehouse, the code sets `isProductAvailable` to `true` regardless of the availability in the warehouse. However, if the product is not found in the store, but `productInWarehouse(productNumber)` returns `true`, it still calls `updateInStoreDatabase(productNumber)`. This could result in updating the wrong database.
+
+Furthermore, even if the product is not found in either the store or warehouse, `isProductAvailable` is still set to `true`, leading to unnecessary calls to `updateProductDatabase(productNumber)`.
+
+Another concern is that `isDelayed` is initially set to `false` and never reassigned elsewhere in this function. This means the conditional block that checks `isDelayed` will never be executed.
+
+RECOMMENDATIONS:
+To fix this issue, the logic for checking and updating the product availability should be corrected. Here's a revised version of the code:
+
+```java
+public void updateInventory(String productNumber) {
+    boolean isProductAvailable = false;
+    boolean isProductInStore = productInStore(productNumber);
+    boolean isProductInWarehouse = productInWarehouse(productNumber);
+
+    if (isProductInStore) {
+        updateInStoreDatabase(productNumber);
+    } else if (isProductInWarehouse) {
+        updateInWarehouseDatabase(productNumber);
+    } else {
+        // handle the case when product is not available in either store or warehouse
+    }
+
+    isProductAvailable = isProductInStore || isProductInWarehouse;
+
+    if (isProductAvailable) {
+        updateProductDatabase(productNumber);
+    } else if (/* add condition to set isDelayed */) {
+        // Warn customer about delay before order processing
+    }
+}
+```
+ORIGINAL CODE:
+```java
+public void updateInventory(String productNumber) {
+    boolean isProductAvailable = false;boolean isDelayed = false;
+    if (productInStore(productNumber)) {isProductAvailable = true;updateInStoreDatabase(productNumber);}
+    else if (productInWarehouse(productNumber)) {isProductAvailable = true;updateInWarehouseDatabase(productNumber);}
+    else {isProductAvailable = true;}
+    if ( isProductAvailable ) {updateProductDatabase(productNumber);}
+    else if ( isDelayed ) {       
+        /* Warn customer about delay before order processing */
+        ...
+    }
+}
+```

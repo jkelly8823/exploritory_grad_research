@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Sequential Loop Vulnerability in a non-blocking assignment for a large loop within a clocked process block.
+
+EXPLANATION:
+In the given code segment, a large loop is used within a clocked process block, which can lead to potential issues with synthesis and timing. The loop uses a non-blocking assignment to initialize all elements of the acct_mem array, but this can result in a large amount of combinational logic being inferred, potentially leading to long synthesis times and complex netlists.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to refactor the code to initialize the array in a more efficient manner, such as using a reset clause or using a combinational logic approach. If the array needs to be initialized on the clock edge, consider initializing a subset of the array per clock edge and iterating over the entire array across multiple clock cycles. 
+
+Here is an example of how the initialization can be done using a state machine:
+
+```systemverilog
+reg [31:0] j;
+reg init_done;
+
+always @(posedge clk_i) begin
+    if(~(rst_ni && ~rst_6)) begin
+        init_done <= 1'b0;
+        j <= 0;
+    end else if (!init_done) begin
+        if (j < AcCt_MEM_SIZE) begin
+            acct_mem[j] <= 32'h00000000;
+            j <= j + 1;
+        end else begin
+            init_done <= 1'b1;
+        end
+    end
+end
+```
+
+ORIGINAL CODE:
+```systemverilog
+module acct_wrapper #(
+    ...
+    always @(posedge clk_i)
+        begin
+            if(~(rst_ni && ~rst_6))
+                begin
+                    for (j=0; j < AcCt_MEM_SIZE; j=j+1)
+                        begin
+                            acct_mem[j] <= 32'h00000000;
+                        end
+                end
+            ...
+```

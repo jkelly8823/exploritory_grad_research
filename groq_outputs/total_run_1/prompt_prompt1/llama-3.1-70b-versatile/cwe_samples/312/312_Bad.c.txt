@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 8, 14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Lack of Input Validation
+
+EXPLANATION:
+The code snippet has a few vulnerabilities. 
+
+1. The `memcpy` function on line 4 is vulnerable to a buffer overflow attack. The `h_length` value from the `gethostbyname` function is used directly as the length for the `memcpy` function without validation. This could allow an attacker to overflow the buffer if `h_length` is larger than the buffer size.
+
+2. The code uses `atoi` on line 8 to convert `argv[3]` to an integer. However, `atoi` does not check for errors. If `argv[3]` is not a number or is out of range, this will cause undefined behavior.
+
+3. The `read` function on line 14 does not validate the number of bytes read from the socket. This could cause an out-of-bounds write if `n` is less than or equal to zero and is written to `password_buffer`.
+
+4. The code also uses `gethostbyname` which is deprecated as it ignores the DNS protocol version evolution and can return the wrong result or no result at all. 
+
+5. The lack of error checking for `connect` function makes it vulnerable to unknown hosts and ports.
+
+
+RECOMMENDATIONS:
+1. Validate the length from `gethostbyname` before using it in `memcpy` to prevent a buffer overflow attack.
+
+2. Use `strtol` or `strtoul` instead of `atoi` to safely convert strings to integers.
+
+3. Validate the number of bytes read from the socket before writing to `password_buffer` to prevent out-of-bounds writes.
+
+4. Use `getaddrinfo` instead of `gethostbyname` to get the host IP address.
+
+5. Add error checking to handle unknown hosts and ports.
+
+
+ORIGINAL CODE:
+```c
+server.sin_family = AF_INET; 
+hp = gethostbyname(argv[1]);
+if (hp==NULL) 
+    error("Unknown host");
+memcpy( (char *)&server.sin_addr,(char *)hp->h_addr,hp->h_length);
+if (argc < 3) 
+    port = 80;
+else 
+    port = (unsigned short)atoi(argv[3]);
+server.sin_port = htons(port);
+if (connect(sock, (struct sockaddr *)&server, sizeof server) < 0) 
+    error("Connecting");
+...while ((n=read(sock,buffer,BUFSIZE-1))!=-1) {
+    write(dfd,password_buffer,n);...
+```
+
+Revised code for increased vulnerability resilience:
+```c
+server.sin_family = AF_INET; 
+hp = gethostbyname(argv[1]);
+if (hp==NULL) 
+    error("Unknown host");
+if(hp->h_length > sizeof server.sin_addr)
+    error("Address length too long");
+memcpy( (char *)&server.sin_addr,(char *)hp->h_addr,hp->h_length);
+
+if (argc < 3) 
+    port = 80;
+else {
+    char *end;
+    long port_num = strtol(argv[3], &end, 10);
+    if (end == argv[3] || *end != '\0') 
+        error("Invalid port number");
+    if (port_num < 0 || port_num > USHRT_MAX)
+        error("Port number out of range");
+    port = (unsigned short)port_num;
+}
+server.sin_port = htons(port);
+if (connect(sock, (struct sockaddr *)&server, sizeof server) < 0) 
+    error("Connecting");
+
+...while ((n=read(sock,buffer,BUFSIZE-1))!=-1) {
+    if(n <= 0)
+        error("Read error");
+    write(dfd,password_buffer,n);...
+```

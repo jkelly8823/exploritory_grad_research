@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+Use of unhandled anonymous threads.
+
+EXPLANATION:
+The provided code segment creates and starts an anonymous thread to perform background processing. However, this thread is not properly managed. If an exception is thrown within the thread's `run()` method, it will terminate without notifying the main thread or logging the error. This could lead to unpredictable behavior, silent failures, or even crashes. Furthermore, because this is an instance of an anonymous `Runnable` class, the thread does not support any way to handle exceptions or stop the thread cleanly.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a named thread class with exception handling and logging mechanisms. Additionally, use an `ExecutorService` instead of manually creating threads to handle task execution and exception handling. Here's an example:
+
+```java
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // Perform servlet tasks.
+    ...
+    
+    // Create and submit a task for background processing using an ExecutorService.
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.submit(new Runnable() {
+        public void run() {
+            try {
+                // Process and store request statistics.
+                ...
+            } catch (Exception e) {
+                // Log the error and perform any necessary cleanup.
+                logger.error("Error processing request statistics", e);
+            }
+        }
+    });
+    executor.shutdown();
+}
+```
+
+ORIGINAL CODE:
+```java
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // Perform servlet tasks.
+    ...
+    // Create a new thread to handle background processing.
+    Runnable r = new Runnable() {
+        public void run() {
+            // Process and store request statistics.
+            ...
+        }
+    };
+    new Thread(r).start();
+}
+```

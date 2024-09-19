@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) and SQL Injection vulnerabilities due to the use of deprecated and insecure mysql_query function and extract function.
+
+EXPLANATION:
+The code provided contains several vulnerabilities, including Insecure Direct Object Reference (IDOR) and SQL Injection. 
+
+1. The mysql_query function is deprecated and should not be used in new applications as it is not secure. It also does not support prepared statements, which makes it vulnerable to SQL injection attacks.
+
+2. The extract function is used with the $_POST superglobal. This is a security risk as it can lead to variable injection and overwrite existing variables. 
+
+3. The code also assumes that a user who has successfully logged in is an administrator if their role is "Admin." However, the logic for determining the user's role is not shown in the code snippet.
+
+4. mysql_real_escape_string function is used for escaping the user input, but it is not sufficient to prevent all SQL injection attacks.
+
+RECOMMENDATIONS:
+1. Use prepared statements with MySQLi or PDO to prevent SQL injection attacks. 
+
+2. Avoid using extract function and instead directly access the $_POST array to prevent variable injection.
+
+3. Validate the user's role on the server-side and not on the client-side.
+
+4. Use a secure function like filter_var, or a password hashing function, if available in your PHP version.
+
+Here is a revised version of the code:
+
+```php
+function login($user, $pass) {
+    $connection = new mysqli("your_host", "your_username", "your_password", "your_database");
+    if ($connection->connect_errno) {
+        // handle the connection error
+    }
+    $query = "SELECT * FROM users WHERE username = ? AND password = ?";
+    $stmt = $connection->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("ss", $user, $pass);
+        $stmt->execute();
+        $stmt->store_result();
+        $stmt->bind_result($username, $password);
+        $stmt->fetch();
+        if ($stmt->num_rows > 0) {
+            // set the $isAdmin variable based on the user's role
+            // This should be retrieved from the database
+            // userRole should be stored hashed for better security
+            $isAdmin = getUserRole($user) == "Admin";
+        }
+    }
+    $stmt->free_result();
+    $stmt->close();
+    $connection->close();
+}
+$isLoginValid = filter_var($user, FILTER_VALIDATE_EMAIL);
+$isAdmin = false;
+if($isLoginValid) {
+    login($user, $pass);
+}
+```
+
+ORIGINAL CODE:
+```php
+function login($user,$pass){$query = buildQuery($user,$pass);mysql_query($query);if(getUserRole($user) == "Admin"){$isAdmin = true;}}
+$isLogin = false;extract($_POST);login(mysql_real_escape_string($user),mysql_real_escape_string($pass));
+```

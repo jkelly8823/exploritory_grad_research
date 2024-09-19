@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 29-31
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential data exposure due to an incomplete data reset when the `ip_resetn` signal is asserted.
+
+EXPLANATION:
+Upon analyzing the code, I found that when `ip_resetn` is asserted (i.e., in reset state), the `Data_out` is reset to `16'h0000`, which is a 16-bit zero value. However, this reset only occurs when `ip_resetn` goes low (negedge). When `ip_resetn` is already low and the module is powered up or comes out of reset, the initial value of `Data_out` is not explicitly defined. This can lead to a situation where `Data_out` retains its previous value, potentially exposing sensitive data.
+
+Furthermore, even when `ip_resetn` is asserted, the `Data_out[15:1]` bits are not explicitly reset to zero in all cases. In the third `else if (~write)` condition, `Data_out[15:1]` is left unchanged, which means it may retain its previous value when `write` is low.
+
+RECOMMENDATIONS:
+To address this vulnerability, it is recommended to explicitly reset all bits of `Data_out` when `ip_resetn` is asserted. Additionally, ensure that all bits of `Data_out` are properly initialized when the module is powered up or comes out of reset. Here's an example of how to modify the code to address this vulnerability:
+
+```verilog
+always @(posedge Clk or negedge ip_resetn)
+  if (~ip_resetn) begin
+    Data_out <= 16'h0000;
+    Write_once_status <= 1'b0;
+  end
+  ...
+```
+
+In the third `else if (~write)` condition, explicitly reset `Data_out[15:1]` to zero:
+
+```verilog
+else if (~write) begin
+  Data_out <= {16{1'b0}};
+  Data_out[0] <= Write_once_status;
+end
+```
+
+By making these changes, you can ensure that all bits of `Data_out` are properly reset when `ip_resetn` is asserted and that no sensitive data is exposed.
+
+ORIGINAL CODE:
+```verilog
+module register_write_once_example ( 
+  input [15:0] Data_in, 
+  input Clk, 
+  input ip_resetn, 
+  input global_resetn, 
+  input write, 
+  output reg [15:0] Data_out 
+); 
+      
+reg Write_once_status; 
+          
+always @(posedge Clk or negedge ip_resetn) 
+  
+  if (~ip_resetn) 
+  begin 
+  
+    Data_out <= 16'h0000; 
+    Write_once_status <= 1'b0; 
+  
+  end 
+  else if (write & ~Write_once_status) 
+  begin 
+  
+    Data_out <= Data_in & 16'hFFFE; 
+    Write_once_status <= 1'b1; // Write once status set on first write, independent of input 
+  
+  end 
+  else if (~write) 
+  begin 
+  
+    Data_out[15:1] <= Data_out[15:1]; 
+    Data_out[0] <= Write_once_status; 
+  
+  end 
+  
+endmodule
+```

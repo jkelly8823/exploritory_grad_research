@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in the code is a Command Injection vulnerability. This vulnerability arises when unsanitized user input is passed directly to a system command, allowing an attacker to inject malicious commands.
+
+EXPLANATION:
+The code calls the `GetUntrustedInput` function to retrieve user input, and then passes this input to the `encode` function, which encodes certain special characters. However, the encoded input is then used to construct a system command in the `system` function call. Since the encoded input is not properly sanitized for shell metacharacters, an attacker can inject malicious commands by carefully crafting the input.
+
+The `encode` function only replaces HTML special characters with their corresponding HTML entities. This is not sufficient to protect against command injection vulnerabilities, as shell metacharacters like semicolons, pipes, and parentheses are not encoded. As a result, an attacker can potentially inject malicious commands that are executed by the system.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should properly escape or sanitize any user input that is passed to a system command. You can use Perl's built-in `quotemeta` function to properly escape the user input for the shell. Alternatively, consider using a safer alternative to the `system` function call, such as the `qx` or `fork/exec` methods, which allow you to pass a list of arguments to the system command rather than a shell command string.
+
+Here is an example of how you could modify the code to use `quotemeta`:
+
+```perl
+sub doit {
+    my $uname = GetUntrustedInput();
+    my $escaped_uname = quotemeta($uname);
+    system("cd /home/$escaped_uname; /bin/ls -l");
+}
+```
+
+Alternatively, you can use the `qx` or `fork/exec` methods, which are safer and more efficient:
+
+```perl
+sub doit {
+    my $uname = GetUntrustedInput();
+    my @output = qx(cd /home/$uname; /bin/ls -l);
+    print join("", @output);
+}
+```
+
+ORIGINAL CODE:
+```perl
+sub GetUntrustedInput {return($ARGV[0]);}
+sub encode {my($str) = @_;$str =~ s/\&/\&amp;/gs;$str =~ s/\"/\&quot;/gs;$str =~ s/\'/\&apos;/gs;$str =~ s/\</\&lt;/gs;$str =~ s/\>/\&gt;/gs;return($str);}
+sub doit {my $uname = encode(GetUntrustedInput("username"));print "<b>Welcome, $uname!</b><p>\n";system("cd /home/$uname; /bin/ls -l");}
+```

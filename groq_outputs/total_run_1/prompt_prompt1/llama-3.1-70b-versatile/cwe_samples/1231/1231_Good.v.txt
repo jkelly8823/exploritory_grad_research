@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6/NA (entire for loop)
+VULNERABILITY_DESCRIPTION:
+The code contains a potential vulnerability related to the use of non-blocking assignments in a for loop inside an always @(posedge clk_i) block. The loop assigns a value to the reglk_mem array six times, but it does so using the non-blocking assignment operator (<=) which is evaluated at the end of the time step. If the loop does not complete within one clock cycle, this could lead to unpredictable behavior or register corruption.
+
+EXPLANATION:
+In this code, a for loop is used to clear the values of the reglk_mem array inside an always @(posedge clk_i) block. However, within this block, each assignment to the reglk_mem array is done using the non-blocking assignment operator (<=). This can be a problem if the for loop does not complete within one clock cycle, as this would mean the last value in the array is overridden with the first value in the next clock cycle. This unpredictable behavior can lead to errors in register values.
+
+RECOMMENDATIONS:
+To fix this issue, it's best to handle for loop operations for complex initialization in a different process. However, for simpler clocked resets or memory initialization without complex operations within the for loop, the loop should fit within a single clock cycle. However for this example this isn't a problem assuming jtag_unlock is low only one cycle and reglk_mem has been previously initialized.
+```original
+        // Declare separate wires for the loop control.
+        reg res_clear;
+        reg [2:0] resCLEAR_cnt;
+        // Initialize clear counter to 0 in reset block.
+        always @(*) if (~rst_ni) resCLEAR_cnt <= 3'd0;
+        // res_cycle set 1x only for memory reset on reset_ni event detected
+       always @(posedge clk_i && ~rst_ni) begin
+           res_clear <= ~jtag_unlock;
+        end
+        // Start counted sequence if prior cycle res_clear = 1
+       always @(posedge clk_i ) begin
+           if (~rst_ni) resCLEAR_cnt <= 3'd0;
+         else  resCLEAR_cnt <= (res_clear) ? 3'd1 : resCLEAR_cnt + 1'b1;
+        end
+        // use resCLEAR_cnt within reglk_mem initialization.
+        always @(posedge clk_i )
+            begin
+                if ( resCLEAR_cnt < 3'd6  ) begin
+                    reglk_mem[resCLEAR_cnt] <= 'h0;
+                end
+             end
+        ```
+ORIGINAL CODE:
+
+always @(posedge clk_i)
+    begin
+        if(~(rst_ni && ~jtag_unlock))
+            begin
+                for (j=0; j < 6; j=j+1) begin
+                    reglk_mem[j] <= 'h0;
+                end
+            end
+        end

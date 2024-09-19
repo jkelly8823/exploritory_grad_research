@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Path Traversal attack (CVE-2020-25650) due to direct concatenation of user input to a file path.
+
+EXPLANATION:
+The vulnerability lies in the way the `$profilePath` is constructed. The `param` function is used to retrieve user input, which is then directly appended to the `$dataPath`. This creates a pathway for potential attacks. An attacker can manipulate the `user` parameter to traverse the directory and access sensitive files outside of the `$dataPath`.
+
+For example, if an attacker passes `../../../etc/passwd` as the `user` parameter, the file path would become `/users/cwe/profiles/../../../etc/passwd`, potentially allowing access to sensitive information.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is highly recommended to use a library or module that provides secure path manipulation functionality. A possible fix is to use a path canonicalization library to ensure that the resulting path is within the intended directory.
+
+Here is an example of how the code can be modified using the `Path::Tiny` library in Perl:
+
+```perl
+use Path::Tiny qw(path);
+
+# ...
+
+my $dataPath = path("/users/cwe/profiles");
+my $username = param("user");
+my $profilePath = $dataPath->child($username);
+
+if (!$profilePath->is_child_of($dataPath)) {
+  ExitError("Invalid profile path: $username");
+}
+
+open(my $fh, "<", $profilePath) || ExitError("profile read error: $profilePath");
+print "<ul>\n";
+while (<$fh>) {
+  print "<li>$_</li>\n";
+}
+print "</ul>\n";
+```
+
+ORIGINAL CODE:
+```perl
+my $dataPath = "/users/cwe/profiles";
+my $username = param("user");
+my $profilePath = $dataPath . "/" . $username;
+open(my $fh, "<", $profilePath) || ExitError("profile read error: $profilePath");
+print "<ul>\n";
+while (<$fh>) {
+  print "<li>$_</li>\n";
+}
+print "</ul>\n";
+```

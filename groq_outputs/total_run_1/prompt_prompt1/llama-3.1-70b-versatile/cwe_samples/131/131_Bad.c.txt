@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 8
+VULNERABILITY_DESCRIPTION:
+The code contains a buffer overflow vulnerability due to insufficient memory allocation and incorrect indexing.
+
+EXPLANATION:
+The `malloc` function is used to allocate memory for `numWidgets` number of `Widget *` pointers. However, in the loop, `numWidgets` number of `Widget *` pointers are allocated and then an additional `NULL` pointer is assigned at the index `numWidgets`. This results in an out-of-bounds memory access, leading to a buffer overflow vulnerability.
+
+Moreover, there is no validation on the return value of `malloc` to ensure the allocation was successful. If the allocation fails, a null pointer is returned, which would lead to a null pointer dereference when trying to assign `WidgetList[i] = InitializeWidget()`.
+
+Additionally, there is no protection against integer overflow in the expression `numWidgets * sizeof(Widget *)` when determining the size of the memory allocation. If `numWidgets` is large enough, the result of the expression could overflow and underflow the maximum allowed value, resulting in a smaller than required allocation.
+
+RECOMMENDATIONS:
+To fix the vulnerability:
+
+* Ensure that the allocation size is sufficient by adding the size required for the additional `NULL` pointer. 
+* Check the return value of `malloc` to ensure the allocation was successful.
+* Validate the result of the expression `numWidgets * sizeof(Widget *)` to prevent integer overflow.
+* Use a safer way to handle memory, such as using a statically allocated array or using `calloc` that can return an error code on failure.
+
+ORIGINAL CODE:
+```c
+int i;
+unsigned int numWidgets;
+Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+WidgetList = (Widget **)malloc((numWidgets + 1) * sizeof(Widget *));
+printf("WidgetList ptr=%p\n", WidgetList);
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```
+
+Recommended modified code would look like this:
+```c
+int i;
+unsigned int numWidgets;
+Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+
+// Prevent integer overflow in the expression
+if (SIZE_MAX / sizeof(Widget *) < numWidgets + 1) {
+    ExitError("Integer overflow in memory allocation");
+}
+
+WidgetList = (Widget **)malloc((numWidgets + 1) * sizeof(Widget *));
+if (WidgetList == NULL) {
+    // Handle memory allocation error
+    ExitError("Memory allocation failed");
+}
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+    if (WidgetList[i] == NULL) {
+        // Handle InitializeWidget error
+        ExitError("InitializeWidget failed");
+    }
+}
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```

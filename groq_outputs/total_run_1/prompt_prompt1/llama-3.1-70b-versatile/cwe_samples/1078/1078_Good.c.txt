@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Multiple Lines/NA (Specifically the lines using MAX_BUFFER_SIZE, fgets, and buffer declaration)
+VULNERABILITY_DESCRIPTION:
+The code uses a fixed-size buffer and does not validate input length before copying user input to the buffer using fgets, but fgets does validate input.
+
+EXPLANATION:
+While `fgets` in C does check for buffer overflows by limiting the input to the specified maximum size minus 1, which is a good practice, the main issue with this code snippet is not as much about the fgets itself, but whether or not buffer overflows could occur elsewhere - and to a lesser extent whether or not user can input null characters that may not be caught by fgets. 
+I analyzed the buffer size and `fgets`, it is possible to avoid buffer overflow, if it is guaranteed elsewhere in the code (Which isn't provided) fgets is not going to overflow if it's restricted to this line of code alone. However there is an additional threat from fgets. Since fgets may read in null characters, and if this buffer is used elsewhere, for instance with functions that are designed to work with null terminated strings, passing in this buffer could cause issues elsewhere in the code. Thus for maximum safety a check should be added at the end of the fgets line.
+RECOMMENDATIONS:
+The fgets function will add a null character, this can also be checked in your code after fgets to see if null character is being pulled in and halt execution if it is. The way to fix this if this is truly an issue elsewhere, would be to either check for those null byte inputs in a separate function after you call fgets or even before you call fgets and have null terminate if your guaranteed at most one null byte is pulled in every time.
+```
+enum { MAX_BUFFER_SIZE = 1024 };
+char buffer[MAX_BUFFER_SIZE];
+if (fgets(buffer, MAX_BUFFER_SIZE, stdin)) {
+   for (int i = 0; i < MAX_BUFFER_SIZE - 1; i++) {
+       if (buffer[i] == '\0') buffer[i] = '\0';  
+       if (buffer[i] == buffer[MAX_BUFFER_SIZE - 1] && buffer[i] == '\0' ) break; 
+   }
+}
+```
+
+ORIGINAL CODE:
+```cpp
+enum { MAX_BUFFER_SIZE = 1024 };...char buffer[MAX_BUFFER_SIZE];...fgets(buffer, MAX_BUFFER_SIZE, stdin);
+```

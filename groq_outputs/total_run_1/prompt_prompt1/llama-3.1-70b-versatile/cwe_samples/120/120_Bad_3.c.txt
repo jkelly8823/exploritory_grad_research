@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in copying hostname to the 'hostname' variable.
+
+EXPLANATION:
+The 'strcpy' function is used to copy the hostname from 'clienthp->h_name' to the 'hostname' variable. However, there is no bounds checking to prevent buffer overflow. This vulnerability can be exploited by sending a hostname longer than 'MAX_LEN', which could potentially cause a buffer overflow and crash the program.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use a safer string copying function like 'strncpy'. This function allows you to specify the maximum number of characters to copy, preventing potential buffer overflows. Here is an example of how the vulnerable line could be changed:
+
+```c
+strncpy(hostname, clienthp->h_name, MAX_LEN - 1);
+hostname[MAX_LEN - 1] = '\0';  // Ensure null-termination
+```
+
+Alternatively, consider using 'snprintf' to copy the string with bounds checking:
+
+```c
+snprintf(hostname, MAX_LEN, "%s", clienthp->h_name);
+```
+
+ORIGINAL CODE:
+```c
+struct hostent *clienthp; char hostname[MAX_LEN];
+// create server socket, bind to server address and listen on socket...
+// accept client connections and process requests
+int count = 0;
+for (count = 0; count < MAX_CONNECTIONS; count++) {
+    int clientlen = sizeof(struct sockaddr_in);
+    int clientsocket = accept(serversocket, (struct sockaddr *)&clientaddr, &clientlen);
+    if (clientsocket >= 0) {
+        clienthp = gethostbyaddr((char*)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+        strcpy(hostname, clienthp->h_name);
+        logOutput("Accepted client connection from host ", hostname);
+        // process client request...
+        close(clientsocket);
+    }
+} close(serversocket);
+```

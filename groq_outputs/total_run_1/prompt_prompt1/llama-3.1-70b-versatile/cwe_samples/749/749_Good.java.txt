@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+SQL Injection vulnerability
+
+EXPLANATION:
+The provided code segment is vulnerable to SQL injection attacks. The databaseName variable is directly concatenated into the SQL query without proper sanitization or parameterization. An attacker could exploit this by providing malicious input for the databaseName variable, potentially leading to unauthorized database access, data tampering, or even complete system compromise. For example, if the databaseName variable is set to a value like "myDB; DROP TABLE users; --", it could result in deleting the entire users table.
+
+RECOMMENDATIONS:
+To prevent SQL injection, the code should use a PreparedStatement with parameterized queries instead of concatenating user input directly into the SQL query. Here's an example of how to fix the vulnerable code:
+
+```java
+private void removeDatabase(String databaseName) {
+    try {
+        PreparedStatement pstmt = conn.prepareStatement("DROP DATABASE ?");
+        pstmt.setString(1, databaseName);
+        pstmt.executeUpdate();
+    } catch (SQLException ex) {
+        // handle the exception
+    }
+}
+```
+
+However, it's essential to note that the `?` placeholder may not work with database name in all database systems, especially MySQL. For MySQL, you may need to use the `IF EXISTS` clause to avoid errors. Here is an example for MySQL:
+
+```java
+private void removeDatabase(String databaseName) {
+    try {
+        PreparedStatement pstmt = conn.prepareStatement(String.format("DROP DATABASE IF EXISTS %s", databaseName));
+        pstmt.executeUpdate();
+    } catch (SQLException ex) {
+        // handle the exception
+    }
+}
+```
+
+Alternatively, you could use the following code which checks if the database exists before attempting to delete it. This approach would prevent an error from being thrown and make your application more robust.
+
+```java
+private void removeDatabase(String databaseName) {
+    try {
+        DatabaseMetaData metaData = conn.getMetaData();
+        ResultSet rs = metaData.getCatalogs();
+        boolean exists = false;
+        while (rs.next()) {
+            if (rs.getString(1).equals(databaseName)) {
+                exists = true;
+                break;
+            }
+        }
+        rs.close();
+
+        if (exists) {
+            PreparedStatement pstmt = conn.prepareStatement("DROP DATABASE ?");
+            pstmt.setString(1, databaseName);
+            pstmt.executeUpdate();
+        }
+    } catch (SQLException ex) {
+        // handle the exception
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```java
+private void removeDatabase(String databaseName) {
+    try {
+        Statement stmt = conn.createStatement();
+        stmt.execute("DROP DATABASE " + databaseName);
+    } catch (SQLException ex) {
+        // ...
+    }
+}
+```

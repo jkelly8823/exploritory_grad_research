@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-10, 16-17
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential infinite loop condition and non-reliable comparison in a timing-sensitive path.
+
+EXPLANATION:
+The given code snippet is part of a state machine. However, there are two potential vulnerabilities present. 
+
+The first vulnerability lies in lines 6-10, where the code sets `pass_mode` and `state_d` based on certain conditions. However, the `miss_pass_check_cnt_q` is only being checked for a specific condition (not equal to 2'b11). If `miss_pass_check_cnt_q` exceeds 2'b11, the state machine may enter an infinite loop.
+
+The second vulnerability is in the comparison of `exp_hash` and `pass_hash` at line 16-17. The comparison appears to be timing sensitive as it affects the state transition. However, without context of the comparison's nature (ASCII vs non-ASCII characters), a precise recommendation cannot be provided. For secure comparison, using a cryptographically secure hashing library or a comparison function that is designed for timing attacks is generally recommended.
+
+RECOMMENDATIONS:
+- For lines 6-10, add a check to ensure that `miss_pass_check_cnt_q` does not exceed a certain threshold, and introduce a protection mechanism to prevent infinite loops. 
+
+- For lines 16-17, use a comparison function that is designed to mitigate timing attacks and reveal as little information as possible to prevent side-channel attacks.
+
+ORIGINAL CODE:
+```vhdl
+case (state_q)
+    Idle: begin
+    ...
+        else if ( (dm::dtm_op_e'(dmi.op) == dm::DTM_PASS) && (miss_pass_check_cnt_q != 2'b11) )
+        begin
+            state_d = Write;pass_mode = 1'b1;
+        end
+    ...
+    end
+    ...
+    PassChkValid: begin
+        if(hashValid) begin
+            if(exp_hash == pass_hash) begin
+                pass_check = 1'b1;
+            end else begin
+                pass_check = 1'b0;
+                miss_pass_check_cnt_d = miss_pass_check_cnt_q + 1
+            end
+            state_d = Idle;
+        end else begin
+            state_d = PassChkValid;
+        end
+    end
+    ...
+```

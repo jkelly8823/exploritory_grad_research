@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+This code contains a potential resource leak due to the return statement within the lock. If the function is supposed to return from within the lock, it will not properly unlock the mutex, potentially causing a deadlock or infinite waiting in a multi-threaded environment.
+
+EXPLANATION:
+The issue arises because the return statement within the lock (pthread_mutex_unlock(mutex)) will skip the function's return value if the lock is acquired successfully. This implies that the function will not properly unlock the mutex if the resource access fails, causing a potential resource leak. Furthermore, even if the unlock function is called there is still an issue here, since it is being returned directly within the function, rather than allowing the function to complete.
+
+RECOMMENDATIONS:
+It's recommended to store the return value of pthread_mutex_unlock in a variable and return it after the lock is released. Plus, add a return value from this function in the success case too.
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (0 != result)
+        return result;
+
+    /* access shared resource */
+
+    result = pthread_mutex_unlock(mutex);
+    return result;
+}
+```
+
+Also, if there's an error that makes the function return an error within the lock before accessing the shared resource, then in this case we can store that error in another variable and return it after the lock is released. To prevent resource leak we should keep a check there.
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int lockResult;
+    int result = 0; // assuming 0 as a default return value
+    
+    lockResult = pthread_mutex_lock(mutex);
+    if (0 != lockResult) {
+        // if we exit here, another thread may still perform the operation
+        // but now the error from pthread_mutex_lock will be lost if we just return result
+        return lockResult;
+    }
+
+    // access shared resource here
+    // store result of shared resource's operation in result variable
+    result = 0;
+
+    lockResult = pthread_mutex_unlock(mutex);
+    if (lockResult == 0) {
+        return result;
+    } else {
+        // if the unlock fails, we need to handle the error too
+        return lockResult;
+    }
+}
+```

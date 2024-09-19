@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 10
+VULNERABILITY_DESCRIPTION:
+Use of Outdated String Functions and Incorrect Memory Handling.
+
+EXPLANATION:
+The code uses `strcpy()`, a function known for causing buffer overflow vulnerabilities. Although the allocated buffer size is hardcoded and the function doesn't take user input, using `strcpy()` still represents a bad practice. 
+
+Additionally, there's an incorrect memory handling issue because the code is freeing memory while still using it. After finding the matching character and freeing the memory, there's no need to go on to the return statement for `FAILURE` and `SUCCESS`. This is incorrect; you should either break from the loop when the character is matched, or consider using a flag to indicate whether the character is matched.
+
+However, if the input string were user-provided, another major vulnerability could occur when an attacker can provide a string longer than 19 characters. This would result in a buffer overflow and potentially cause arbitrary code execution.
+
+RECOMMENDATIONS:
+Use `strncpy()` instead of `strcpy()` to prevent potential buffer overflow issues. Change the function to break the loop immediately after the character is matched. Also, make sure to validate the length of input strings in real scenarios to prevent potential buffer overflow issues.
+
+Here is a revised version:
+
+```c
+int contains_char(char c) {
+    const char *originalStr = "Search Me!";
+    char *str = (char*)malloc(strlen(originalStr) + 1);
+    strncpy(str, originalStr, strlen(originalStr) + 1);
+    int i = 0;
+    while(i < strlen(str)) {
+        if(str[i] == c) {
+            free(str);
+            return SUCCESS;
+        }
+        i++;
+    }
+    free(str);
+    return FAILURE;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+int contains_char(char c){
+    char *str;int i = 0;str = (char*)malloc(20*sizeof(char));strcpy(str, "Search Me!");while( i < strlen(str) ){
+        if( str[i] == c ){
+        
+            /* matched char, free string and return success */
+            free(str);return SUCCESS;
+        }
+        /* didn't match yet, increment pointer and try next char */
+        i = i + 1;
+    }
+    /* we did not match the char in the string, free mem and return failure */
+    free(str);return FAILURE;
+}
+```

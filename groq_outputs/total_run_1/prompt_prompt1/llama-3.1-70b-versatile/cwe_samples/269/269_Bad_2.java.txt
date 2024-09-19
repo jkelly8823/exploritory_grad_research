@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 6-7
+VULNERABILITY_DESCRIPTION:
+The code contains a Authentication Bypass vulnerability. The method `resetPassword` grants access to certain roles to reset passwords, but it only denies access to Guest and User roles. However, it does not validate whether the requesting user has the necessary permissions to reset another user's password. This could potentially allow a user to reset the password of an administrative user.
+
+EXPLANATION:
+This vulnerability stems from the fact that the `resetPassword` method only checks if the requesting user is authenticated and if their role has sufficient privileges to reset another user's password. However, there is no validation to ensure that the requesting user is either the same user whose password is being reset or if they have explicit permission to do so. This could potentially allow for abuse where a higher-privileged user's password is reset without their knowledge or consent. Furthermore, the method is vulnerable to lateral movement attacks where an attacker escalates their privileges by targeting another user who has higher privileges.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following steps can be taken:
+- Validate that the requesting user is either the same user whose password is being reset or if they have explicit permission to do so.
+- Implement a check to restrict the ability to reset the password of administrative users to only other administrative users.
+
+Here is an example of how the `resetPassword` method could be updated to address this issue:
+```java
+public void resetPassword(User requestingUser, User user, String password ){
+    if(isAuthenticated(requestingUser) && (requestingUser.role == Roles.ADMIN || requestingUser.equals(user))){
+        switch(requestingUser.role){
+            case GUEST:System.out.println("You are not authorized to perform this command");break;
+            case USER:System.out.println("You are not authorized to perform this command");break;
+            default:setPassword(user,password);break;}
+    }
+    else{System.out.println("You must be logged in and have the necessary permissions to perform this command");}
+}
+```
+ORIGINAL CODE:
+```java
+                  public enum Roles {ADMIN,OPERATOR,USER,GUEST}
+                     public void resetPassword(User requestingUser, User user, String password ){
+                        if(isAuthenticated(requestingUser)){
+                              switch(requestingUser.role){
+                                    case GUEST:System.out.println("You are not authorized to perform this command");break;
+                                       case USER:System.out.println("You are not authorized to perform this command");break;
+                                       default:setPassword(user,password);break;}
+                                 }
+                           
+                           else{System.out.println("You must be logged in to perform this command");}
+                     }
+               
+                ```

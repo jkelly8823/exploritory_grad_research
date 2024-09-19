@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an integer overflow, and a buffer overflow due to an off-by-one allocation issue.
+
+EXPLANATION:
+This vulnerability arises from an off-by-one allocation issue and incorrect usage of signed and unsigned integers. The variable `numWidgets` is an unsigned integer, but the error checking code uses a signed comparison. If the untrusted value for `numWidgets` is INT_MAX (the maximum value an int can hold) + 1, the signed comparison would incorrectly evaluate to a small negative value and thus avoid the error check. 
+
+Additionally, allocating space using `malloc` and then assigning to the last index `WidgetList[numWidgets] = NULL` is incorrect as it can lead to an off-by-one buffer overflow. 
+
+Moreover, since `numWidgets` comes from `GetUntrustedSizeValue()`, it poses a significant risk of attack should an attacker be able to manipulate this value.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, consider the following recommendations:
+
+- Change the signed `int` comparison to unsigned `int` to prevent integer overflows when comparing with `numWidgets`.
+- Use memory-safe functions and allocate memory without off-by-one errors.
+- Validate `numWidgets` before calling `malloc` to prevent potential overflow errors.
+- Be cautious when using `GetUntrustedSizeValue()`, ideally you should validate what the values could be and sanitize them before proceeding.
+- Additionally, consider using `calloc` to initialize the allocated memory to all zeros.
+
+Here's an improved version of the given code:
+
+```c
+unsigned int numWidgets = GetUntrustedSizeValue();
+if (numWidgets == 0 || numWidgets > MAX_NUM_WIDGETS) {
+    ExitError("Incorrect number of widgets requested!");
+}
+unsigned int sizeToAllocate = numWidgets * sizeof(Widget *);
+Widget **WidgetList = (Widget **)calloc(sizeToAllocate + 1, 1);
+if (WidgetList == NULL) {
+    ExitError("Memory allocation failed!");
+}
+// Initialize widgets
+for (unsigned int i = 0; i < numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+WidgetList[numWidgets] = NULL;
+// Use WidgetList
+showWidgets(WidgetList);
+free(WidgetList);
+```
+
+ORIGINAL CODE:
+```c
+int i;
+unsigned int numWidgets;
+Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+WidgetList = (Widget **)malloc(numWidgets * sizeof(Widget *));
+printf("WidgetList ptr=%p\n", WidgetList);
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```

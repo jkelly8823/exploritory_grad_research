@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-2
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an Insecure Use of System Functions (CWE-98).
+
+EXPLANATION:
+Although the `getCurrentUser()` function is assumed to return a username that is guaranteed to be alphanumeric, avoiding the classic command injection vulnerability (CWE-78), another issue still exists. The issue lies in the fact that the code is using the `system()` function to execute a command that includes user input. This function passes the command to the shell for execution, which means it is vulnerable to another type of injection attack. When the command is passed to the shell, it can be interpreted and executed, and a malicious actor could inject malicious commands that are executed by the shell. 
+
+In this case, it's not possible to inject malicious commands directly into the `grep` command because the usernames are alphanumeric, but it's still vulnerable to other attacks, for example, changing the current user's username to a value that affects the command's behavior. This, combined with another vulnerability, could lead to serious security issues.
+
+However, there is a more significant issue: `grep` programs themselves can be replaced with malicious versions on some systems, so the `system()` call in this code is sending user-controlled input directly to the operating system shell interpreter, hence raising a separate vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to:
+
+1. Avoid using `system()` with user-controlled input whenever possible. In this case, use PHP's `posix` functions to execute commands more securely.
+2. Validate and sanitize all input data, even if you're certain it comes from a trusted source.
+3. Use prepared statements with parameterized queries whenever possible.
+
+Here is an example of how to modify the above code to avoid using `system()`:
+
+```php
+$userName = getCurrentUser();
+$ps = posix_kill(posix_getpid(), 0); //see who ps can report on
+if ($ps !== 0) {
+    error_log("user not existing, or running outside a valid process.");
+    exit();
+}
+$processes = shell_exec("ps aux | awk '{print $1}' "); //only look at user name
+foreach (explode('\n', $processes) as $p) {
+    if ($p == $userName) {
+        // rest of the logic to process
+    }
+}
+```
+Note: This example assumes you are in a Unix-like environment, where `ps` commands and `posix` functions can work correctly.
+
+ORIGINAL CODE:
+
+```php
+$userName = getCurrentUser();
+$command = 'ps aux | grep ' . $userName;
+system($command);
+```

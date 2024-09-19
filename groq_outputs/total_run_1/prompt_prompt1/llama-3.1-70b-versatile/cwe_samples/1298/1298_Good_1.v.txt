@@ -1,0 +1,91 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 22-24, 43-44
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to information exposure through register loading and potential out-of-bounds access.
+
+EXPLANATION:
+In the given code, the pmpaddr_reg and pmpcfg_reg registers are loaded with user input (pmpaddr_i and pmpcfg_i) without proper bounds checking or validation. This could lead to potential out-of-bounds access or information exposure.
+
+Specifically, in lines 22-24, the pmpaddr_reg and pmpcfg_reg are assigned the values of pmpaddr_i and pmpcfg_i respectively without any checks. Although the declarations of pmpaddr_i and pmpcfg_i (lines 5-6) include the width of the registers, there is still a possibility of an out-of-bounds access if the input is not properly masked or truncated.
+
+Additionally, in lines 43-44, the i_pmp_data module is instantiated and its inputs are connected to the loaded registers (pmpaddr_reg and pmpcfg_reg). If the registers contain invalid or out-of-bounds values, this could lead to further issues.
+
+RECOMMENDATIONS:
+To address this vulnerability, we recommend adding input validation and bounds checking for the pmpaddr_i and pmpcfg_i inputs. This could be done using conditional statements to check the values of the inputs before loading them into the registers.
+
+For example, you could use the following code:
+
+```systemverilog
+if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE) begin
+    if ((pmpaddr_i >= 'b0) && (pmpaddr_i < 'b1 << 16)) begin
+        pmpaddr_reg <= pmpaddr_i;
+    end
+    if ((pmpcfg_i >= 'b0) && (pmpcfg_i < 'b1 << 8)) begin
+        pmpcfg_reg <= pmpcfg_i;
+    end
+end
+```
+
+This code adds checks to ensure that the input values are within the valid range before loading them into the registers.
+
+ORIGINAL CODE:
+
+
+                    module dma # (...)(...);
+                    ...
+                        
+                        input [7:0] [16-1:0] pmpcfg_i;   // 8-8-8-8
+                        input logic [16-1:0][53:0]     pmpaddr_i;
+                        ...
+                        reg [7:0] [16-1:0] pmpcfg_reg;
+                        reg [16-1:0][53:0] pmpaddr_reg;
+                        ...
+                        //// Save the input command
+                        always @ (posedge clk_i or negedge rst_ni)
+                            
+                            begin: save_inputs
+                            if (!rst_ni)
+                                
+                                begin
+                                ...
+                                pmpaddr_reg <= 'b0 ;
+                                pmpcfg_reg <= 'b0 ;
+                                end
+                                
+                            else 
+                                
+                                begin
+                                    
+                                    if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE) 
+                                    begin
+                                    ...
+                                    pmpaddr_reg <= pmpaddr_i;
+                                    pmpcfg_reg <= pmpcfg_i;
+                                    end
+                                    
+                                end 
+                                
+                            end // save_inputs
+                            ...
+                            // Load/store PMP check
+                            pmp #(
+                                
+                                .XLEN       ( 64                     ),
+                                .PMP_LEN    ( 54                     ),
+                                .NR_ENTRIES ( 16           )
+                                
+                            ) i_pmp_data (
+                                
+                                .addr_i        ( pmp_addr_reg        ),
+                                .priv_lvl_i    ( riscv::PRIV_LVL_U   ), // we intend to apply filter on
+                                // DMA always, so choose the least privilege
+                                .access_type_i ( pmp_access_type_reg ),
+                                // Configuration
+                                .conf_addr_i   ( pmpaddr_reg           ),
+                                .conf_i        ( pmpcfg_reg            ),
+                                .allow_o       ( pmp_data_allow      )
+                                
+                            );
+                            
+                        
+                    endmodule

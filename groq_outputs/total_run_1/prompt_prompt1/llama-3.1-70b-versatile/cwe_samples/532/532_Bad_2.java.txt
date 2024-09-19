@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability.
+
+EXPLANATION:
+The vulnerability is present in the query string construction, where the username and accountNumber variables are directly concatenated into the SQL query. This allows an attacker to inject malicious SQL code by providing specially crafted input. The isAuthorizedUser function is not sufficient to prevent SQL injection attacks, as it only checks for authorization and not for the legitimacy of the input data. Furthermore, a SQL injection attack could potentially allow an attacker to access, modify, or delete data from the database.
+
+RECOMMENDATIONS:
+To fix the vulnerability, we recommend using Prepared Statements with parameterized queries. This approach separates the SQL code from the user input and prevents malicious SQL injection. Here's an example of how to use Prepared Statements:
+
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    String query = "SELECT * FROM accounts WHERE owner = ? AND accountID = ?";
+
+    try {
+        if (isAuthorizedUser(username)) {
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            PreparedStatement pstmt = conn.prepareStatement(query);
+            pstmt.setString(1, username);
+            pstmt.setString(2, accountNumber);
+            ResultSet queryResult = pstmt.executeQuery();
+
+            if (queryResult.next()) {
+                // assume constructor for BankAccount exists
+                userAccount = new BankAccount(queryResult.getString(1), queryResult.getString(2));
+            }
+        }
+    } catch (SQLException ex) {
+        String logMessage = "Unable to retrieve account information from database,\nquery: " + query;
+        Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);
+    }
+    return userAccount;
+}
+```
+
+In the revised code, we use a parameterized query with '?' placeholders for the username and accountNumber. Then, we set the values of these parameters using the `setString` method, which ensures the values are properly escaped and quoted. This approach effectively prevents SQL injection attacks.
+
+ORIGINAL CODE:
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    String query = null;
+    try {
+        if (isAuthorizedUser(username)) {
+            query = "SELECT * FROM accounts WHERE owner = " + username + " AND accountID = " + accountNumber;
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            Statement stmt = conn.createStatement();
+            ResultSet queryResult = stmt.executeQuery(query);
+            userAccount = (BankAccount) queryResult.getObject(accountNumber);
+        }
+    } catch (SQLException ex) {
+        String logMessage = "Unable to retrieve account information from database,\nquery: " + query;
+        Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);
+    }
+    return userAccount;
+}
+```

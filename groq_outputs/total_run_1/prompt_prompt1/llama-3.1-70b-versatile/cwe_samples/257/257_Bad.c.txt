@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+This function contains a buffer overflow vulnerability, in addition to insufficient error checking and the use of a deprecated function.
+
+EXPLANATION:
+The function `VerifyAdmin` takes a `char *password` as an argument, but the function does not check the length of the password before passing it to the `compress` function and then `strcmp` function. If the password is too long, this can lead to a buffer overflow. 
+
+Additionally, this function uses `strcmp` for validating passwords which is also not recommended. This is because the comparison of two strings returns 0 if they are identical and non-zero otherwise, and since password comparison is typically done differently than string comparison, more sophisticated comparison is needed.
+
+Lastly, the `strcmp` function may throw a segmentation fault or return incorrect results if `compress(password)` or `compressed_password` is a null pointer.
+
+RECOMMENDATIONS:
+To secure this function, it is recommended to limit the password length before passing it to the `compress` function. Also, use `strncmp` with a specified length and error checking with `NULL` values to make sure the function does not throw any segmentation faults.
+
+One way to fix this function is by doing something like this:
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+#define PASSWORD_MAX_LENGTH 256
+#define HASH_LENGTH 256
+
+int VerifyAdmin(char *password) {
+    if (password == NULL || strlen(password) > PASSWORD_MAX_LENGTH) {
+        printf("Password too long or null!\n");
+        return 0;
+    }
+
+    char *password_hash = compress(password);
+
+    if (password_hash == NULL) {
+        printf("Error: compression failed!\n");
+        return 0;
+    }
+
+    if (strncmp(password_hash, compressed_password, HASH_LENGTH) != 0) {
+        printf("Incorrect Password!\n");
+        return 0;
+    }
+
+    printf("Entering Diagnostic Mode...\n");
+    return 1;
+}
+```
+
+ORIGINAL CODE:
+```c
+int VerifyAdmin(char *password) {
+    if (strcmp(compress(password), compressed_password)) {
+        printf("Incorrect Password!\n");
+        return(0);
+    }
+    printf("Entering Diagnostic Mode...\n");
+    return(1);
+}
+```

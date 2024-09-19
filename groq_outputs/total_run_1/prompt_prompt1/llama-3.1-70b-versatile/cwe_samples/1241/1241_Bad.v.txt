@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11, 14-15
+VULNERABILITY_DESCRIPTION:
+ The code is vulnerable to latch inference and unintended combinational logic.
+
+EXPLANATION:
+The issue is caused by the improper usage of the "always" block in combination with the "@" operator. The "@" operator without a specific clock or reset signal infers a combinatorial logic instead of sequential logic. However, since there's no conditional statement controlling the assignment to the "in_sr" register, this could result in latch inference which is generally considered a bad practice. This may cause synthesis tools to infer an unintended latch or other unexpected behavior.
+
+Furthermore, lines 8-11 and 14-15 require proper input validation checks to ensure that the inputs are not assigned concurrently to either valid or invalid states, eliminating data corruption and or unknown state presence on assignments or declarations. 
+
+RECOMMENDATIONS:
+To fix the code, it's recommended to replace the "always @ (*)" block with a proper clocked "always" block or to restructure the code to be a purely combinatorial process without registers. If sequential logic is intended, provide a clock and possibly reset conditions.
+
+Here is an example of possible fixes:
+```vhdl
+always @(posedge clk or negedge rst_n)
+begin
+    if (!rst_n)
+        in_sr <= 'h0000; // Initialize in_sr to a known state on reset
+    else
+        in_sr <= ~ (poly_i [15:0] & entropy16 [15:0]);
+end
+```
+Or, for a purely combinational design:
+```vhdl
+assign in_sr_comb = ~(poly_i [15:0] & entropy16 [15:0]);
+```
+ORIGINAL CODE:
+```vhdl
+reg in_sr, entropy16_valid;
+reg [15:0] entropy16;
+
+assign entropy16_o = entropy16;
+assign entropy16_valid_o = entropy16_valid;
+
+always @ (*)
+begin
+    in_sr = ~ (poly_i [15:0] & entropy16 [15:0]);
+end
+```

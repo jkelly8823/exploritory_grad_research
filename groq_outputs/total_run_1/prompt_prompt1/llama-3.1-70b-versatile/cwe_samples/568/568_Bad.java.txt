@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+The finalize() method is being used with a native call, and the finalize method is deprecated due to its unpredictable nature and potential for resource leaks.
+
+EXPLANATION:
+The finalize() method in Java was designated for cleaning up resources but can't be relied upon to perform these tasks consistently. This is because the JVM is only guaranteed to call finalize() at some point after an object is no longer reachable by the user's code, but it's not bound to do it. Moreover, if finalize() throws a Throwable, it suppresses any other exceptions which were pending in the GC and will cause problems for the JVM. When dealing with native resources, it's better to have explicit control over them.
+
+RECOMMENDATIONS:
+Use a shutdown hook or a try-with-resources block instead of finalize() for native calls. This will give you more control over when resources are cleaned up and minimize the possibility of resource leaks.
+
+```java
+// Use a try-with-resources block if the native resource can be handled
+// as AutoClosable (this would require the native library to implement
+// java.lang.AutoCloseable)
+try (NativeResource resource = new NativeResource()) {
+    // Use the native resource
+    resource.useNative();
+} // NativeResource's close() method is called automatically
+```
+or
+
+```java
+// Use a shutdown hook if you need the resources to be cleaned up on JVM exit
+Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+    discardNative();
+}));
+```
+
+ORIGINAL CODE:
+```java
+protected void finalize() { discardNative(); }
+```

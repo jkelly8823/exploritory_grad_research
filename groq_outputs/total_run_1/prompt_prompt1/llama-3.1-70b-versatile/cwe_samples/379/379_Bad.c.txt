@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The vulnerability present is a resource leak due to a missing fclose() call before removing the temporary file using rm(). 
+
+EXPLANATION:
+The tmpfile() function in C creates a temporary file and opens it in binary mode for reading and writing. When the program finishes using the temporary file, it should be closed using fclose() before removing the file with rm() or rmtmp(). Failing to close the file could result in resource leaks. However, in this case, the rm() call has been replaced with rmtmp(), which could indicate an attempt to avoid this, but it's unclear as rmtmp() isn't the typical API call to be used here.
+
+However, using the fclose() before an rmtmp() may resolve this issue, but according to the presented code, an error may occur here as rmtmp() typically isn't used. Therefore, I will make my conclusions based on fclose instead. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should close the file before removing it. The fclose() function should be used to close the file before deleting it.
+```c
+if (fclose(stream) != 0) {
+  perror("Could not close the temporary file\n");
+  return (-1);
+}
+unlink("filename"); // remove tmp file
+```
+Use of tmpfile() isn't recommended as tmpfile() isn't safe regarding file name disclosure, an additional risk here is temp file deletion, do proper error handling, as its not reliable, switch the file handling with secure way like with file descriptor, with tmpnam() like example or by system call mkstemp with file descriptor.
+
+ORIGINAL CODE:
+```c
+FILE *stream;if( (stream = tmpfile()) == NULL ) {
+    perror("Could not open new temporary file\n");return (-1);
+}
+// write data to tmp file
+...// remove tmp filermtmp();
+```

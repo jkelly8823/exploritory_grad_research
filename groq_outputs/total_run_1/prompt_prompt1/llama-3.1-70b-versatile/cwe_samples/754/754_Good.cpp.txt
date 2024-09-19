@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to buffer overflow attacks and incomplete error handling.
+
+EXPLANATION:
+The code uses the `printf` function to display error messages. However, in the error handling for opening and writing to a file, the `filename` variable is passed directly to `printf`. The `filename` variable is a char pointer, which means that an attacker can potentially inject a format string attack. This vulnerability allows an attacker to execute arbitrary code on the system.
+
+Furthermore, the function does not check for errors on the `closeFile` function call.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use a safe version of the `printf` function that prevents format string attacks, such as `printf("Unable to open or write file %s", filename)`. Additionally, check the return value of the `closeFile` function and handle any errors that may occur. 
+
+To further improve the security of the code, consider using a secure way to handle file operations, such as using `fopen`, `fwrite`, and `fclose` instead of custom file operation functions.
+
+ORIGINAL CODE:
+
+```c
+int outputStringToFile(char *output, char *filename) {
+    int isOutput = SUCCESS;
+    int isOpen = openFileToWrite(filename);
+    if (isOpen == FAIL) {
+        printf("Unable to open file %s", filename);
+        isOutput = FAIL;
+    } else {
+        int isWrite = writeToFile(output);
+        if (isWrite == FAIL) {
+            printf("Unable to write to file %s", filename);
+            isOutput = FAIL;
+        }
+        int isClose = closeFile(filename);
+        if (isClose == FAIL) {
+            isOutput = FAIL;
+        }
+    }
+    return isOutput;
+}
+```
+
+It would be more optimal to write this with new security in mind, for example
+
+```c
+int outputStringToFile(char *output, char *filename) {
+    int isOutput = SUCCESS;
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        printf("Unable to open file %s", filename);
+        isOutput = FAIL;
+    } else {
+        if (fprintf(file, "%s", output) < 0) {
+            printf("Unable to write to file %s", filename);
+            isOutput = FAIL;
+        }
+        if (fclose(file) != 0) {
+            printf("Unable to close file %s", filename);
+            isOutput = FAIL;
+        }
+    }
+    return isOutput;
+}
+```

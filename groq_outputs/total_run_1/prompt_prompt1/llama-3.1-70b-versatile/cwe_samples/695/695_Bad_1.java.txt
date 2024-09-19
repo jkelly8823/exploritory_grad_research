@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 12-14
+VULNERABILITY_DESCRIPTION:
+Resource leak and potential denial of service due to unhandled socket closure.
+
+EXPLANATION:
+In the provided code segment, a socket is opened to a remote server, but it is not closed properly in the case of an exception. If an exception occurs while using the socket, the socket will not be closed, which can cause resource leaks. Additionally, the code does not handle the potential denial of service that can occur if the remote server is unresponsive or unavailable.
+
+In the try block, a socket is created and assigned to the `sock` variable. However, the `sock` variable is not closed in the case of an exception. This means that if an exception occurs, the socket will remain open and consume system resources. Furthermore, if the remote server is unresponsive or unavailable, the socket may remain in a blocked state, resulting in a denial of service.
+
+Moreover, the exception handling is too broad, as it catches the base `Exception` class. This can mask other programming errors and make debugging more difficult.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the socket should be closed in a finally block, regardless of whether an exception occurs. The exception handling should also be more specific to handle specific exceptions that may occur while using the socket. Here is an example of how the code can be refactored to fix the vulnerability:
+
+```java
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // ...
+    Socket sock = null;
+    try {
+        sock = new Socket(remoteHostname, 3000);
+        // Do something with the socket.
+        // ...
+    } catch (UnknownHostException e) {
+        // Handle unknown host exception
+    } catch (IOException e) {
+        // Handle IO exception
+    } finally {
+        if (sock != null) {
+            try {
+                sock.close();
+            } catch (IOException e) {
+                // Handle exception while closing socket
+            }
+        }
+    }
+}
+```
+
+Alternatively, Java 7 and later versions provide a try-with-resources statement that can automatically close the socket, regardless of whether an exception occurs.
+
+```java
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // ...
+    try (Socket sock = new Socket(remoteHostname, 3000)) {
+        // Do something with the socket.
+        // ...
+    } catch (UnknownHostException e) {
+        // Handle unknown host exception
+    } catch (IOException e) {
+        // Handle IO exception
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // Perform servlet tasks.
+    // ...
+    // Open a socket to a remote server (bad).
+    Socket sock = null;
+    try {
+        sock = new Socket(remoteHostname, 3000);
+        // Do something with the socket.
+        // ...
+    } catch (Exception e) {...}
+}
+```

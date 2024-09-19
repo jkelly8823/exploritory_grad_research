@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+VULNERABILITY_DESCRIPTION: Insufficient Input Validation and Potential Buffer Overflow
+EXPLANATION:
+The code uses fgets() to read input from stdin into a fixed-size buffer. This can potentially lead to a buffer overflow vulnerability if the input exceeds the buffer size, even though fgets() is designed to prevent overflows by including the null-terminator and up to `size-1` characters. However, there's a common mistake here - fgets() includes the null-character in its count, so a read of `size-1` actually holds `size-2` characters and the last one for null-terminator. On top of that fgets returns NULL on failure and should be checked for this condition. Also, it could be subject to an underflow condition as fgets will take as input until the file descriptor isn't set with its second parameter but, it should ideally also check the return value of the fgets function call. And lastly as fgets does not protect the user from stack-based attacks but against streams' attacks.
+RECOMMENDATIONS:
+- Check the return value of fgets to handle any potential errors.
+- Verify the input size to prevent from buffer overflow. Ensure the reading will not exceed `MAX_BUFFER_SIZE-1`. Also be sure the buffer will be initialized and passed with this size minus one - and, that the return value isn't considered a char nor reconverted either:
+
+Here is how you can modify the vulnerable code:
+
+```c
+enum { MAX_BUFFER_SIZE = 1024 };
+char buffer[MAX_BUFFER_SIZE];
+
+// Prevent input from exceeding the buffer size
+if (fgets(buffer, MAX_BUFFER_SIZE-1, stdin) != NULL) {
+    // String is null-terminated and input validation has succeeded
+} else {
+    // An error occurred, or user hit ENTER on an empty line
+    // Perform actions accordingly
+}
+```
+ORIGINAL CODE:
+```c
+enum { MAX_BUFFER_SIZE = 1024 };
+char buffer[MAX_BUFFER_SIZE];
+fgets(buffer, MAX_BUFFER_SIZE, stdin);
+```

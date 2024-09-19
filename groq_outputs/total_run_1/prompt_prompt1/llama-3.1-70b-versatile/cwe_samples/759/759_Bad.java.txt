@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+Insecure use of MessageDigest and incorrect hashing of passwords.
+
+EXPLANATION:
+The provided code uses the SHA algorithm from the MessageDigest class for hashing a password. However, there are a few issues:
+
+1. The MessageDigest instance is declared as `encer`, but then it is never used for hashing the password. The code incorrectly uses `password.digest()`, which seems to be a typo and does not refer to any declared variable. This will result in a `java.lang.NullPointerException` because `password` is not initialized.
+
+2. Even if the `encer` instance was used correctly, the code directly uses the SHA algorithm without any additional security measures such as salting. This is insecure because it makes the system vulnerable to rainbow table attacks.
+
+3. The password verification uses a simple comparison between the generated hash and the stored hash using a custom `equal()` method. However, the implementation of this method is not shown in the provided code.
+
+4. The code might be using plain text passwords for authentication. Although strings are immutable in Java, using a string to store passwords can still be insecure if an attacker gains access to the memory, as strings may not be immediately garbage collected.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following recommendations:
+- Use a secure method to hash the password such as PBKDF2 (Password-Based Key Derivation Function 2), BCrypt, or Argon2.
+- Use a secure method to store passwords such as hashed and salted passwords.
+- Use a secure comparison method to compare the passwords such as `MessageDigest.isEqual()`.
+- Use a `char[]` or a `byte[]` instead of a `String` to store passwords to reduce the risk of memory leaks.
+
+- Replace the code with the following example:
+
+```java
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+
+// generate salt
+SecureRandom random = new SecureRandom();
+byte[] salt = new byte[16];
+random.nextBytes(salt);
+
+// hash password
+KeySpec spec = new PBEKeySpec(plainTextIn.toCharArray(), salt, 65536, 128);
+SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+byte[] digest = f.generateSecret(spec).getEncoded();
+
+// store salt and digest
+
+// verify password
+// generate hash of input password using stored salt
+KeySpec spec2 = new PBEKeySpec(inputPassword.toCharArray(), storedSalt, 65536, 128);
+SecretKeyFactory f2 = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+byte[] inputDigest = f2.generateSecret(spec2).getEncoded();
+
+// compare stored digest with generated digest of input password
+MessageDigest.isEqual(storedDigest, inputDigest);
+```
+
+ORIGINAL CODE:
+```java
+String plainText = new String(plainTextIn);
+MessageDigest encer = MessageDigest.getInstance("SHA");
+encer.update(plainTextIn);
+byte[] digest = password.digest();
+//Login if hash matches stored hash
+if (equal(digest, secret_password())) {
+    login_user();
+}
+```

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: NA (note: due to partial code, it is unclear what the exact line numbers are)
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a timing attack due to the use of a comparison function (`equal`) for verifying password hashes.
+
+EXPLANATION:
+The `equal` function used for comparing the calculated hash (`ctext`) with the stored password hash (`secret_password()`) can leak timing information about the hash comparison process. An attacker can exploit this by measuring the time it takes for the comparison to complete, potentially revealing whether the hash being compared is a prefix or not. This allows an attacker to infer information about the stored hash, ultimately leading to more sophisticated attacks like password cracking or hash collisions.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the comparison function should be replaced with a constant time comparison function, such as the one using the `hmac.Equal` or similar functions in your programming language. This function will always take the same amount of time, regardless of the lengths of the input strings or the position of the mismatch.
+
+Here is a code example of how to secure the comparison (pseudo-code:
+
+```c
+int constant_time_cmp(const unsigned char *a, const unsigned char *b, size_t len) {
+  unsigned char result = 0;
+  for (size_t i = 0; i < len; i++) {
+    result |= a[i] ^ b[i];
+  }
+  return result == 0;
+}
+
+// Replacing the equal function with the constant_time_cmp function
+if (constant_time_cmp(ctext, secret_password(), len)) {
+  login_user();
+}
+```
+
+ORIGINAL CODE:
+```c
+unsigned char *check_passwd(char *plaintext) {
+  ctext = simple_digest("sha1",plaintext,strlen(plaintext), ... );
+  // Login if hash matches stored hash
+  if (equal(ctext, secret_password())) {
+    login_user();
+  }
+}
+```

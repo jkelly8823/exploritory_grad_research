@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-25
+VULNERABILITY_DESCRIPTION:
+Vulnerable directory path traversal (Path Traversal Vulnerability) is present in the code.
+
+EXPLANATION:
+The vulnerability is caused by the fact that the filename is not properly validated. An attacker could send a request with a malicious filename containing path traversal sequences (e.g., "..\..\..\_evil_file.txt") to write files outside the designated directory. The code currently uses the filename as-is and appends it to the(uploadLocation) which is a constant. This could lead to potential overwriting of sensitive files or could lead to elevation of privileges by writing executable files in key locations. 
+
+Moreover,  using "bw.write(line)" to write user-controlled data directly to a file is not a best practice as it does not limit the amount of data being written to the file.
+
+RECOMMENDATIONS:
+1. **Validate filenames**: Always validate filenames from user input using a whitelist approach (e.g., only allowing certain extensions). 
+2. **Use filename sanitizer libraries**: Utilize a sanitizing library to parse and modify file paths safely (e.g. "java.io.File.renameTo()").
+3. **Ensure proper directory permissions**: Ensure the upload location is owned by the application's user and group, and ensure that write permissions are not granted to unwanted users.
+4. **Limit the length of user input data**: Modify the code to discard any filename input beyond a certain number of characters to prevent buffer overflow type attacks.
+5. **Proper exception handling**: When any errors are encountered during the upload, log the related data along with complete stack traces.
+6. **Proper Security Checks**: Properly validate 'request' object input before calling 'getInputStream' as different requests may have different HTTP methods invoked (making the code fail under different circumstances). 
+
+ORIGINAL CODE:
+
+```java
+public class FileUploadServlet extends HttpServlet {
+    ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        ...
+        // verify that content type is multipart form data
+        if (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+            ...
+            // extract the filename from the Http header
+            BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
+            ...
+            pLine = br.readLine();
+            String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+            // output the file to the local upload directory
+            try {
+                BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));
+                for (String line; (line=br.readLine())!=null; ) {
+                    if (line.indexOf(boundary) == -1) {
+                        bw.write(line);
+                        bw.newLine();
+                        bw.flush();
+                    }
+                } //end of for loop
+                bw.close();
+            } catch (IOException ex) {...}
+            // output successful upload response HTML page
+        }// output unsuccessful upload response HTML page
+        else{...}
+    }...
+...
+```

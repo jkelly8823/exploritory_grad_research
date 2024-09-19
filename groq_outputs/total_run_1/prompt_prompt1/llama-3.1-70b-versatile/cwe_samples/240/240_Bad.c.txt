@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-13
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in the provided code is a potential buffer overflow when copying the message body into the `message` array.
+
+EXPLANATION:
+The code uses `getMessage` function to read data from a socket into a buffer, but it does not perform any bounds checking on the length of the data received. The `getMessage` function returns the number of bytes read, but it does not guarantee that the data received is null-terminated or that it is within the buffer's capacity. 
+
+The code then copies the message body from the `msg->msgBody` array into the `message` array without checking if the `msg->msgLength` is greater than or equal to `MESSAGE_SIZE`. This could lead to a buffer overflow if `msg->msgLength` is larger than `MESSAGE_SIZE`, resulting in undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking to ensure that the data received from the socket is within the capacity of the buffer and the `message` array. Here are some steps you can follow:
+
+1. Check the return value of `getMessage` to ensure that the number of bytes read is not greater than `BUFFER_SIZE`.
+2. Check the value of `msg->msgLength` to ensure that it is not greater than or equal to `MESSAGE_SIZE` before copying the message body into the `message` array.
+3. Use library functions like `strncpy` or `snprintf` to perform the copy operation, which allow you to specify the maximum number of characters to copy and prevent buffer overflows.
+
+ORIGINAL CODE:
+```
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+    
+    // get message from socket and store into buffer
+    
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+        
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+        
+        // copy message body into string for processing
+        int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+        
+        // process message
+        success = processMessage(message);
+    }return success;
+}
+```

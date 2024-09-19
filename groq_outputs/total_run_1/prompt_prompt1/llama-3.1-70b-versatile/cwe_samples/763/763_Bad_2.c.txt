@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 10
+VULNERABILITY_DESCRIPTION:
+A double-free vulnerability is present in the given code. A double-free vulnerability occurs when a program attempts to free the same memory location twice, which can lead to undefined behavior, crashes, and potentially be exploited to execute malicious code.
+
+EXPLANATION:
+The 'strtok' function in C stores a static pointer to the current position in the input string. When 'strtok' is called with a non-NULL pointer, it treats that string as the input. However, when called with a NULL pointer, 'strtok' continues from the last position it processed. Therefore, each time 'strtok' is called with NULL, it returns a pointer to the same string, as long as it hasn't finished parsing. This means that when 'tok' is not malformed and is added to the command queue, 'tok' is still pointing to the same string that will be returned again on the next 'strtok' call. 
+
+However, when 'tok' is malformed, 'free(tok)' is called, attempting to free the memory that 'tok' is pointing to. This is incorrect because 'tok' is pointing into the memory that was allocated for 'input', and the return value of 'strtok' should not be freed manually. When the loop continues and 'tok' is valid, 'add_to_command_queue(tok)' adds the pointer to the command queue. However, when 'tok' is malformed and 'free(tok)' is called, it is freeing the memory that will be pointed to by 'tok' in the command queue, which will likely result in an attempt to access freed memory when the command queue is processed.
+
+RECOMMENDATIONS:
+- The code should not manually free the memory allocated for 'tok', because 'tok' is pointing to memory that is part of the 'input' array and should only be freed once, when 'free(input)' is called. 
+- Consider using 'strtok_r', a safer, reentrant version of 'strtok', which can avoid this issue. However, note that 'strtok_r' still modifies the input string by inserting null-terminators.
+
+ORIGINAL CODE:
+```c
+//hardcode input length for simplicity
+char* input = (char*) malloc(40*sizeof(char));char *tok;char* sep = " \t";
+get_user_input( input );
+
+/* The following loop will parse and process each token in the input string */
+
+tok = strtok( input, sep);while( NULL != tok ){
+    if( isMalformed( tok ) ){
+
+        /* ignore and discard bad data */
+        free( tok ); 
+    }else{add_to_command_queue( tok );}tok = strtok( NULL, sep));
+}
+```

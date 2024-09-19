@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Use of alloca() and incorrect pointer assignment, leading to a potential stack overflow and undefined behavior.
+
+EXPLANATION:
+The code is usingalloca() to allocate memory on the stack, but this is not a standard function and should be avoided in favor of more safe and portable options. Furthermore, the pointer assignment *p = alloca(sizeof(int *)); and p = *p; is used to allocate a block of memory on the stack, and then assigning the address of the allocated memory back to the pointer p. This can cause undefined behavior.
+
+However, the primary issue here is that each call to alloca() allocates memory on the stack, and the space used does not get deallocated, resulting in a potential stack overflow. The function alloca() should be used in place where you allocate small memory that get deallocated after function finishes. But, here it is used in the loop, where it get continuously allocate, making it big risk for a stack overflow.
+
+Considering the initial comment on database getting too big, that makes it even bigger risk factor.
+
+RECOMMENDATIONS:
+
+1.  Instead of using alloca(), it would be better to use dynamically allocated memory with malloc(), and manually free the used memory when it is no longer needed.
+
+2.  This might make more sense if changed into dynamically allocated memory structure (i.e., array), which gets allocated like needed, and freed when that array is no longer needed.
+
+Here is how the changes might look like:
+
+```c
+#include <stdlib.h>  //malloc and free declaration
+
+
+int *base = NULL;
+int i,end_limit;
+
+end_limit = get_nmbr_obj_from_db();
+
+// Allocate the structure
+int *array_base = (int *)malloc(end_limit * sizeof(int));
+
+// Check if the allocation failed
+if (array_base == NULL) {
+    // handle memory allocation failure here
+}
+
+// Now use the allocated memory
+for (i = 0; i < end_limit; i++)
+{
+
+    array_base[i] = i; // some example action
+}
+
+// When the allocated memory is no longer needed
+free(array_base);
+
+//or, This might make sense if no memory allocation required here:
+//    And simple variable i, end_limit, are called inside database
+
+int i,end_limit;
+end_limit = get_nmbr_obj_from_db();
+for ( i = 0; i < end_limit; i++)
+{
+    //no need for allocation
+}
+``` 
+ORIGINAL CODE:
+```c
+// Gets the size from the number of objects in a database, which over time can conceivably get very large
+int end_limit = get_nmbr_obj_from_db();
+int i;
+int *base = NULL;
+int *p =base;
+for (i = 0; i < end_limit; i++)
+{
+    
+    *p = alloca(sizeof(int *)); // Allocate memory on the stack
+    p = *p; // // Point to the next location to be saved
+    
+}
+```

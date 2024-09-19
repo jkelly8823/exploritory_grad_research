@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The provided code contains a potential vulnerability to a Denial-of-Service (DoS) attack through unhandled redirects. The `http_redirect` function may be called without checking if the destination URL is valid or has reached a possible limit.
+
+EXPLANATION:
+In the code, the `http_redirect` function is called immediately after determining that the IP is not in the allowed list. However, there is no validation of the `$errorPageURL` before redirecting the user. This can lead to potential issues, such as:
+
+- The destination URL may not be properly sanitized or validated, potentially causing a DoS attack if the redirect leads to a server with an unbound capacity (network DoS) or cannot handle requests.
+- In cases where `$errorPageURL` is dynamically generated, a potential user input could be inserted in the string without any protection.
+
+In addition to this, the `http_redirect` function itself might cause security issues. This function is part of the `http` PHP extension, but it can't be guaranteed to always be available in every environment, potentially resulting in further security issues.
+
+The commented portion of the code does not contain a terminating line end before the ellipsis, and thus is not safe to analyze for errors.
+
+RECOMMENDATIONS:
+- The destination URL ($errorPageURL) must be cleaned and validated before a redirect is attempted to ensure it is within your server's reach and safe to interact with.
+- It's recommended to verify whether `http_redirect` function will always work depending on your deployment needs.
+- A more typical approach for redirection would be the header functions and a conditional exit for aborting the current execution:
+  
+```php
+  if(!in_array($requestingIP, $ipAllowList)) {
+    header('Location:'.$errorPageURL);
+    exit('You are not authorized to view this page');
+  }
+```
+Alternatively, using HTML redirect might also work depending on specifics.
+Before relying solely on the alternate way given above, thorough error checking and review should take place when upgrading any major systems.
+
+ORIGINAL CODE:
+```php
+$requestingIP = $_SERVER['REMOTE_ADDR'];
+if(!in_array($requestingIP,$ipAllowList)){echo "You are not authorized to view this page";
+http_redirect($errorPageURL);
+}$status = getServerStatus();
+echo $status;
+```

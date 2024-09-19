@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 10, 26
+VULNERABILITY_DESCRIPTION:
+Use-after-Free vulnerability and Inconsistent Saving and Loading of Configurations.
+
+EXPLANATION:
+The `save_config_state` and `restore_config_state` functions demonstrate a couple of potential vulnerabilities. In the `save_config_state` function, the `cfg` pointer is passed to `save_config_state` but this is a recursive call with the same parameters leading to undefined behavior unless `save_config_state` is meant to be used as a local variable here in which case the naming is incorrect. Also, there's no error checking for potential memory issues in `get_config_state`, `get_hash_of_config_state`, `save_config_state`, and `save_hash`. 
+
+In `restore_config_state`, after the hash verification, `load_config_file(cfg)` is called but `cfg` is a pointer with unknown contents. This might cause undefined behavior when it's used after being passed to `get_hash_of_config_state`. Also, there's no error checking in `get_persisted_sha_value` and `get_config_file`. If these functions didn't return successfully, this might lead to undefined behavior.
+
+Moreover, `get_config_file` returns a config file pointer, but this pointer might not be initialized or validated before passing to `get_hash_of_config_state` and `load_config_file`.
+
+RECOMMENDATIONS:
+- A line `cfg = get_config_state();` should be followed by a memory management method for the `cfg` returned, implementing a copy-and-paste of the cfg memory location if needed. Otherwise, removing the second call `save_config_state(cfg);` will prevent the undefined behavior.
+- Implement error checking in `get_config_state`, `get_hash_of_config_state`, `save_config_state`, `save_hash`, `get_persisted_sha_value`, and `get_config_file`. Check if these functions failed and handle the error.
+- Add checks to ensure that the pointers are not null before passing them to any function.
+- Verify `cfg` after `get_config_file()` returns to make sure it doesn't cause undefined behavior in `get_hash_of_config_state` and `load_config_file`.
+
+ORIGINAL CODE:
+
+
+```c
+void save_config_state()
+{
+	void* cfg;
+	void* sha;
+	
+	cfg = get_config_state();
+	save_config_state(cfg); 						// Is this correct? Should this function be calling itself again? And was cfg intended to be cfg or somethign else like config state variable (state perhaps?) when being called.
+	
+	// save hash(cfg) to trusted location
+	sha = get_hash_of_config_state(cfg);
+	save_hash(sha); 
+	go_to_sleep();
+	
+}
+
+void restore_config_state()
+{
+	void* cfg;
+	void* sha_1, sha_2;
+	
+	cfg = get_config_file();
+	// restore hash of config from trusted memory
+	sha_1 = get_persisted_sha_value();
+	
+	sha_2 = get_hash_of_config_state(cfg);
+	if (sha_1 != sha_2)
+		assert_error_and_halt();
+	
+	load_config_file(cfg);
+}
+```

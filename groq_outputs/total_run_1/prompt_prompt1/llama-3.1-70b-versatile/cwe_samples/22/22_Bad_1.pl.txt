@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+A Path Traversal Vulnerability exists in the provided code.
+
+EXPLANATION:
+The code is vulnerable to a Path Traversal attack, which allows an attacker to access files outside of the intended directory. The issue is caused by insecurely concatenating the `$Username` variable with a hardcoded directory path. The `$Username` variable is obtained from an untrusted source (`GetUntrustedInput()`), and even though `../` is removed, it is still possible to traverse the directory structure using other techniques such as `.` or encoded directory traversal.
+
+In this case, the vulnerability arises from the sanitation attempt being insufficient. The removal of `../` alone does not prevent a malicious user from submitting a filename that still allows directory traversal. This can be achieved, for example, by including a path that uses the `./` notation, which will simply be removed by the sanitation, effectively allowing directory traversal.
+
+RECOMMENDATIONS:
+To fix the vulnerability, sanitize the `$Username` variable more securely by only allowing valid, non-traversable filenames. Here are a few steps that can be taken:
+
+1. Use a whitelisting approach to validate the input. Only allow certain, predefined characters (e.g., alphanumeric, underscores) in the username.
+2. Use a well-tested, existing library for sanitizing input.
+3. Consider using a parameterized file path or a sandboxed environment to limit the impact of a potential attack.
+
+One possible secure implementation in Perl is:
+
+```perl
+use strict;
+use warnings;
+use File::Spec;
+
+my $Username = GetUntrustedInput();
+my $allowed_chars = '^[a-zA-Z0-9_]+$';
+if ($Username !~ /$allowed_chars/) {
+    die 'Invalid username';
+}
+my $filename = File::Spec->join('/home/user/', $Username);
+ReadAndSendFile($filename);
+```
+
+ORIGINAL CODE:
+```perl
+my $Username = GetUntrustedInput(); $Username =~ s/\.\.\///; my $filename = "/home/user/" . $Username; ReadAndSendFile($filename);
+```

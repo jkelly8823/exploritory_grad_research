@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8, 14-16
+VULNERABILITY_DESCRIPTION:
+Path Traversal and Potential Arbitrary File Access vulnerabilities.
+
+EXPLANATION:
+The code uses user-provided input (sys.argv[1]) to construct a file path without proper validation. Although it uses os.path.normpath to normalize the path, it does not prevent a malicious user from providing a manipulated path, allowing for potential directory traversal attacks. Additionally, the try-except block catches the FileNotFoundError exception but does not handle other potential exceptions, such as PermissionError or IsADirectoryError, which could also be caused by a malicious path.
+
+Furthermore, the code assumes that the provided filename is a normal file, not a directory or a special file. If a malicious user provides a directory or special file, the code may attempt to read from it, potentially leading to unexpected behavior or security vulnerabilities.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, consider the following:
+
+1. Validate user-provided input: Use a whitelist approach to validate the provided filename against a set of allowed file extensions and directories.
+
+2. Handle exceptions properly: Catch and handle all relevant exceptions that may be raised when attempting to open and read a file.
+
+3. Check file type and existence: Use os.path.exists() to check if the file exists, and os.path.isfile() to check if the path is a regular file before attempting to open and read it.
+
+Here's an updated version of the code that addresses these vulnerabilities:
+
+```python
+import os
+import sys
+
+def main():
+    filename = sys.argv[1]
+    allowed_extensions = ['.txt', '.log']  # Define allowed file extensions
+
+    if not filename.endswith(tuple(allowed_extensions)):
+        print("Error - invalid file type")
+        return
+
+    path = os.path.join(os.getcwd(), filename)
+
+    if not os.path.exists(path) or not os.path.isfile(path):
+        print("Error - file not found or not a regular file")
+        return
+
+    try:
+        with open(path, 'r') as f:
+            file_data = f.read()
+    except PermissionError as e:
+        print(f"Error - permission denied: {e}")
+    except Exception as e:
+        print(f"Error - unexpected error: {e}")
+
+if __name__ == "__main__":
+    main()
+```
+
+ORIGINAL CODE:
+```python
+import os
+import sys
+
+def main():
+    filename = sys.argv[1]
+    path = os.path.normpath(f"{os.getcwd()}{os.sep}{filename}")
+    try:
+        with open(path, 'r') as f:
+            file_data = f.read()
+    except FileNotFoundError as e:
+        print("Error - file not found")
+
+main()
+```

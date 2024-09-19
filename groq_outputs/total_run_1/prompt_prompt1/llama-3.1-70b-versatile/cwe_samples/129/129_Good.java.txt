@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 9
+VULNERABILITY_DESCRIPTION:
+Null Pointer Exception Vulnerability Due to Variable Shadowing
+
+EXPLANATION:
+The displayProductSummary method is calling the getProductSummary method and assigning the result to a variable. However, this variable is re-declared within the try block. As a result, the value returned by getProductSummary is being assigned to the local variable within the try block, not the outer variable declared in displayProductSummary. 
+
+This results in the outer productSummary variable remaining a default empty string ("") even after a successful execution of getProductSummary, and the method will always return a null or empty string.
+
+Moreover, if an IndexOutOfBoundsException is thrown within the getProductSummary method and an exception is caught, even if there are no other operations performed within the catch block, the outer productSummary variable will be returned, displaying no information to the user regarding the error.
+
+The developer may also be expecting to handle the Exception class differently or to print the error to the console, if needed. Without being asked to do these specifics, by at minimum a System.err statement or throwing another Exception of a more suitable class. These methods help developers get the messages and stack trace.
+
+RECOMMENDATIONS:
+Remove the re-declaration of productSummary within the try block. Assign the result of getProductSummary directly to the outer productSummary variable. Also, consider including a logging or notification mechanism for IndexOutOfBoundsExceptions or Exceptions caught in displayProductSummary for proper error handling. Here's the corrected code:
+```java
+// Method called from servlet to obtain product information
+public String displayProductSummary(int index) {
+    String productSummary = new String("");
+    try {
+        productSummary = getProductSummary(index);
+    } catch (Exception ex) {
+        System.err.println("Error occurred in product summary retrieval");
+        // Consider throwing a custom Exception for notification
+    }
+    return productSummary;
+}
+
+public String getProductSummary(int index) {
+    String productSummary = "";
+    if ((index >= 0) && (index < MAX_PRODUCTS)) {
+        productSummary = products[index];
+    } else {
+        System.err.println("index is out of bounds");
+        throw new IndexOutOfBoundsException();
+    }
+    return productSummary;
+}
+```
+ORIGINAL CODE:
+```java
+// Method called from servlet to obtain product information
+public String displayProductSummary(int index) {
+    String productSummary = new String("");
+    try {
+        String productSummary = getProductSummary(index);
+    } catch (Exception ex) {}
+    return productSummary;
+}
+public String getProductSummary(int index) {
+    String productSummary = "";
+    if ((index >= 0) && (index < MAX_PRODUCTS)) {
+        productSummary = products[index];
+    } else {
+        System.err.println("index is out of bounds");
+        throw new IndexOutOfBoundsException();
+    }
+    return productSummary;
+}
+```

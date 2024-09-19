@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-13
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to an XML Injection Attack. The code is reading an XML file from the local filesystem without proper validation, and then parsing it using DocumentBuilderFactory. This can lead to XML injection attacks if the file is tampered with.
+
+EXPLANATION:
+The code reads an XML file from the local filesystem and then parses it using DocumentBuilderFactory. This is a potential vulnerability because it does not validate the XML file. An attacker can modify the XML file to include malicious elements, which can result in the parser interpreting the input as executable code. This could potentially lead to sensitive data exposure or even arbitrary code execution.
+
+RECOMMENDATIONS:
+To address this vulnerability, we recommend the following fixes:
+- Always validate the XML file before parsing it.
+- Set the "http://xml.org/sax/features/external-general-entities" and "http://xml.org/sax/features/external-parameter-entities" flags to `false` to prevent external entity resolution.
+- Set the DocumentBuilderFactory's own features to prevent external entity attacks.
+
+Here is an example of how to set the features:
+
+```java
+DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+dbf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+dbf.setXIncludeAware(false);
+dbf.setExpandEntityReferences(false);
+```
+Also, use a `Schema` or a `DTD` to validate the XML file against a fixed set of allowed elements.
+
+ORIGINAL CODE:
+```java
+@Stateless
+public class InterestRateBean implements InterestRateRemote {
+     
+    private Document interestRateXMLDocument = null;
+    private File interestRateFile = null;
+    public InterestRateBean() {
+          try {
+                /* get XML document from the local filesystem */
+                interestRateFile = new File(Constants.INTEREST_RATE_FILE);
+                if (interestRateFile.exists()){
+                    DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+                    DocumentBuilder db = dbf.newDocumentBuilder();
+                    interestRateXMLDocument = db.parse(interestRateFile);
+                }
+          } catch (IOException ex) {...}
+    }
+    public BigDecimal getInterestRate(Integer points) {return getInterestRateFromXML(points);}
+    
+    /* member function to retrieve interest rate from XML document on the local file system */
+    
+    private BigDecimal getInterestRateFromXML(Integer points) {...}
+}
+```

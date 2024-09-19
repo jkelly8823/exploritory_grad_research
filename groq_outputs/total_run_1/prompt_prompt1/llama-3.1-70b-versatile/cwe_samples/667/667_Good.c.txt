@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+pthread_mutex_unlock() is called unconditionally, potentially returning a non-zero value, which is not checked for errors.
+
+EXPLANATION:
+The pthread_mutex_unlock() function attempts to unlock a mutex. If this function fails, it will return a non-zero value. In the given code, this value is not checked for errors and is directly returned by the function. This can make the program unusable if the mutex cannot be unlocked properly.
+
+If there is an error while unlocking the mutex, this error code is directly returned to the caller without any indication that an error occurred. This could potentially lead to issues that are difficult to debug, as the caller of the function would need to verify if the function is returning a valid result or an error code.
+
+RECOMMENDATIONS:
+The return value of pthread_mutex_unlock() should be checked for errors and properly handled. Here's an example of how to improve the code:
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (result != 0) {
+        return result;
+    }
+
+    // access shared resource
+
+    // Check the return value of pthread_mutex_unlock()
+    result = pthread_mutex_unlock(mutex);
+    if (result != 0) {
+        // Handle the error, for example by logging it
+        perror("pthread_mutex_unlock");
+        // You may also want to consider aborting the function here, depending
+        // on your application's requirements
+    }
+
+    return result;
+}
+```
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+    
+    /* access shared resource */
+    
+    return pthread_mutex_unlock(mutex);
+}
+```

@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) and Resource Leak due to uncontrolled usage of ExecutorService.
+
+EXPLANATION:
+In this code, a new ExecutorService instance with a fixed thread pool size of MAX_CONNECTIONS is created in every iteration of the while loop. This can cause a denial of service, as the application will eventually run out of memory and resources due to the continuous creation of new ExecutorService instances. Furthermore, none of the threads are being waited for to complete their tasks, which can potentially lead to a resource leak.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to create the ExecutorService instance outside the while loop and reuse it for all incoming connections. This way, the thread pool can effectively manage threads and prevent the code from running out of resources.
+
+Here's an updated version of the code snippet:
+```java
+public void acceptConnections() {
+    ExecutorService pool = Executors.newFixedThreadPool(MAX_CONNECTIONS);
+    try {
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            hasConnections = checkForMoreConnections();
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            pool.execute(t);
+        }
+        serverSocket.close();
+        // Shutdown the thread pool to release resources
+        pool.shutdown();
+    } catch (IOException ex) { ... }
+}
+```
+ORIGINAL CODE:
+```java
+public static final int SERVER_PORT = 4444;
+public static final int MAX_CONNECTIONS = 10;
+...
+public void acceptConnections() {
+    try {
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            hasConnections = checkForMoreConnections();
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            ExecutorService pool = Executors.newFixedThreadPool(MAX_CONNECTIONS);
+            pool.execute(t);
+        }
+        serverSocket.close();
+    } catch (IOException ex) { ... }
+}
+```

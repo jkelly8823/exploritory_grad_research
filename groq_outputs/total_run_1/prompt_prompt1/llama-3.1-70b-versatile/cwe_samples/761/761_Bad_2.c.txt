@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 6, 10, 14
+VULNERABILITY_DESCRIPTION:
+The given code segment is vulnerable to multiple vulnerabilities, including Integer Overflow, Out-of-Bounds Read, and Use After Free. Additionally, there's a potential for Buffer Overflow due to the hardcoded input length and missing input validation. There's also a Resource Leak because the original memory block allocated for the input is never freed, only the strtok-generated tokens.
+
+EXPLANATION:
+In line 3, we have a memory allocation for input with a fixed size. In line 4, get_user_input() may potentially write beyond the allocated 40 characters, leading to a Buffer Overflow.
+
+In line 6, we see a loop using strtok(), which tokenizes the input based on the given separator (" \t"). However, the loop has issues. The use of strtok() makes the tok variable point to different parts of input, and when we do free(tok), we're freeing parts of the original memory block allocated in line 3. If we free a part of the original block, the rest of the block becomes inaccessible and needs the original pointer to be freed.
+
+Additionally, isMalformed(tok) may return true for certain inputs, discarding their corresponding allocation segment of the original block, but free(tok) won't update the memory. This mismatch can prevent proper handling in the original memory block.
+
+Initially, using malloc to allocate memory does not null-terminate the block (There might be no 0x00 at the end), assuming it should hold strings that would eventually get tokenized. This may create issues in certain application instances where token limits can get affected.
+
+In the current code get_user_input does lack validation for input read operation causing a potential buffer overflow depending on the input provided.
+
+RECOMMENDATIONS:
+To prevent this, we should follow proper dynamic memory management techniques:
+
+1. Validate user input to ensure it's within the bounds of the allocated memory, preventing Buffer Overflow attacks. 
+   For example, using fgets(input, 40, stdin) instead of get_user_input() and making sure the length is within limits before proceeding to the parsing phase.
+
+2. Use a safer function instead of strtok() as it is not thread-safe. Here's an alternative example that uses strdup() to safely duplicate the tokens:
+
+  ```c
+    // parse and process each token in the input string
+  char *rest = input;
+  while( *rest ){
+      const char * TokEnd = strchr( rest, *" \t");
+      int len;
+      if( NULL == TokEnd ){
+        len = strlen( rest );
+      }else{
+        len = TokEnd - rest;
+      }
+      if( !isMalformed(rest) ){
+        // duplicate segment of the memory for token (safer)
+        char *tok = malloc( len + 1 );
+        if(NULL == tok) break;
+        strncpy( tok, rest, len );
+        tok[len] = '\0';
+
+        add_to_command_queue( tok );
+        free( tok );
+      }
+      // point to the next Tok in the collection
+      if( len == 0 )rest++;
+      if( NULL == TokEnd )break;
+      rest=TokEnd+1;
+  }
+```
+
+3. Ensure to manually deallocate manually-allocated memory after it's no longer needed to prevent Resource Leak.
+
+  ```cpp
+  free(input);
+  ```
+   Do it after your intended application of the input.
+
+4. Remove commented tokens - e.g. hardcode test in get-user input function, since commented parts won't get processed.
+
+ORIGINAL CODE:
+
+```c
+//hardcode input length for simplicity
+char* input = (char*) malloc(40*sizeof(char));
+char *tok;char* sep = " \t";
+get_user_input( input );
+
+/* The following loop will parse and process each token in the input string */
+tok = strtok( input, sep);while( NULL != tok ){
+  if( isMalformed( tok ) ){
+    /* ignore and discard bad data */
+    free( tok );
+  }else{add_to_command_queue( tok );}
+  tok = strtok( NULL, sep));
+}
+```

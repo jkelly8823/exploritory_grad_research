@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+The provided code is vulnerable to a potential asynchronous reset issue in the sequential logic. This can occur because the reset signal 'reset' is not synchronized with the clock signal 'clk', which can cause the system to fail or exhibit unexpected behavior.
+
+EXPLANATION:
+In sequential logic, the asynchronous reset is typically considered unsecure and poses significant safety risks, especially in JTAG locking logic which controls system debugging privileges. If the reset signal is not synchronized with the clock signal, there is a possibility of metastability issues, which may result in unpredictable system behavior or incorrect reset value being applied. This can potentially unlock the JTAG interface even when it is intended to be locked.
+
+RECOMMENDATIONS:
+To address this potential vulnerability, the reset signal should be synchronized with the clock signal. This can be done using the following code:
+
+```verilog
+reg reset_sync;
+
+always @(posedge clk or negedge reset) begin
+    if (!reset) begin
+        reset_sync <= 0;
+    end else begin
+        reset_sync <= 1;
+    end
+end
+
+always @(posedge clk) begin
+    if (~reset_sync) lock_jtag <= 0;
+    else if (en) lock_jtag <= d;
+end
+```
+This way, the reset signal is synchronized with the clock signal, and any metastability issues are mitigated.
+
+ORIGINAL CODE:
+```verilog
+always @(posedge clk) begin
+    if (~reset) lock_jtag <= 0;
+    else if (en) lock_jtag <= d;
+end
+```

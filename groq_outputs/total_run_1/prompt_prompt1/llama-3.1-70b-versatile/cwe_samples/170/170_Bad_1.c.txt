@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to unchecked return value from readlink().
+
+EXPLANATION:
+The readlink() function does not perform any error checking on its return value, which can lead to a buffer overflow. If the symbolic link being read is longer than MAXPATH, readlink() will fill the buffer and then continue filling past it, leading to undefined behavior. Additionally, the use of strlen() on the buffer is not sufficient to prevent this, as it only returns the length of the string after the buffer has been overflowed.
+
+Furthermore, without proper error checking on readlink(), this code may also lead to cases where the actual length of the symbolic link being read is longer than MAXPATH, and readlink() is truncating the path without any indication of this.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to check the return value of readlink() and ensure that it does not exceed MAXPATH. It is also a good practice to leave some buffer space for a null-terminator.
+
+Recommended fixes:
+- Check the return value of readlink() against MAXPATH.
+- Use the safer version of readlink(), such as readlinkat().
+- Consider using snprintf() or other safer alternatives for constructing the path.
+
+Example of how the code could be modified to fix this issue:
+```c
+ssize_t len = readlink(pathname, buf, MAXPATH - 1);
+if (len < 0) {
+    // Handle error
+} else if (len == MAXPATH - 1) {
+    // Handle case where path was truncated
+} else {
+    length = len;
+}
+```
+
+ORIGINAL CODE:
+char buf[MAXPATH];...readlink(pathname, buf, MAXPATH);int length = strlen(buf);...

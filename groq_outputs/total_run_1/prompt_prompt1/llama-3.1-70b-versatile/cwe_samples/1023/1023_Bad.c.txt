@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7
+VULNERABILITY_DESCRIPTION:
+Insecure comparison and logging in authentication.
+
+EXPLANATION:
+The `AuthenticateUser` function has two vulnerabilities. Firstly, when comparing the input username, it uses `strncmp` with `strlen(inUser)` as the length parameter. This could potentially lead to an information disclosure vulnerability. If the input username is longer than the predefined `username`, the comparison will return a false negative because `strncmp` compares the substrings up to the given length, causing the extra characters in the input username to be ignored.
+
+Secondly, when comparing the input password, it uses `strncmp` with `strlen(inPass)` as the length parameter. This can also lead to an information disclosure vulnerability similar to the username comparison.
+
+Another issue is that the usernames and passwords are compared in a way that may not properly account for null-terminated strings. The `strncmp` function may not provide the desired results if the input strings are not terminated with a null character.
+
+Lastly, the error messages logged by the application provide more information than necessary. For example, when the authentication fails due to the username, it logs "Auth failure of username using strlen of inUser". This message could potentially reveal information about the authentication process.
+
+RECOMMENDATIONS:
+Use `strcmp` for string comparisons, but ensure that the strings passed to it are guaranteed to be null-terminated. Alternatively, use `strncmp` with a maximum length that is known to be present in the input and the predefined strings. Additionally, the error messages should be made more generic to avoid providing unnecessary information. Authentication failures should be logged with minimal details to prevent information disclosure.
+
+Here is an example of how the `AuthenticateUser` function could be modified:
+
+```c
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strcmp(username, inUser) != 0) {
+        logEvent("Auth failure: invalid username");
+        return(AUTH_FAIL);
+    }
+    if (strcmp(pass, inPass) == 0) {
+        logEvent("Auth success");
+        return(AUTH_SUCCESS);
+    } else {
+        logEvent("Auth failure: invalid password");
+        return(AUTH_FAIL);
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strncmp(username, inUser, strlen(inUser))) {
+        logEvent("Auth failure of username using strlen of inUser");
+        return(AUTH_FAIL);
+    }
+    if (! strncmp(pass, inPass, strlen(inPass))) {
+        logEvent("Auth success of password using strlen of inUser");
+        return(AUTH_SUCCESS);
+    }else {
+        logEvent("Auth fail of password using sizeof");
+        return(AUTH_FAIL);
+    }
+}
+int main (int argc, char **argv) {
+    int authResult;if (argc < 3) {
+        ExitError("Usage: Provide a username and password");
+    }
+    authResult = AuthenticateUser(argv[1], argv[2]);
+    if (authResult == AUTH_SUCCESS) {
+        DoAuthenticatedTask(argv[1]);
+    }else {
+        ExitError("Authentication failed");
+    }
+}
+```

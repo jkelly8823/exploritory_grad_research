@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2, 3-4
+VULNERABILITY_DESCRIPTION:
+Double-checked locking idiom vulnerability. The use of double-checked locking in the given code is broken due to partial instantiation in Java.
+
+EXPLANATION:
+The provided code appears to be implementing the double-checked locking idiom, which is a pattern designed to reduce synchronization overhead for lazy initialization of objects. However, this idiom is broken in Java due to the way objects are constructed and garbage collection.
+
+The problem arises from the fact that the object is partially instantiated when the constructor is invoked, which means that the object's fields are not yet set when the synchronized block is exited. This could lead to a situation where one thread sees a non-null value for the object reference `helper` and then attempts to use the partially instantiated `helper`. This can result in unexpected behavior, including data corruption or ClassCastException.
+
+Furthermore, Java does not guarantee the order in which code is executed when the first locking operation is lifted and the resulting value is checked again. This introduces an additional layer of vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the entire `if` statement should be synchronized on the same object:
+
+```java
+synchronized (this) {
+    if (helper == null) {
+        helper = new Helper();
+    }
+}
+return helper;
+```
+
+Alternatively, you can use the Holder class idiom which is considered safer than double-checked locking idiom.
+
+```java
+private class HelperHolder {
+    private static final Helper helper = new Helper();
+}
+
+private Helper helper() {
+    return HelperHolder.helper;
+}
+```
+
+This is because the JVM guarantees that when a class is loaded, the static initializers for that class will be executed once and in a thread-safe way.
+
+ORIGINAL CODE:
+```
+if (helper == null) {
+    synchronized (this) {if (helper == null) {helper = new Helper();}}
+}
+return helper;
+```

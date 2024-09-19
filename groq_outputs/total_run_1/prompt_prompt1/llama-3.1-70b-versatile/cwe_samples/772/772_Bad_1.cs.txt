@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+A SQL Injection vulnerability and a potential unhandled exception are present in the code. It does not validate the input in "queryString" and it also fails to close the SqlDataReader and then the SqlConnection in a finally block to ensure closure even if an exception occurs.
+
+EXPLANATION:
+This code is vulnerable to SQL injection attacks because the input in "queryString" is not validated or sanitized before being executed. This means that malicious input could be used to manipulate the database in unintended ways. Additionally, the failure to close the SqlDataReader before closing the SqlConnection and not using "finally" block to close resources could result in exceptions, including unhandled ones if the connection can't be closed and other operations on the SqlDataReader can't be performed.
+
+RECOMMENDATIONS:
+1. Validate and sanitize all input in "queryString" to prevent SQL injection attacks. 
+   Consider using parameterized queries where parameters are passed as parameters instead of adding them to the query string directly.
+
+2. Implement a "finally" block to close SqlDataReader and SqlConnection after use. This ensures that database resources are released even if exceptions occur.
+
+3. Replace "conn.Connection.Close()"; with "conn.Close()"; because the object 'conn' is already a SqlConnection type.
+
+Here is an improved version of this code which includes the fixes mentioned above:
+
+```csharp
+SqlConnection conn = new SqlConnection(connString);
+try
+{
+    SqlCommand cmd = new SqlCommand(queryString, conn);
+    // Add query parameters for prevent SQL injection
+    // ex.  cmd.Parameters.AddWithValue("@paramName", paramValue);
+    conn.Open();
+    SqlDataReader rdr = cmd.ExecuteReader();
+    try
+    {
+        HarvestResults(rdr);
+    }
+    finally
+    {
+        rdr.Close();
+    }
+}
+finally
+{
+    conn.Close();
+}
+```
+
+ORIGINAL CODE:
+```csharp
+SqlConnection conn = new SqlConnection(connString);
+SqlCommand cmd = new SqlCommand(queryString);
+cmd.Connection = conn;
+conn.Open();
+SqlDataReader rdr = cmd.ExecuteReader();
+HarvestResults(rdr);
+conn.Connection.Close();
+```

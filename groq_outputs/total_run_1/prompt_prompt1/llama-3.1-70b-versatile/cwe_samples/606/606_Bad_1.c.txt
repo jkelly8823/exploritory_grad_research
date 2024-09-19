@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 16-17
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to two types of buffer overflow vulnerabilities. The first occurs when using the `getMessage` function to read data from a socket, which can potentially write beyond the bounds of the `buffer` array. The second occurs when copying the message body from the `ExMessage` structure to the `message` array.
+
+EXPLANATION:
+The `getMessage` function can potentially write beyond the bounds of the `buffer` array if the data read from the socket is larger than `BUFFER_SIZE`. Although the code checks for this possibility by only considering the return value of `getMessage` if it is greater than 0, the function's return value is not necessarily the number of bytes written to the buffer. Moreover, even if it were, there is no guarantee that the return value accurately reflects the amount of data that was written.
+
+Similarly, when copying the message body from the `ExMessage` structure to the `message` array, the code does not perform any checks to ensure that the destination array is large enough to hold the data being copied. The loop iterates over the `msg->msgLength` elements, which can be greater than `MESSAGE_SIZE`, and there is no bounds checking to prevent overflow.
+
+The code assumes that the message body will always be null-terminated, as evidenced by the assignment of `message[index] = '\0'`. However, this is not guaranteed to be the case, and a buffer overflow attack could potentially be used to create a message without a null terminator.
+
+RECOMMENDATIONS:
+The following changes should be made to this code to address these vulnerabilities:
+
+1. Use `recv` instead of `getMessage` and pass `BUFFER_SIZE` as the maximum amount of data to read, to prevent buffer overflow attacks when reading from the socket.
+2. Add bounds checking when copying the message body to the `message` array, to prevent buffer overflows. For example, use `memcpy` with a maximum length, or add a check before the loop to ensure that `msg->msgLength` is not greater than `MESSAGE_SIZE-1`.
+3. Always ensure that the `message` array has enough space to hold the null terminator after copying the message body.
+
+ORIGINAL CODE:
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE]; char message[MESSAGE_SIZE];
+    
+    // get message from socket and store into buffer
+    
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+        
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+        
+        // copy message body into string for processing
+        int index; for (index = 0; index < msg->msgLength; index++) { message[index] = msg->msgBody[index]; } message[index] = '\0';
+        
+        // process message
+        success = processMessage(message);
+    }
+    return success;
+}
+```

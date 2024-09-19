@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+This module appears to have a potential vulnerability in its CSR (Control and Status Register) write and update logic, specifically in the handling of the mie_d value.
+
+EXPLANATION:
+The vulnerability is due to the fact that the mie_d value is being updated directly from user-provided data (csr_wdata), without proper validation or sanitization. This could potentially allow an attacker to set bits in mie_d that are not intended to be written by the mideleg field, potentially leading to escalation of privileges or unpredictable behavior. This vulnerability is a form of a variable manipulation vulnerability, and it can be exploited if an attacker is able to write arbitrary values to the CSR_SIE register.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to only update bits in mie_d that are intended to be written by the mideleg field. This can be achieved by using a bitwise AND operation with a mask that only allows the mideleg bits to be updated. The corrected code should look something like this:
+```
+riscv::CSR_SIE: begin
+  mie_d = (mie_q & ~mideleg_q) | (csr_wdata & mideleg_mask);
+end
+```
+Additionally, the code should be reviewed to ensure that the mideleg_mask value is correctly defined and that it only includes the bits that are intended to be written by the mideleg field.
+
+ORIGINAL CODE:
+```
+                  module csr_regfile #(...)(...);
+                  ...
+                  // ---------------------------
+                  // CSR Write and update logic
+                  // ---------------------------
+                  ...
+                     
+                     if (csr_we) begin
+                        
+                        unique case (csr_addr.address)
+                        ...
+                           
+                           riscv::CSR_SIE: begin
+                                 
+                                 // the mideleg makes sure only delegate-able register
+                                 //(and therefore also only implemented registers) are written
+                                 mie_d = (mie_q & ~mideleg_q) | (csr_wdata & mideleg_q) | utval_q;
+                                 
+                           end
+                           ...
+                           
+                        endcase
+                        
+                     end
+                     
+                  endmodule
+```

@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+UninitializedName and Inconsistent Driver Issue
+
+EXPLANATION:
+The vulnerability lies in the line where the assign statement is used to drive the signal 'write_auth'. This is declared as a wire, but the assign statement uses the ternary operator, which is a procedural expression that can only be used in the body of a procedural block or under certain conditions in a function. If there is an issue resolving the condition the assign statement is trying to evaluate then the compiler will try to infer a latch. This may lead to unintended behavior and race condition when dealing with the assign statement. 
+
+Another issue, at the same line 'acl_oh_allowlist' is not initialized before the assign statement which might also cause undefined behavior in the combinational circuit. 
+
+Also, assign statement is used for 'acl_oh_allowlist', which depends on non-deterministic values from the assign statement. This is evaluated every time, but it uses a level-sensitive latch (always@*) in synthesis and produces an output based on non-deterministic values.
+
+RECOMMENDATIONS:
+- Initialize the 'acl_oh_allowlist' variable before it is used to prevent undefined behavior. 
+- Avoid using assign and always(*) statement to prevent non-deterministic values.
+
+The correct implementation of this is to create a combinational circuit and synthesize all expressions that need non-deterministic values to produce as an initial value.
+
+Here is a modified code.
+
+```
+            module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+               output [31:0] data_out;
+               input [31:0] data_in, incoming_id, address;
+               input clk, rst_n;
+               reg write_auth, addr_auth;
+               reg [31:0] data_out, acl_oh_allowlist, q;
+               reg [31:0] mask;
+               initial acl_oh_allowlist = 32'h8312;
+               initial mask = 32'hFFFFFFFF;
+               always @ (*) 
+               begin
+                  if (incoming_id & acl_oh_allowlist) write_auth = 1'b1;
+                  else write_auth = 1'b0;
+               end
+               assign addr_auth = (address == 32'hF00) ? 1 : 0;
+               always @ (posedge clk or negedge rst_n)
+               begin
+                  if (!rst_n)
+                  begin
+                     q <= 32'h0;
+                     data_out <= 32'h0;
+                  end
+                  else
+                  begin
+                     q <= (addr_auth & write_auth) ? data_in: q;
+                     data_out <= q;
+                  end
+               end
+            endmodule    
+```
+
+ORIGINAL CODE:
+``` 
+               module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+               output [31:0] data_out;
+               input [31:0] data_in, incoming_id, address;
+               input clk, rst_n;
+               wire write_auth, addr_auth;
+               reg [31:0] data_out, acl_oh_allowlist, q;
+               assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+               always @*
+                 acl_oh_allowlist <= 32'h8312; 
+               assign addr_auth = (address == 32'hF00) ? 1: 0;
+               always @ (posedge clk or negedge rst_n)
+                 if (!rst_n)
+                   begin
+                     q <= 32'h0;
+                     data_out <= 32'h0;
+                   end
+                 else
+                   begin
+                     q <= (addr_auth & write_auth) ? data_in: q;
+                     data_out <= q;
+                   end
+                 end
+               endmodule
+```

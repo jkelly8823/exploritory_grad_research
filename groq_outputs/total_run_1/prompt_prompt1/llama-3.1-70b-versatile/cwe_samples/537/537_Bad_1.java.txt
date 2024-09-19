@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) via session fixation and Password Logging.
+
+EXPLANATION:
+The bankManagerLoginServlet is vulnerable to session fixation and insecure storage of user credentials. The request.getParameter("username") and request.getParameter("password") are directly stored in the variables 'username' and 'password'. These parameters are directly accessible by the 'BankManager' class. 
+
+Moreover, when a login is unsuccessful, the exception message and the failed login credentials are logged. This is a severe information disclosure vulnerability, because the attacker may try various passwords for the same username and could view the actual error message in each case which makes brute force easier for them.
+
+Additionally, the bankManagerLoginServlet sets the login credentials to attributes of a request. By setting request attribute with user credentials, an attacker could potentially access these attributes after intercepting the request.
+
+
+RECOMMENDATIONS:
+1. Always validate user-supplied input on the server-side and make sure to throw exceptions when encountering invalid input. 
+2. Use secure protocol while transmitting passwords and other sensitive information. HTTPS should always be used to encrypt communications with the browser.
+3. Hash the password before storing it into the database to prevent password disclosure in case of a successful breach.
+4. Implement rate limiting to allow only a limited number of failed login attempts for each account.
+5. Log security-relevant events, but avoid including sensitive information.
+6. Avoid direct object references by abstracting the objects or identifiers.
+
+ORIGINAL CODE:
+
+```java
+public class BankManagerLoginServlet extends HttpServlet {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        try {
+            // Get username and password from login page request
+            String username = request.getParameter("username");
+            String password = request.getParameter("password");
+            // Authenticate user
+            BankManager bankMgr = new BankManager();
+            boolean isAuthentic = bankMgr.authenticateUser(username, password);
+            // If user is authenticated then go to successful login page
+            if (isAuthentic) {
+                request.setAttribute("login", new String("Login Successful."));
+                getServletContext().getRequestDispatcher("/BankManagerServiceLoggedIn.jsp"). forward(request, response);
+            } else {
+                // Otherwise, raise failed login exception and output unsuccessful login message to error page
+                throw new FailedLoginException("Failed Login for user " + username + " with password " + password);
+            }
+        } catch (FailedLoginException ex) {
+            // output failed login message to error page
+            request.setAttribute("error", new String("Login Error"));
+            request.setAttribute("message", ex.getMessage());
+            getServletContext().getRequestDispatcher("/ErrorPage.jsp").forward(request, response);
+        }
+    }
+}
+```

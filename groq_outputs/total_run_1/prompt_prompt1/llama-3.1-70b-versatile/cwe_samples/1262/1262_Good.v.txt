@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9-10
+VULNERABILITY_DESCRIPTION: This code is vulnerable to an Information Exposure vulnerability due to the fact that it truncates a potentially larger value (riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl)) to a smaller value (csr_addr.csr_decode.priv_lvl) without proper validation.
+
+EXPLANATION:
+In this code, the line `if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)) begin` checks if the value of `priv_lvl_o` ORed with `csr_addr.csr_decode.priv_lvl` and then casted to `riscv::priv_lvl_t` is not equal to `csr_addr.csr_decode.priv_lvl`. However, the result of this comparison can be influenced by external data (`priv_lvl_o`), which could lead to unintended behavior. Moreover, if `priv_lvl_o` is a user-controlled value, this code can be exploited to gain access to sensitive information about the system's privilege level.
+
+Additionally, the two if-statements have similar actions inside them. This repetition of code can be avoided and potentially cause issues if the exceptionhandling needs to be modified.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should:
+
+- Validate and sanitize the input data to prevent truncation or corruption of sensitive information.
+- Split the user-controlled data into its constituent parts and then use these parts in a manner that prevents overwriting or modifying other variables.
+- Merge the duplicate code with similar actions into a function.
+
+ORIGINAL CODE:
+```verilog
+if (csr_we || csr_read) begin
+    // check access
+    if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)) begin
+        // set exception code for illegal instruction
+        csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+        csr_exception_o.valid = 1'b1;
+    end
+    // check access to debug mode only CSRs
+    if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin
+        // set exception code for illegal instruction
+        csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+        csr_exception_o.valid = 1'b1;
+    end
+end
+```

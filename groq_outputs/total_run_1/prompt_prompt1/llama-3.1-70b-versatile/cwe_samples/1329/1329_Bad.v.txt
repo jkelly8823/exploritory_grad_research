@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 16
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a timing attack due to the use of a conditional statement in a way that reveals the comparison result of a secret data (exp_hash and pass_hash) through timing differences.
+
+EXPLANATION:
+In the PassChkValid state, the code compares two hash values (exp_hash and pass_hash) using a conditional statement. If the two hashes are equal, the code sets the pass_check signal to 1'b1 and moves to the Idle state. If the two hashes are not equal, the code sets the pass_check signal to 1'b0. However, the conditional statement is not constant-time, meaning that the time it takes to execute can depend on the values being compared. An attacker can measure the time it takes for the comparison to complete and deduce the result of the comparison. This can allow an attacker to infer information about the secret data.
+
+RECOMMENDATIONS:
+To prevent timing attacks, it's recommended to use a constant-time comparison algorithm, such as a bitwise XOR operation. Additionally, consider using a secure comparison function that avoids revealing the comparison result through timing differences. 
+
+Example of a constant-time comparison:
+```verilog
+reg [255:0] cmp_result;
+always @(*) begin
+    cmp_result = 0;
+    for (int i = 0; i < 256; i++) begin
+        cmp_result = cmp_result | (exp_hash[i] ^ pass_hash[i]);
+    end
+end
+```
+This code uses a bitwise XOR operation to compare the two hashes and sets a flag if any bit is not equal.
+
+ORIGINAL CODE:
+```verilog
+module dmi_jtag(...)(...);
+    ...
+    PassChkValid: begin
+        if(hashValid) begin
+            if(exp_hash == pass_hash) begin
+                pass_check = 1'b1;
+            end else begin
+                pass_check = 1'b0;
+            end
+            state_d = Idle;
+        end else begin
+            state_d = PassChkValid;
+        end
+    end
+    ...
+    hmac hmac(
+    ...
+    .key_i(256'h24e6fa2254c2ff632a41b...),
+    ...
+    );
+    ...
+endmodule
+```

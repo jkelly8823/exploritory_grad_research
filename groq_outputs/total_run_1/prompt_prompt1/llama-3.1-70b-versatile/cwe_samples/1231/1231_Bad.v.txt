@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+JTAG reset handling vulnerability.
+
+EXPLANATION:
+The code seems to be part of a digital circuit's reset mechanism, specifically handling JTAG reset. However, the condition `~(rst_ni && ~jtag_unlock && ~rst_9)` might be a vulnerability. This is because `rst_9` is not properly synchronized with the other reset signals (`rst_ni` and `jtag_unlock`). An asynchronous reset signal can potentially cause multiple clock domain crossings and metastability issues, potentially leading to unpredictable behavior.
+
+However, the real vulnerability in this code lies in the potential for a null pointer or invalid memory access exception at `reglk_mem[j] <= 'h0;`. If the reset mechanism isn't properly synchronized, it could attempt to access memory out of its bounds or even attempt null pointer access if `reglk_mem` isn't initialized.
+
+RECOMMENDATIONS:
+Firstly, make sure `reglk_mem` is properly initialized and the rest of the circuit ensures `reglk_mem` isn't accessed before it's initialized.
+
+Secondly, to handle asynchronous resets safely, ensure that `rst_9` is synchronized with the other reset signals using a double flip-flop synchronizer or metasatability counter. This will mitigate the potential for metastability and multi-clock domain crossing issues.
+
+Thirdly, add bounds checking to ensure that `j` stays within the range of memory size defined by `reglk_mem` to prevent possible null pointer access. 
+
+ORIGINAL CODE:
+```verilog
+                            always @(posedge clk_i)
+                                begin
+                                    if(~(rst_ni && ~jtag_unlock && ~rst_9))
+										begin
+                                            for (j=0; j < 6; j=j+1) begin
+                                                reglk_mem[j] <= 'h0;
+                                            
+                                        end
+									
+                                
+                        	end...
+```

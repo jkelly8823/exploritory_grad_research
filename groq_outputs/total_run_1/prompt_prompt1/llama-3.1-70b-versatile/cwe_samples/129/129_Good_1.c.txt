@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-16
+VULNERABILITY_DESCRIPTION:
+Insecure usage of sscanf can lead to a buffer overflow vulnerability.
+
+EXPLANATION:
+The usage of sscanf with the format string "%d %d" is insecure because it does not limit the number of bytes that can be read from the buffer. If the buffer contains more than two integer values, sscanf will continue reading beyond the boundaries of the format string, potentially overflowing the stack. Additionally, even if the buffer contains only two integer values, sscanf does not check if the values are within a valid range, allowing for potential integer overflows. 
+
+Furthermore, the vulnerability in the code is exacerbated by the fact that sscanf stores the values directly into the sizes array without validating the index value (num). If the server sends a large value for num, it could overwrite memory beyond the boundaries of the sizes array, leading to undefined behavior or a segmentation fault.
+
+RECOMMENDATIONS:
+To fix the buffer overflow vulnerability, it is recommended to use the safer fscanf function from the stdio.h library or to use the sscanf_s function, which allows specifying the maximum field width for the input. Also, it is essential to validate the values before storing them in the sizes array. Here is an example of how to secure the code:
+```c
+if (sscanf(buf, "%d %d", &num, &size) == 2) {
+    if (num > 0 && num <= (unsigned)count && size > 0) {
+        sizes[num - 1] = size;
+    } else {
+        report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+    }
+}
+```
+Another approach is to use safer parsing libraries like `scanf_s` or `sscanf_s` or higher-level parsing libraries.
+
+ORIGINAL CODE:
+```c
+/* capture the sizes of all messages */
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+
+    // read values from socket and added to sizes array
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+        // continue read from socket until buf only contains '.'
+        if (DOTLINE(buf))break;
+        else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+            if (num > 0 && num <= (unsigned)count)sizes[num - 1] = size;
+            else
+
+                /* warn about possible attempt to induce buffer overflow */
+                report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+            
+        }
+    }...
+}
+```

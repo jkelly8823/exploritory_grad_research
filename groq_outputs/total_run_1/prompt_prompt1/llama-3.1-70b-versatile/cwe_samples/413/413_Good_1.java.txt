@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 18
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to loss of signal, also known as "lost wake-up" issue. This occurs when the `signalAll()` method is called before the threads waiting on the condition variable have a chance to await on it.
+
+EXPLANATION:
+In the `deposit()` method, the signal is sent before the balance is updated. This means that if a thread is waiting for sufficient funds in the `withdraw()` method, it may miss the signal sent by the `deposit()` method and remain in a waiting state indefinitely, even if sufficient funds are now available. This happens because the awaiting thread has not yet called `await()`, and the signal is sent.
+
+Similarly, in the `withdraw()` method, the `await()` method is called repeatedly in a loop until sufficient funds are available. However, if multiple threads are waiting for sufficient funds and one of them is awakened by the `signalAll()` call, it may still not acquire the lock to update the balance, resulting in the other waiting threads missing the signal.
+
+RECOMMENDATIONS:
+The fix for this issue is to use the `signal()` or `signalAll()` method after updating the shared state that the awaiting threads are waiting for. This ensures that the awaiting threads do not miss the signal.
+
+```csharp
+// In the deposit() method
+public void deposit(double amount) {
+    balanceChangeLock.lock();
+    try {
+        double newBalance = balance + amount;
+        balance = newBalance;
+        
+        // inform other threads that funds are available after updating the balance
+        sufficientFundsCondition.signalAll();
+    } catch (Exception e) {...}finally {
+        balanceChangeLock.unlock();
+    }
+}
+
+// In the withdraw() method
+public void withdraw(double amount) {
+    balanceChangeLock.lock();
+    try {
+        while (balance < amount) {
+            // temporarily unblock access
+            sufficientFundsCondition.await();
+        }
+        double newBalance = balance - amount;
+        balance = newBalance;
+    } catch (Exception e) {...}finally {
+        balanceChangeLock.unlock();
+    }
+}
+```
+
+The order of operations has been updated so that the `signalAll()` call is made after updating the balance in the `deposit()` method.
+
+ORIGINAL CODE:
+```java
+public class BankAccount {
+    ...
+    // lock object for thread access to methods
+    private ReentrantLock balanceChangeLock;
+    
+    // condition object to temporarily release lock to other threads
+    private Condition sufficientFundsCondition;
+
+    // method to deposit amount into BankAccount
+    public void deposit(double amount) {
+        balanceChangeLock.lock();try {
+            double newBalance = balance + amount;balance = newBalance;
+            
+            // inform other threads that funds are available
+            sufficientFundsCondition.signalAll();
+        
+        } catch (Exception e) {...}finally {// unlock lock objectbalanceChangeLock.unlock();}
+    }
+
+    // method to withdraw amount from bank account
+    public void withdraw(double amount) {
+        balanceChangeLock.lock();try {
+            while (balance < amount) {
+                // temporarily unblock access
+                sufficientFundsCondition.await();
+            }double newBalance = balance - amount;balance = newBalance;
+        
+        } catch (Exception e) {...}finally {// unlock lock objectbalanceChangeLock.unlock();}
+    }
+    ...
+}
+```

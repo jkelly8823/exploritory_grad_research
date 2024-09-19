@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 9
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code snippet is due to an uninitialized variable and potential asynchronous behavior.
+
+EXPLANATION:
+In the provided Verilog code, the module foo_bar has an uninitialized wire named grant_access, which is assigned a value only inside the always block. However, since Verilog's always blocks do not execute during compile-time initialization, grant_access remains undefined until the simulation or execution of the code, potentially leading to incorrect behavior and X-protection issues. Additionally, combining an asynchronous reset (rst_n) and a synchronous grant_access within the same always block may lead to asynchronous behavior that can be problematic in certain digital circuit implementations.
+
+RECOMMENDATIONS:
+To address the uninitialized variable vulnerability:
+
+1. Initialize grant_access as a reg instead of wire: Change the grant_access declaration to 'reg grant_access' so that it has an initial value set during the compilation process.
+
+2. Use a separate always block or a combinatorial logic block to assign grant_access: Move the grant_access assignment out of the always block. Since the value depends only on usr_id, this can be done outside:
+
+```verilog
+always @ (*) begin
+    grant_access = (usr_id == 3'h4);
+end
+```
+
+Additionally, the assign statement can be used to assign the grant_access, but be aware that assign is not allowed to be block-wise.
+
+Alternatively, you may want to change the negate rst_n, and edge cases depending on your requirements.
+
+ORIGINAL CODE:
+```verilog
+module foo_bar(data_out, usr_id, data_in, clk, rst_n);
+output reg [7:0] data_out;
+input wire [2:0] usr_id;
+input wire [7:0] data_in; 
+input wire clk, rst_n;
+wire grant_access;
+always @ (posedge clk or negedge rst_n)
+begin
+    if (!rst_n)
+        data_out = 0;
+    else
+        data_out = (grant_access) ? data_in : data_out;
+        assign grant_access = (usr_id == 3'h4) ? 1'b1 : 1'b0;
+end
+endmodule
+```

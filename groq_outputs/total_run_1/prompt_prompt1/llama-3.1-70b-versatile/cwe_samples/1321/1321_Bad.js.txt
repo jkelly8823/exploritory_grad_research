@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-9, 11
+VULNERABILITY_DESCRIPTION:
+A Prototype Pollution vulnerability exists in this code.
+
+EXPLANATION:
+The code provided appears to be a function used to set a value in an object by a given path. However, this function is vulnerable to Prototype Pollution. The function iterates over the path array, creating objects if they do not exist. This could potentially allow an attacker to pollute the Object prototype, affecting all objects in the application. This is because the Object.prototype is not properly isolated from the function's input.
+
+RECOMMENDATIONS:
+To prevent Prototype Pollution, we need to isolate the Object prototype from the function's input. This can be achieved by creating a new object instead of modifying the existing one, and by using Object.create(null) to create a new object that does not inherit the Object prototype. Also, we can use validate the input data to prevent attacks.
+
+Here's a modified version of the function with the vulnerability fixed:
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = Object.create(null);  // Create a new object
+    for (const attr of pathArray) {
+        if (!objectToModify[attr]) {
+            objectToModify[attr] = Object.create(null);  // Create a new object
+        }
+        objectToModify = objectToModify[attr];
+    }
+    objectToModify[attributeToSet] = value;
+    return objectToModify;  // Return the new object
+}
+
+// Example usage
+const obj = {};
+setValueByPath(obj, 'nested.path', 'value');  // Returns a new object
+```
+
+However, if you still need to keep this functionality and you're building on an already existing object the modified version would look like this:
+
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+        if (!Object.prototype.hasOwnProperty.call(objectToModify, attr)) {
+            objectToModify[attr] = Object.create(null);
+        }
+        objectToModify = objectToModify[attr];
+    }
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+
+// Example usage
+const obj = {};
+setValueByPath(obj, '__proto__.polluted', 'I pollute the prototype!');  // Does not pollute the Object prototype
+```
+
+
+
+ORIGINAL CODE:
+
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+    if (typeof objectToModify[attr] !== 'object') {
+        objectToModify[attr] = {};
+    }
+    objectToModify = objectToModify[attr];
+    }
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```

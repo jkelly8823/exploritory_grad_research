@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-11
+VULNERABILITY_DESCRIPTION:
+Denial-of-Service (HTTP Request Smuggling) Vulnerability due to ignoring error from http.MaxBytesReader.
+
+EXPLANATION:
+In the given code snippet, the http.MaxBytesReader function is used to limit the size of the request body to prevent a potential denial-of-service (DoS) attack. However, the error returned by r.Body.Read() (in io.ReadAll(r.Body)) is not checked for an error condition that may indicate the request body length exceeded the maximum allowed length.
+
+The code only checks for errors when reading the request body but not when the maximum allowed body length is exceeded. This could potentially allow an attacker to smuggle malicious requests, leading to a denial-of-service (DoS) attack or other unintended consequences.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, the code should also check for the error from the http.MaxBytesReader and handle it properly. This can be achieved by checking the error from io.ReadAll (which is actually wrapping the error returned from the underlying reader). The modified code should look like this:
+
+```go
+r.Body = http.MaxBytesReader(w, r.Body, MaxRespBodyLength)
+if data, err := io.ReadAll(r.Body); err != nil {
+    // Handle the error, e.g., return an error response to the client
+    http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+    return
+}
+body = data
+```
+
+ORIGINAL CODE:
+
+```go
+func serve(w http.ResponseWriter, r *http.Request) {
+    var body []byte
+    const MaxRespBodyLength = 1e6
+    if r.Body != nil {
+        r.Body = http.MaxBytesReader(w, r.Body, MaxRespBodyLength)
+        if data, err := io.ReadAll(r.Body); err == nil {
+            body = data
+        }
+    }
+}
+```

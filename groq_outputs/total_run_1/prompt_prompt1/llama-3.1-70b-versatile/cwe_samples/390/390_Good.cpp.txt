@@ -1,0 +1,111 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 12
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an Unhandled Dynamic Memory Allocation and Insecure Use of Exceptions. 
+
+EXPLANATION:
+The provided code allocates memory dynamically using `new char[length]`, but does not check if the allocation was successful. This is a vulnerability because if the allocation fails, a null pointer will be returned, which could cause crashes or segmentation faults when the pointer is accessed. Furthermore, the use of `throw` to handle exceptions is insecure because it can lead to memory leaks in multi-threaded applications. In addition, the use of `printf` and throwing exceptions after printing the error message is not the recommended way to handle exceptions.
+
+RECOMMENDATIONS:
+1. Check the result of dynamic memory allocation. 
+2. Use smart pointers or containers to manage memory in place of raw pointers.
+3. Use `std::stdexcept` for exception handling instead of throwing a char pointer.
+4. Use std::cerr for printing error messages instead of printf.
+
+ORIGINAL CODE:
+
+
+                  char* readFile (char *filename) {
+                        try {
+                              // open input fileinfile.open(filename);
+                                 if (!infile.is_open()) {throw "Unable to open file " + filename;}
+                                 // get length of fileinfile.seekg (0, ios::end);int length = infile.tellg();infile.seekg (0, ios::beg);
+                                 // allocate memorychar *buffer = new char [length];
+                                 // read data from fileinfile.read (buffer,length);
+                                 if (!infile.good()) {throw "Unable to read from file " + filename;}infile.close();
+                                 return buffer;
+                           }catch (char *str) {printf("Error: %s \n", str);infile.close();throw str;}catch (...) {printf("Error occurred trying to read from file \n");infile.close();throw;}
+                     }
+
+Here's a revised example that incorporates the recommendations above:
+
+```cpp
+#include <stdexcept>
+
+char* readFile (char *filename) {
+  try {
+    std::ifstream infile;
+    infile.open(filename);
+    if (!infile.is_open()) { 
+      throw std::runtime_error(std::string("Unable to open file ") + filename); 
+    }
+    
+    // get length of file
+    infile.seekg(0, std::ios_base::end);
+    int length = infile.tellg();
+    infile.seekg (0, std::ios_base::beg);
+    
+    // allocate memory
+    char *buffer = new (std::nothrow) char[length];
+    if (!buffer) {
+      throw std::runtime_error("Memory allocation failed");
+    }
+    
+    // read data from file
+    infile.read(buffer,length);
+    if (!infile.good()) { 
+      delete[] buffer; 
+      throw std::runtime_error(std::string("Unable to read from file ") + filename); 
+    }
+    infile.close();
+    
+    return buffer;
+  } catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    throw;
+  } catch (...) {
+    std::cerr << "Unknown error occurred trying to read from file\n";
+    throw;
+  }
+}
+```
+
+In this revised example, it is still using c-style array and new operator for memory allocation. However, it would be even better to use a std::vector as it handles the memory for you.
+
+```cpp
+#include <vector>
+#include <stdexcept>
+#include <fstream>
+
+std::vector<char> readFile (const char *filename) {
+  try {
+    std::ifstream infile;
+    infile.open(filename);
+    if (!infile.is_open()) { 
+      throw std::runtime_error(std::string("Unable to open file ") + filename); 
+    }
+    
+    // get length of file
+    infile.seekg(0, std::ios_base::end);
+    int length = infile.tellg();
+    infile.seekg (0, std::ios_base::beg);
+    
+    std::vector<char> buffer(length);
+    
+    // read data from file
+    infile.read(buffer.data(), length);
+    if (!infile.good()) { 
+      throw std::runtime_error(std::string("Unable to read from file ") + filename); 
+    }
+    infile.close();
+    
+    return buffer;
+  } catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    throw;
+  } catch (...) {
+    std::cerr << "Unknown error occurred trying to read from file\n";
+    throw;
+  }
+}
+```

@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 24-25
+VULNERABILITY_DESCRIPTION:
+Insecure assignment and usage of a register inside an always combinational block.
+
+EXPLANATION:
+In the given code, the "acl_oh_allowlist" is assigned a constant value in an always combinational block. This results in an incorrect assignment of the acl_oh_allowlist variable which could potentially lead to the variable not being updated as expected. Furthermore, assigning a value to a reg variable after it has been declared using a combinational timing control (always @*) but also declared within the initial always block is contradictory and can cause unintended behavior.
+
+Moreover, the fact that acl_oh_allowlist isn't a constant that is necessary for initialization in one operation (other than 32'h8312) of the system that can be computed in an elaboration, but is, in both assignments an operation variable that is of necessity does not provide an accurate way to input variables for which output an output of dependency upon them are stored to data_out.
+
+
+However there is one instance (Always @*) of an initialization variable assign (Acl) assigned properly in a @* block.
+
+What poses a problem is the improper ACL_ ("access control list") initialization in this initial block, but also q on power up being addressed.
+
+
+
+If our register "acl_oh_allowlist" must be initialized to some start-up value inside one operation whenever power up hits logic state conditions have re-established conditions which denote that we pose for operation. In this, using an initial always block won't work. A reset must be included in these cases.
+
+RECOMMENDATIONS:
+Use an initial variable assignment at the time of variable declaration instead of inside an always combinational block, especially if re-assignments aren't expected. To retain values after power up, perform the initial assignment or value assignment when the reset input signal does become high ("rst_n" changed from low and then it sets it the power startup bit). Otherwise remove this duplicate for optimization.
+
+
+
+To solve this issue, consider rewriting the given lines as shown below:
+
+```verilog
+module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+    output [31:0] data_out;
+    input [31:0] data_in, incoming_id, address;
+    input clk, rst_n;
+    wire write_auth, addr_auth;
+    reg [31:0] data_out, acl_oh_allowlist, q;
+    
+    // Assigned with initial value
+    reg [31:0] acl_oh_allowlist = 32'h8312;
+
+    assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0;
+    assign addr_auth = (address == 32'hF00) ? 1: 0;
+    always @ (posedge clk or negedge rst_n)
+        if (!rst_n)
+            begin
+                q <= 32'h0;
+                data_out <= 32'h0;
+            end
+        else
+            begin
+                q <= (addr_auth & write_auth) ? data_in: q;
+                data_out <= q;
+            end
+endmodule
+```
+
+
+
+ORIGINAL CODE:
+```verilog
+module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+    output [31:0] data_out;
+    input [31:0] data_in, incoming_id, address;
+    input clk, rst_n;
+    wire write_auth, addr_auth;
+    reg [31:0] data_out, acl_oh_allowlist, q;
+    assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+    always @*
+        
+        acl_oh_allowlist <= 32'h8312; 
+        
+    assign addr_auth = (address == 32'hF00) ? 1: 0;
+    always @ (posedge clk or negedge rst_n)
+        
+        if (!rst_n)
+        
+            begin
+            
+                q <= 32'h0;
+                data_out <= 32'h0;
+            
+            end
+    
+        else
+        
+            begin
+            
+                q <= (addr_auth & write_auth) ? data_in: q;
+                data_out <= q;
+            
+            end
+        
+        end
+        
+    endmodule
+```

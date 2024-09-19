@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 6
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to misuse of `strncmp` function.
+
+EXPLANATION:
+The `strncmp` function is used to compare the first `n` characters of two strings. However, in this code snippet, the second argument `sizeof(tHost)` is incorrect. The `sizeof` operator returns the number of bytes the variable occupies in memory, not the length of the string. In this case, `tHost` is a pointer to a character array, so `sizeof(tHost)` will return the size of the pointer, not the length of the string. This can lead to a buffer overflow vulnerability if the length of `hp->h_name` is greater than the length of `tHost`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use the `strlen` function to get the length of the string `tHost` instead of `sizeof(tHost)`. Also, ensure that the length of `hp->h_name` is not greater than the length of `tHost` to prevent buffer overflow. It's also a good practice to use `strncmp` with a fixed length to prevent buffer overflow.
+
+```c
+int tHostLen = strlen(tHost);
+if (hp && strlen(hp->h_name) <= tHostLen && !strncmp(hp->h_name, tHost, tHostLen)) {
+    trusted = true;
+} else {
+    trusted = false;
+}
+```
+
+ORIGINAL CODE:
+```c
+struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";
+myaddr.s_addr=inet_addr(ip_addr_string);
+hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);
+if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {
+    trusted = true;
+} else {
+    trusted = false;
+}
+```

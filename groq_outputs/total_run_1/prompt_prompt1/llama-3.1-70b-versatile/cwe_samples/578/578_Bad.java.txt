@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION: Unrestricted Use of ClassLoader and getResourceAsStream method can lead to Directory Traversal Vulnerability.
+
+EXPLANATION:
+The use of `getResourceAsStream` method without proper input validation can lead to a directory traversal attack. An attacker could manipulate the `Constants.INTEREST_RATE_FILE` variable to access sensitive files outside of the intended directory.
+
+In this code, the `getResourceAsStream` method is used with `Constants.INTEREST_RATE_FILE`, which might contain user-input or external data. This can lead to unauthorized access to files on the server's local file system. 
+
+The usage of `DocumentBuilderFactory.newInstance()` without any configuration changes also poses a risk of XML External Entity (XXE) injection attack.
+
+RECOMMENDATIONS:
+1. Validate and sanitize all user input and external data before using it to construct file paths.
+2. Use a validated list of allowed files and directories to prevent directory traversal attacks.
+3. Use `SecurityManager` or `AccessController` to enforce strict access control to sensitive files and directories.
+4. Use `DocumentBuilderFactory.newInstance().setFeature("http://xmlns.jcp.org/xml/ns/jaxp/1.0/features/secure-processing", true)` to enable secure processing of XML data and prevent XXE attacks.
+
+ORIGINAL CODE:
+```java
+@Stateless
+public class InterestRateBean implements InterestRateRemote {
+    
+    private Document interestRateXMLDocument = null;
+    public InterestRateBean() {
+        try {
+            // get XML document from the local filesystem as an input stream
+            // using the ClassLoader for this class
+            ClassLoader loader = this.getClass().getClassLoader();
+            InputStream in = loader.getResourceAsStream(Constants.INTEREST_RATE_FILE);
+            
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            interestRateXMLDocument = db.parse(interestRateFile);
+        } catch (IOException ex) {...}
+    }
+    
+    public BigDecimal getInterestRate(Integer points) {
+        return getInterestRateFromXML(points);
+    }
+    
+    /* member function to retrieve interest rate from XML document on the local file system */
+    
+    private BigDecimal getInterestRateFromXML(Integer points) {...}
+}
+```

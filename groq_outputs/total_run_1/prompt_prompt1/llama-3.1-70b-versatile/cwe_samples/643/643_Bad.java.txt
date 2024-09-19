@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to XPath Injection.
+
+EXPLANATION:
+The code is vulnerable to XPath Injection because it directly injects user-provided data (`login.getUserName()` and `login.getPassword()`) into the XPath expression (`xlogin`). This allows an attacker to manipulate the XPath expression and potentially access sensitive data or escalate privileges. An attacker could, for example, inject malicious XPath syntax that escapes the intended evaluation, allowing them to access arbitrary sections of the XML document.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend using parameterized XPath expressions or escaping user-provided data to prevent injection. In this case, we can use the `XPathExpression` interface's `evaluate` method with an `XPathExpression` instance that uses a parameterized XPath expression.
+
+Here's an updated example with a parameterized XPath expression:
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();
+XPathExpression xlogin = xpath.compile("//users/user[login/text()=$login and password/text()=$password]/home_dir/text()");
+Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+
+// Create an XPathConstants.NamespaceContextMap for variables
+VariableMap vars = new VariableMapImpl(
+        new NamespacePrefixMapperImpl()
+);
+vars.put("login", login.getUserName());
+vars.put("password", login.getPassword());
+
+String homedir = xlogin.evaluate(d, vars);
+```
+Alternatively, if using a parameterized XPath expression is not feasible, we can escape user-provided data using a library like OWASP's Encoder or Apache Commons Lang's `StringEscapeUtils`.
+
+ORIGINAL CODE:
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();
+XPathExpression xlogin = xpath.compile("//users/user[login/text()='" + login.getUserName() + "' and password/text() = '" + login.getPassword() + "']/home_dir/text()");
+Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+String homedir = xlogin.evaluate(d);
+```

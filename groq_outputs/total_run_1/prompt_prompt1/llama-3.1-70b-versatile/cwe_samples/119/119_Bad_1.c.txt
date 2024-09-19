@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 18
+VULNERABILITY_DESCRIPTION:
+A potential vulnerability exists in the given code segment due to lack of input validation and encoding.
+
+EXPLANATION:
+The `copy_input` function is designed to process a user-supplied string by encoding certain characters. However, it does not properly handle characters that should be encoded when input is greater than the allocated buffer size in an encoding scenario (if certain unencoding/decoding actions are taken upon entry to the program.) The potential issue here arises when there is a decode/encode translation that manipulates and changes this buffer.
+
+However, there are issues that arise with how the content is copied to `dst_buf`. The main issue is a buffer overflow. The code checks that the input string is less than or equal to `MAX_SIZE`, but the logic does not consider that each input character might require more than one output character. This means that the encoded string might exceed the allocated size for `dst_buf` leading to a buffer overflow.
+
+Another issue here is when processing ASCII Character ' < '.
+
+
+
+Even though attempts were made to encode &'s nothing ended up happening for '<' which is un-initialized (even to NULL) and can potentially lead itself to a remote exploit.
+
+Overall, for an attacker to successfully use this vulnerability for a potential attack, certain circumstances need to present themselves; also the attacker would likely have access to the address that this local 'dst - buffer' currently lives on.
+
+
+
+RECOMMENDATIONS:
+
+- Before copying and encoding the string, check that the destination buffer has enough room to accommodate all characters.
+- ALWAYS ensure complete closure, especially in scenarios like this one where lack of resources lead an effective vulnerability.
+
+```c
+ char * copy_input(char *user_supplied_string){
+      int i, dst_index; 
+      char *dst_buf = (char*)malloc(5*sizeof(char) * MAX_SIZE);
+      int input_length = strlen(user_supplied_string);
+      int max_dest_index =  0; 
+
+     if( 10 * input_length  > MAX_SIZE){
+      die("the encoded data exceeds buffer limits");
+  }
+  for(i = 0; i < input_length; i++){
+    if('&' == user_supplied_string[i]){
+      dst_buf[dst_index++] = '&';
+      dst_buf[dst_index++] = 'a';
+      dst_buf[dst_index++] = 'm';
+      dst_buf[dst_index++] = 'p';
+      dst_buf[dst_index++] = ';';
+    
+    } else if ('<' == user_supplied_string[i]){
+      dst_buf[dst_index++] = '&';
+      dst_buf[dst_index++] = 'l';
+      dst_buf[dst_index++] = 't';
+      dst_buf[dst_index++] = ';';
+    }else {
+      dst_buf[dst_index++] = user_supplied_string[i];
+    }
+    if (dst_index > MAX_SIZE){
+      die("user string too long, die evil hacker!");
+    }
+  }
+  dst_buf[dst_index] = '\0'; // null-terminate the string
+return dst_buf;
+}
+```
+Keep in mind these are only suggestions. A much more dynamic approach to manage buffers/allocating sizes, and error checking routines set in place would be preferred rather than simple size limiting scenarios.
+
+
+
+ORIGINAL CODE:
+```c
+char * copy_input(char *user_supplied_string){
+  int i, dst_index;char *dst_buf = (char*)malloc(4*sizeof(char) * MAX_SIZE);if ( MAX_SIZE <= strlen(user_supplied_string) ){die("user string too long, die evil hacker!");}dst_index = 0;for ( i = 0; i < strlen(user_supplied_string); i++ ){
+    if( '&' == user_supplied_string[i] ){dst_buf[dst_index++] = '&';dst_buf[dst_index++] = 'a';dst_buf[dst_index++] = 'm';dst_buf[dst_index++] = 'p';dst_buf[dst_index++] = ';';}else if ('<' == user_supplied_string[i] ){
+      /* encode to &lt; */
+    }else dst_buf[dst_index++] = user_supplied_string[i];
+}return dst_buf;
+}
+```

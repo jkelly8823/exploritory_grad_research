@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 2
+VULNERABILITY_DESCRIPTION:
+Inadequate Certificate Validation - This vulnerability exists because the code does not properly validate the identity of the SSL certificate. Specifically, it checks if the peer certificate was verified successfully (X509_V_OK), but it does not check if the certificate actually belongs to the expected peer.
+
+EXPLANATION:
+The code correctly checks the verification result of the SSL certificate, but it does not check if the certificate's subject, or the certificate's subject alternative names, match the expected domain or identity of the peer. This allows an attacker with a valid but unauthorized certificate (obtained, for example, through a phishing attack) to impersonate the expected peer, which can lead to a MitM (Man-in-the-middle) attack.
+
+RECOMMENDATIONS:
+It is recommended to also check the subject of the certificate, or the certificate's subject alternative names, to ensure they match the expected identity of the peer. This can be done by using functions such as X509_NAME_get_text_by_NID and X509_get_subject_name to access the subject of the certificate.
+
+```cpp
+// Get the subject DN from the certificate
+X509_NAME *subject_name = X509_get_subject_name(cert);
+// Get the subject name as a string
+char subject_dnsname[256];
+X509_NAME_get_text_by_NID(subject_name, NID_commonName, subject_dnsname, 256);
+
+// Check if the common name matches the expected domain
+if (strcmp(subject_dnsname, "expected.domain.com") != 0) {
+    printf("Certificate validation failed: Mismatched subject name\n");
+    // Abort connection
+}
+```
+
+Note: Always check if a function was successful before using its result.
+
+ORIGINAL CODE:
+```cpp
+cert = SSL_get_peer_certificate(ssl);if (cert && (SSL_get_verify_result(ssl)==X509_V_OK)) {
+    // do secret things
+}
+```

@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15, 16-17
+VULNERABILITY_DESCRIPTION:
+The provided code segment contains potential buffer overflow vulnerabilities.
+
+EXPLANATION:
+In the given code, two buffer overflow vulnerabilities have been identified. 
+
+The first vulnerability exists in the loop where the contents of `msg->msgBody` are being copied into the `message` buffer. The loop iterates `msg->msgLength` times, but there is no check to ensure that `msg->msgLength` is less than or equal to `MESSAGE_SIZE`. This can result in a buffer overflow when `msg->msgLength` is greater than `MESSAGE_SIZE`.
+
+The second potential vulnerability exists when the null terminator (`'\0'`) is appended to the `message` buffer. If `msg->msgLength` is equal to `MESSAGE_SIZE`, then the null terminator will be written one byte beyond the end of the `message` buffer, resulting in a buffer overflow.
+
+Additionally, the initial concern of ignoring the possibility that the buffer received from `getMessage` is greater than `BUFFER_SIZE` could lead to issues with the `recastBuffer` function and its handling of unexpected input.
+
+However, the issue of ignoring buffer > BUFFER_SIZE from the initial comment has been somewhat mitigated as it does check that the received message is greater than 0, but no check is performed for the upper limit.
+
+RECOMMENDATIONS:
+1. Ensure that `msg->msgLength` is less than or equal to `MESSAGE_SIZE` before copying data into the `message` buffer.
+
+```c
+if (msg->msgLength <= MESSAGE_SIZE) {
+    int index; 
+    for (index = 0; index < msg->msgLength; index++) {
+        message[index] = msg->msgBody[index];
+    }
+    message[index] = '\0';
+} else {
+    // Handle the error where the message length exceeds the buffer size.
+}
+```
+
+2. Validate the `getMessage` function returns value to prevent processing incomplete or large data.
+
+```c
+if (getMessage(socket, buffer, BUFFER_SIZE) == BUFFER_SIZE && msg->msgLength > BUFFER_SIZE) {
+    // Handle the error where the received message exceeds the buffer size.
+}
+```
+
+ORIGINAL CODE:
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+    
+    // get message from socket and store into buffer
+    
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+        
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+        
+        // copy message body into string for processing
+        int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+        
+        // process message
+        success = processMessage(message);
+    }
+    return success;
+}
+```

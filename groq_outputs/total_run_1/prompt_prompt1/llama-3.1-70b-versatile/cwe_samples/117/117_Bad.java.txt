@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-6
+VULNERABILITY_DESCRIPTION: 
+This segment of code contains an Input Validation vulnerability, specifically a null pointer vulnerability and an insecure error handling issue due to catching a specific exception type (NumberFormatException). When catching an exception, sensitive information about the system and code should not be revealed. The error message reveals that val was not parseable, potentially providing attackers with information that could be used to refine their attack.
+
+EXPLANATION:
+The code checks to see if a value can be parsed into an integer but fails to perform proper validation on the request parameter. Additionally, the error handling issue arises when the code catches a NumberFormatException, revealing information about the input data that can be useful to an attacker. This reveals information about how the code handles input data, potentially giving attackers the knowledge needed to exploit other vulnerabilities.
+
+RECOMMENDATIONS:
+It is recommended to improve the validation and error handling. Specific exception types should only be caught if the application is running in a non-production mode or the intention is to have a helpful error message at the development phase. 
+However, this message may reveal internal code details and potentially expose underlying technology, i.e., by naming the involved classes. One way of handling this is to define a service-level layer which catches exceptions and returns a standard and simple error message so that potential internal system-related error messages are always suppressed. 
+
+Avoiding handling exceptions based on their types allows more fine-grained tuning for which exception to ignore or propagate, as often errors like IOException or SQLAccessException reveal more operation-level context in standard usage scenarios.
+We suggest ensuring proper input validation is performed on the request parameter before passing it to the Integer.parseInt() function, possibly utilizing exception handling for overall exceptional cases instead of catching every instance possible.
+
+An example fix could involve calling a server side data validation to verify parameters' conformity which looks something like this:
+
+    String val = request.getParameter("val");
+    try {
+        int value = Integer.parseInt(val);
+        if (validate(val)) {
+            // use "value" 
+        } else {
+            // Handle invalid input error.
+        }
+    } catch (Exception ex) {
+        // Capture and re-throw errors with non-obvious and application-specific descriptions to deter intruders. 
+        throw new RuntimeException("Error occurred whilst reading parameters.");
+    }
+    
+ ORIGINAL CODE:
+    String val = request.getParameter("val"); try { int value = Integer.parseInt(val); }catch (NumberFormatException) {log.info("Failed to parse val = " + val);}...

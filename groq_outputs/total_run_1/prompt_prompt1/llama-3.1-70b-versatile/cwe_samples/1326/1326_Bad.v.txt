@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-10
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory access and unguarded read access to a memory element.
+
+EXPLANATION:
+The vulnerability lies in the fact that the code does not properly validate the input address before accessing the memory location. The line `raddr_q <= addr_i[$clog2(RomSize)-1+3:3]` does not ensure that the address will be within the bounds of the memory. Additionally, the line `mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i` can also cause an out-of-bounds memory access.
+
+Moreover, the read access to the memory is not guarded against spurious X'es. Although the code attempts to handle this by setting the output to '0 if the read address is out of bounds, this does not prevent X'es from being assigned to `raddr_q` when `req_i` is low, potentially causing issues downstream.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should include proper bounds checking for the input address and ensure that the read address is valid before accessing the memory. This can be achieved by adding a check to ensure that `addr_i[$clog2(RomSize)-1+3:3]` is within the valid range of addresses before assigning it to `raddr_q`. Additionally, it is recommended to ensure that `raddr_q` is not assigned an X value when `req_i` is low.
+
+Code example of a possible fix:
+```verilog
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        localparam int ADDRESS_WIDTH = $clog2(RomSize);
+        localparam int MAX_ADDR = (1 << ADDRESS_WIDTH) - 1;
+        if (!we_i) begin
+            if (addr_i[$clog2(RomSize)-1+3:3] >= 0 && addr_i[$clog2(RomSize)-1+3:3] <= MAX_ADDR) begin
+                raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+            end else begin
+                raddr_q <= '0;
+            end
+        end else begin
+            if (addr_i[$clog2(RomSize)-1+3:3] >= 0 && addr_i[$clog2(RomSize)-1+3:3] <= MAX_ADDR) begin
+                mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;
+            end
+        end
+    end else begin
+        raddr_q <= '0;
+    end
+end
+```
+
+ORIGINAL CODE:
+```verilog
+...
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        if (!we_i) begin
+            raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+        end else begin
+            mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;
+        end
+    end
+end
+...
+// this prevents spurious Xes from propagating into the speculative fetch stage of the core
+assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;
+```

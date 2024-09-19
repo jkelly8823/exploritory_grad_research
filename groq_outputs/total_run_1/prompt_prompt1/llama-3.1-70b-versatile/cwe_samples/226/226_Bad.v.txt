@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19-25, 27-31
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to timing side-channel attacks due to the data-dependent behavior in the `always` block.
+
+EXPLANATION:
+The given code is part of a digital circuit implementing an AES wrapper. The `case` statement inside the `always` block is used to assign values to different parts of the `p_c` array based on the `address` variable. However, the assignment is conditional upon the `reglk_ctrl_i[3]` register. If this register is set to 1, the `p_c` array is not updated; otherwise, it is. This data-dependent behavior can potentially allow an attacker to infer information about the secret key being processed.
+
+Moreover, the assignment to `p_c` array parts uses `wdata[31:0]`, which is a 32-bit slice of a register. However, the type and bit width of `p_c` are not specified. If the array elements are less than 32 bits in size, this could lead to truncation of data, making it vulnerable to data leakage.
+
+Another concern is that the design does not seem to implement any form of secure key masking, which could expose the secret key being processed to timing attacks.
+
+RECOMMENDATIONS:
+1. Implement secure key masking: The secret key should be masked while being processed to prevent any potential timing side-channel attacks.
+2. Ensure uniform access time: All cases in the `case` statement should take the same amount of time to execute to prevent attackers from inferring information about the secret key.
+3. Verify data type: Verify the type and bit width of `p_c` array to ensure it matches the width of the assigned data `wdata[31:0]`.
+4. Use secure coding practices: Implement secure coding practices for the design, such as avoiding data-dependent behavior, ensuring uniform execution times for all cases, and keeping sensitive information hidden during processing.
+
+ORIGINAL CODE:
+
+
+module aes0_wrapper #(...)(...);
+...
+always @(posedge clk_i)
+
+ begin
+
+   if(~(rst_ni && ~rst_1)) //clear p_c[i] at reset
+
+     begin
+
+       start <= 0;
+       p_c[0] <= 0;
+       p_c[1] <= 0;
+       p_c[2] <= 0;
+       p_c[3] <= 0;
+       ...
+
+     end
+
+   else if(en && we)
+
+     case(address[8:3])
+
+     0:
+
+       start  <= reglk_ctrl_i[1] ? start  : wdata[0];
+
+     1:
+
+       p_c[3] <= reglk_ctrl_i[3] ? p_c[3] : wdata[31:0];
+
+     2:
+
+       p_c[2] <= reglk_ctrl_i[3] ? p_c[2] : wdata[31:0];
+
+     3:
+
+       p_c[1] <= reglk_ctrl_i[3] ? p_c[1] : wdata[31:0];
+
+     4:
+
+       p_c[0] <= reglk_ctrl_i[3] ? p_c[0] : wdata[31:0];
+
+     ...
+
+     endcase
+
+   end // always @ (posedge wb_clk_i)
+
+endmodule

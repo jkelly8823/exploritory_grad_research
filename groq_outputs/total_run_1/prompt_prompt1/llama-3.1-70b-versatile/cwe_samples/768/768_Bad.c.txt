@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8
+VULNERABILITY_DESCRIPTION:
+A buffer overflow vulnerability may occur due to incorrect usage of the while loop condition and assignment of privileges in the Add_Regular_Users function.
+
+EXPLANATION:
+In the Add_Regular_Users function, a memory block for the specified number of users is allocated using calloc. However, in the while loop, the loop counter is initialized to the number of users (num_users), and decremented until it reaches 0. This causes the loop to iterate from num_users-1 down to 0. Since array indices in C are 0-based, the loop attempts to access an out-of-bounds index when i equals num_users, resulting in undefined behavior.
+
+Furthermore, the while loop condition contains a single equals operator (=) instead of a double equals operator (==), which causes the function to return immediately after the first iteration when i is assigned the value PRIV_REGULAR, effectively setting users[0].privileges = PRIV_REGULAR and users[0].id = 0, while the rest of the array remains uninitialized.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the while loop should be modified to iterate correctly using a for loop or a while loop with the correct condition.
+
+```c
+user_t *Add_Regular_Users(int num_users) {
+    user_t* users = (user_t*)calloc(num_users, sizeof(user_t));
+    for(int i = 0; i < num_users; i++) {
+        users[i].privileges = PRIV_REGULAR;
+        users[i].id = i;
+    }
+    return users;
+}
+```
+
+Alternatively, you can also consider adding error checking to ensure that the allocation is successful and handle potential memory allocation failures.
+
+```c
+user_t *Add_Regular_Users(int num_users) {
+    user_t* users = (user_t*)calloc(num_users, sizeof(user_t));
+    if (users == NULL) {
+        // handle memory allocation failure
+    }
+    for(int i = 0; i < num_users; i++) {
+        users[i].privileges = PRIV_REGULAR;
+        users[i].id = i;
+    }
+    return users;
+}
+```
+
+ORIGINAL CODE:
+```c
+#define PRIV_ADMIN 0
+#define PRIV_REGULAR 1
+
+typedef struct {
+    int privileges;
+    int id;
+} user_t;
+
+user_t *Add_Regular_Users(int num_users) {
+    user_t* users = (user_t*)calloc(num_users, sizeof(user_t));
+    int i = num_users;
+    while( --i && (users[i].privileges = PRIV_REGULAR) ) {
+        users[i].id = i;
+    }
+    return users;
+}
+
+int main() {
+    user_t* test;
+    int i;
+    test = Add_Regular_Users(25);
+    for(i = 0; i < 25; i++)
+        printf("user %d has privilege level %d\n", test[i].id, test[i].privileges);
+}
+```

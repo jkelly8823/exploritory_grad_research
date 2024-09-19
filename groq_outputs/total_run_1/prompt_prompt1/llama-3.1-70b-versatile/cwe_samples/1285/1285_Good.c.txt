@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow attack.
+
+EXPLANATION:
+The vulnerability exists in the line where sscanf is used to parse the input from the socket into two integers, num and size. The sscanf function does not perform any bounds checking on the input, which can lead to a buffer overflow if the input is not properly formatted. 
+
+Additionally, the code checks if num is within the range of 1 to count, but it does not check if size is within a valid range. A malicious server could send a large size value that overflows the buffer when it is stored in the sizes array.
+
+The report function is called when an invalid num is detected, but it is only a warning message and does not prevent the buffer overflow from occurring.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the code should perform bounds checking on the input to sscanf, and also validate the size value before storing it in the sizes array. The report function should be modified to handle the error more securely, such as by exiting the function or returning an error code.
+
+Here is an example of how the code could be modified to fix the vulnerability:
+
+```c
+while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+    if (DOTLINE(buf))break;
+    else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+        if (num > 0 && num <= (unsigned)count && size >= 0 && size <= MAX_SIZE) {
+            sizes[num - 1] = size;
+        } else {
+            report(stderr, "Error: invalid data for message size\n");
+            return -1; // or exit(1) to terminate the program
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+        if (DOTLINE(buf))break;
+        else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+            if (num > 0 && num <= (unsigned)count)sizes[num - 1] = size;
+            else
+                report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+        }
+    }...
+}
+```

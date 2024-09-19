@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The function f() does not properly handle the unlocking of a mutex on failure.
+EXPLANATION:
+The given function locks a mutex, but it unlocks the mutex regardless of the result of the function. If the function should fail after locking the mutex (e.g., in the "access shared resource" section), the unlock will be missed, resulting in a resource deadlock. This can be a complex issue to identify, and the consequences of such an oversight can be severe, especially in multithreaded applications.
+However, given the current code the potential issue seems not to be present as it will return pthread_mutex_unlock(mutex) value (this value should be checked).
+
+Yet, The given segment appears to ignore and return the result of pthread_mutex_unlock directly. It's desirable to check if pthread_mutex_unlock was successful.
+
+RECOMMENDATIONS:
+The function should be modified to ensure that the mutex unlock operation is handled correctly on failure. The result of pthread_mutex_unlock should be checked.
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex); 
+    if (0 != result) {
+        return result;
+    }
+
+    /* access shared resource */
+
+    result = pthread_mutex_unlock(mutex);
+    return result;
+}
+```
+
+Make sure that in the place of accessing shared resource there is not any potential exception, otherwise unlock the mutex.
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+    
+    /* access shared resource */
+    
+    return pthread_mutex_unlock(mutex);
+} 
+```
+
+However, to completely get rid of the issue, this code should be part of a try/catch block so that whenever some problem occurs in shared resource area, mutex would be released
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex); 
+    if (0 != result) {
+        return result;
+    }
+
+    try {
+        /* access shared resource */
+    } catch (...) {
+        pthread_mutex_unlock(mutex);
+        // propagate the exception if needed
+        throw;
+    }
+
+    result = pthread_mutex_unlock(mutex);
+    return result;
+}
+```

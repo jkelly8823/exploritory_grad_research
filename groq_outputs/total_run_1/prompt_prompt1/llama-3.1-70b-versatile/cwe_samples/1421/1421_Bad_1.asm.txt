@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION:
+Potential Privilege Escalation and Data Leak due to Unsanitized Register Usage.
+
+EXPLANATION:
+This vulnerability arises from using an unsanitized value from X6 in the address calculation in line 6. X6 is assumed to hold an EL0 base address, but it is loaded into an elevated privilege context where it can access arbitrary addresses, allowing potential data leaks. Additionally, this address calculation combines user-controlled input from X2 in line 1 and unsanitized X6 in line 6 to ultimately calculate the address for line 6. If the attacker can manipulate the memory layout and exploit this control, an attacker can access arbitrary memory locations.
+
+The manipulation through unsanitized register usage is elevated due to the unsanitized load of TTBR0_EL1 (Translation Table Base Register) into X3 in line 3 and then the manipulation of this X3 register across multiple lines in this execution flow. Moreover, when access happens with this combined memory address X6 and manipulated X3 registers to the memory space having access level control and potentially unsanitized memory, it becomes further worse. 
+
+The major issue is, the approach demonstrates that lack of sufficient protection and validation needed on unsanitized data across elevated privilege contexts, considering this example runs in slightly elevated context.
+
+RECOMMENDATIONS:
+To prevent potential privilege escalation and data leaks:
+- Add data validation for unsanitized registers and operations, such as X1 in line 1.
+- Add privilege checks at various entry points and, especially, while using unsanitized values, such X6 in line 6.
+- Implement bounds checking in address calculations that utilize unsanitized values.
+- Restrict the access level control based on the execution context elevation so that unsanitized address handling stays secure from accessing memory spaces.
+
+ORIGINAL CODE:
+1 LDR X1, [X2] ; arranged to miss in the cache
+2 CBZ X1, over ; This will be taken 
+3 MRS X3, TTBR0_EL1; 
+4 LSL X3, X3, #imm 
+5 AND X3, X3, #0xFC0
+6 LDR X5, [X6,X3] ; X6 is an EL0 base address
+7 over

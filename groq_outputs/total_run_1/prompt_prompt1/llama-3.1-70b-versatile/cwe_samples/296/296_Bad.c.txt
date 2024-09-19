@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+The code does not properly handle all possible return values from the SSL_get_verify_result function, potentially leading to a false sense of security. It only checks for X509_V_OK and X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN, but ignores other possible error conditions.
+
+EXPLANATION:
+The SSL_get_verify_result function can return a wide range of error codes, but the code only checks for two specific cases. By failing to handle other possible error conditions, the code may allow an attacker to compromise the connection without being detected. For example, X509_V_ERR_CERT_NOT_YET_VALID or X509_V_ERR_CERT_HAS_EXPIRED error codes are not checked, which could allow an expired or soon-to-be-expired certificate to be considered trustworthy.
+
+RECOMMENDATIONS:
+To properly handle all possible return values from the SSL_get_verify_result function, a switch statement or a comprehensive if-else chain should be used to check for all possible error codes. The X509_V_FLAG_TRUSTED_FIRST flag should be used to prioritize trusted certificates. Here's an example of how the code can be modified:
+
+```c
+X509 *cert = NULL;
+long foo = SSL_get_verify_result(ssl);
+
+if (cert = SSL_get_peer_certificate(ssl)) {
+    if (X509_V_OK == foo) {
+        // Certificate is valid and trusted
+    } else {
+        switch (foo) {
+            case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+                // Handle X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT
+                break;
+            case X509_V_ERR_CERT_NOT_YET_VALID:
+                // Handle X509_V_ERR_CERT_NOT_YET_VALID
+                break;
+            case X509_V_ERR_CERT_HAS_EXPIRED:
+                // Handle X509_V_ERR_CERT_HAS_EXPIRED
+                break;
+            case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+                // Handle X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+                break;
+            // Handle other possible error codes accordingly
+            default:
+                // Handle generic X509 verification error
+                break;
+        }
+    }
+} else {
+    // Handle error: unable to retrieve peer certificate
+}
+```
+
+ORIGINAL CODE:
+
+
+if ((cert = SSL_get_peer_certificate(ssl)) && host)foo=SSL_get_verify_result(ssl);
+if ((X509_V_OK==foo) || X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN==foo)) {
+       // certificate looks good, host can be trusted
+}

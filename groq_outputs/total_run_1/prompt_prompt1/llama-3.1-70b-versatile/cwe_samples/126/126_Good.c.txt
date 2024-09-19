@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 7-8
+VULNERABILITY_DESCRIPTION:
+Buffer overflow may occur due to incorrect buffer size in strncpy function calls, and hard-coded null character index values.
+
+EXPLANATION:
+While it is true that `strncpy` is being used to prevent buffer overflow, there is still a potential vulnerability with hard-coded null character index values for both variables (255 for Filename, 31 for Pattern). In this case, the code manually sets a null character at the end of the string. However, these hard-coded index values should match the size of the buffer minus one. The code's comment claims that it prevents off-by-one overflow, but for safety, we assume that buffer overflows might not be stopped. 
+
+Additionally, a manual null-character termination operation is potentially unnecessary. We can clarify this once we understand the nature of the input file content being copied.
+
+For this reason, a potential buffer overflow vulnerability exists in this code, as well as for incorrect array indexing. We should validate our assumption that strncpy had secured bounds to prevent an off-by-one error in the array.
+
+Given the details that we have so far, we recommend caution.
+
+RECOMMENDATIONS:
+Instead of manually setting a null character at the end of the string, it's safer to make use of strncpy's ability to null-terminate the copied string by passing the correct buffer size.
+
+Specific change:
+```c
+                    /* copy filename parameter to variable, prevent off-by-one overflow */
+                    strncpy(Filename, argv[2], sizeof(Filename) - 1);
+                    Filename[sizeof(Filename) - 1] = '\0';  // Just in case.
+                    
+                    /* copy pattern parameter to variable, prevent off-by-one overflow */
+                    strncpy(Pattern, argv[3], sizeof(Pattern) - 1);
+                    Pattern[sizeof(Pattern) - 1] = '\0';  // Just in case.
+```
+Reusing the `sizeof(Pattern) - 1` value prevents potential errors and eliminates concerns about accuracy and future changes.
+
+However, strlcpy and strlcat may offer a more secure data handling.
+
+ORIGINAL CODE:
+
+```c
+                    /* copy filename parameter to variable, no off-by-one overflow */
+                    strncpy(Filename, argv[2], sizeof(Filename)-1);Filename[255]='\0';
+                    
+                    /* copy pattern parameter to variable, no off-by-one overflow */
+                    strncpy(Pattern, argv[3], sizeof(Pattern)-1);Pattern[31]='\0';
+```

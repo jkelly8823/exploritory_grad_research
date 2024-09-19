@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-57 (entire code segment due to vulnerabilities throughout)
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to several security issues, including Command Injection, Path Traversal, and Unrestricted File Upload.
+
+EXPLANATION:
+The code processes HTTP file uploads, but it lacks proper input validation and sanitization. The filename is extracted from the HTTP request header without any validation, which allows an attacker to manipulate the filename and potentially execute arbitrary system commands or overwrite sensitive files. 
+
+The filename is constructed by concatenating a directory path with the user-provided filename, without any sanitization. This allows an attacker to potentially traverse the file system and write files to sensitive locations.
+
+Furthermore, the code does not validate the file type or content, making it possible for an attacker to upload malicious files, such as executable code or HTML files containing malware.
+
+The use of FileWriter and BufferedWriter in combination with the user-provided filename allows an attacker to write to files in arbitrary locations.
+
+Additionally, the use of `bw.write(line);` and `bw.newLine();` without proper encoding or escaping of the data allows for potential code injection attacks.
+
+RECOMMENDATIONS:
+1. Properly validate and sanitize the filename to prevent path traversal and command injection attacks. 
+2. Enforce a specific directory for file uploads and ensure that the filename is properly sanitized and encoded to prevent any potential command injection or traversal attacks.
+3. Use a secure method for constructing the filename, such as using a temporary file or a unique identifier.
+4. Validate the file type and content to prevent uploading malicious files.
+5. Use prepared statements or a secure method for writing files to prevent code injection attacks.
+6. Implement additional security measures such as authentication, authorization, and rate limiting to prevent abuse.
+
+ORIGINAL CODE:
+                  public class FileUploadServlet extends HttpServlet {
+                     
+                        ...
+                           protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                           
+                              response.setContentType("text/html");PrintWriter out = response.getWriter();String contentType = request.getContentType();
+                                 // the starting position of the boundary headerint ind = contentType.indexOf("boundary=");String boundary = contentType.substring(ind+9);
+                                 String pLine = new String();String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+                                 // verify that content type is multipart form dataif (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+                                 
+                                    // extract the filename from the Http headerBufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));...pLine = br.readLine();String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+                                       // output the file to the local upload directorytry {
+                                          BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));for (String line; (line=br.readLine())!=null; ) {if (line.indexOf(boundary) == -1) {bw.write(line);bw.newLine();bw.flush();}} //end of for loopbw.close();
+                                       
+                                       
+                                       } catch (IOException ex) {...}// output successful upload response HTML page
+                                 }// output unsuccessful upload response HTML pageelse{...}
+                           }...
+                        
+                     }
+               
+               

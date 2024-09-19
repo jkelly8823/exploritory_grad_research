@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The use of snprintf or strncpy with static buffer and non-checked count can lead to an out-of-bounds access, but more specifically the use of 'gethostbyaddr' and 'gethostbyname' has security issues. They return a pointer to a static structure.
+EXPLANATION:
+In the code snippet, 'gethostbyaddr' is used to obtain host information associated with the given network address. However, the 'gethostbyaddr' and 'gethostbyname' functions return a pointer to a static buffer that is overwritten with each call. This presents several issues. 
+
+If the function fails, it will return NULL and set h_errno. However, it does not describe why it failed. Moreover, it's not thread-safe.
+
+But the bigger issue here is the usage of 'strncmp'. The 'strncmp' function doesn't null-terminate its string if it didn't find the specified number of characters, and if the string is longer than 'sizeof(tHost)' here it'll be cut at 'sizeof(tHost)'. So it will correctly compare but won't account for '\0'.
+
+RECOMMENDATIONS:
+1. 'gethostbyaddr' should be replaced with 'getaddrinfo' which returns a dynamically allocated linked list of hostent structures. This is safer since it uses the thread-safe non-static storage to return the structure.
+
+2. Try to avoid using static functions in C programming when possible, unless explicitly dealing with code written in a single-threaded context.
+
+3. Even though you're using strncmp and truncating the input string 'tHost', strncmp should still be checked for the entire 'strlen(tHost)'
+
+Here's what the safer replacement is:(If you know the length and can get the correct Hostname.)
+
+```c
+// Your variables initialization is same as before.
+//...
+
+struct addrinfo *res;
+struct addrinfo hints;
+char* CANONQNAMEBUFFSIZE = "256";
+
+memset(&hints, 0, sizeof(hints));    
+Hints.ai_family = AF_INET;
+
+//You might want to check for errors. 
+if (getaddrinfo(tHost, CANONQNAMEBUFFSIZE, &hints, &res) == 0) {
+    if (res->ai_family == AF_INET) {
+      //... use CANONQNAMEBUFFSIZE.
+    }
+}
+
+```
+4. But we will recommend 'arpa/inet.h' here since seems like that's the case we are considering the usage of 'gethostbyaddr/r' API. Ensure that with CANONQNAMEBUFFSIZE, you are dealing with complete Host name properly which might as well does include complete CANONQNAMEBUFFSIZE amount of characters since for big servers you name can go quite big.
+
+
+
+ORIGINAL CODE:
+```
+   struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";
+myaddr.s_addr=inet_addr(ip_addr_string);
+hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);
+if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {trusted = true;} else {trusted = false;}
+```

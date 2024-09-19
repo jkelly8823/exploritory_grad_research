@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Command Injection vulnerability.
+
+EXPLANATION:
+The code uses the subprocess.call function to execute a system command, which includes user-supplied input (the 'validated' IP address). Although the input is validated by a regular expression, the validation is incomplete and can still allow an attacker to inject malicious commands. The regular expression used in the validate_ip_regex function only checks if the input string matches the pattern of an IP address, but it does not prevent an attacker from injecting malicious commands as a suffix. For example, if an attacker passes the input "127.0.0.1; ls -l", the subprocess.call function will execute both the ping command and the ls -l command, which is a potential security vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should use a safer approach to execute the system command. Here are some recommendations:
+- Use the shutil module's which function to get the full path of the ping command, and then execute the command using a call to a shell-free function such as subprocess.run with stdin and stdout set to None.
+- Use an array instead of a string for the command and arguments. This will prevent shell substitution.
+- Avoid using subprocess.call, which is deprecated in favor of subprocess.run.
+- Use the check_output or check_call function from the subprocess module, which can also help to prevent command injection attacks.
+
+ORIGINAL CODE:
+```
+          import subprocess
+          import re
+          
+          def validate_ip_regex(ip: str):
+		  
+		    ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+		    if ip_validator.match(ip):
+		    
+		      return ip
+		    
+		    else:
+		    
+		      raise ValueError("IP address does not match valid pattern.")
+		    
+		  
+		  
+		  def run_ping_regex(ip: str):
+		  
+		    validated = validate_ip_regex(ip)
+		    # The ping command treats zero-prepended IP addresses as octal
+		    result = subprocess.call(["ping", validated])
+		    print(result)
+		  
+		
+	       
+```

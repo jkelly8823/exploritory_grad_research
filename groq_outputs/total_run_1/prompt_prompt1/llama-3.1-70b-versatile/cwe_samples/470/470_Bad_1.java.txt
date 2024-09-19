@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Command Injection/Unstricted Deserialization vulnerability, also known as 'Dynamic Class Loading'.
+
+EXPLANATION:
+The issue lies in the lines where the code uses the 'Class.forName' and 'newInstance' methods to dynamically load and instantiate a class based on a user-provided parameter ('request.getParameter("ctl")'). This creates a vulnerability because an attacker can manipulate the 'ctl' parameter to load and execute any class that is accessible on the classpath, potentially leading to remote code execution or unauthorized access to sensitive data. 
+
+The 'Class.forName' method is used to reflectively load a class, and the 'newInstance' method is used to create a new instance of the loaded class. These methods can be exploited to dynamically load and execute arbitrary code, bypassing the normal security checks and controls.
+
+The call to 'ao.checkAccessControl(request)' is insufficient to prevent the vulnerability because an attacker can still manipulate the 'ctl' parameter to bypass access controls or inject arbitrary code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+1. Validate user input: Ensure that the 'ctl' parameter is validated and sanitized before using it to load a class. 
+   This includes checking that the value is not null, empty or contains any suspicious characters.
+
+   Example: `if (ctl == null || ctl.isEmpty() || ctl.contains("someSuspiciousCharacter")) { return "Invalid CTL value"; }`
+
+2. Use a Whitelist: Instead of allowing any class to be loaded, consider maintaining a whitelist of allowed classes that can be loaded.
+
+   Example: 
+   ```
+   List<String> allowedClasses = Arrays.asList("AllowedClass1", "AllowedClass2");
+   if (!allowedClasses.contains(ctl)) {
+      return "CTL value is not allowed";
+   }
+   ```
+
+3. Use Dependency Injection: Instead of creating a new instance of the class using reflection, consider using dependency injection to provide an instance of the class, where the dependency injection framework controls the creation and lifecycle of the class instance.
+
+4. Remove the dynamic loading of classes altogether and switch to a known set of commands that can be executed.
+
+ORIGINAL CODE:
+```java
+String ctl = request.getParameter("ctl");
+Class cmdClass = Class.forName(ctl + "Command");
+Worker ao = (Worker) cmdClass.newInstance();
+ao.checkAccessControl(request);
+ao.doAction(request);
+```

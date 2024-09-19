@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 45
+VULNERABILITY_DESCRIPTION:
+Unsecured Input Privilege Level
+
+EXPLANATION:
+The input privilege level for the physical memory protection (PMP) core 'i_pmp_data' is set to the user privilege level 'PRIV_LVL_U' without any explicit checks. This is a vulnerability because an attacker with access to the module's input interface may be able to manipulate the PMP to access restricted memory regions by using 'PRIV_LVL_U' as the current privilege level. As this lacks proper validation and handling of privilege levels, untrusted input can potentially bypass memory protection or elevate user privileges.
+
+RECOMMENDATIONS:
+1. Always validate the current privilege level and update it accordingly. For instance, it could be set based on the system's current security state or based on the current user privileges.
+2. Ensure that when in user mode, the module should restrict access based on unprivileged memory regions, and require elevated privilege levels (like M or S) if it wants to have more access rights.
+3. Always verify that any input address 'addr_i' does not attempt to traverse from its assigned user region to higher privilege memory spaces (mainly data associated with privilege S or M level).
+
+ORIGINAL CODE:
+
+                    module dma #( ... )( ... );
+                    ...
+                        
+                        input [7:0] [16-1:0] pmpcfg_i;
+                        input logic [16-1:0][53:0]     pmpaddr_i;
+                        ...
+                        //// Save the input command
+  						always @ (posedge clk_i or negedge rst_ni)
+							
+							begin: save_inputs
+							if (!rst_ni)
+								
+								begin
+								...
+								end
+								
+							else
+								
+								begin
+									
+									if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE)
+									begin
+									...
+									end
+									
+								end
+								
+							end // save_inputs
+							...
+							// Load/store PMP check
+							pmp #(
+								
+								.XLEN       ( 64                     ),
+								.PMP_LEN    ( 54                     ),
+								.NR_ENTRIES ( 16           )
+								
+							) i_pmp_data (
+								
+								.addr_i        ( pmp_addr_reg        ),
+								.priv_lvl_i    ( riscv::PRIV_LVL_U   ),
+								.access_type_i ( pmp_access_type_reg ),
+								// Configuration
+								.conf_addr_i   ( pmpaddr_i           ),
+								.conf_i        ( pmpcfg_i            ),
+								.allow_o       ( pmp_data_allow      )
+								
+							);
+							
+						
+					endmodule

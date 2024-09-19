@@ -1,0 +1,110 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-15, 17-18
+VULNERABILITY_DESCRIPTION:
+Resource leak, socket not being closed, and potential Denial of Service (DoS) vulnerability due to infinite loop and unchecked exceptions.
+
+EXPLANATION:
+The code has several issues. 
+
+Firstly, the `ServerSocket` and `Socket` resources are not being properly closed, which will cause resource leaks. 
+
+Secondly, the `while (listening)` loop in the constructor can cause an infinite loop and potential Denial of Service (DoS) vulnerability, as the `listening` variable is never set to `false` and the `start()` method is called repeatedly. 
+
+Thirdly, the `try`-`catch` blocks do not handle exceptions properly, and errors are silently ignored. 
+
+Lastly, `extends Thread` is discouraged, as it's better to use the `Runnable` and `Executor` frameworks in Java.
+
+RECOMMENDATIONS:
+
+- Close `ServerSocket` and `Socket` resources properly using `try-finally` or `try-with-resources` blocks.
+- Remove the infinite loop from the constructor and handle exceptions properly.
+- Replace `extends Thread` with `implements Runnable`.
+- Use `ExecutorService` to manage threads.
+
+ORIGINAL CODE:
+
+```java
+@Stateless
+public class StockSymbolBean extends Thread implements StockSymbolRemote {
+        
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    boolean listening = false;
+    
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        } catch (IOException ex) {...}
+        listening = true;
+        while(listening) {
+            start();
+        }
+    }
+    
+    public String getStockSymbol(String name) {...}
+    public BigDecimal getStockValue(String symbol) {...}
+    public void run() {
+        try {
+            clientSocket = serverSocket.accept();
+        } catch (IOException e) {...}
+        ...
+    }
+        
+}
+```
+ 
+ Fix the above code to match the recommended changes.
+
+```java
+@Stateless
+public class StockSymbolBean implements StockSymbolRemote, Runnable {
+        
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    ExecutorService executorService;
+    
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+            executorService = Executors.newFixedThreadPool(10);
+        } catch (IOException ex) {
+            //Properly handle exceptions here
+        }
+    }
+    
+    public String getStockSymbol(String name) {...}
+    public BigDecimal getStockValue(String symbol) {...}
+    
+    @Override
+    public void run() {
+        try (ServerSocket server = new ServerSocket(Constants.SOCKET_PORT)) {
+            while (true) {
+                try (Socket client = server.accept()) {
+                    // Handle the client socket here
+                } catch (IOException ex) {
+                    //Properly handle exceptions here
+                }
+            }
+        } catch (IOException ex) {
+            //Properly handle exceptions here
+        } finally {
+            if (serverSocket != null) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    //Properly handle exceptions here
+                }
+            }
+        }
+    }
+    // Start a new task using an ExecutorService in the main function, if required
+    public void startService(){
+        executorService.submit(this);
+    }
+    // Stop the executor service, when required 
+    public void stopService(){
+        executorService.shutdown();
+    }
+    // Other utility methods to control, pause/restart executor service 
+}
+```

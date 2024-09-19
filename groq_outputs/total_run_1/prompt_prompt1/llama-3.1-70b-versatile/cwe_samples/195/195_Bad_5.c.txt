@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 8
+VULNERABILITY_DESCRIPTION: Buffer overflow vulnerability through a calculation error.
+
+EXPLANATION: 
+The vulnerability exists in the function `proc_msg`. The calculation of the buffer size for `buf` is based on the subtraction of `msg_len` from `pre_len`, which could potentially result in a negative value. This calculation error is caused by the fact that `pre_len` is the size of the string "preamble: " and `msg_len` is the length of the preamble string up to the colon. However, when calling `proc_msg`, the code passes `jnklen`, which is the length of the preamble string up to the colon, and the string actually used in the function call is just "s" whereas `s` in the function definition is used to denote a full string like "preamble: message\n". 
+
+This difference causes the code to incorrectly calculate the buffer size, resulting in a large buffer size (since `msg_len` is much smaller than `pre_len`) and allows the buffer to overflow. This is demonstrated by passing "s" instead of `s` to the `proc_msg` function.
+
+RECOMMENDATIONS:
+To fix the vulnerability, we should ensure that the buffer size calculation is correct and accurate. Here are the steps to follow:
+
+- Verify the input values before calculating the buffer size. 
+- Always check for potential errors and handle them properly.
+
+The correct buffer size calculation should be based on the actual length of the string `s` instead of making assumptions about the preamble length. Here's a revised version of the function:
+
+```c
+int proc_msg(char *s, int msg_len)
+{
+    int pre_len = strlen(s);
+    // ... other code
+    char buf[pre_len - msg_len + 1]; // Don't forget the null terminator!
+    // ... other code
+}
+```
+That being said, given the fact we are trying to buffer a prepended message from a predefined phrase before a colon, perhaps our approach should allocate buffers where size >= strlen(s) + msg_len + 1, removing the - in the equation. A 2nd buffer, buf2 would then be used, only populating data between s + jnklen + 2 (past the colon, perhaps plus 1 more or minus for a space) and buf2 length up to actual strlen(s), performing some post-processing to finish appending "s" contents to buf2 here.
+
+ORIGINAL CODE:
+
+```c
+int proc_msg(char *s, int msg_len)
+{
+    // Note space at the end of the string - assume all strings have preamble with space
+    int pre_len = sizeof("preamble: ");
+    char buf[pre_len - msg_len];
+    // ... Do processing here if we get this far
+}
+char *s = "preamble: message\n";
+char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack
+```

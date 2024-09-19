@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION: 
+A possible path traversal vulnerability based on untrusted data exists in the UrlHandlerReceiver class. This vulnerability can occur if an attacker can maliciously alter the intent or its data before it is received by the receiver. 
+
+EXPLANATION:
+In this case, we see that a receiver has registered for the "com.example.URLHandler.openURL" Intent. When this receiver receives an Intent with the correct action, it gets an extra from the Intent with the key "URLToOpen" and uses the length of this URL without any validation or sanitization. In this particular case, we don't see any operations on the URL that could potentially cause harm. However, if an operation like URL parsing, download, or opening in a browser were present, it could lead to a vulnerability where an attacker can cause the application to parse any URL or trigger arbitrary actions by sending malicious Intents with a crafted URL. To prevent such scenarios, always validate or sanitize data received from untrusted sources.
+
+RECOMMENDATIONS:
+Always validate and sanitize intent data received by a BroadcastReceiver before consuming it. Validate the URL before performing any operations on it. This includes checking for protocol, domain, path, and query parameters. Consider implementing Package visibility restrictions (manifest-based visibility declarations and the `android:exported` attribute) and set `android:exported` to false in the Manifest file to restrict external broadcasts. It's also a good practice to restrict custom schemes, eg, by taking a hash of the expected valid values and then checking this rather than a series of if/else on values.
+
+ORIGINAL CODE:
+```java
+IntentFilter filter = new IntentFilter("com.example.URLHandler.openURL");
+MyReceiver receiver = new MyReceiver();
+registerReceiver(receiver, filter);
+
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if("com.example.URLHandler.openURL".equals(intent.getAction())) {
+            String URL = intent.getStringExtra("URLToOpen");
+            int length = URL.length();
+            // ... 
+        }
+    }
+}
+```

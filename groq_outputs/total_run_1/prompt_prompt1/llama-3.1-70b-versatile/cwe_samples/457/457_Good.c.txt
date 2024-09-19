@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Use After Free vulnerability.
+
+EXPLANATION:
+The `test_string` variable is initially declared as a pointer to a string literal. However, when the code inside the `if` statement is executed, `test_string` is reassigned to point to a new string literal. 
+
+The problem arises when we consider that the original string literal "Done at the beginning" may be stored in read-only memory. When we try to reassign `test_string` to point to "Hello World!", this could be interpreted as a request to modify read-only memory, which is not allowed. Furthermore, between the declaration and reassignment of `test_string`, the original memory may be deallocated, resulting in a Use After Free vulnerability.
+
+Additionally, on some platforms and compilers, string literals may be "interned", or pooled. That is, multiple pointers to the same string literal may refer to the same piece of memory. Therefore, reassigning `test_string` seems like it could introduce unexpected side effects, up to and including crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using `strcpy` or `strncpy` to copy the string into a character array instead of using a pointer to assign new string literals. Alternatively, use a dynamically allocated string and avoid string literals.
+
+Alternatively, consider avoiding the 'feature' that causes the most problem in the code by making use of dynamically allocated strings and changing the code to use dynamically allocated strings instead of string literals.
+
+Here's an example of how to use `strncpy` and dynamically allocated strings:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+int main() {
+    int i = 0;
+    int err_val = 0;
+    char *test_string = malloc(256);
+    strncpy(test_string, "Done at the beginning", 256);
+    if (i != err_val) {
+        strncpy(test_string, "Hello World!", 256);
+    }
+    printf("%s", test_string);
+    free(test_string);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+char *test_string = "Done at the beginning";
+if (i != err_val)
+{
+test_string = "Hello World!";
+}
+printf("%s", test_string);
+```

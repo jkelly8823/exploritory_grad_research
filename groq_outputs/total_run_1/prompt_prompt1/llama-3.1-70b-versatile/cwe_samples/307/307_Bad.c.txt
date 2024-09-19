@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the getNextMessage function calls, where data is being written to the username and password buffers without proper bounds checking. This is because the getNextMessage function calls do not specify the maximum amount of data to read, potentially leading to writing more data than the allocated size of the username and password buffers. This can cause a buffer overflow, potentially allowing an attacker to inject code and execute arbitrary commands.
+
+Additionally, this code does not check for the case where getNextMessage returns 0, which can indicate the end of the file or connection. This may cause the program to enter an infinite loop if the connection is closed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following changes should be made:
+1. Use bounded buffer operations: Ensure that the getNextMessage function checks the amount of data read and does not exceed the allocated buffer sizes. This can be done by using a third argument to specify the maximum amount of data to read.
+2. Check return values: Add checks for the case where getNextMessage returns 0 or -1 to prevent infinite loops.
+3. Use safe string operations: Use string operations that prevent buffer overflows, such as strncpy or strncat.
+
+Sample safe code:
+```c
+int length = getNextMessage(socket, username, USERNAME_SIZE - 1);  // Leave space for null-terminator
+if (length < 0) {
+    printf("Error getting message\n");
+    return FAIL;
+}
+username[length] = '\0';  // Ensure null-termination
+
+length = getNextMessage(socket, password, PASSWORD_SIZE - 1);
+if (length < 0) {
+    printf("Error getting message\n");
+    return FAIL;
+}
+password[length] = '\0';
+```
+
+ORIGINAL CODE:
+                  int validateUser(char *host, int port){
+                        int socket = openSocketConnection(host, port);if (socket < 0) {printf("Unable to open socket connection");return(FAIL);}
+                           int isValidUser = 0;char username[USERNAME_SIZE];char password[PASSWORD_SIZE];
+                           while (isValidUser == 0) {
+                              if (getNextMessage(socket, username, USERNAME_SIZE) > 0) {if (getNextMessage(socket, password, PASSWORD_SIZE) > 0) {isValidUser = AuthenticateUser(username, password);}}
+                           }return(SUCCESS);
+                     }

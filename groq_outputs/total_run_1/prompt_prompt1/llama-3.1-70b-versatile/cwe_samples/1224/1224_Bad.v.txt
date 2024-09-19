@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 25
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in the code is a potential latch in the "Data_out" register. This is because the "else if (~write)" condition only updates Data_out[0] with Write_once_status and leaves the rest of Data_out untouched. This could potentially lead to unpredictable behavior when write is low and Write_once_status is changed, but the write enable signal is asserted before all the flip-flop updates have taken place.
+
+EXPLANATION:
+A latch can occur in the design when the flip-flop is not properly updated for all its bits under all possible input combinations. In the given code, when 'write' is high but then it goes low before the flip-flops finish updating (because a latch occurs after Write_once_status changed to high), Data_out bits 15:1 could still be updated based on the asynchronously arriving Write_once_status change signal state at register rise edge. This could cause latching at a value that may not be the intended final state.
+
+RECOMMENDATIONS:
+To fix this vulnerability, all bits of the Data_out register should be updated in every possible condition of the always block. Here's the revised code snippet for the vulnerable part:
+            
+always @(posedge Clk or negedge ip_resetn)
+      
+	if (~ip_resetn)
+	begin
+	
+	  Data_out <= 16'h0000;
+	  Write_once_status <= 1'b0; 
+	
+	end 
+	else if (write & ~Write_once_status)
+	begin
+	
+	  Data_out <= Data_in & 16'hFFFE;
+	  Write_once_status <= Data_in[0]; // Input bit 0 sets Write_once_status
+	
+	end
+	else 
+	begin 
+	
+	  Data_out <= (write) ? Data_out : {Data_out[15:1], Write_once_status}; 
+	
+	end 
+
+ORIGINAL CODE:
+```
+module register_write_once_example
+	( 
+	input [15:0] Data_in, 
+	input Clk, 
+	input ip_resetn, 
+	input global_resetn,
+	input write,
+	output reg [15:0] Data_out 
+	);
+      
+	reg Write_once_status; 
+      
+	always @(posedge Clk or negedge ip_resetn)
+	
+	if (~ip_resetn)
+	begin
+	
+	  Data_out <= 16'h0000;
+	  Write_once_status <= 1'b0; 
+	
+	end 
+	else if (write & ~Write_once_status)
+	begin
+	
+	  Data_out <= Data_in & 16'hFFFE;
+	  Write_once_status <= Data_in[0]; // Input bit 0 sets Write_once_status
+	
+	end
+	else if (~write)
+	begin 	
+
+	  Data_out[15:1] <= Data_out[15:1]; 
+	  Data_out[0] <= Write_once_status; 
+	
+	end 
+	
+	endmodule
+```

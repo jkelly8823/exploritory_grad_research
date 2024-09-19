@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Insecure direct object reference (IDOR) and potential path traversal vulnerability in log file writing.
+
+EXPLANATION:
+The code is vulnerable to an insecure direct object reference (IDOR) and potential path traversal vulnerability. This is due to the fact that the path to the log file is hardcoded as "logFile.log", which is in the same directory as the script. This leaves the application open to attacks where the attacker could potentially write to a log file that is not intended, potentially overwriting sensitive data. 
+
+Additionally, if an attacker is able to manipulate the file path (e.g., through an input or environment variable), this could allow them to write to arbitrary locations in the file system.
+
+RECOMMENDATIONS:
+1. The path to the log file should be generated or sanitized securely, taking into account the context and permissions of the script. 
+2. Absolute paths should be used instead of relative paths to prevent potential path traversal attacks.
+3. Error handling should be added to prevent the script from writing to an arbitrary location on the file system.
+Here's an example of how the code could be modified to address these issues:
+
+```php
+function writeToLog($message){
+    $logFile = '/path/to/logFile.log';
+    $logFile = fopen($logFile, "a");
+    //attempt to get logfile lock
+    if (flock($logFile, LOCK_EX)) {
+        fwrite($logFile,$message);
+        // unlock logfile
+        flock($logFile, LOCK_UN);
+    }else {
+        print "Could not obtain lock on $logFile, message not recorded\n";
+    }
+    fclose($logFile);
+}
+```
+
+ORIGINAL CODE:
+```php
+function writeToLog($message){$logfile = fopen("logFile.log", "a");
+    //attempt to get logfile lock
+    if (flock($logfile, LOCK_EX)) {fwrite($logfile,$message);
+       // unlock logfile
+       flock($logfile, LOCK_UN);}else {print "Could not obtain lock on logFile.log, message not recorded\n";}
+}fclose($logFile);
+```
+Please note that `fclose($logFile)` is outside of the function which might be causing a Fatal error because there's no variable like `$logFile` outside the function's scope. The correct line should be `fclose($logfile)` and it should be inside the function.

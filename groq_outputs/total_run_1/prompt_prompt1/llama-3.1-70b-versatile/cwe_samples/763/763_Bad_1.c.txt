@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 13, 14, 16, 20
+VULNERABILITY_DESCRIPTION:
+The code contains an unbounded string traversal and two memory-related vulnerabilities: a dangling pointer and a double-free vulnerability.
+
+EXPLANATION:
+The while loop condition `while( *str != NULL)` causes an unbounded string traversal because `str` will not check for the actual end of the allocated memory but rather the occurrence of a NULL character in the memory location. This results in buffer overflow if the allocated string doesn't have a NULL Terminator at its end.
+
+The function has an object lifetime issue because it frees the allocated memory (`free(str)`) and then continues to execute, using the pointer after it has been freed. It also frees the memory before returning, but it does so after it has already freed it in the case of a matched character. This will result in double-free, which may result in a crash or even code execution.
+
+Additionally, incrementing the pointer with `str = str + 1;` is better expressed as `str++` due to clarity and maintenance concerns.
+
+RECOMMENDATIONS:
+Replace `str = str + 1;` with `str++`. 
+
+Also, replace the condition of while with a length parameter to restrict the traversal within the allocated memory bounds.
+
+To avoid the dangling pointer and double-free issues, move the free() call to the end of the function and outside of any conditional branches. This way, free() will be called exactly once regardless of the return value.
+
+The following shows the revised function:
+
+
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+
+int contains_char(char c){
+    char *str; 
+    str = (char*)malloc(20*sizeof(char)); 
+    strcpy(str, "Search Me!"); 
+    int len = 20; 
+    int i;
+    for(i = 0; i < len; i++){
+        if(str[i] == '\0'){
+            break;
+        }
+        if( str[i] == c ){
+            free(str); 
+            return SUCCESS;
+        }
+    }
+    free(str); 
+    return FAILURE;
+}
+```
+Note: Always remember to `free()` memory, but never access it after you `free()`.
+
+ORIGINAL CODE:
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+int contains_char(char c){
+    char *str;
+    str = (char*)malloc(20*sizeof(char));
+    strcpy(str, "Search Me!"); 
+    while( *str != NULL){
+        if( *str == c ){
+            free(str); 
+            return SUCCESS;
+        }
+        str = str + 1;
+    }
+    free(str); 
+    return FAILURE;
+}
+```

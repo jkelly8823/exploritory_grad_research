@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The scanf/%d format string does not perform any bounds checking on the input. It does not prevent an integer overflow or buffer overflow which can be triggered by an overly large input, which causes sscanf() to write outside the variables intended by the programmer.
+
+EXPLANATION:
+The vulnerability exists because the sscanf function is not checking for bounds of the input. If an overly large input is provided, it causes sscanf() to write outside the variables intended by the programmer. The condition EOF == error will also never be true for integer assignments as error value returned by sscanf is the number of successful assignments, which in this case would be 2 when both integers are parsed successfully.
+
+In this case, we assume n and m are 32-bit or 64-bit integers. If the input string is "2147483648", sscanf will assign -2147483648 to m, but this does not result in a buffer overflow error here. However, a string of more than 10 digits in length, such as "2147483648000000" for 32-bit integers, could result in a successful assignment that is then undefined as an integer.
+
+RECOMMENDATIONS:
+1. Validate user input by setting limits using "%10d" in the format string to limit the number of digits that can be scanned for each integer to prevent, e.g., a 32-bit unsigned integer overflow. However, this creates the vulnerability of the program succeeding but with values outside the requirements of the programmer.
+2. Ensure n and m are properly validated after the sscanf to prevent the program from proceeding with bad data. This may involve additional checks for the numerical values after the assignment, which removes vulnerabilities from the programmers incorrect assumptions and reduces incorrect conditions such as reading a negative number for a height variable.
+
+ORIGINAL CODE:
+```c
+void parse_data(char *untrusted_input){
+    int m, n, error;
+    error = sscanf(untrusted_input, "%d:%d", &m, &n);
+    if (EOF == error){
+        die("Did not specify integer value. Die evil hacker!\n");
+    }
+    /* proceed assuming n and m are initialized correctly */
+}
+```

@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 13
+VULNERABILITY_DESCRIPTION:
+File Access and Potential OutOfMemoryError vulnerabilities.
+
+EXPLANATION:
+This method is vulnerable to file access issues and potential OutOfMemoryError. On line 5-6, a `FileReader` is opened but not closed within a finally block. If an exception occurs, the file may remain open, which could lead to file descriptor exhaustion. 
+
+Additionally, if the file size exceeds the maximum value for an integer (Integer.MAX_VALUE), the cast of the file length to an integer on line 6 could result in an incorrect array size, potentially leading to unexpected behavior when reading the file.
+
+In line 13, the method throws a general `IOException` which is not specific and can be improved. This method also catches a general exception which can potentially hide other issues.
+
+RECOMMENDATIONS:
+- Use a try-with-resources statement to ensure that the `FileReader` is closed after use, preventing potential file descriptor exhaustion.
+- Use `Files.readAllBytes()` or `Files.readAllLines()` to avoid manual file handling and buffer size issues. These methods provide a more efficient and safe way to read files.
+- Avoid catching general exceptions and instead catch specific exceptions that can be handled meaningfully. 
+- Instead of re-throwing the caught exception, wrap and re-throw a custom exception with more detailed error information, or handle it accordingly.
+
+ORIGINAL CODE:
+```java
+public String readFile(String filename) throws FileNotFoundException, IOException, Exception {
+    String retString = null;
+    try {
+        // initialize File and FileReader objects
+        File file = new File(filename);
+        FileReader fr = new FileReader(file);
+        // initialize character buffer
+        long fLen = file.length();
+        char [] cBuf = new char[(int) fLen];
+        // read data from file
+        int iRead = fr.read(cBuf, 0, (int) fLen);
+        // close file
+        fr.close();
+        retString = new String(cBuf);
+    } catch (FileNotFoundException ex) {
+        System.err.println ("Error: FileNotFoundException opening the input file: " + filename );
+        System.err.println ("" + ex.getMessage() );
+        throw new FileNotFoundException(ex.getMessage());
+    } catch (IOException ex) {
+        System.err.println("Error: IOException reading the input file.\n" + ex.getMessage() );
+        throw new IOException(ex);
+    } catch (Exception ex) {
+        System.err.println("Error: Exception reading the input file.\n" + ex.getMessage() );
+        throw new Exception(ex);
+    }
+    return retString;
+}
+```

@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Insecure direct object reference vulnerability and potential username enumeration.
+
+EXPLANATION:
+The `authenticateUser` method in the `BankManager` class directly checks the provided username and password against the stored username and password of the `user` object. This can lead to an insecure direct object reference vulnerability, where an attacker can attempt to authenticate with different usernames, potentially gaining unauthorized access to user accounts.
+
+Moreover, since the `authenticateUser` method immediately updates the `isUserAuthentic` flag to `true` if the provided credentials match, it allows an attacker to enumerate usernames by observing the difference in responses between valid and invalid usernames. This can help an attacker narrow down their attack to specific, existing usernames.
+
+The `setUser` method also allows an attacker to set the `user` object based on a provided username, potentially allowing them to access unauthorized user data.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities, consider the following changes:
+
+1. Use a secure password comparison method, such as `password.equals(user.getPassword())` -> `passwordHash.equals(hash(user.getPassword()))` and store hashed versions of user passwords in the database.
+2. Delay the update of the `isUserAuthentic` flag to a more secure timing, such as after a successful authentication against a stored hash, and avoid immediately returning `true` or `false`. Use a constant time to respond with a generic authentication failure message to prevent username enumeration.
+3. Implement rate limiting on authentication attempts to slow down brute-force attacks.
+
+ORIGINAL CODE:
+```java
+public class BankManager {
+    // user allowed to perform bank manager tasks
+    private User user = null;private boolean isUserAuthentic = false;
+    
+    // constructor for BankManager class
+    public BankManager() {...}
+    
+    // retrieve user from database of users
+    public User getUserFromUserDatabase(String username){...}
+    
+    // set user variable using username
+    public void setUser(String username) {this.user = getUserFromUserDatabase(username);}
+    
+    // authenticate user
+    public boolean authenticateUser(String username, String password) {if (username.equals(user.getUsername()) && password.equals(user.getPassword())) {isUserAuthentic = true;}return isUserAuthentic;}
+    
+    // methods for performing bank manager tasks
+    ...
+}
+```

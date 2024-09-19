@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7/NA
+VULNERABILITY_DESCRIPTION:
+This code segment is vulnerable to a Memory Corruption bug, specifically a kernel memory disclosure through an Attempted indirect read that might result in Out-of-Bounds Memory Access.
+
+EXPLANATION:
+Analysis of the given assembly code reveals an attempt to read kernel memory. In line 4, the code tries to read a byte from a memory address stored in register `rcx`. The result is then used to access another memory location, which is likely outside the expected memory range (in line 7). This pattern, combined with the repetitive loop on line 6 in case of a zero result, strongly suggests an attempt to extract data from kernel memory through an indirect memory access. This technique is commonly associated with information disclosure in kernel space. Also, note that mov rbx in line 7 is problematic - it uses the result from reading kernel memory, modifying the data. Such operations may result in control-flow attacks from exploiters to create potentially exploitable crashes or gain control of the kernel. At worst this may run as part of even more disturbing covert channels where information from kernel memory may not originate in attack execution itself.
+
+RECOMMENDATIONS:
+To properly prevent this attack, do ensure applications request kernel API safely instead. Relying on such kernels is discouraged and the following steps should normally prevent more malicious practices where kernel data will likely always be deemed private.
+
+Some possible general fixes are:
+* kernel input validation: Carefully check each data provided to functions that will later supply the kernel with data directly. Keep them sanitized.
+* validate pointer or value which may lead to arbitrary memory access
+* perform bounds checking for the range of RCX register when accessing memory
+
+ORIGINAL CODE:
+
+1 ; rcx = kernel address, rbx = probe array
+2 xor rax, rax                # set rax to 0
+3 retry:
+4 mov al, byte [rcx]          # attempt to read kernel memory
+5 shl rax, 0xc                # multiply result by page size (4KB)
+6 jz retry                    # if the result is zero, try again
+7 mov rbx, qword [rbx + rax]  # transmit result over a cache covert channel

@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION:
+Improper Mutex Usage and Unreleased Mutex
+
+EXPLANATION:
+The code uses a mutex to protect access to a shared resource. However, there are two potential issues. Firstly, when `pthread_mutex_lock(mutex)` fails, the function returns the error code immediately, but it does not unlock the mutex if it had been partially locked before the failure. This can lead to a deadlock. 
+
+Secondly, when an exception occurs or when execution is interrupted between `pthread_mutex_lock(mutex)` and `pthread_mutex_unlock(mutex)`, the mutex will not be unlocked, resulting in a deadlock or a starvation situation.
+
+RECOMMENDATIONS:
+The recommended way to use mutexes is to ensure they are always unlocked in the same scope they are locked, using a try-finally or try-catch block. However, C does not support try-finally or try-catch blocks. Therefore, we recommend the following way to write this function:
+
+```c
+int f(pthread_mutex_t *mutex, int *result) {
+    *result = pthread_mutex_lock(mutex);
+    if (0 != *result) {
+        return 0;  // return 0 if mutex_lock is failed
+    }
+
+    /* access shared resource */
+
+    *result = pthread_mutex_unlock(mutex);
+    return 0;
+}
+```
+
+However, the function call side needs to be handled as per this way to ensure mutex will not be stuck. That will prevent a resource leak.
+
+OTHERWISE, 
+When the return statement of `pthread_mutex_unlock(mutex)` cannot be used for returning the error of the `pthread_mutex_lock`. You can use another variable to get its error. Or you can process `pthread_mutex_unlock(mutex)` in a separate error handle function 
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int lock_status;
+    int unlock_status;
+    lock_status = pthread_mutex_lock(mutex);
+    if (lock_status != 0) {
+        return lock_status;
+    }
+
+    /* access shared resource */
+
+    unlock_status = pthread_mutex_unlock(mutex);
+    return unlock_status;
+}
+```
+The following is similar to a try-finally block in the programming language that does support try-finally (usually based on language that support runtime exception handling).
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int lock_status;
+    lock_status = pthread_mutex_lock(mutex);
+    if (lock_status != 0) {
+        return lock_status;
+    } else {
+        int result;
+        /* access shared resource */
+        result = 0;
+        int unlock_status = pthread_mutex_unlock(mutex);
+        if (unlock_status != 0) {
+            result = unlock_status;
+        }
+        return result;
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (0 != result) return result;
+
+    /* access shared resource */
+
+    return pthread_mutex_unlock(mutex);
+}
+```

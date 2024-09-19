@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 13
+VULNERABILITY_DESCRIPTION:
+The vulnerability in the given code segment is a potential integer overflow vulnerability when allocating memory for the board. 
+
+EXPLANATION:
+The issue arises from the fact that `m * n * sizeof(board_square_t)` is calculated using integer arithmetic, which may exceed the maximum limit for an integer if `m` and `n` are large values near the `MAX_DIM` boundary, leading to integer overflow. This would result in `malloc` being called with a small or negative value, which may cause undefined behavior. 
+
+However, in some systems, the behavior of `malloc` when called with a large value (larger than available system memory) may simply result in `malloc` returning a null pointer. But on most modern Linux systems (with glibc), the requested size `m * n * sizeof(board_square_t)` for `malloc` is first limited by `SIZE_MAX`, which prevents integer overflow from causing an attack.
+
+Additionally, the code does not handle failure of `malloc` properly. If `malloc` fails (i.e., it returns `NULL`), the program would likely crash or produce unexpected results.
+
+RECOMMENDATIONS:
+
+- Use a safer way to allocate memory like applying the rule of thumb for avoiding integer overflow in a size calculation:
+
+  ```c
+size_t total_size = m;  
+if ((SIZE_MAX / sizeof(board_square_t)) < total_size) {
+    die("Integer overflow!\n");
+}  
+total_size *= sizeof(board_square_t);  
+total_size *= n;  
+if (SIZE_MAX / n < total_size / n) {  
+    die("Integer overflow!\n");
+}
+board = (board_square_t*) malloc(total_size); 
+```
+
+- Always check the return value of `malloc` after calling it to ensure the memory allocation was successful. If the return value is `NULL`, handle the error accordingly.
+
+- To prevent buffer overflow when inputting `m` and `n`, consider using a safer function like `fgets` instead of `scanf`. Here `scanf` can read one integer for `n` but may leave the newline and other input in the input stream.

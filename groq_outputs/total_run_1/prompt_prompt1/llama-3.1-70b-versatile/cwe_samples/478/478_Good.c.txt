@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 11-12
+VULNERABILITY_DESCRIPTION:
+The code contains an uncontrolled resource management vulnerability. Specifically, it fails to properly handle resources (execution flow) in the presence of exit calls, potentially allowing information disclosure or resource leaks.
+
+EXPLANATION:
+The code includes an unconditional exit call after both the FAILED and default branches. Although it appears to attempt to handle errors, an unconditioned exit can be a problem when there are unreleased resources such as locks or open files. Even in the event there are no resources to clean up after an exit, an unconditional exit might cause unexpected program termination and prevent any potential error or debug logs.
+
+Additionally, in most compiled languages, there is an implied operation when a function reaches its end. One common case where this implication can get exploited is that any exceptions raised beyond a closed stack frame (due to a fall through from the break-less blocks) get lost. Also should the call back up the stack frames any existing non-destructive locks or network connections then usually get kept active for the exiting program. Lastly exit can severely shorten the response detail if it contains valuable data which can occur in an instance which gets called with no return, before responding and passing through exception messages.
+
+RECOMMENDATIONS:
+The code can be improved by including exception handling to catch any potential errors or resource leaks before exiting the program. Instead of calling exit directly, use a function such as atexit, at_quick_exit or _Exit.
+
+ORIGINAL CODE:
+
+
+                  #define FAILED 0
+                  #define PASSED 1
+                  int result;
+                  ...
+                  result = security_check(data);
+                  switch (result) {
+                        case FAILED:
+                            printf("Security check failed!\n");
+                            exit(-1);
+                          //Break never reached because of exit()
+                          break;
+                           case PASSED:
+                            printf("Security check passed.\n");
+                            break;
+                           default:
+                            printf("Unknown error (%d), exiting...\n",result);
+                            exit(-1);
+                        
+                     }

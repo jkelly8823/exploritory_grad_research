@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Dangling pointer vulnerability. When the input character is found, the function frees the allocated memory and then uses the same freed pointer to return.
+
+EXPLANATION:
+The `while` loop iterates through the string, and when it finds a match, it frees the memory allocated to the string. However, it then returns, leaving the function, but the pointer `str` is still used after it has been freed. Although in this specific case, the code still works because it immediately returns after freeing the memory, this is still technically undefined behavior and could potentially lead to issues in certain environments or if the function were modified in the future.
+
+Another potential issue is at line 7. The while loop check is incorrect. It should check for the end of the string (`'\0'`), not `NULL`. This can be fixed by changing the while loop condition to `while (*str != '\0')`.
+
+Lastly, there is no error checking for the memory allocation. The `malloc` function call should be checked for errors to prevent potential null pointer dereferences.
+
+RECOMMENDATIONS:
+
+1. Change the while loop condition to correctly check for the end of the string (`'\0'`).
+2. Perform error checking on the memory allocation.
+3. To avoid the dangling pointer issue, consider freeing the memory before returning, but without using the pointer after it has been freed.
+
+Here's an example of how the function could be improved:
+
+```c
+int contains_char(char c) {
+    char *str;
+    str = (char*)malloc(20*sizeof(char));
+    if (str == NULL) {
+        // handle memory allocation error
+        return FAILURE;
+    }
+    strcpy(str, "Search Me!");
+    int result = FAILURE;
+    while (*str != '\0') {
+        if (*str == c) {
+            result = SUCCESS;
+            break;
+        }
+        str++;
+    }
+    free(str);
+    return result;
+}
+
+```
+
+ORIGINAL CODE:
+
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+
+int contains_char(char c){
+    char *str;str = (char*)malloc(20*sizeof(char));strcpy(str, "Search Me!");while( *str != NULL){
+        if( *str == c ){
+            /* matched char, free string and return success */
+            free(str);return SUCCESS;
+        }
+        /* didn't match yet, increment pointer and try next char */
+        str = str + 1;
+    }
+    /* we did not match the char in the string, free mem and return failure */
+    free(str);return FAILURE;
+}
+```

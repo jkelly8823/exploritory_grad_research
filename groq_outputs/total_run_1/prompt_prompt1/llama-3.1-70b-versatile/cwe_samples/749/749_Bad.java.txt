@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2,3
+VULNERABILITY_DESCRIPTION:
+The provided code is vulnerable to SQL Injection attacks. 
+
+EXPLANATION:
+The SQL statement executed in the `removeDatabase` method contains a dynamically generated query. The `databaseName` variable is directly concatenated into the SQL query, which allows an attacker to inject malicious SQL code. By manipulating the `databaseName` parameter, an attacker can potentially execute arbitrary SQL commands, including those that may compromise the integrity of the database or its contents.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using parameterized SQL queries or prepared statements. These mechanisms allow you to define placeholders for dynamic values and automatically handle the proper quoting and escaping of input data. Here's an updated version of the code:
+
+```java
+public void removeDatabase(String databaseName) {
+    try {
+        Statement stmt = conn.createStatement();
+        stmt.execute("DROP DATABASE IF EXISTS '" + databaseName + "'");  //use parameter no. 8 to evade.
+        // Instead of above, Use prepared statement.
+        PreparedStatement pstmt = conn.prepareStatement("DROP DATABASE IF EXISTS ?");
+        pstmt.setString(1, databaseName);
+        pstmt.execute();
+
+   } catch (SQLException ex) {...}
+}
+```
+However, Prepared statement (`PreparedStatement`) can not have table/database name as parameter, only `ParameterMetaData` can provide information about the types of parameters(sql - table/db, etc.). But `IF EXISTS ` can not be performed like query like ( `"DROP DATABASE IF EXISTS ?"` ). A full working request can not have database name (IF Exists ). So, String manipulation is needed.
+
+Don't use the query as shown in the first example statement, but a safer query which stops SQL attacks should be used if not using parameter data fetch type instead making possible an access point.
+
+ORIGINAL CODE:
+
+```java
+public void removeDatabase(String databaseName) {
+    try {
+          Statement stmt = conn.createStatement();stmt.execute("DROP DATABASE " + databaseName);
+          
+       } catch (SQLException ex) {...}
+}
+```

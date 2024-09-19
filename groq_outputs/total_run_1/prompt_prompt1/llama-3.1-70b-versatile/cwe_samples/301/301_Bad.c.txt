@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7
+VULNERABILITY_DESCRIPTION:
+Potential Uncontrolled Memory Allocation and Cryptographic Weakness: SHA-1 is considered cryptographically insecure, and using 'strlen(password_and_cmd)' could lead to an uncontrolled memory allocation.
+
+EXPLANATION:
+The code uses SHA-1 as the digest algorithm which is widely considered to be weak and vulnerable to collisions. The NIST, in their FIPS 180-4 standard, does not approve SHA-1 as it can be used for digital signatures, key derivation, and data integrity. Using SHA-256 or stronger SHA variants (SHA-3) is recommended.
+
+Another issue lies in the function 'generate_password_and_cmd' which calls 'simple_digest'. The variable 'password_and_cmd' is used as input to 'strlen' function, potentially causing a null-terminated string, passed to a function requiring a 'const char *' and 'unsigned int' length pair. Misuse could occur where null character within the buffer causes unintended shortening of the data, resulting in uncontrolled allocation during dynamic memory allocation on line 6 of the function 'simple_digest'.
+
+RECOMMENDATIONS:
+1. Update the cryptographic algorithm to a more secure one such as 'sha256' or another variant that the EVP library supports.
+2. Manually specify the password length while calling 'generate_password_and_cmd', or refactor it to safely and securely iterate through password characters.
+3. Include null checks before passing the password variables into 'generate_password_and_cmd' and 'simple_digest' as both consider the length directly and uncontrolled allocation is possible.
+
+ORIGINAL CODE:
+```c
+unsigned char *simple_digest(char *alg,char *buf,unsigned int len, int *olen) {
+    const EVP_MD *m;
+    EVP_MD_CTX ctx;
+    unsigned char *ret;
+    OpenSSL_add_all_digests();
+    if (!(m = EVP_get_digestbyname(alg))) return NULL;
+    if (!(ret = (unsigned char*)malloc(EVP_MAX_MD_SIZE))) return NULL;
+    EVP_DigestInit(&ctx, m);
+    EVP_DigestUpdate(&ctx,buf,len);
+    EVP_DigestFinal(&ctx,ret,olen);
+    return ret;}
+unsigned char *generate_password_and_cmd(char *password_and_cmd) {simple_digest("sha1",password,strlen(password_and_cmd)...);}
+```

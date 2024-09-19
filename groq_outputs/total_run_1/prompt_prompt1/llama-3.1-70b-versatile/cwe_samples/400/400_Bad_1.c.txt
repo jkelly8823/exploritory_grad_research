@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5, 8
+VULNERABILITY_DESCRIPTION:
+The code contains multiple potential buffer overflow vulnerabilities due to the lack of error checking and bounds checking when using functions that involve copying data into character arrays.
+
+EXPLANATION:
+The code uses functions such as `getNextMessage` to copy data into character arrays `filename` and `buffer`. However, there is no check to ensure that the data copied into these arrays does not exceed their respective sizes (`FILENAME_SIZE` and `BUFFER_SIZE`). If the data received from the socket is larger than the size of these arrays, it can cause a buffer overflow, potentially leading to arbitrary code execution or crashes.
+
+Additionally, the `getNextMessage` function returns a value greater than 0, indicating success, but the code does not check if this value is actually within the bounds of the array. This could lead to writing beyond the bounds of the array, even if the return value is technically valid.
+
+Another issue is that the `openFileToWrite` function returns a value greater than 0, but it's not checked if this value is a valid file descriptor. If the file cannot be opened, it's unclear what value this function will return.
+
+RECOMMENDATIONS:
+1. Add bounds checking for `getNextMessage` to ensure that the data copied into the `filename` and `buffer` arrays does not exceed their respective sizes.
+2. Use functions like `snprintf` or `strcpy` with bounds checking to prevent buffer overflows.
+3. Check the return value of `openFileToWrite` to ensure that it's a valid file descriptor.
+
+Here's an example of how to apply these recommendations:
+```c
+int writeDataFromSocketToFile(char *host, int port){
+    char filename[FILENAME_SIZE];
+    char buffer[BUFFER_SIZE];
+    int socket = openSocketConnection(host, port);
+    
+    if (socket < 0) {
+        printf("Unable to open socket connection");
+        return FAIL;
+    }
+    
+    int bytesRead = getNextMessage(socket, filename, FILENAME_SIZE-1); // Leave space for null terminator
+    if (bytesRead <= 0) {
+        closeSocket(socket);
+        return FAIL;
+    }
+    
+    filename[FILENAME_SIZE-1] = '\0'; // Ensure null termination
+    
+    if (openFileToWrite(filename) > 0) {
+        while (1) {
+            bytesRead = getNextMessage(socket, buffer, BUFFER_SIZE-1);
+            if (bytesRead <= 0) {
+                break;
+            }
+            buffer[BUFFER_SIZE-1] = '\0'; // Ensure null termination
+            
+            if (writeToFile(buffer) <= 0) {
+                break;
+            }
+        }
+        closeFile();
+    }
+    closeSocket(socket);
+}
+```
+ORIGINAL CODE:
+```c
+int writeDataFromSocketToFile(char *host, int port){
+    char filename[FILENAME_SIZE];char buffer[BUFFER_SIZE];int socket = openSocketConnection(host, port);
+    if (socket < 0) {printf("Unable to open socket connection");return(FAIL);}if (getNextMessage(socket, filename, FILENAME_SIZE) > 0) {
+        if (openFileToWrite(filename) > 0) {
+            while (getNextMessage(socket, buffer, BUFFER_SIZE) > 0){if (!(writeToFile(buffer) > 0))break;
+            }
+        }closeFile();
+    }closeSocket(socket);
+}
+```

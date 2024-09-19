@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Unvalidated Input
+
+EXPLANATION:
+The vulnerability exists in the use of sscanf to parse the input from the socket into variables num and size. The sscanf function does not perform any bounds checking on the input values, which can lead to a buffer overflow if the input values exceed the expected range. Furthermore, the input values are not validated before being used to access the sizes array. This can lead to out-of-bounds access to the array, potentially causing a crash or allowing an attacker to write to arbitrary memory locations.
+
+Additionally, there is no check to ensure that the num value is within the bounds of the sizes array. An attacker can send a value for num that is larger than or equal to count, which can lead to a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+
+* Use safer functions such as `ssnprintf` or `scanf` with a width specifier to parse the input values.
+* Validate the input values before using them to access the sizes array.
+* Check that the input values are within the expected range.
+* Use bounds checking to ensure that the num value is within the bounds of the sizes array.
+
+Here's an example of how the vulnerable code can be fixed:
+
+```c
+// read values from socket and added to sizes array
+while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+    // continue read from socket until buf only contains '.'
+    if (DOTLINE(buf)) break;
+    else {
+        char *endptr;
+        num = strtol(buf, &endptr, 10);
+        if (endptr == buf || *endptr != ' ') {
+            // invalid input
+            break;
+        }
+        size = strtol(endptr + 1, &endptr, 10);
+        if (endptr == endptr + 1 || *endptr != '\0') {
+            // invalid input
+            break;
+        }
+
+        if (num < 1 || num > count) {
+            // out of range
+            break;
+        }
+
+        sizes[num - 1] = size;
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+        if (DOTLINE(buf))break;
+        else if (sscanf(buf, "%d %d", &num, &size) == 2)sizes[num - 1] = size;
+    }...
+}
+```

@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Potential Resource Leak and Unhandled Client Disconnection Vulnerability.
+EXPLANATION:
+The while loop is missing a condition to break the loop and exit the connection acceptance. The `hasConnections` variable is always true, which may cause the loop to continue indefinitely. Additionally, the loop does not handle client disconnections properly. If a client disconnects while the server is accepting new connections, the server may enter an infinite loop or produce unpredictable behavior. Furthermore, if an exception occurs, the serverSocket is not guaranteed to be closed, potentially causing resource leaks.
+RECOMMENDATIONS:
+Add a condition to break the loop when there are no more connections, or implement a mechanism for clients to signal their disconnection. Also, move the clientSocket.close() call to a finally block to ensure it is closed, regardless of whether an exception is thrown. Using a thread pool instead of creating new threads for each client connection is also a better practice.
+
+ORIGINAL CODE:
+
+```java
+public void acceptConnections() {
+    try {
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            t.start();
+        }
+        serverSocket.close();
+    } catch (IOException ex) {
+        // handle exception
+    }
+}
+```
+
+Improved Code:
+
+```java
+public void acceptConnections() {
+    ServerSocket serverSocket = null;
+    try {
+        serverSocket = new ServerSocket(SERVER_PORT);
+        ExecutorService executor = Executors.newCachedThreadPool();
+        int counter = 0;
+        while (!serverSocket.isClosed()) {
+            Socket client = serverSocket.accept();
+            client.setSoTimeout(30000); // 30 seconds
+            executor.submit(new ClientSocketThread(client));
+            counter++;
+        }
+    } catch (IOException ex) {
+        // handle exception
+    } finally {
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                // Ignoring close exception
+            }
+        }
+    }
+}
+```
+
+**Note**: Using `ExecutorService` instead of `Thread` and setting a timeout on the socket connection can make the code more robust.

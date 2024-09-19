@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 3
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Path Traversal Vulnerability.
+
+EXPLANATION:
+The vulnerability in this code is that it uses a user-provided file name without validating or sanitizing it. This can lead to a buffer overflow vulnerability if the file name is too long, as it is copied into a fixed-size buffer without a length check. Furthermore, it can also lead to a path traversal vulnerability if an attacker can control the file name and inject directory traversal characters (e.g., '../' or '.././').
+
+Additionally, there is a potential buffer overflow vulnerability in the fgets function if the buffer size is too small to hold the input line.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+1. Use a safer way to handle file names, such as using a dynamically allocated buffer that can grow if the file name is too long.
+2. Validate and sanitize the file name to prevent path traversal attacks. This can be done using a function like realpath or by checking the file name against a whitelist of allowed directories.
+3. Check the return value of fgets to ensure that the buffer size is sufficient.
+
+Some example changes to the code could be:
+
+- Use a dynamically allocated buffer instead of a fixed-size buffer.
+- Validate the file name using realpath or a whitelist of allowed directories.
+- Use fgets_s or fgets with a maximum buffer size to prevent buffer overflow.
+
+Here's an updated version of the code with some basic fixes:
+
+```c
+int decodeFile(const char* fName) {
+    char* canonicalPath = realpath(fName, NULL);
+    if (canonicalPath == NULL) {
+        printf("cannot open %s\n", fName);
+        return DECODE_FAIL;
+    }
+    FILE* f = fopen(canonicalPath, "r");
+    free(canonicalPath);
+    if (!f) {
+        printf("cannot open %s\n", fName);
+        return DECODE_FAIL;
+    }
+    else {
+        char buf[BUF_SZ];
+        while (fgets(buf, sizeof(buf), f)) {
+            if (!checkChecksum(buf)) {
+                fclose(f);
+                return DECODE_FAIL;
+            }
+            else {
+                decodeBlock(buf);
+            }
+        }
+    }
+    fclose(f);
+    return DECODE_SUCCESS;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];FILE* f = fopen(fName, "r");if (!f) {printf("cannot open %s\n", fName);return DECODE_FAIL;}else {
+        while (fgets(buf, BUF_SZ, f)) {if (!checkChecksum(buf)) {return DECODE_FAIL;}else {decodeBlock(buf);}}
+    }fclose(f);return DECODE_SUCCESS;
+}
+```

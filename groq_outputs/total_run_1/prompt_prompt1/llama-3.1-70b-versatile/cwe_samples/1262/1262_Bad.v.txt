@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-13, 18-21
+VULNERABILITY_DESCRIPTION: Unhandled CSR Exception Handling and Potential Information Disclosure
+EXPLANATION:
+This code snippet appears to be part of a RISC-V Core-Service-Handler implementation, checking for valid accesses to certain CSR addresses. However, there are potential issues with the exception handling mechanism and information disclosure. 
+
+The CSR exception cause is set to 'ILLEGAL_INSTR' in both instances, regardless of the specific CSR being accessed. This might not be desirable, as distinct causes for different exceptions would provide more context. Moreover, the 'valid' signal is always set to 1 when an exception occurs, but it is never reset to 0.
+
+Additionally, when an exception occurs due to trying to access debug mode CSRs while not in debug mode, no additional information or error messages are generated or logged. This might make it harder to diagnose and handle the exception properly.
+
+RECOMMENDATIONS:
+1. Consider implementing more specific and distinct CSR exception cause values for different CSR addresses and accesses. This would improve debuggability and enable more context-aware exception handling.
+
+2. Ensure that the 'valid' signal is properly reset when the exception is handled. This would prevent false-positives or unnecessary actions when subsequent CSR accesses occur.
+
+3. Add additional logging or reporting mechanisms for CSR exceptions, particularly when debug CSRs are accessed without being in debug mode. This would help with error diagnosis, handling, and potential auditing requirements.
+
+ORIGINAL CODE:
+```cpp
+if (csr_we || csr_read) begin
+    // check for register already locked access from lower privileges    
+    if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl) && !(csr_addr.address==riscv::CSR_MEPC)) begin    
+        csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+        csr_exception_o.valid = 1'b1;    
+    end
+    // check access to debug mode only CSRs
+    if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin    
+        csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+        csr_exception_o.valid = 1'b1;    
+    end
+end
+```

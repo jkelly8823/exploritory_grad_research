@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 63-76, 81
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable due to incorrect use of default values, specifically in the cases where the default value is either not defined or assigned an incorrect value. This may lead to unintentional exposure of sensitive data.
+
+EXPLANATION:
+The issue is primarily observed in the instantiation of the `register_example` module within the `register_top` module. In one instance, a hardcoded value of 1224 is assigned to the `REGISTER_DEFAULT` parameter, which may cause a misconfigured secure mode due to a non-standard value being used. Another instance where this parameter is not defined, in `Insecure_Device_ID_2`, will result in a default value of 2^32-2 being used, potentially compromising security.
+
+Additionally, while a thorough evaluation cannot be completed without a more comprehensive understanding of the implementation specifics and the environment in which this code operates, these potential misconfigurations pose a risk to the overall system security.
+
+RECOMMENDATIONS:
+1.  Assign a default value to `REGISTER_DEFAULT` parameter consistently: The same value should be assigned in all instances to ensure configuration consistency across the module and avert configuration errors.
+2.  Utilize Parameters in module definitions: Ensure all parameters are given a defined value in module instances to prevent default values that may undermine designed module functionality. 
+3.  Implement checks for default values: Add conditional logs or triggers when a default value is used to track unexpected configurations. This allows developers to observe changes in core module behavior and the associated security impact.
+4.  Regular Code Inspections: Consistently regular automated code inspections to validate module-level security vulnerabilities would help ensure code purity, maintainability, and system integrity.
+
+ORIGINAL CODE:
+
+// Parameterized Register module example 
+// Secure_mode : REGISTER_DEFAULT[0] : When set to 1 register is read only and not writable// 
+module register_example 
+#( 
+parameter REGISTER_WIDTH = 8, // Parameter defines width of register, default 8 bits 
+parameter [REGISTER_WIDTH-1:0] REGISTER_DEFAULT = 2**REGISTER_WIDTH -2 // Default value of register computed from Width. Sets all bits to 1s except bit 0 (Secure _mode) 
+) 
+( 
+input [REGISTER_WIDTH-1:0] Data_in, 
+input Clk, 
+input resetn, 
+input write, 
+output reg [REGISTER_WIDTH-1:0] Data_out 
+); 
+  
+reg Secure_mode; 
+  
+always @(posedge Clk or negedge resetn) 
+  
+if (~resetn) 
+begin 
+  
+  Data_out <= REGISTER_DEFAULT; // Register content set to Default at reset 
+  Secure_mode <= REGISTER_DEFAULT[0]; // Register Secure_mode set at reset 
+  
+end 
+else if (write & ~Secure_mode) 
+begin 
+  
+  Data_out <= Data_in; 
+  
+end 
+  
+endmodule 
+                  
+module register_top 
+( 
+input Clk, 
+input resetn, 
+input write, 
+input [31:0] Data_in, 
+output reg [31:0] Secure_reg, 
+output reg [31:0] Insecure_reg 
+); 
+  
+register_example #( 
+  
+  .REGISTER_WIDTH (32), 
+  .REGISTER_DEFAULT (1224) // Incorrect Default value used bit 0 is 0. 
+  
+) Insecure_Device_ID_1 ( 
+  
+  .Data_in (Data_in), 
+  .Data_out (Secure_reg), 
+  .Clk (Clk), 
+  .resetn (resetn), 
+  .write (write) 
+  
+); 
+  
+register_example #( 
+  
+  .REGISTER_WIDTH (32) // Default not defined 2^32-2 value will be used as default. 
+  
+) Insecure_Device_ID_2 ( 
+  
+  .Data_in (Data_in), 
+  .Data_out (Insecure_reg), 
+  .Clk (Clk), 
+  .resetn (resetn), 
+  .write (write) 
+  
+); 
+  
+endmodule

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21-22, 24
+VULNERABILITY_DESCRIPTION:
+This Verilog module uses an asynchronous reset signal and also does not properly handle metastability issues due to the negative edge of the ip_resetn signal. 
+
+EXPLANATION:
+The given Verilog module uses a combination of edge-sensitive and level-sensitive logic, which can lead to simulation vs. synthesis mismatches. The design contains an always block for sequential logic which is triggered by both the positive edge of the clock signal Clk and the negative edge of the asynchronous reset signal ip_resetn. However, the module does not include any mechanism to prevent metastability due to the negative edge of the asynchronous reset signal as no time is allowed between the de-assertion and assertion of the reset signal. Furthermore, asynchronous resets introduce complexity in flip-flop (ff) timing closure, provide additional logic to prevent metastability, and introduce hold time issues with clock domain crossing.
+
+Additionally, this module is using Data_out[0] to indicate Write_once_status which leads to write once and will consistently force one bit to zero and data_in masking bit 0 will never be written by any operation hence the always Write_once_status will be High for subsequent Data write.
+
+RECOMMENDATIONS:
+1. Synchronize the asynchronous reset signal by using a flip-flop cascade or another synchronization circuit to prevent metastability. 
+2. Instead of masking the Data_in with 0xFFFE always check if this bit is hard to reach for any input on your module before mask and do data_in[0] <= Write_once_status for others to recognize.
+3. Modify the always block to use only the positive edge of the clock signal, and a combinational logic block to handle asynchronous reset signal ip_resetn if necessary and convert such use case synchronous reset use for your sequential logic.
+4. Make ip_resetn and global_resetn as same input port for both of synchronous resets.
+
+ORIGINAL CODE:
+```verilog
+module register_write_once_example
+(
+  input [15:0] Data_in,
+  input Clk,
+  input ip_resetn,
+  input global_resetn,
+  input write,
+  output reg [15:0] Data_out
+);
+  
+  reg Write_once_status;
+  
+  always @(posedge Clk or negedge ip_resetn)
+  if (~ip_resetn)
+  
+    begin
+      Data_out <= 16'h0000; 
+      Write_once_status <= 1'b0;
+      
+    end
+  
+  else if (write & ~Write_once_status) 
+  
+    begin
+      Data_out <= Data_in & 16'hFFFE; // Input data written to register after masking bit 0
+      Write_once_status <= 1'b1; // Write once status set after first write.
+      
+    end
+  
+  else if (~write)
+  
+    begin
+      Data_out[15:1] <= Data_out[15:1];
+      Data_out[0] <= Write_once_status;
+      
+    end
+  
+  endmodule
+```

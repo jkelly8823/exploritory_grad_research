@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24, 25
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to SQL Injection and Cross-Site Scripting (XSS) attacks due to the insecure use of user input data.
+
+EXPLANATION:
+The `update_profile` function retrieves data from `$_POST['email']` and sends it to the `SendUpdateToDatabase` function without proper validation or sanitization. This allows an attacker to inject malicious data, such as SQL commands or JavaScript code. Furthermore, `session_is_registered` is deprecated and has been removed in PHP 5.4.0. Using `isset` to check for the session variable is more secure.
+
+RECOMMENDATIONS:
+1. Validate and sanitize all user input data using functions like `filter_var` or `htmlspecialchars`.
+2. Use prepared statements with parameterized queries to prevent SQL injection.
+3. Update the session management to use more secure functions like `isset` instead of `session_is_registered`.
+4. Keep software up-to-date to avoid known vulnerabilities.
+
+ORIGINAL CODE:
+// initiate the session in order to validate sessions
+session_start();
+//if the session is registered to a valid user then allow update
+// The user session is valid, so process the request
+if (! session_is_registered("username")) {
+    echo "invalid session detected!";
+    // Redirect user to login page
+    [...]
+    exit;
+}
+// and update the information
+// The user session is valid, so process the request
+update_profile();
+function update_profile {
+    // read in the data from $POST and send an update
+    SendUpdateToDatabase($_SESSION['username'], $_POST['email']);
+    [...]
+    echo "Your profile has been successfully updated.";
+}
+
+**Example Secure Code**
+
+```php
+session_start();
+
+if (!isset($_SESSION['username'])) {
+    echo "invalid session detected!";
+    exit;
+}
+
+function update_profile() {
+    if (isset($_POST['email'])) {
+        $email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
+        if ($email) {
+            $statement = $connection->prepare('UPDATE users SET email = ? WHERE username = ?');
+            $statement->bind_param('ss', $email, $_SESSION['username']);
+            $statement->execute();
+            echo "Your profile has been successfully updated.";
+        } else {
+            echo 'Invalid email';
+        }
+    } else {
+        echo 'No email provided';
+    }
+}
+```

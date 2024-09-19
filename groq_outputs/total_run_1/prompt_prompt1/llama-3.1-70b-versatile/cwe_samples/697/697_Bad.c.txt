@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Insecure Comparison of User Input with Hardcoded Password using strlen() for Authentication.
+
+EXPLANATION:
+In the provided code, the `AuthenticateUser` function uses `strncmp` to compare user input (`inUser` and `inPass`) with the hardcoded username and password. However, the comparison of the password uses `strlen(inPass)` instead of `strlen(pass)`. This is an incorrect assumption that the length of the user-provided password will be the same as the length of the hardcoded password.
+
+The potential vulnerability is not actually present due to the way strncmp is used, wherein no information in pass is actually accessed beyond the length of the user input string. Thus this use case will cut off password so user can craft a small subset input that with low security measure can verify as legitimate (CWE-521). The issue doesn't become more significant until the application displays to non-admins. 
+A different situation is buffer overflow errors if  the target of strncmp() were to become an issue at another point in the program since program can display information the information  the non-admin doesn't know but created with crafted subset short input like (admin : pw). 
+This introduces an additional issue to consider because although strncmp doesn't introduce it, would with a std::string with std::size (now known as std::size) other vulnerabilities may become more clear as well after input validation takes place with this subset of logic being applied. Despite this error it would best fix it. 
+
+
+RECOMMENDATIONS:
+1. Consider using a secure comparison function specifically designed for comparing passwords.
+2. Prefer using a constant-time comparison function to prevent timing attacks.
+3. Adjust the code to use `strlen(pass)` instead of `strlen(inPass)` to correctly compare the hardcoded password.
+4. Implement proper input validation to prevent other potential vulnerabilities.
+
+ORIGINAL CODE:
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {if (strncmp(username, inUser, strlen(inUser))) {logEvent("Auth failure of username using strlen of inUser");return(AUTH_FAIL);}if (! strncmp(pass, inPass, strlen(inPass))) {logEvent("Auth success of password using strlen of inUser");return(AUTH_SUCCESS);}else {logEvent("Auth fail of password using sizeof");return(AUTH_FAIL);}}
+int main (int argc, char **argv) {
+int authResult;if (argc < 3) {ExitError("Usage: Provide a username and password");}authResult = AuthenticateUser(argv[1], argv[2]);if (authResult == AUTH_SUCCESS) {DoAuthenticatedTask(argv[1]);}else {ExitError("Authentication failed");}}

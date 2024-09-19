@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4,3
+VULNERABILITY_DESCRIPTION:
+The given code includes the potential for buffer overflow and incorrect handling of character encoding.
+
+EXPLANATION:
+The `MultiByteToWideChar` function is used to convert the input `username` to Unicode. However, the output buffer `unicodeUser` has a fixed size `UNLEN+1`. If the input `username` exceeds this length, a buffer overflow will occur. 
+Additionally, while `MultiByteToWideChar` handles the character encoding correctly, there is no error handling or checking to ensure the conversion was successful. 
+Furthermore, in the NetUserGetInfo function call, the error checking is incomplete. The NetUserGetInfo function returns a DWORD error code that should be checked for success/failure, but this is not done within the provided segment.
+
+RECOMMENDATIONS:
+To fix the vulnerabilities, consider the following recommendations:
+
+- Before calling `MultiByteToWideChar`, check if `username` is `NULL` or if its length exceeds the buffer capacity. If either of these conditions is met, handle the error accordingly.
+- After calling `MultiByteToWideChar`, check its return value for any conversion errors. If an error is found, handle it according to your application's error handling policy.
+- When calling `NetUserGetInfo`, store the returned error code in a variable and check if the function call was successful.
+- A better practice for handling fixed-size buffers is to use a safer function like `wcsncpy` or `wcsncat` and ensure the buffer is always null-terminated.
+
+ORIGINAL CODE:
+void getUserInfo(char *username, struct _USER_INFO_2 info){
+    WCHAR unicodeUser[UNLEN+1];
+    MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, sizeof(unicodeUser));
+    NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);
+}

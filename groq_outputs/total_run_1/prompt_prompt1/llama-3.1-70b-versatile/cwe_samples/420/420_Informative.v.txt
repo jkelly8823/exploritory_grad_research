@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11
+VULNERABILITY_DESCRIPTION:
+Hardcoding of security-sensitive data in the code.
+
+EXPLANATION:
+The code appears to be part of a hardware design, specifically a module that handles write authorization and data output. However, it contains hardcoded data in lines 10 and 11 (32'h8312 and 32'hF00). Hardcoding sensitive data such as this can pose a significant security risk because the data can be leaked through binary analysis or reverse engineering. In this specific case, 32'h8312 appears to be a value in an allowlist, and 32'hF00 appears to be an authorized address.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider using more secure methods to store and manage sensitive data. Some potential alternatives include:
+
+* Using environment variables or configuration files to store sensitive data.
+* Implementing a key management system to securely store and retrieve sensitive data.
+* Using secure authentication protocols that don't rely on hardcoded values.
+
+To implement these recommendations in the code, replace lines 10 and 11 with secure data retrieval methods:
+```
+   // Replace 32'h8312 with a secure method to retrieve ACL values
+  reg [31:0] acl_oh_allowlist;
+  parameter ACL_AOH = 32'h8312;  // Use parameters to store sensitive data
+  initial acl_oh_allowlist = ACL_AOH;
+
+  // Replace 32'hF00 with a secure method to retrieve authorized addresses
+  localparam AUTH.getAddress = 32'hF00;
+  assign addr_auth = (address ==  AUTH.getAddress) ? 1 : 0;
+```
+
+ORIGINAL CODE:
+```
+module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+output [31:0] data_out;
+input [31:0] data_in, incoming_id, address;
+input clk, rst_n;
+wire write_auth, addr_auth;
+reg [31:0] data_out, acl_oh_allowlist, q;
+assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+always @*
+  
+acl_oh_allowlist <= 32'h8312; 
+
+assign addr_auth = (address == 32'hF00) ? 1: 0;
+always @ (posedge clk or negedge rst_n)
+  
+if (!rst_n)
+  
+ begin
+ 
+ q <= 32'h0;
+ data_out <= 32'h0;
+ 
+ end
+  
+ else
+  
+ begin
+  
+ q <= (addr_auth & write_auth) ? data_in: q;
+ data_out <= q;
+ 
+ end
+  
+ endendmodule
+```

@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to data-dependent timing variations and can cause glitches in the output signal z.
+
+EXPLANATION:
+The 2x1 multiplexor designed using logic gates has a common issue with combinational logic circuits - they are prone to glitches when dealing with continuous logical operations. The given design can be affected by short-term voltage spikes or "glitches" on the output line z, particularly when both inputs and_out1 and and_out2 tend to be true for short periods. This occurs because output signal z is generated from a combination of the and_out1 and and_out2 signals, using an OR operation. When these signals experience both logical 0 and logical 1 values simultaneously for a brief duration due to signal propagation, a logic error "glitch" occurs.
+
+RECOMMENDATIONS:
+1. Clock the outputs: Introduce a D-Flip Flop for registering the output to ensure that output only changes when there is a clock pulse, not immediately after input transitions.
+
+```vhdl
+reg enable;
+always @ (posedge clk)
+    enable <= 1'b1;
+always @ (enable)
+    assign z = enable ? and_out1 | and_out2 : 0;
+```
+
+2. Create a redundant redundant logic: Apply a T-gate method - that delays one of the inputs and places it in parallel with its complementary component - effectively removing the 'output hazards'.
+
+```vhdl
+wire and_out1_red, and_out2_red;
+assign and_out1_red = not_sel & in0;
+assign and_out2_red = sel & in1;
+assign z = and_out1 | and_out2_red;
+assign z = ~z & not_sel & in0 | z & (and_out1 & not_sel | ~and_out1 & in0);
+```
+OR 
+3. Analyze critical paths: One can reduce the critical path using synthesis directives to assign an equivalent low-glitch component equivalent using library modules, or select cells where V (or -) or hVth occur to set the state output timing.
+
+ORIGINAL CODE:
+```verilog
+// 2x1 Multiplexor using logic-gates
+ module glitchEx(
+ input wire in0, in1, sel,
+ output wire z
+ );
+ wire not_sel;
+ wire and_out1, and_out2;
+ 
+ assign not_sel = ~sel;
+ assign and_out1 = not_sel & in0;
+ assign and_out2 = sel & in1;
+ 
+ // Buggy line of code:
+ assign z = and_out1 | and_out2; // glitch in signal z
+ 
+ endmodule
+```

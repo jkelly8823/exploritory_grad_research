@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+This code has a vulnerability in the selection logic for assigning the value of `rom_rdata` based on `ariane_boot_sel_i`. It only considers `rom_rdata_linux` in both cases.
+
+EXPLANATION:
+The vulnerability lies in the ternary operator that selects the value for `rom_rdata`. Regardless of the value of `ariane_boot_sel_i`, the `rom_rdata_linux` signal is assigned to `rom_rdata`. The `rom_rdata_patch` signal from the `i_bootrom_patch` instance is never used. This might be an oversight and can cause functionality issues if `rom_rdata_patch` and `rom_rdata_linux` have different purposes or behaviors.
+
+RECOMMENDATIONS:
+The corrective action would be to correct the ternary operator to use the correct signal based on the `ariane_boot_sel_i` value. Here's a possible fix:
+
+```verilog
+assign rom_rdata = (ariane_boot_sel_i) ? rom_rdata_patch : rom_rdata_linux;
+```
+
+With this change, when `ariane_boot_sel_i` is true, `rom_rdata_patch` is assigned to `rom_rdata`, and when it's false, `rom_rdata_linux` is assigned.
+
+ORIGINAL CODE:
+```verilog
+bootrom i_bootrom_patch (
+    .clk_i                   ,
+    .req_i      ( rom_req   ),
+    .addr_i     ( rom_addr  ),
+    .rdata_o    ( rom_rdata_patch )
+);
+
+bootrom_linux i_bootrom_linux (
+    .clk_i                   ,
+    .req_i      ( rom_req   ),
+    .addr_i     ( rom_addr  ),
+    .rdata_o    ( rom_rdata_linux )
+);
+
+assign rom_rdata = (ariane_boot_sel_i) ? rom_rdata_linux : rom_rdata_linux;
+```

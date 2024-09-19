@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability
+
+EXPLANATION:
+In this code, a double-free vulnerability is present. The variable 'p' is initially set to point to a local array 'localArray'. However, if the 'heap' parameter is true, the code assigns a dynamically allocated memory block to 'p'. In both cases, the 'delete[] p' statement is executed. This is problematic because if 'heap' is false, 'p' points to a stack-based array, which should not be manually deallocated using 'delete[]'. If 'heap' is true, 'p' points to a heap-based allocation, which is correctly deallocated. However, this leaves 'localArray' allocated on the stack but its starting address copied into 'p'. If 'p' is used after this point without being reset to 'localArray', then 'p' is a dangling pointer. The code does not check whether 'p' points to a dynamically allocated memory block before calling 'delete[]' on it, leading to a double-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should handle the local array and the dynamically allocated memory separately. A possible fix would be to use two distinct pointers for the two cases, and ensure that 'delete[]' is only called on dynamically allocated memory blocks.
+
+Here's a recommended fix for the given code snippet:
+
+```cpp
+class A { 
+    void foo(bool heap) { 
+        int *p; 
+        if (heap) {
+            p = new int[2]; 
+            // ... (use p)
+            delete[] p;
+        } else {
+            int localArray[2] = {11,22}; 
+            p = localArray; 
+            // ... (use p)
+        }
+    }
+};
+```
+
+ORIGINAL CODE:
+```cpp
+class A{void foo(bool);};
+void A::foo(bool heap) {int localArray[2] = {11,22};int *p = localArray;if (heap){p = new int[2];}delete[] p;}
+```

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 6
+VULNERABILITY_DESCRIPTION:
+Path Traversal and File Inclusion Vulnerability
+
+EXPLANATION:
+The provided code contains a path traversal vulnerability, which could be used by an attacker to read arbitrary files on the system. This vulnerability occurs because the `$realFile` variable, which is used to store the resolved path of the file, is not validated or sanitized.
+
+The vulnerability is present in lines 4 and 5, where the code is trying to resolve symbolic links. However, if the file is not a symbolic link, the `readlink()` function is not called, and the original path is used. If the original path is a symbolic link, or if it contains a path traversal sequence such as `../../`, the attacker could exploit this vulnerability to read arbitrary files.
+
+Additionally, the code does not have any checks to prevent directory traversal attacks. If an attacker can inject a string containing a directory traversal sequence into the `$filename` variable, they could potentially access files outside of the intended directory.
+
+The vulnerability is further exacerbated by the fact that the `fileowner()` function is used to check ownership, which may not prevent attacks if the file has open permissions for other users or groups.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the `$filename` variable to prevent path traversal attacks.
+2. Use `realpath()` instead of `readlink()` to prevent symbolic link attacks.
+3. Use `basename()` function to prevent directory traversal attacks.
+4. Consider using a whitelist of allowed files and directories to access.
+5. Implement proper error handling and logging mechanisms.
+6. Use more restrictive file permissions to limit the attack surface.
+
+Here is an example of how the function can be modified to address these vulnerabilities:
+
+```php
+function readFile($filename) {
+    $user = getCurrentUser();
+    $realFile = realpath($filename);
+    if ($realFile !== realpath(dirname($filename)) . '/' . $realFile) {
+        // This means the $realFile is outside of the directory we expect
+        echo 'Access denied';
+        writeLog($user . ' attempted to access the file '. $filename . ' on '. date('r'));
+        return;
+    }
+    if (fileowner($realFile) == $user) {
+        if (is_readable($realFile)) {
+            echo file_get_contents($realFile);
+        } else {
+            echo 'Access denied';
+            writeLog($user . ' attempted to access the file '. $filename . ' on '. date('r'));
+        }
+    } else {
+        echo 'Access denied';
+        writeLog($user . ' attempted to access the file '. $filename . ' on '. date('r'));
+    }
+}
+
+// ORIGINAL CODE:
+function readFile($filename){
+    $user = getCurrentUser();
+    $realFile = $filename;
+    //resolve file if its a symbolic link
+    if(is_link($filename)){$realFile = readlink($filename);}
+    if(fileowner($realFile) == $user){echo file_get_contents($realFile);return;}else{echo 'Access denied';writeLog($user . ' attempted to access the file '. $filename . ' on '. date('r'));}
+}
+```

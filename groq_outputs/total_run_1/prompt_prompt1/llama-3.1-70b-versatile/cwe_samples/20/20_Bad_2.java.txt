@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code is a Potential Intent Hijacking vulnerability.
+
+EXPLANATION:
+In the provided code, the IntentFilter is registered with a dynamically loaded receiver. The receiver, however, is not validated for its authenticity before being registered. This allows an attacker to hijack the intent and cause the receiver to receive the intent. This could potentially lead to the attacker being able to execute arbitrary actions using the intent, such as steal data or perform malicious actions.
+
+In addition to that, the onReceive function itself is vulnerable to attacker controlled data. The URL passed to it is taken from intents which could be sent by attackers. However, this does not currently appear to be the primary issue as there is not enough context to know what is happening to the URL data after this point.
+
+RECOMMENDATIONS:
+1. Validate the Intent: Before processing the intent, validate its authenticity to ensure that it comes from a trusted source.
+
+2. Validate the data sent in the Intent: The URL data sent in the intent should be validated to ensure it does not contain any data that may cause issues if processed in your receiver.
+
+Here's an example of how you can add a validation in the onReceive function:
+```
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if(intent.getAction().equals("com.example.URLHandler.openURL") 
+           && intent.getStringExtra("URLToOpen") != null){
+            String URL = intent.getStringExtra("URLToOpen");
+            // Only proceed with processing if intent comes from your own app
+            if (intent.resolveActivityInfo(context.getPackageManager(), 0) != null) {
+                int length = URL.length();
+                // ...
+            } else {
+                Log.w("Warning: Possible Intent Hijacking Attempt.");
+                return;
+            }
+        }
+    }
+}
+```
+ORIGINAL CODE:
+```
+IntentFilter filter = new IntentFilter("com.example.URLHandler.openURL");
+MyReceiver receiver = new MyReceiver();
+registerReceiver(receiver, filter);
+...
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if("com.example.URLHandler.openURL".equals(intent.getAction())) {
+            String URL = intent.getStringExtra("URLToOpen");
+            int length = URL.length();
+            ...
+        }
+    }
+}
+```

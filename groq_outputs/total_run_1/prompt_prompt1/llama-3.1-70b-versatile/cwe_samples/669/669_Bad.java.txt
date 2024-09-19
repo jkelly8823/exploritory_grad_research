@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-24
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability and Lack of Input Validation
+
+EXPLANATION:
+The vulnerability exists in the lines where the filename is extracted from the Http header and used to output the file to the local upload directory. The code does not properly validate the filename and does not prevent directory traversal. This allows an attacker to upload files to any directory on the system by manipulating the filename. Additionally, the code does not check if the uploadLocation is a directory or a file, which can lead to overwriting of existing files.
+
+Furthermore, the code appends the filename to the uploadLocation without checking if it already exists. This can lead to unintended file writes and overwrites.
+
+Another issue is that the code uses the FileWriter with the append parameter set to true. This means that if the file already exists, new data will be appended to the end of the file instead of overwriting it. This can lead to unexpected behavior and security vulnerabilities.
+
+RECOMMENDATIONS:
+1. Validate the filename: Use a whitelist approach to validate the filename. Only allow filenames that match a predefined pattern, and reject any filenames that do not match.
+2. Prevent directory traversal: Use a library like Java's `java.nio.file.Paths` to normalize the filename and prevent directory traversal.
+3. Check if the uploadLocation is a directory: Use the `java.io.File` class to check if the uploadLocation is a directory before writing files to it.
+4. Use a safer way to write files: Instead of using `FileWriter` with the append parameter set to true, consider using `FileOutputStream` or `Path` with the `StandardOpenOption.CREATE_NEW` option to write files.
+
+ORIGINAL CODE:
+
+```java
+// ...
+
+// extract the filename from the Http header
+BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
+...pLine = br.readLine();
+String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));
+
+// output the file to the local upload directory
+try {
+BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));
+for (String line; (line=br.readLine())!=null; ) {
+if (line.indexOf(boundary) == -1) {
+bw.write(line);
+bw.newLine();
+bw.flush();
+}} //end of for loop
+bw.close();
+
+// ...
+```
+
+Note: The above analysis is based on the provided code snippet. There may be other vulnerabilities present in the rest of the code that are not analyzed here. It is recommended to perform a thorough security audit on the entire codebase.

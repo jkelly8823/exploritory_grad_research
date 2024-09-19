@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-14
+VULNERABILITY_DESCRIPTION: 
+This code is vulnerable to a PHP code injection and reflected XSS attack due to directly using a user-supplied input variable ("$_GET") without proper validation or sanitization.
+
+EXPLANATION:
+The code directly uses the `$_GET` superglobal variable, which contains data from an HTTP GET request. This data can be easily manipulated by an attacker, potentially allowing them to inject malicious code into the system. In this case, an attacker could potentially inject or expose user email addresses if they can control the `json` variable. Additionally, the same vulnerability allows an attacker to manipulate other fields.
+
+Furthermore, the `getUserRecord` function is called without any validation of the `username`, which means an attacker could potentially perform unauthorized actions using the `getUserRecord` function.
+
+Lastly, echoing the entire `$record` using `json_encode` might also lead to sensitive information disclosure, depending on what other data the `$record` contains.
+
+RECOMMENDATIONS:
+1. Always validate and sanitize user-supplied inputs: Before using any data from the `$_GET` superglobal, ensure it matches a specific format or criteria. If it does not, reject it with a suitable error message.
+2. Implement proper encoding and escaping: Use functions like `urlencode` and `htmlspecialchars` to prevent XSS attacks when displaying or storing user-supplied data.
+3. Limit access and visibility of sensitive information: Modify the `getUserRecord` function to ensure it only returns visible fields when called from an unauthorized API endpoint or do not expose email addresses at all.
+Here's a possible way of reworking the code:
+```
+if (isset($_GET['json']) && strtolower($_GET['json']) === 'true') {
+    $username = isset($_GET['user']) ? $_GET['user'] : '';
+    if (!empty($username)) {
+        $record = getUserRecord($username);
+        // filter sensitive information
+        $safeRecord = array_filter($record, function($key) {
+            return !in_array($key, ['email_address']); // add other sensitive keys as needed
+        }, ARRAY_FILTER_USE_KEY);
+        echo json_encode($safeRecord);
+    } else {
+        echo 'Invalid request';
+    }
+} else {
+    // Handle non-JSON requests
+}
+```
+ORIGINAL CODE:
+```
+// API flag, output JSON if set
+$json = $_GET['json']
+$username = $_GET['user']
+if(!$json){
+    $record = getUserRecord($username);
+    foreach($record as $fieldName => $fieldValue){
+        if($fieldName == "email_address") {
+        
+                // skip displaying user emails
+                continue;
+        }else{
+            writeToHtmlPage($fieldName,$fieldValue);
+        }
+    }
+}else{
+    $record = getUserRecord($username);
+    echo json_encode($record);
+}
+```

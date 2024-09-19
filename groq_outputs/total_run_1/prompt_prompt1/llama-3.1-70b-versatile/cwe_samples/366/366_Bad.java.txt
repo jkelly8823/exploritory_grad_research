@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a visibility and reordering issue due to a lack of proper synchronization and volatile keywords.
+
+EXPLANATION:
+The issue here is that in a multithreaded environment, there is no guarantee that changes made by one thread will be visible to another thread. In this code, `foo` is being written by the main thread and read by the `Threader` thread. However, there is no synchronization in place to ensure that the changes made by the main thread are visible to the `Threader` thread. This is because changes made by one thread may not be immediately visible to another thread due to caching and reordering. 
+
+Additionally, even if the reordering issue is ignored, the visibility issue can still cause the `Threader` thread to print 0. This is because the main thread's write to `foo` is not guaranteed to be visible to the `Threader` thread before it reads `foo`. 
+
+RECOMMENDATIONS:
+To fix this issue, you can use the `volatile` keyword to ensure that changes made by one thread are always visible to all other threads. Here is the recommended code:
+
+```java
+public class Race {
+    static volatile int foo = 0;
+    
+    public static void main() {
+        new Threader().start();
+        foo = 1;
+    }
+    
+    public static class Threader extends Thread {
+        
+        public void run() {
+            System.out.println(foo);
+        }
+    }
+}
+```
+
+Alternatively, you can use proper synchronization using `synchronized` blocks or `Lock` objects to ensure that the `Threader` thread sees the updated value of `foo`. Here is an example using `synchronized` blocks:
+
+```java
+public class Race {
+    static int foo = 0;
+    
+    public static void main() {
+        new Threader().start();
+        synchronized (Threader.class) {
+            foo = 1;
+        }
+    }
+    
+    public static class Threader extends Thread {
+        
+        public void run() {
+            synchronized (Threader.class) {
+                System.out.println(foo);
+            }
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+public class Race {
+    static int foo = 0;
+
+    public static void main() {
+        new Threader().start();
+        foo = 1;
+    }
+
+    public static class Threader extends Thread {
+        
+        public void run() {
+            System.out.println(foo);
+        }
+    }
+}
+```

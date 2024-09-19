@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-17
+VULNERABILITY_DESCRIPTION:
+Inconsistent State Update due to Non-Blocking Assignments in a Loop
+
+EXPLANATION:
+The code uses non-blocking assignments (`assign`) within a loop to update the `check_pass` signal. This can lead to inconsistent state updates due to the non-blocking nature of these assignments. Specifically, the assignments to `check_pass[i]` and `check_pass` are made without waiting for the previous assignments to be evaluated, which can result in incorrect values being assigned to `check_pass` when the loop is terminated prematurely using the `break` statement. Additionally, the use of non-blocking assignments in a combinatorial process (`always_comb`) is not recommended as it can lead to complex and hard-to-debug behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use blocking assignments (`=`) instead of non-blocking assignments (`assign`) within the loop. Additionally, the `continue` statement is not necessary as the loop will automatically continue to the next iteration after evaluating the current iteration.
+
+Here is the recommended modified code:
+
+    always_comb @ (posedge clk)
+    begin
+        check_pass = 4'b0;
+        for (int i = 0; i < 4; i++) begin
+            if (entered_pass[(i*8 - 1) : i] == golden_pass[(i*8 - 1) : i]) begin
+                check_pass[i] = 1'b1;
+            end else begin
+                check_pass[i] = 1'b0;
+                break;
+            end
+        end
+        grant_access = (check_pass == 4'b1111) ? 1'b1 : 1'b0;
+    end
+
+However, this still does not fix the premature break and the short circuit behavior that may cause the `check_pass` to not be fully set. A better solution would be to use a separate flag to track if an invalid condition has been found and only assign `grant_access` once the entire loop has been completed.
+
+Here is another recommended modified code:
+
+    always_comb @ (posedge clk)
+    begin
+        check_pass = 4'b0;
+        valid_pass = 1'b1;
+        for (int i = 0; i < 4; i++) begin
+            if (entered_pass[(i*8 - 1) : i] != golden_pass[(i*8 - 1) : i]) begin
+                valid_pass = 1'b0;
+                check_pass[i] = 1'b0;
+            end else begin
+                check_pass[i] = 1'b1;
+            end
+        end
+        grant_access = valid_pass ? 1'b1 : 1'b0;
+    end
+ORIGINAL CODE:
+    always_comb @ (posedge clk)
+    begin
+        assign check_pass[3:0] = 4'b0;
+        for (i = 0; i < 4; i++) begin
+            if (entered_pass[(i*8 - 1) : i] eq golden_pass[(i*8 - 1) : i])
+                assign check_pass[i] = 1;
+                continue;
+            else
+                assign check_pass[i] = 0;
+                break;
+        end
+        assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;
+    end

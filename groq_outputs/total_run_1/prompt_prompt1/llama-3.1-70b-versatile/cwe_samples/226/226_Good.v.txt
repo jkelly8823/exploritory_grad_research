@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+This code contains an asynchronous reset condition that can lead to timing-related issues and potential glitches.
+
+EXPLANATION:
+The line of code "if(~(rst_ni && ~rst_1))" checks for a reset condition by performing a logical operation on two reset signals: "rst_ni" and "rst_1". However, this operation is done outside of a designated reset condition, and instead it's used to signal a clear operation on the 'p_c' variable. The reset might be asynchronous, leading to unpredictable timing-related issues, such as glitches in digital circuits.
+
+RECOMMENDATIONS:
+The use of asynchronous reset in this code segment can be replaced by synchronous reset. A better approach would be to clear 'p_c' only when the designated reset signal ("rst_ni" in this case) is asserted. This can be done inside an initial reset block and also ensure a set period of time for which reset signal asserted before it goes away (a common rule of thumb is at least 5x the longest clock period).
+```javascript
+always @(posedge clk_i)
+begin
+  if (!rst_ni) 
+   //clear on reset
+   begin
+     p_c[0] <= 0;
+     p_c[1] <= 0;
+     p_c[2] <= 0;
+     p_c[3] <= 0;
+   end
+   else
+   //rest of the code...
+```
+
+ORIGINAL CODE:
+```
+module aes0_wrapper #(...)(...);
+...
+always @(posedge clk_i)
+begin
+  if(~(rst_ni && ~rst_1)) //clear p_c[i] at reset
+  ...
+  else if(ct_valid) //encryption process complete, clear p_c[i]
+  begin
+    p_c[0] <= 0;
+    p_c[1] <= 0;
+    p_c[2] <= 0;
+    p_c[3] <= 0;
+  end
+...
+  else if(en && we)
+  case(address[8:3])
+  ...
+  endcase
+  end // always @ (posedge wb_clk_i)
+endmodule
+```

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to fgets() Function with Unchecked Return Value.
+
+EXPLANATION:
+The fgets() function is used to read input from the file, but there is no error checking on its return value. This variable size input can cause a buffer overflow if the input exceeds the size of the buffer. Additionally, fgets() can also return NULL when there is an error, which would cause undefined behavior when passed to checkChecksum() or decodeBlock(). 
+
+In addition, fgets() includes the null terminator, however, there's no explicit space reserved or error check for it.
+
+RECOMMENDATIONS:
+Check the fgets() return value and verify that the contents of the buffer have been fully read (i.e., check for NULL or EOF return), in addition, do not neglect accounting for null terminator which can cause an overflow under edge case, declare the buffer size considering null termination, while maintaining synchronization of allocated and expected size (e.g., for writing over).
+
+Example of fixing the vulnerability:
+Use a safer method for receiving input or parse the files. Here's how fgets() can be used with checks:
+
+```c
+int decodeFile(char* fName) {
+    FILE* f = fopen(fName, "r");
+    if (!f) { 
+        printf("cannot open %s\n", fName);
+        return DECODE_FAIL;
+    } else {
+        char buf[BUF_SZ];
+        while (1) {
+            if (fgets(buf, BUF_SZ, f) == NULL) {
+                if (feof(f))  // normal end of file
+                    break;
+                else
+                    return DECODE_FAIL;
+            }
+            if (!checkChecksum(buf)) {
+                return DECODE_FAIL;
+            } else {
+                decodeBlock(buf);
+            }
+        }
+    }
+    fclose(f);
+    return DECODE_SUCCESS;
+}
+```
+
+ORIGINAL CODE:
+```c
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];FILE* f = fopen(fName, "r");if (!f) {printf("cannot open %s\n", fName);return DECODE_FAIL;}else {
+        while (fgets(buf, BUF_SZ, f)) {if (!checkChecksum(buf)) {return DECODE_FAIL;}else {decodeBlock(buf);}}
+    }fclose(f);return DECODE_SUCCESS;
+}
+```

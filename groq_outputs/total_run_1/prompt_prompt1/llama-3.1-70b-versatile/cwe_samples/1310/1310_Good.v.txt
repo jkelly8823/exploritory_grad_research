@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 12
+VULNERABILITY_DESCRIPTION:
+Unsanitized Input/Untrusted External Input Used Directly in Code Flow
+
+EXPLANATION:
+The code provided utilizes data from external sources (ariane_boot_sel_i and rom_rdata_patch, rom_rdata_linux), but it does so without any verification or validation. This data could potentially be manipulated to force a certain condition. Specifically, 'ariane_boot_sel_i' could be influenced from an external source, directly affecting the control flow, and potentially leading to unintended ROM data being accessible in 'rom_rdata' via the value in 'ariane_boot_sel_i'.
+ 
+Additionally, because data from external sources can directly manipulate 'rom_rdata', a tainted source may potentially further contaminate or even produce unintended values from downstream components using 'rom_rdata'. Therefore, data should be sanitized prior to passing it as input to an operation to ensure a secure flow.
+
+However, the more concerning issue here is perhaps just a problem of just unclear assumptions as, without a larger view of the code in question, further concerns are speculative.
+ 
+RECOMMENDATIONS:
+1. Implement proper sanitization and validation for all data coming from external untrusted sources (e.g., 'ariane_boot_sel_i'). Limit a potentially tainted source from dictating directly controllable outcomes within the application.
+
+2. Implement a clear system of checking for the integrity and authenticity of 'ariane_boot_sel_i'.
+
+3. Improve the control flow such that access to any potential ROM data can be encapsulated to avoid unrestricted access if the integrity check fails (whenever 'ariane_boot_sel_i' equals 0 and when it equals 1). It should allow authorized and desired outcomes following validation.
+ 
+4. More fully encapsulate any flow leading to the assignment of 'rom_rdata' and take precautions against security vulnerabilities concerning the tainted 'ariane_boot_sel_i'. 
+
+5. Provide complete code structure visibility to properly secure data sources that have not presently been inspected or commented upon; it may result in larger concerns than presented here in just this one piece.
+
+
+ORIGINAL CODE:
+
+                    ...
+                        
+                        bootrom i_bootrom_patch (
+                            
+                            .clk_i                   ,
+                            .req_i      ( rom_req   ),
+                            .addr_i     ( rom_addr  ),
+                            .rdata_o    ( rom_rdata_patch )
+                            
+                        );
+                        bootrom_linux i_bootrom_linux (
+                            
+                            .clk_i                   ,
+                            .req_i      ( rom_req   ),
+                            .addr_i     ( rom_addr  ),
+                            .rdata_o    ( rom_rdata_linux )
+                            
+                        );
+                        
+                    assign rom_rdata = (ariane_boot_sel_i) ? rom_rdata_patch : rom_rdata_linux;
+                    ...

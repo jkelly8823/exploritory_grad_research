@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 9
+VULNERABILITY_DESCRIPTION:
+Unvalidated data being copied into a fixed-size buffer.
+
+EXPLANATION:
+In the given code, the `strtok` function is used to split the input string into tokens. These tokens are then used to fill the `command` buffer. However, the code uses `strcpy`, which does not perform any bounds checking, to copy the token into the buffer.
+
+The potential vulnerability arises from the fact that the size of the buffer allocated for the `command` variable is determined by the length of the current token. If a token is longer than the buffer allocated for it, or if `malloc` fails to allocate the requested memory, it can lead to a buffer overflow.
+
+Furthermore, the issue becomes more severe as the allocation and copying are done inside a loop where `tok` is being set to a token that may exceed the length of 40 (the original allocation size) especially since input from a potentially malicious user is being used, hence it makes sense to check for potential buffer overflow.
+
+RECOMMENDATIONS:
+1. Instead of using `strcpy`, use `strncpy` or `snprintf` to ensure that the token is copied into the `command` buffer safely, without overflowing the buffer.
+
+2. Error checking for `malloc` is needed to make sure that it successfully allocates the required space.
+
+Here is an improved version:
+
+```c
+//...
+
+// Increase length allocation to account for potential null-terminator addition by strtok
+command = (char*) malloc( (strlen(tok) + 2) * sizeof(char) );
+if (command == NULL) {
+    // Handle memory allocation error...
+}
+
+// Use strlcpy to safely copy the token into the command buffer
+strlcpy( command, tok, (strlen(tok) + 2) * sizeof(char) );
+```
+3. Always validate that the input has a known format or is free from injection vectors. This will reduce the risk of an actual attack by reducing the leverage that an attacker has.
+
+ORIGINAL CODE:
+
+```c
+                    //hardcode input length for simplicity
+                    char* input = (char*) malloc(40*sizeof(char));char *tok, *command;char* sep = " \t";
+                    get_user_input( input );
+                    
+                    /* The following loop will parse and process each token in the input string */
+                    
+                    tok = strtok( input, sep);while( NULL != tok ){
+                       if( !isMalformed( command ) ){
+                                  /* copy and enqueue good data */
+                                  command = (char*) malloc( (strlen(tok) + 1) * sizeof(char) );strcpy( command, tok );add_to_command_queue( command );
+                        }tok = strtok( NULL, sep));
+                    }
+                    free( input )
+                
+           ```

@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 9, 16
+VULNERABILITY_DESCRIPTION:
+Inconsistent Privilege Level Control Flow Vulnerability.
+
+EXPLANATION:
+In the provided code snippet, the debug mode is controlled based on different privilege levels. The code checks the privilege level `priv_lvl_o` and sets `debug_mode_d` accordingly. However, there's an inconsistency between the usage of `priv_lvl_o` and `priv_lvl_q` when determining the current privilege level. This inconsistency can potentially lead to unintended behavior, as the code sets `priv_lvl_o` using `debug_mode_q` and `umode_i` but uses `priv_lvl_q` in the case statement.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to use the same variable for determining the current privilege level consistently. Since `priv_lvl_o` is used in the case statement, it should also be used in the assignment for `debug_mode_q`. The corrected code should look like this:
+
+```verilog
+assign debug_mode_q <= debug_mode_d;
+assign priv_lvl_o = (debug_mode_q || umode_i) ?  riscv::PRIV_LVL_M : riscv::PRIV_LVL_U;
+
+//Case statement should be re-evaluated using priv_lvl_q?
+//or priv_lvl_o should be the one used for case statement?
+
+unique case (priv_lvl_o)
+riscv::PRIV_LVL_M: begin
+    debug_mode_d = dcsr_q.ebreakm;
+end 
+...
+riscv::PRIV_LVL_U: begin
+    debug_mode_d = dcsr_q.ebreaku;
+end
+endcase
+```
+
+ORIGINAL CODE:
+
+```verilog
+module csr_regfile #(
+    ...
+    // check that we actually want to enter debug depending on the privilege level we are currently in
+    unique case (priv_lvl_o)
+    riscv::PRIV_LVL_M: begin
+        debug_mode_d = dcsr_q.ebreakm;
+    end
+    ...
+    riscv::PRIV_LVL_U: begin
+        debug_mode_d = dcsr_q.ebreaku;
+    end
+    ...
+    assign priv_lvl_o = (debug_mode_q || umode_i) ?  riscv::PRIV_LVL_M : priv_lvl_q;
+    ...
+    debug_mode_q  <= debug_mode_d;
+    ...
+```

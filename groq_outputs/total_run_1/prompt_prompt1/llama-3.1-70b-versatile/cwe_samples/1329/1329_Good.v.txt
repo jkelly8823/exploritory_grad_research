@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-17, 25
+VULNERABILITY_DESCRIPTION: 
+Insecure Direct Object Reference (IDOR) and potential key exposure.
+
+EXPLANATION:
+The code appears to be defining a Digital Controller Module (DCM) in a hardware description language (VHDL or Verilog), handling HMAC (Keyed-Hashing for Message Authentication) key encryption/decryption. 
+
+However, there are vulnerabilities in this code snippet:
+
+1. HMAC Key Directly Updated (Potential IDOR):
+Inside the "always_ff" block, the HMAC key (hmac_key_reg) is updated directly from the input "hmac_key_i" when "hmac_patch_en" is enabled. This allows for a potentially insecure update mechanism, where an attacker could manipulate hmac_key_i to force hmac_key_reg to an arbitrary value, bypassing internal HMAC key management. 
+
+2. HMAC Key Exposure:
+Additionally, hmac_key_reg is directly assigned to .key_i in the HMAC module instantiation. This may introduce the risk of key exposure, in cases where hmac_key_i was previously modified maliciously. The .key_i input should ideally be fed a sanitized, trusted HMAC key generated securely.
+
+RECOMMENDATIONS:
+1. Implement HMAC Key Management:
+Replace hmac_key_i assignment in always_ff block with a checked HMAC key update procedure, preferably storing the key securely before writing it into hmac_key_reg.
+
+2. Sanitize HMAC Key Input:
+Before hmac_key_reg assignment to HMAC module's .key_i input, ensure that hmac_key_reg is first checked for sanity and only then passed as a parameter. Validate all HMAC key assignments with checks for potential corrupt/or useless HMAC keys.
+
+3. Recommend Encryption:
+Protect hmac_key_i and hmac_key_reg to defend against any unauthorized direct update or reading (typically recommended using hash key secrecy or random secret cryptographic keys generation code block (not present in this snippet) where such hash encryption can shield away threats.
+
+4. Use Secure HMAC Key Generation Methods:
+When generating hmac_key_reg, in order to have proper hash encryption enable HMAC key handling checks during such key assignment.
+
+ORIGINAL CODE:
+```verilog
+module dmi_jtag(...)
+(
+    
+    input logic [255:0] hmac_key_i,
+    input logic         hmac_patch_en,
+    ... 
+    reg [255:0] hmac_key_reg;
+    ...
+    
+);
+...
+    
+    always_ff @(posedge tck_i or negedge trst_ni) begin
+    ...
+    if (hmac_patch_en)
+        
+        hmac_key_reg <= hmac_key_i;
+        
+    ...
+    end
+    
+...
+    
+    hmac hmac(
+    ...
+    .key_i(hmac_key_reg),
+    ...
+    );
+    
+...
+endmodule
+```

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-10
+VULNERABILITY_DESCRIPTION:
+The provided code function `host_lookup` contains a buffer overflow vulnerability.
+
+EXPLANATION:
+In the `host_lookup` function, the `strcpy` function is used to copy the hostname from `hp->h_name` into the `hostname` buffer, which is declared as a character array of size 64. However, the `strcpy` function does not perform bounds checking, and it does not limit the amount of data that it copies. This means that if the `hp->h_name` is longer than 64 characters, `strcpy` will continue to copy beyond the end of the `hostname` buffer, overwriting adjacent memory and potentially causing a buffer overflow.
+
+Furthermore, the input `user_supplied_addr` is not sanitized, validated or whitelisted directly within this snippet but is passed to the `addr` variable, which is later passed to `gethostbyaddr` function. This process assumes `user_supplied_addr` is already sanitized, otherwise it may be a source of vulnerability.
+
+Lastly, there are missing error checks and input validation for critical function calls like `gethostbyaddr`, which can lead to crashes or undefined behavior if those functions fail.
+
+RECOMMENDATIONS:
+1. Use stack based safe string handling library functions like `strncpy` instead of `strcpy`, with size limits enforced.
+2. Implement proper error checking for function calls like `gethostbyaddr`, which can fail and provide a good error handling practice.
+3. Always sanitize and validate all inputs like `user_supplied_addr` within this function, before they're processed.
+4. Ensure `hostname` is sufficiently sized for largest probable hostname.
+
+ORIGINAL CODE:
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;
+    in_addr_t *addr;
+    char hostname[64];
+    in_addr_t inet_addr(const char *cp);
+
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+
+    validate_addr_form(user_supplied_addr);
+    addr = inet_addr(user_supplied_addr);
+    hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);
+    strcpy(hostname, hp->h_name);
+}
+```

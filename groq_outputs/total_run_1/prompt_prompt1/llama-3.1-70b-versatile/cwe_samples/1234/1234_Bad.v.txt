@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a race condition where the `Data_out` register can be written to even when the lock status is set to prevent writes, under certain conditions.
+EXPLANATION:
+The vulnerability arises from the use of both the `Lock` input and the `lock_status` register to control write access to the `Data_out` register. Specifically, the code checks both `~lock_status` and `scan_mode` or `debug_unlocked` to determine if a write is allowed. However, this creates a race condition where if `lock_status` is set to 1 (locked) and then `scan_mode` or `debug_unlocked` is set to enable write access, a write operation can be performed even though the `lock_status` register indicates the register is locked. This can be exploited by setting `Lock` to 1 and then immediately setting `scan_mode` or `debug_unlocked` to 1, allowing an unauthorized write operation to occur.
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to remove the use of `lock_status` register and use the `Lock` input directly to control write access to the `Data_out` register. Additionally, the condition to check `scan_mode` and `debug_unlocked` should be priority ordered to prevent a write operation when the lock is set. Here's the revised code:
+
+```
+always @(posedge Clk or negedge resetn)
+  if (~resetn) 
+    Data_out <= 16'h0000;
+  else if (~Lock && write && !(scan_mode || debug_unlocked)) 
+    Data_out <= Data_in;
+  else if (~Lock && write && (scan_mode || debug_unlocked)) 
+    Data_out <= Data_in;
+  else if (Lock) 
+    Data_out <= Data_out;
+  else 
+    Data_out <= Data_out;
+```
+
+ORIGINAL CODE:
+```verilog
+module Locked_register_example
+(
+  input [15:0] Data_in,
+  input Clk,
+  input resetn,
+  input write,
+  input Lock,
+  input scan_mode,
+  input debug_unlocked,
+  output reg [15:0] Data_out
+);
+
+reg lock_status;
+  
+always @(posedge Clk or negedge resetn)
+  if (~resetn) 
+    lock_status <= 1'b0;
+  else if (Lock)
+    lock_status <= 1'b1;
+  else if (~Lock)
+    lock_status <= lock_status;
+
+always @(posedge Clk or negedge resetn)
+  if (~resetn) 
+    Data_out <= 16'h0000;
+  else if (write & (~lock_status | scan_mode | debug_unlocked) ) 
+    Data_out <= Data_in;
+  else if (~write)
+    Data_out <= Data_out;
+
+endmodule
+```

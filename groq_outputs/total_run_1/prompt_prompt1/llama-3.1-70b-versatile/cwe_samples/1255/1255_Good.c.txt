@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16, 18
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Side-Channel Attack, specifically a Power Analysis Attack. The code introduces a timing difference between the execution of the password verification logic for correct and incorrect digits, which can be used to infer information about the password.
+
+EXPLANATION:
+The code is written to be non-constant time, meaning the execution time depends on the input. This can be observed in lines 14-16 and 18, where a conditional statement and a bitwise operation are performed. These operations introduce a timing difference between the verification of correct and incorrect digits. Additionally, the comment on line 16 suggests a power consumption difference, implying a potential side-channel.
+
+The non-constant time nature of the code allows an attacker to use power analysis to deduce information about the password. By observing the power consumption of the device while attempting to login, the attacker may be able to infer which digits of the password are correct and which are incorrect. This information can be used to dramatically reduce the search space for a brute-force attack.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the code should be modified to be constant time. This means that the execution time should be independent of the input. Some recommendations for the code include:
+
+- Removing the conditional assignment of `password_ok` (lines 14-16 and 18) and instead using a constant time comparison.
+- Using a constant time iteration order for the password verification loop.
+- Adding noise or random delays to the execution time to mask the timing differences.
+
+ORIGINAL CODE:
+
+```c
+static nonvolatile password_tries = NUM_RETRIES;
+do
+
+  while (password_tries == 0) ; // Hang here if no more password tries
+  password_tries--;  // Put retry code here to catch partial retries
+  password_ok = 0;
+  for (i = 0; i < NUM_PW_DIGITS; i++)
+   
+    if (GetPasswordByte() == stored_password([i])
+     
+      password_ok |= 0x10; // Power consumption here
+     
+    else
+     
+      password_ok |= 0x01; // is now the same here
+     
+   
+  end
+  if ((password_ok & 1) == 0)
+
+    password_tries = NUM_RETRIES;
+    break_to_Ok_to_proceed
+
+  while (true)
+// Password OK
+  
+```

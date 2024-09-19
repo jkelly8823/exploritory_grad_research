@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Insecure comparison of sensitive data (password) using strcmp.
+
+EXPLANATION:
+The code uses strcmp to compare the input password with the hardcoded password "Mew!". This approach has two issues: 
+1. strcmp returns 0 if the strings match, but the if condition in the code will actually be true if the strings do not match (because of the implicit conversion of the result to a boolean). This means that the condition is incorrectly checking for inequality instead of equality. This might be considered a minor bug, but in combination with the security concerns below, it becomes much more serious.
+2. strcmp can be vulnerable to timing attacks. Many platforms will implement strcmp in a way that takes longer to return for characters that are earlier in the alphabet, and earlier in the user-supplied password. A clever attacker might use this information to reconstruct the password, one character at a time.
+
+RECOMMENDATIONS:
+1. To fix the bug mentioned above, we should explicitly check for inequality, for instance, if (strcmp(password, "Mew!") == 0) or more idiomatically in C: if (!strcmp(password, "Mew!")).
+2. For the timing attack vulnerability, consider using a constant-time comparison function for sensitive data. There are several libraries that offer such functionality.
+
+Here's an example fix:
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+// Define a constant-time comparison function for two strings, 
+// assuming both have length 'len'.
+int constant_time_strcmp(char const * s1, char const * s2, size_t len) {
+    int res = 0;
+    for (size_t i = 0; i < len; i++) {
+        res |= s1[i] ^ s2[i];
+    }
+    return res;
+}
+
+int VerifyAdmin(char *password) {
+    char admin_password[] = "Mew!";
+    if (strlen(password) != strlen(admin_password)) return 0;
+
+    if (constant_time_strcmp(password, admin_password, strlen(password))) {
+        printf("Incorrect Password!\n");
+        return 0;
+    } 
+    printf("Entering Diagnostic Mode...\n");
+    return 1;
+}
+```
+ORIGINAL CODE:
+```c
+int VerifyAdmin(char *password) {
+    if (strcmp(password, "Mew!")) {
+        printf("Incorrect Password!\n");return(0)
+    }
+    printf("Entering Diagnostic Mode...\n");return(1);
+}
+```

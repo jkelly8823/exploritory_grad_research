@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability due to double deletion of memory
+
+EXPLANATION:
+The provided code has a "Use-After-Free" vulnerability due to a double memory deletion issue. The function `A::foo(bool)` has a local array `localArray` and a pointer `p` that is initially assigned to it. When the function parameter `heap` is true, `p` is reassigned to a new heap-allocated array. However, regardless of the value of `heap`, the function always attempts to delete `p` using `delete[]`. If `heap` is false, `p` is still pointing to `localArray` when `delete[]` is called, which leads to undefined behavior since `localArray` was not allocated using `new[]`. Additionally, when `heap` is true, `p` is deleted and its contents are no longer valid.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to ensure that we only call `delete[]` on pointers that were allocated using `new[]`. Here's an updated version of the code that makes the necessary checks:
+
+```cpp
+class A {
+    void foo(bool);
+};
+
+void A::foo(bool heap) {
+    int* p;
+    if (heap) {
+        p = new int[2];
+    } else {
+        int localArray[2] = {11,22};
+        p = localArray;
+    }
+
+    // Use p here...
+
+    // Delete p only if it was allocated on the heap
+    if (heap) {
+        delete[] p;
+    }
+}
+```
+
+In this updated code, we use a pointer `p` and only assign it to the address of `localArray` if we are not allocating on the heap. Then, we check the value of `heap` before calling `delete[]`. This prevents the double deletion and ensures that `delete[]` is only called on pointers that were allocated using `new[]`.
+
+ORIGINAL CODE:
+                  class A{void foo(bool);};void A::foo(bool heap) {int localArray[2] = {11,22};int *p = localArray;if (heap){p = new int[2];}delete[] p;};

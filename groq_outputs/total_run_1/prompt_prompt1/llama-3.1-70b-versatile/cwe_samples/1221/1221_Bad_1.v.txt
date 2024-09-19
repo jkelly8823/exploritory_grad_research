@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 7, 8
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds array access due to integer underflow vulnerability.
+
+EXPLANATION:
+In the given code, there is an array access using the variable `JTAG_OFFSET` which is defined as 81. However, when accessing the `mem` array, it uses `JTAG_OFFSET-1` as the index. Since `JTAG_OFFSET` is defined as 81, this could potentially result in accessing memory out of bounds.
+
+Another vulnerability present here is in the lines where it is assigning multiple mem arrays. Here, during the concatenation process if `JTAG_OFFSET` is 0 and if `mem` is being accessed as `mem[JTAG_OFFSET-1]`, it can lead to undefined behavior or integer underflow which will then access `mem[-1]` resulting in underflow and thus lead to unpredictable results or unexpected outcome.
+
+In other lines, given below:
+
+`mem[JTAG_OFFSET-2], mem[JTAG_OFFSET-3], mem[JTAG_OFFSET-4], mem[JTAG_OFFSET-5], mem[JTAG_OFFSET-6], mem[JTAG_OFFSET-7], mem[JTAG_OFFSET-8]`
+
+the same might occur.
+
+In SystemVerilog, because indexing is 0-based and because some array types could allow negative indexing, shifting above arrays could be done with the risk of an out-of-bounds error that could potentially lead to a memory leak or buffer overflow on most compilers given these constraints of shift or subtraction operations turning either towards right hand side (higher values in array), or left (negative indexing).
+
+
+RECOMMENDATIONS:
+Add error checking to make sure that the `JTAG_OFFSET` index value does not underflow, i.e., result in a negative value. Adjust or add if needed any 'offset mechanism you would be using in order to avoid array indexing in the form above.
+
+To fix the integer underflow vulnerability you can add a bounds check before accessing the array. Here is an example:
+
+```
+wire [31:0] jtag_value;
+integer i;
+
+for( i = 0; i < 8; i = i + 1 ) begin
+    if( JTAG_OFFSET - i < 0) begin
+        // deal with underflow: perhaps jtag_value should be some signal, or maybe undefined behaviour results and end/stop test
+        // assign jtag_value with some sensible signal or set it with a reset, such that any further action could easily be avoided    
+    end else begin
+        jtag_value = jtag_value +{mem[JTAG_OFFSET - i]};
+    end    
+end
+assign jtag_hash_o = jtag_value;
+```
+
+Another alternative solution: Since all of those indices have offsets reduced from the shift at value equals 81 at index and offset for values all occur subtracted away till -one prior of underflows, perhaps offset shift may better define new rule JtagShiftValue=  (MemSize - 1)  
+Assign JtagShiftValue To an integer
+
+and later 
+change the jtagHash line
+
+to a more 
+robust formulation 
+
+when new variable defined this is how to shift 
+these indexes correctly  since all begin from this new value.
+
+Alternatively use method bounds prior all indexes shifted values 0 upwards.
+
+
+ORIGINAL CODE:
+
+``` vhdl
+parameter  MEM_SIZE = 100;
+localparam JTAG_OFFSET = 81;
+                    
+const logic [MEM_SIZE-1:0][31:0] mem = {
+                    
+    // JTAG expected hamc hash
+    32'h49ac13af, 32'h1276f1b8, 32'h6703193a, 32'h65eb531b,
+    32'h3025ccca, 32'h3e8861f4, 32'h329edfe5, 32'h98f763b4,
+                    
+...
+assign jtag_hash_o = {mem[JTAG_OFFSET-1],mem[JTAG_OFFSET-2],mem[JTAG_OFFSET-3],
+mem[JTAG_OFFSET-4],mem[JTAG_OFFSET-5],mem[JTAG_OFFSET-6],mem[JTAG_OFFSET-7],mem[JTAG_OFFSET-8]};
+...
+```

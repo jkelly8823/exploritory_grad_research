@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The code contains a SQL injection vulnerability. This allows an attacker to inject malicious SQL code and execute it on the database.
+
+EXPLANATION:
+The vulnerability arises from the fact that the code directly concatenates user input into an SQL query using the `$username` and `$password` parameters. This allows an attacker to inject malicious SQL code by manipulating these input values. For example, an attacker could try to log in with the username `Robert'); DROP TABLE users; --` and a password that doesn't matter. This would result in the SQL query `Select * from users where username=Robert'); DROP TABLE users; -- And password=random` which would potentially drop the entire user table.
+
+Additionally, there is a secondary concern about using external resources for database configuration files as that exposes potential directory traversal, local file inclusion attacks on default operating systems file systems when configurations with sensitive data are directly readable externally.
+
+RECOMMENDATIONS:
+(1) Use prepared statements with parameterized input to prevent SQL injection. The recommended PDO library for MySQL offers functionalities for prepared statements and we can include using either the `prepare()` and `execute()` functions.
+(2) Validate and sanitize input parameters. Always check for malicious or unexpected input values and reject or filter them before processing.
+(3) Use more secure database extension, like `mysqli` instead of the older `mysql` for safe escaping or even better a lower-level/ODBC implementation such as `PDO`.
+(4) If feasible, for increased security, consider revising the configuration code that is retrieved over HTTP, possibly moving the database configuration file to an internal location.
+
+ORIGINAL CODE:
+
+
+                  //assume the password is already encrypted, avoiding CWE-312
+                  
+                  function authenticate($username,$password){
+                     include("http://external.example.com/dbInfo.php");
+                     
+                     //dbInfo.php makes $dbhost, $dbuser, $dbpass, $dbname available
+                     mysql_connect($dbhost, $dbuser, $dbpass) or die ('Error connecting to mysql');mysql_select_db($dbname);$query = 'Select * from users where username='.$username.' And password='.$password;$result = mysql_query($query);
+                     if(mysql_numrows($result) == 1){mysql_close();return true;}else{mysql_close();return false;}
+                  }

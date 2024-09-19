@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-14
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized or Corrupted Union Field.
+The code assigns to the `nameID` member of the union in the `buf` structure but then prints out the value of `buf.name` without proper type switching. This can lead to undefined behavior as `buf.name` points to the wrong data.
+
+EXPLANATION:
+The issue here is due to the type switching that occurs in the union within the struct. In the code, when `buf.msgType == NAME_TYPE`, it is incorrect to use `buf.nameID` and when `buf.msgType == ID_TYPE`, it is incorrect to use `buf.name`. However, after changing the value of `buf.nameID`, the code does not update `buf.msgType` to correctly indicate which field of the union is valid.
+
+When we do `buf.nameID = (int)(defaultMessage + 1);`, we're overwriting `buf.name` since `nameID` and `name` occupy the same space in memory. Then, when we print `buf.name` without updating `buf.msgType`, it has the wrong value.
+
+RECOMMENDATIONS:
+1. Ensure correct switching of types: Update `buf.msgType` whenever we change `buf.name` or `buf.nameID`.
+
+2. Add proper validation: Ensure that `buf.msgType` accurately reflects which field of the union is being used before trying to access it.
+
+Here's how you could update the code to avoid this vulnerability:
+
+```c
+#define NAME_TYPE 1
+#define ID_TYPE 2
+
+struct MessageBuffer{
+    int msgType;
+    union {
+        char *name;
+        int nameID;
+    };
+};
+
+int main (int argc, char **argv) {
+    struct MessageBuffer buf;
+    char *defaultMessage = "Hello World";
+    buf.msgType = NAME_TYPE;
+    buf.name = defaultMessage;
+    printf("Pointer of buf.name is %p\n", buf.name);
+
+    if (/* validate input if necessary */) {
+        buf.nameID = (int)(defaultMessage + 1);
+        buf.msgType = ID_TYPE;  // update type to match new field usage
+    }
+    printf("Pointer of buf.name is now %p\n", buf.name);
+
+    if (buf.msgType == NAME_TYPE) {
+        printf("Message: %s\n", buf.name);
+    } else {
+        printf("Message: Use ID %d\n", buf.nameID);
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+#define NAME_TYPE 1
+#define ID_TYPE 2
+struct MessageBuffer{int msgType;union {char *name;int nameID;}};
+
+int main (int argc, char **argv) {
+struct MessageBuffer buf;char *defaultMessage = "Hello World";
+buf.msgType = NAME_TYPE;buf.name = defaultMessage;printf("Pointer of buf.name is %p\n", buf.name);
+/* This particular value for nameID is used to make the code architecture-independent. If coming from untrusted input, it could be any value. */
+buf.nameID = (int)(defaultMessage + 1);printf("Pointer of buf.name is now %p\n", buf.name);if (buf.msgType == NAME_TYPE) {printf("Message: %s\n", buf.name);}else {printf("Message: Use ID %d\n", buf.nameID);}
+}
+```

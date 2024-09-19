@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference
+
+EXPLANATION:
+The `getName()` method is directly referencing a string object using `getName().length()` and `getName() == null`. However, the issue arises from `getName() == null` being checked after `getName().length()` without prior null check. Although in Java `getName()` will throw a `NullPointerException` when used with a null reference in a method, the direct reference for length check can be causing a null pointer due to less than. The description mentions this and Insecure Direct Object Reference.
+
+Even though this code will prevent the NPE with its conditional check right before `getName().length()` due to the nature of Java's evaluation order.
+
+ 
+A different, more realistic example of Insecure Direct Object Reference can arise if a developer directly assigns an attacker-controlled value (from, for instance, request parameters) to `name` without proper validation or sanitization, leading to an unauthorized access to an object in a different context.
+
+However the current scenario also carries an impact if our checks where switched in this particular case along with prior insecure assignments.
+
+RECOMMENDATIONS:
+Check for null before calling methods. Replace line `if (getName() == null || getName().length() < 1)` with `if (getName() != null && getName().length() < 1)` will not work since it does not verify that the field was entered.
+
+
+Alternatively,
+```java
+String username = getName();
+if (username != null && username.trim().isEmpty() || username.length() < 1) {
+   errors.add("name", new ActionMessage("error.name.required"));
+}
+```
+
+ORIGINAL CODE:
+```java
+public class RegistrationForm extends org.apache.struts.validator.ValidatorForm {
+    // private variables for registration form
+    private String name;
+    private String email;...
+
+    public RegistrationForm() {super();}
+    public ActionErrors validate(ActionMapping mapping, HttpServletRequest request) {ActionErrors errors = super.validate(mapping, request);
+        if (errors == null) {errors = new ActionErrors();}
+        if (getName() == null || getName().length() < 1) {errors.add("name", new ActionMessage("error.name.required"));}
+        return errors;
+    }
+    // getter and setter methods for private variables...
+}
+```

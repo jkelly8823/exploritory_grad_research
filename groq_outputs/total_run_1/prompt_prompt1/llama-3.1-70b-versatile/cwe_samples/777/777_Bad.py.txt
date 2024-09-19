@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-15/NA (Particularly vulnerable line is 14)
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Command Injection attacks, where an attacker can inject malicious commands to be executed on the system.
+
+EXPLANATION:
+The vulnerability arises from the use of the subprocess module in conjunction with user-provided input. Although the input (IP address) goes through a regular expression validation function (`validate_ip_regex`), it is passed directly as arguments to the subprocess (`ping`) command. This is dangerous because an attacker can craft an IP address that also injects a malicious command, exploiting the format string vulnerability of the `subprocess.call` function.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use the `shutil` module's `which` function to explicitly identify the full path to the `ping` command and avoid passing user-provided input as command arguments. Instead, use standard input redirection and capture the output. Alternatively, consider using a Python library for performing ICMP pings (e.g., `os`, `scapy` or `ping3` libraries) to avoid relying on external system commands.
+
+ORIGINAL CODE:
+```python
+import subprocess
+import re
+
+def validate_ip_regex(ip: str):
+  ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+  if ip_validator.match(ip):
+    return ip
+  else:
+    raise ValueError("IP address does not match valid pattern.")
+
+def run_ping_regex(ip: str):
+  validated = validate_ip_regex(ip)
+  # The ping command treats zero-prepended IP addresses as octal
+  result = subprocess.call(["ping", validated])
+  print(result)
+```
+Example Code Changes:
+
+```python
+import shutil
+import subprocess
+
+def validate_ip_regex(ip: str):
+  ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+  if ip_validator.match(ip):
+    return ip
+  else:
+    raise ValueError("IP address does not match valid pattern.")
+
+def run_ping_regex(ip: str):
+  validated = validate_ip_regex(ip)
+  ping_command = shutil.which('ping')
+  if ping_command is not None:
+    command = [ping_command]  # using full path
+    result = subprocess.call(command, input=f"-c 1 {validated}".encode())
+    print(result)
+  else:
+    print("Error: 'ping' command not found")
+```

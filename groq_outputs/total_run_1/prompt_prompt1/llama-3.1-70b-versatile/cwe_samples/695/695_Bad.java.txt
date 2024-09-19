@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Unsynchronized Native Library Loading Vulnerability
+
+EXPLANATION:
+The static block in the Echo class loads a native library using System.loadLibrary(). This can be a security vulnerability if the library loading is not properly synchronized. If multiple instances of the Echo class are created concurrently, it could lead to the native library being loaded multiple times or in an inconsistent state.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the library loading should be synchronized to ensure that it is only loaded once. This can be achieved by using a synchronized block or by using a holder class to load the library lazily.
+
+Here's an example of how the code can be modified:
+
+```java
+class Echo {
+    private static native void runEcho();
+
+    static {
+        synchronized (Echo.class) {
+            if (!isLibraryLoaded) {
+                System.loadLibrary("echo");
+                isLibraryLoaded = true;
+            }
+        }
+    }
+    private static boolean isLibraryLoaded = false;
+
+    public static void main(String[] args) {
+        new Echo().runEcho();
+    }
+}
+```
+
+Alternatively, you can use a holder class to load the library lazily:
+
+```java
+class Echo {
+    private static native void runEcho();
+
+    private static void loadLibrary() {
+        System.loadLibrary("echo");
+    }
+
+    private static class EchoLoader {
+        static {
+            loadLibrary();
+        }
+    }
+
+    public static void main(String[] args) {
+        EchoLoader.class.getClass();
+        new Echo().runEcho();
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```
+class Echo {
+    
+    public native void runEcho();
+
+    static {
+        System.loadLibrary("echo");
+    }
+    public static void main(String[] args) {
+        new Echo().runEcho();
+    }
+}
+```

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Denial of Service (DoS) via a 'die' statement when a fatal authentication error occurs, and also shows a loose validation in the 'ReportAuth' and 'PrivilegedFunc' subs, allowing usage of 'ReportAuth' and potential 'PrivilegedFunc' despite being called with '0' as fatal without requiring $result being success.
+
+EXPLANATION:
+I found several issues in the given code:
+
+1.  In the function 'ReportAuth', even if the function call will execute a fatal action, there's no check on $username, and using this will be loose as the Report will print because when ne does not match "success" then even it's declared in die that this is for "Failed" case.
+2.  I also suspect that within 'PrivilegedFunc', even with no having an option to $fatal value to take '1', and function isn't going to execute more in next program execution even though that if user got passed here - then after being passed, they can run those functions despite error.
+
+RECOMMENDATIONS:
+Here are some changes to remediate the identified security vulnerability in the code:
+
+    sub ReportAuth {
+        my ($username, $result, $fatal) = @_;
+        
+        if (!defined $username) {
+            die "No username provided.";
+        }
+        # Check if $result is a valid and expected value.
+        if ($result ne "success" && $fatal) {
+            die "Authentication failed with a fatal error: $result";
+        }
+        PrintLog("auth: username=%s, result=%d", $username, $result);
+    }
+
+    sub PrivilegedFunc {
+        my $username = shift || die "Error: No username";
+        my $result = CheckAuth($username);
+        ReportAuth($username, $result, 1);
+        if ($result eq "success") {
+            DoReallyImportantStuff();
+        }
+    }
+
+This change better handles the authentication validation within the code as some possible fixes are taken with considering not being going down without fatal error whenever program need those values for proceeding.

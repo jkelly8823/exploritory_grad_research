@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 7
+VULNERABILITY_DESCRIPTION:
+Unintended Resynchronization and Implicit Latch
+
+EXPLANATION:
+The code uses a non-blocking assignment (`<=`) in a combination of an if-else statement, which can lead to the generation of implicit latches. However, in this case, it appears to be used to reset an array of registers `reglk_mem` when the reset condition is true. The problem lies in the combinational for loop not being protected by a clocked assignment. If the reset condition changes during the execution of the loop, some registers might be reset, and others might stay in an old value, leading to unpredictable behavior.
+
+RECOMMENDATIONS:
+The loop should be protected with a clocked assignment, and the if condition should use a blocking assignment to ensure the reset condition is set only after the loop completes. Here's how you can modify the code:
+
+```module reglk_wrapper #(
+...
+  ...
+  always @(posedge clk_i)
+  begin
+    if(rst_ni && ~jtag_unlock && ~rst_9) begin
+      reglk_mem_valid <= 1'b0; // indicate valid reset condition
+    end else if(~reglk_mem_valid) begin
+      // perform reset
+      for (j=0; j < 6; j=j+1) begin
+        reglk_mem[j] <= 'h0;
+      end
+      reglk_mem_valid <= 1'b1;
+    end
+  end
+  ...
+```
+Note: This is one possible solution; the exact implementation might depend on the actual hardware and requirements.
+
+ORIGINAL CODE:
+```verilog
+module reglk_wrapper #(
+  ...
+  
+  always @(posedge clk_i)
+  
+    begin
+    
+      if(~(rst_ni && ~jtag_unlock && ~rst_9))
+      
+        begin
+        
+          for (j=0; j < 6; j=j+1) begin
+          
+            reglk_mem[j] <= 'h0;
+          
+          end
+        
+        end
+      
+      ...
+    
+   
+  
+```
+This modified code ensures that the reset process is properly synchronized with the clock and avoids unintended behavior.

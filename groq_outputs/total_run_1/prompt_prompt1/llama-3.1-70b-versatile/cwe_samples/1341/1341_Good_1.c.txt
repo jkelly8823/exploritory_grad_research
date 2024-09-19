@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a Double Close vulnerability. This occurs when the fclose function is called on a FILE pointer that has already been closed.
+
+EXPLANATION:
+The code initializes a file pointer 'f' to a file named "dbl_cls.c". If the file is successfully opened, it reads the file into a character array 'b' and then checks the 'f_flg' variable to close the file. The issue arises because the fclose function is called on the FILE pointer 'f' twice. This can lead to undefined behavior and potentially cause a crash or exploit a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the fclose function should only be called once. The redundant fclose call can be removed, and the condition for the fclose call can be combined into a single condition. Additionally, it is recommended to check the result of fclose to handle any potential errors.
+
+```c
+char b[2000];
+int f_flg = 0;
+FILE *f = fopen("dbl_cls.c", "r");
+if (f)
+{
+    f_flg = 1;
+    b[0] = 0;
+    fread(b, 1, sizeof(b) - 1, f);
+    printf("%s\n'", b);
+    if (fclose(f) == EOF) {
+        perror("fclose failed");
+    }
+    f_flg = 0;
+    printf("\n-----------------\nClose done\n");
+}
+```
+
+ORIGINAL CODE:
+```c
+char b[2000];
+int f_flg = 0;
+FILE *f = fopen("dbl_cls.c", "r");
+if (f)
+{
+    f_flg = 1;
+    b[0] = 0;
+    fread(b, 1, sizeof(b) - 1, f);
+    printf("%s\n'", b);
+    if (f_flg)
+    {
+        int r1 = fclose(f);
+        f_flg = 0;
+        printf("\n-----------------\n1 close done '%d'\n", r1);
+    }
+    if (f_flg)
+    {
+        int r2 = fclose(f);  // Double close
+        f_flg = 0;
+        printf("2 close done '%d'\n", r2);
+    }
+}
+```

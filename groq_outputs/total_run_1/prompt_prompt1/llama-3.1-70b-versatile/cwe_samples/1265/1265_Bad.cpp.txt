@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 7
+VULNERABILITY_DESCRIPTION:
+The code contains a double-free vulnerability and a dangling pointer vulnerability.
+
+EXPLANATION:
+The vulnerability occurs in the `Widget` class. In the `changeBackgroundImage` method, the `backgroundImage` pointer is deleted and then reassigned to the new image. However, in the `click` method, the `backgroundImage` pointer is used without checking whether it has been deleted. If the `changeBackgroundImage` method is called from another thread or from within the `click` method itself, and `backgroundImage` is deleted while it is being used, the program may crash or behave unpredictably.
+
+Additionally, the `Image` class stores a reference to the `scriptEngine` object and uses it in the `click` method. However, if the `scriptEngine` object is deleted before the `Image` object, it will be a dangling pointer.
+
+RECOMMENDATIONS:
+To fix the double-free and dangling pointer vulnerabilities, consider the following recommendations:
+
+1. Use smart pointers to manage memory: Instead of manually deleting memory, use smart pointers like `std::unique_ptr` or `std::shared_ptr` to ensure that memory is released correctly.
+2. Use synchronization mechanisms: If multiple threads can access the `backgroundImage` pointer, use synchronization mechanisms like mutexes or locks to prevent concurrent access.
+3. Check for null pointers: Before using the `backgroundImage` pointer, check whether it is null to prevent crashes.
+4. Consider using a safer design: Instead of deleting and reassigning the `backgroundImage` pointer, consider using a safer design, such as swapping pointers or using a pointer to a pointer.
+
+ORIGINAL CODE:
+```cpp
+class Widget{
+private:
+    Image* backgroundImage;
+public:
+    void click(){
+        if (backgroundImage){
+            backgroundImage->click();
+        }
+    }
+    void changeBackgroundImage(Image* newImage){
+        if (backgroundImage){
+            delete backgroundImage;
+        }
+        backgroundImage = newImage;
+    }
+}
+class Image{
+public:
+    void click(){
+        scriptEngine->fireOnImageClick();
+        /* perform some operations using "this" pointer */
+    }
+}
+```

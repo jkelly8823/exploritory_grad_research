@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 10, 11
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow due to insecure memory allocation and copying, Double-Free vulnerability
+
+EXPLANATION:
+The provided C code is vulnerable to a buffer overflow due to the insecure usage of `strncpy()` and the allocation of `buf1R2`. The `BUFSIZE1` and `BUFSIZE2` are defined with specific sizes (512 and 248, respectively). However, these sizes are not validated against potential inputs. 
+
+The code allocates memory for `buf1R2` with `BUFSIZE1` size and uses `strncpy()` to copy data from `argv[1]`. If `argv[1]` is longer than `BUFSIZE1-1`, it will truncate the data, potentially preventing the vulnerability from being exploited in certain cases. However, in this code snippet, we assume that a malicious input will be used to test the code.
+
+The double-free vulnerability occurs when the same memory location `buf2R1` is freed twice.
+
+RECOMMENDATIONS:
+- Validate and check the input size before allocating memory and copying data to prevent buffer overflows. Use functions like `snprintf()` or `strcpy_s()` that handle null-termination and truncation of input data. 
+
+- Implement bounds checking to ensure the allocated buffer can accommodate the provided data.
+```c
+char *buf1R2 = (char *) malloc(strlen(argv[1]) + 1);
+if (buf1R2) {
+    strncpy(buf1R2, argv[1], strlen(argv[1]));
+    buf1R2[strlen(argv[1])] = '\0';
+    // use buf1R2 and then free
+    free(buf1R2);
+}
+```
+- Correct the double-free issue by ensuring the memory allocation `buf2R1` is only freed once. Consider adding error checking code after each free operation.
+
+- Avoid casting result of malloc, `buf1R1 = malloc(BUFSIZE2);` to prevent potential mask of bug related to malloc that fails, as well as utilize sizeof rather than hardcoding the buffer size type: `buf1R2 = malloc(BUFSIZE2 * sizeof(*buf1R2));` should BUFSIZE2 be reassigned to hold number of bufr1R2 pointers in an array.
+  
+ORIGINAL CODE:
+```c
+#include <stdio.h>
+#include <unistd.h>
+#define BUFSIZE1 512
+#define BUFSIZE2 ((BUFSIZE1/2) - 8)
+
+int main(int argc, char **argv) {
+    char *buf1R1;
+    char *buf2R1;
+    char *buf1R2;
+    buf1R1 = (char *) malloc(BUFSIZE2);
+    buf2R1 = (char *) malloc(BUFSIZE2);
+    free(buf1R1);
+    free(buf2R1);
+    buf1R2 = (char *) malloc(BUFSIZE1);
+    strncpy(buf1R2, argv[1], BUFSIZE1-1);
+    free(buf2R1);
+    free(buf1R2);
+}
+```

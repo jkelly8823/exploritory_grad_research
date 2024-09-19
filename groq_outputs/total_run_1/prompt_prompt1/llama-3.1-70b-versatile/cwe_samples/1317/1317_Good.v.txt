@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+A potential vulnerability exists due to insufficient conditional checks on input signals.
+
+EXPLANATION:
+The code is assigning the value of `en` based on the logical AND of `en_acct` and `acct_ctrl_i`. However, it does not account for cases where `en_acct` might be an input from an untrusted source. Considering `en_acct` is an output of `axi_lite_interface`, which has an input `en_o`, which is set to `en_acct`, this scenario seems plausible.
+
+RECOMMENDATIONS:
+To address this vulnerability, we recommend adding additional checks on the input `en_acct`. Specifically, ensure that `en_acct` is only asserted when it is safe to do so. Additionally, validate the input checks on `acct_ctrl_i` to ensure they meet the requirements for secure input handling.
+
+```c
+always_comb begin
+    en = 1'b0;
+    if (en_acct == 1'b1 && acct_ctrl_i == 1'b1) begin
+        en = 1'b1;
+    end
+end
+```
+
+Alternatively, using a sync logic check would be even better. Ensure `en` becomes high when and only when we need it to become high.
+
+```c
+reg prev_en_acct, prev_acct_ctrl_i;
+always @(posedge clk) begin
+    if (~rst_n) begin
+        prev_en_acct       <= 1'b0;
+        prev_acct_ctrl_i   <= 1'b0;
+    end else begin
+        prev_en_acct       <= en_acct;
+        prev_acct_ctrl_i   <= acct_ctrl_i;
+    end
+end
+
+always_comb begin
+    en = 1'b0;
+    if ((prev_acct_ctrl_i == 1'b1) && (prev_en_acct == 1'b1) && 
+        (acct_ctrl_i == 1'b1) && (en_acct == 1'b1)) begin
+        en = 1'b1;
+    end
+end
+```
+
+We're checking every condition becomes true at the same time frame here, making sure the previous frame had the condition true.
+
+ORIGINAL CODE:
+
+```c
+module clint #(...
+) (
+    ... 
+    input logic     acct_ctrl_i,
+    ... 
+);
+    logic     en, en_acct;
+    ...
+    axi_lite_interface #(...
+    ) axi_lite_interface_i (
+    ...
+    .en_o       ( en_acct    ),
+    ... 
+    );
+    assign en = en_acct && acct_ctrl_i;
+    ...
+endmodule
+```

@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+
+EXPLANATION:
+The given code is vulnerable to SQL injection attacks. This occurs when user input is directly concatenated into the SQL query string without proper sanitization or parameterization. An attacker can supply malicious input, such as SQL keywords or special characters, to alter the query's intent, leading to unauthorized data access or modification.
+
+In this specific case, the `username` and `accountNumber` variables are directly inserted into the query string without any sanitization. This enables an attacker to inject malicious SQL code, potentially allowing them to access sensitive data or disrupt database operations.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use Prepared Statements with parameterized queries. Prepared Statements separate the query logic from the user input data, preventing an attacker from injecting malicious SQL code.
+
+Here is a recommended fix:
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    try {
+        if (isAuthorizedUser(username)) {
+            String query = "SELECT * FROM accounts WHERE owner = ? AND accountID = ?";
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            PreparedStatement pstmt = conn.prepareStatement(query);
+            pstmt.setString(1, username);
+            pstmt.setString(2, accountNumber);
+            ResultSet queryResult = pstmt.executeQuery();
+            while (queryResult.next()) {
+                userAccount = (BankAccount)queryResult.getObject(accountNumber);
+            }
+        }
+    } catch (SQLException ex) {
+        String logMessage = "Unable to retrieve account information from database";
+        Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);
+    }
+    return userAccount;
+}
+```
+Additionally, consider using a more robust error handling approach and possibly implementing a secure logging mechanism to handle sensitive data.
+
+ORIGINAL CODE:
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    String query = null;
+    try {
+        if (isAuthorizedUser(username)) {
+            query = "SELECT * FROM accounts WHERE owner = "+ username + " AND accountID = " + accountNumber;
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            Statement stmt = conn.createStatement();
+            ResultSet queryResult = stmt.executeQuery(query);
+            userAccount = (BankAccount)queryResult.getObject(accountNumber);
+        }
+    } catch (SQLException ex) {
+        String logMessage = "Unable to retrieve account information from database,\nquery: " + query;
+        Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);
+    }
+    return userAccount;
+}
+```

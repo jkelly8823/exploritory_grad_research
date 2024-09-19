@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-11
+VULNERABILITY_DESCRIPTION:
+Infinite loop in the acceptConnections method, lack of proper error handling, and resource leak.
+
+EXPLANATION:
+The while loop in the acceptConnections method has a predicate (hasConnections) that is set to true and never updated. This results in an infinite loop, which can lead to denial-of-service (DoS) attacks or service degradation.
+
+Additionally, the catch block for the IOException does not provide any error handling or logging. This makes it difficult to diagnose issues when an exception occurs.
+
+Moreover, there is no proper resource handling in the method. If an exception occurs before the serverSocket.close() statement is reached, the server socket will remain open and cause a resource leak.
+
+RECOMMENDATIONS:
+1. Update the while loop condition to break when no more connections are accepted or an exception occurs.
+2. Handle the IOException properly by logging the error and/or declaring it in the method signature if necessary.
+3. Close the server socket in a finally block to prevent resource leaks.
+4. Consider using a try-with-resources statement for automatic resource management.
+
+ORIGINAL CODE:
+
+```java
+public void acceptConnections() {
+    try {
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            t.start();
+        }
+        serverSocket.close();
+    } catch (IOException ex) {
+        // ... (empty catch block)
+    }
+}
+```
+
+Suggested modification:
+
+```java
+public void acceptConnections() {
+    ServerSocket serverSocket = null;
+    try {
+        serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        while (true) {
+            try {
+                Socket client = serverSocket.accept();
+                if (client == null) break; // add a condition to break the loop
+                Thread t = new Thread(new ClientSocketThread(client));
+                t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+                t.start();
+            } catch (IOException ex) {
+                // Handle or declare IOException here
+                // For example:
+                logger.error("Error accepting connection", ex);
+            }
+        }
+    } catch (IOException ex) {
+        // Handle or declare IOException here
+        // For example:
+        logger.error("Error creating server socket", ex);
+    } finally {
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException ex) {
+                logger.error("Error closing server socket", ex);
+            }
+        }
+    }
+}
+```

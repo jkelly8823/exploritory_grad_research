@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20-24, 31
+VULNERABILITY_DESCRIPTION:
+Path Traversal and File Write vulnerabilities are present in the code.
+
+EXPLANATION:
+The code is vulnerable to Path Traversal and File Write attacks. The code doesn't validate or sanitize the filename obtained from the HTTP request, which can allow an attacker to traverse the directory structure and write files to arbitrary locations on the server. Additionally, the code appends the filename to the uploadLocation without any checks, which can lead to directory traversal. The line `filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\"")` attempts to extract the filename from the HTTP header but doesn't prevent directory traversal attacks.
+
+Furthermore, the code sets `append` to `true` when opening the `FileWriter` which can lead to file corruption if the same file is being uploaded multiple times.
+
+RECOMMENDATIONS:
+1.  Sanitize and validate the filename to prevent directory traversal attacks. Use the `FileUtils.getTempFile()` method or the `UUID` class to generate a random unique filename.
+2.  Set `append` to `false` when opening the `FileWriter` to prevent file corruption.
+3.  Use a whitelist of allowed file extensions instead of relying solely on the `filename` string.
+4.  Validate and limit the upload file size to prevent potential Denial-of-Service (DoS) attacks.
+5.  Log and handle exceptions properly to prevent sensitive information disclosure.
+
+ORIGINAL CODE:
+
+
+```java
+public class FileUploadServlet extends HttpServlet {
+    ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        ...
+        String contentType = request.getContentType();
+        // the starting position of the boundary header
+        int ind = contentType.indexOf("boundary=");
+        String boundary = contentType.substring(ind+9);
+        String pLine = new String();
+        String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+        // verify that content type is multipart form data
+        if (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+            // extract the filename from the Http header
+            BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
+            ...pLine = br.readLine();
+            String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));
+            // output the file to the local upload directory
+            try {
+                BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));
+                for (String line; (line=br.readLine())!=null; ) {
+                    if (line.indexOf(boundary) == -1) {
+                        bw.write(line);
+                        bw.newLine();
+                        bw.flush();
+                    }
+                } //end of for loop
+                bw.close();
+            } catch (IOException ex) {...}
+            // output successful upload response HTML page
+        } // output unsuccessful upload response HTML page
+        else {...}
+    }
+    ...
+}
+```

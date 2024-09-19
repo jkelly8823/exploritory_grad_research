@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 13-16
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability, Dynamic Memory Allocation with Unsanitized Input
+
+EXPLANATION:
+The given code snippet is vulnerable to integer overflow and dynamic memory allocation with unsanitized input. The code reads an integer input for the board's height (`m`) and width (`n`) and checks if they are within the `MAX_DIM` limit. However, the check occurs before the `malloc` call. The `malloc` function allocates a block of memory with the size `m * n * sizeof(board_square_t)`, which may be used to create a denial-of-service (DoS) vulnerability or crash the program. This issue can be leveraged if an attacker provides a sufficiently large input that does not exceed `MAX_DIM` individually but causes an integer overflow when multiplied, resulting in an unexpectedly small or large amount of memory allocation.
+
+RECOMMENDATIONS:
+To fix this vulnerability:
+
+1.  Validate the input values for `m` and `n` to prevent negative numbers and to ensure they will not cause an integer overflow when multiplied.
+2.  Perform the multiplication and overflow check before the `malloc` call to prevent unexpected allocations.
+3.  Always check the result of `malloc` to prevent calls with zero-size allocations or crashes in case of memory allocation failure.
+4.  Consider using more secure libraries, such as `safe_malloc` or equivalent, which provide additional checks against common allocation pitfalls.
+
+```c
+int newdim = m * n * sizeof(board_square_t);
+if (newdim / (m * sizeof(board_square_t)) != n) {
+    die("Input values cause integer overflow");
+}
+if (newdim == 0) {
+    die("Null pointer allocation attemp: Invalid input\n");
+}
+board = (board_square_t*)malloc(newdim);
+if (!board) {
+    die("Memory allocation failed\n");
+}
+```
+
+ORIGINAL CODE:
+
+```c
+#define MAX_DIM 100
+/* board dimensions */
+
+int m, n, error; 
+board_square_t *board;
+
+printf("Please specify the board height: \n");
+error = scanf("%d", &m);
+if ( EOF == error ) {
+    die("No integer passed: Die evil hacker!\n");
+}
+
+printf("Please specify the board width: \n");
+error = scanf("%d", &n);
+if ( EOF == error ) {
+    die("No integer passed: Die evil hacker!\n");
+}
+
+if ( m > MAX_DIM || n > MAX_DIM ) {
+    die("Value too large: Die evil hacker!\n");
+}
+
+board = (board_square_t*)malloc( m * n * sizeof(board_square_t));
+```

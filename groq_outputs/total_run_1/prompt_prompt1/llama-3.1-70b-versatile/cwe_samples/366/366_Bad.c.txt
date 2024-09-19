@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+Unintended Information Leak through Static Variables
+
+EXPLANATION:
+The given code segment contains a function named `storenum` with a static variable `counter` that increments on each function call. However, the function does not actually use this counter for any meaningful operation and instead returns the value of `foo`, which seems to be storing the maximum number passed to this function so far. 
+
+However, the problem lies in the fact that the `counter` variable is not reset between different instances of the program, it retains its value even after the program exits. If this function is used in a multi-tenant environment or on a multi-user system and the static variable is used to store something that reveals sensitive information about the users' usage patterns, it could potentially leak sensitive information.
+
+Moreover, even without an explicit use of the static variable to reveal sensitive information, having it there introduces unnecessary complexity and bugs such as potential counters overflow can be used as a vector to launch a Denial of Services (DoS) attack especially if the system resources are managed wrongly.
+
+In the current context, having `counter` might not be causing any critical vulnerability but not having a static `counter` like variable should be the initial preference especially if not being used.
+
+RECOMMENDATIONS:
+The ideal solution is to completely remove the unnecessary `counter` variable and related increment operation. The `storenum` function should be modified to accept no additional state and just keep track of the maximum value.
+
+```cpp
+int storenum(int num) {
+    static int max_num = 0;
+    if (num > max_num) {
+        max_num = num;
+    }
+    return max_num;
+}
+```
+
+ However if keeping track of the counter is really necessary for function's intended use case then storing it in a dynamically allocated memory space can potentially give more flexibility on its usage.
+
+```cpp
+int* storenum_counter = NULL;
+
+int storenum(int num) {
+    if (storenum_counter == NULL) {
+        storenum_counter = (int*)malloc(sizeof(int));
+        *storenum_counter = 0;
+    }
+    (*storenum_counter)++;
+    // rest of function body code can go here 
+    // remember to free up memory, otherwise that will introduce potential vulnerabilities of memory leaks
+    return 0;
+}
+```
+Please note though these fixes depend heavily on where and why you are going to have the `counter`.
+
+ORIGINAL CODE:
+```c
+int foo = 0;
+int storenum(int num) {
+    static int counter = 0;
+    counter++;
+    if (num > foo) 
+        foo = num;
+    return foo;
+}
+```

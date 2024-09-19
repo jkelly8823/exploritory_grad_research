@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) due to inadequate file validation, allowing unauthorized access to arbitrary files.
+
+EXPLANATION:
+The provided function, `printFile`, accepts a `$filename` as an input, but does not perform adequate validation or sanitization on the file name. This allows an attacker to potentially bypass the authorization check (`isOwnerOf` function) and access arbitrary files on the system by manipulating the `$filename` parameter.
+
+The `file_get_contents` function is used to read the contents of the file specified by `$filename`, which can lead to unauthorized access to sensitive files, including configuration files, user data, or even system files.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to:
+
+1. Validate and sanitize the `$filename` parameter to ensure that it only allows access to authorized files.
+2. Implement least privilege access by limiting the directory and file access to a specific directory.
+3. Use a secure way to read files, such as using `fopen` with a specified file mode and validating the file contents.
+
+Also, it is recommended to check the return value of `file_get_contents` and handle potential errors or exceptions.
+
+SAMPLE SECURE CODE:
+
+```php
+function printFile($username, $filename) {
+    // Define allowed directory
+    $allowedDir = '/path/to/authorized/files/';
+
+    // Validate filename
+    if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $filename)) {
+        echo 'Invalid filename';
+        return false;
+    }
+
+    // Sanitize filename
+    $filename = $allowedDir . $filename;
+
+    // Check if file exists and is readable
+    if (!is_file($filename) || !is_readable($filename)) {
+        echo 'File not found or not readable';
+        return false;
+    }
+
+    // Check if user is authorized
+    if (!isOwnerOf($username, $filename)) {
+        echo 'You are not authorized to view this file';
+        return false;
+    }
+
+    // Read file contents securely
+    $file = fopen($filename, 'r');
+    if ($file) {
+        $contents = fread($file, filesize($filename));
+        fclose($file);
+    } else {
+        echo 'Error reading file';
+        return false;
+    }
+
+    echo $contents;
+    return true;
+}
+
+```
+
+ORIGINAL CODE:
+```php
+function printFile($username,$filename){
+        
+            //read file into string
+            $file = file_get_contents($filename);if ($file && isOwnerOf($username,$filename)){echo $file;return true;}else{echo 'You are not authorized to view this file';}return false;
+}
+```
+
+Note: The provided original code has been formatted to multiple lines for better readability.

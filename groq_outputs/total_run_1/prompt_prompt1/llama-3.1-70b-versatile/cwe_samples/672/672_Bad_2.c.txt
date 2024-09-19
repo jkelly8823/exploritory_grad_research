@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Double Free Vulnerability (memory corruption)
+
+EXPLANATION:
+The vulnerability arises in the `processMessage` function when dynamically allocated memory is reassigned and the original allocation is not cleared. The line `messageBody = &message[1][0];` reassigns the `messageBody` pointer to point to a different memory location without freeing the previously allocated memory. This results in a memory leak and a double-free vulnerability because the `free(messageBody)` call will attempt to free the wrong memory location, causing a memory corruption.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should avoid reassigning the pointer to dynamically allocated memory. Instead, copy the contents of the `message[1]` to the dynamically allocated memory using a function like `strcpy`. Remove the line `messageBody = &message[1][0];` and use `strcpy` to copy the contents of `message[1]`. Also, ensure that you check for `NULL` pointer before using it.
+
+```c
+messageBody = (char*)malloc((length + 1) * sizeof(char)); //allocate space for null-terminator
+if(messageBody != NULL) {    
+    strcpy(messageBody, message[1]);
+    int success = processMessageBody(messageBody);
+    if (success == ERROR) { result = ERROR; free(messageBody); }
+}
+else { 
+    printf("Unable to allocate memory");
+    result = FAIL;
+}
+```
+
+ORIGINAL CODE:
+```c
+#define FAIL 0
+#define SUCCESS 1
+#define ERROR -1
+#define MAX_MESSAGE_SIZE 32
+
+int processMessage(char **message){
+    int result = SUCCESS;
+    int length = getMessageLength(message[0]);
+    char *messageBody;
+
+    if ((length > 0) && (length < MAX_MESSAGE_SIZE)) {
+        messageBody = (char*)malloc(length*sizeof(char));
+        messageBody = &message[1][0];
+
+        int success = processMessageBody(messageBody);
+        if (success == ERROR) { result = ERROR; free(messageBody); }
+    }
+    else { 
+        printf("Unable to process message; invalid message length");
+        result = FAIL;
+    }
+
+    if (result == ERROR) { 
+        logError("Error processing message", messageBody);
+    }
+
+    return result;
+}
+```

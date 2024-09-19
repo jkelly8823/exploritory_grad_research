@@ -9,11 +9,11 @@ This repository contains tools and scripts for conducting research with the GROQ
 
      ```plaintext
      groq_key=               # Your GROQ API key
-     groq_limit=             # Number of files to run
+     groq_limit=             # Number of files to run, -1 to run all
      groq_models=            # Array of model names (e.g., '["llama-3.1-70b-versatile", "gemma2-9b-it"]')
 
      sample_dir=datasets/data_samples  # Directory containing your samples
-     prompt_dir=prompts                # Directory containing your prompts
+     prompt_dir=prompts/run            # Directory containing your prompts
      test_dir=run_name                 # Subdirectory to save results from this GROQ test
      parser_dir=groq_outputs           # Directory holding LLM outputs to parse
      ```
