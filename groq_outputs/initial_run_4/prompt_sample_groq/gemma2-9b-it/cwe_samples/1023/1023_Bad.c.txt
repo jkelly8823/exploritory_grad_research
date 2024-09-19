@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 9 - 13, 16 - 19
+VULNERABILITY_DESCRIPTION:  Hardcoded credentials and insecure password comparison
+
+EXPLANATION:
+The code contains several vulnerabilities:
+
+* **Hardcoded Credentials (CWE-259):** The `username` and `password` variables are directly defined as hardcoded strings. This makes them easily discoverable and vulnerable to attackers. 
+* **Insecure Password Comparison:** 
+    * The code uses `strncmp` with  `strlen(inUser)` and `strlen(inPass)` to compare passwords. 
+    *  `strlen` returns the length of the string, assuming the entire string has to be compared, this can lead to issues if passwords are shorter than the maximum allowed length.
+    * Secure password comparison should use a consistent hashing algorithm to securely compare passwords, regardless of length.
+
+* **Logging Sensitive Information:** The `logEvent` function logs authentication success and failure messages, potentially revealing information about successful login attempts and the usernames used.
+
+
+RECOMMENDATIONS:
+
+1. **Never Hardcode Credentials:**
+   * Use environment variables, configuration files, or secure credential management systems to store sensitive information.
+
+2. **Implement Secure Password Hashing:**
+   * Use a strong, cryptographically secure hashing algorithm like bcrypt or Argon2 to hash passwords before storing them. Compare incoming passwords with their hashed equivalents. 
+
+3. **Salt Passwords:**
+   * Add a unique "salt" value to each password before hashing to make password cracking more difficult.
+
+4. **Limit Log Output:**
+   * Avoid logging sensitive information like usernames and passwords directly. Log success/failure states generically or use anonymized identifiers.
+
+5. **Use Random Initialization:** Use `rand()` or a cryptographically secure random number generator to initialize variables like usernames, especially in a multi-threaded environment.
+
+
+
+
+ORIGINAL CODE:            
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {
+  if (strncmp(username, inUser, strlen(inUser))) {
+    logEvent("Auth failure of username using strlen of inUser");
+    return(AUTH_FAIL);
+  }
+  if (! strncmp(pass, inPass, strlen(inPass))) {
+    logEvent("Auth success of password using strlen of inUser");
+    return(AUTH_SUCCESS);
+  } else {
+    logEvent("Auth fail of password using sizeof");
+    return(AUTH_FAIL);
+  }
+}
+int main (int argc, char **argv) {
+  int authResult;
+  if (argc < 3) {
+    ExitError("Usage: Provide a username and password");
+  }
+  authResult = AuthenticateUser(argv[1], argv[2]);
+  if (authResult == AUTH_SUCCESS) {
+    DoAuthenticatedTask(argv[1]);
+  } else {
+    ExitError("Authentication failed");
+  }
+  
+}
+```

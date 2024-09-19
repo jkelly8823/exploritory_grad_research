@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5 ( lines containing strncmp comparisons), 6 ( line containing ExitError for authentication failure)
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability and Insecure Direct Object Reference.
+
+EXPLANATION:
+The `AuthenticateUser` function uses `strncmp` to compare the input username and password with the hard-coded values. However, it uses the `strlen` function to limit the comparison length, which can lead to a buffer overflow vulnerability if the input strings are longer than the hard-coded strings.
+
+Furthermore, the `DoAuthenticatedTask` function is called with the authenticated username directly from the user input (`argv[1]`), which might be used as an insecure direct object reference (IDOR) vulnerability if not properly sanitized.
+
+Additionally, the `ExitError` function is used to handle authentication errors without any brute-force protection or rate limiting, making it vulnerable to brute-force attacks.
+
+RECOMMENDATIONS:
+1. Use secure comparison functions like `strcmp` and `strcmp_safe` to prevent buffer overflow vulnerabilities.
+2. Validate and sanitize the input username and password to prevent buffer overflow and IDOR vulnerabilities.
+3. Implement brute-force protection and rate limiting in the `ExitError` function to prevent brute-force attacks.
+4. Avoid passing user-input data directly to functions like `DoAuthenticatedTask`.
+
+ORIGINAL CODE:
+
+
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+ 
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {if (strncmp(username, inUser, strlen(inUser))) {logEvent("Auth failure of username using strlen of inUser");return(AUTH_FAIL);}if (! strncmp(pass, inPass, strlen(inPass))) {logEvent("Auth success of password using strlen of inUser");return(AUTH_SUCCESS);}else {logEvent("Auth fail of password using sizeof");return(AUTH_FAIL);}}
+int main (int argc, char **argv) {
+	int authResult;if (argc < 3) {ExitError("Usage: Provide a username and password");}authResult = AuthenticateUser(argv[1], argv[2]);if (authResult == AUTH_SUCCESS) {DoAuthenticatedTask(argv[1]);}else {ExitError("Authentication failed");}}

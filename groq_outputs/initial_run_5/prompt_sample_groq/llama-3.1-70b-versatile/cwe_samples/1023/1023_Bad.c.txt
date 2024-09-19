@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) and Potential Buffer Overflow Vulnerability in AuthenticateUser Function.
+
+EXPLANATION:
+The AuthenticateUser function appears to be vulnerable to Insecure Direct Object Reference and Potential Buffer Overflow attacks. In the first instance of strncmp, it uses the length of the user input as the length of the hardcoded username, rather than the actual length of the username. This could potentially allow unauthorized access if an attacker can manipulate the length of the user input. Additionally, if the input length exceeds the actual length of the hardcoded username, it may lead to an out-of-bounds read.
+
+In the second instance of strncmp, it uses the length of the input password correctly but the event logged still refers to the "strlen of inUser". Moreover, the use of strncmp without ensuring that the null terminator exists in the input strings can lead to buffer overflows if the strings passed are not null terminated.
+
+Furthermore, in certain cases (when sizeof is used incorrectly in place of strlen), an integer overflow may occur as string lengths are typically represented by the size_t type which is unsigned and may cause integer overflow issues if dealt with using signed comparisons.
+
+RECOMMENDATIONS:
+- Limit the length of the hardcoded username by using strlen(username) instead of strlen(inUser).
+- Ensure all strings input to strncmp are null terminated to prevent buffer overflows.
+- Validate and handle potential integer overflows by comparing length of input and hardcoded strings with size_t type (unsigned int).
+- Use input validation for the username/password to prevent brute force attacks, password guessing or prevent log pollution during validation of password attempts using hardcoded credentials or ideally environment variables.
+- Restrict information that is being logged, avoid revealing reasons for logEvent failures to prevent it from helping potential attacks.
+
+ORIGINAL CODE:
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin"; char *pass = "password";
+
+int AuthenticateUser(char *inUser, char *inPass) {
+if (strncmp(username, inUser, strlen(inUser))) {
+logEvent("Auth failure of username using strlen of inUser");
+return(AUTH_FAIL);
+}
+if (! strncmp(pass, inPass, strlen(inPass))) {
+logEvent("Auth success of password using strlen of inUser");
+return(AUTH_SUCCESS);
+}else {
+logEvent("Auth fail of password using sizeof");
+return(AUTH_FAIL);
+}
+}
+
+int main (int argc, char **argv) {
+int authResult;
+if (argc < 3) {
+ExitError("Usage: Provide a username and password");
+}
+authResult = AuthenticateUser(argv[1], argv[2]);
+if (authResult == AUTH_SUCCESS) {
+DoAuthenticatedTask(argv[1]);
+}else {
+ExitError("Authentication failed");
+}
+}
+```

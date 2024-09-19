@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability due to misuse of `strncmp` function.
+
+EXPLANATION:
+The `AuthenticateUser` function uses `strncmp` to compare the input username and password with the hard-coded values. However, the `strncmp` function is used incorrectly. The third argument to `strncmp` should be the minimum of the two lengths being compared, not `strlen(inPass)` for the password comparison. This can lead to a buffer overflow vulnerability if the input password is longer than the allocated space for the password. The `strncmp` function will read beyond the bounds of the password buffer, potentially causing a buffer overflow.
+
+Also, the usage of `strlen(inUser)` instead of `strlen(username)` in the password comparison is incorrect. This can lead to incorrect authentication results and potential buffer overflow.
+
+Additionally, the comparison is done using `strlen(inPass)` which is not the correct length to compare. This can lead to a buffer overflow if the input password is longer than the allocated space for the password.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use the correct lengths for the `strncmp` function. Allocate sufficient space for the input password and ensure that the lengths are correctly used.
+
+Instead of using `strlen(inUser)` and `strlen(inPass)` directly in the `strncmp` function, define the maximum allowed length for the username and password, and use that in the comparison.
+
+Replace `char *pass = "password";` with `char pass[MAX_PASS_LENGTH] = "password";` where `MAX_PASS_LENGTH` is the maximum allowed length for the password.
+
+Change the `strncmp` function to:
+```c
+if (strncmp(username, inUser, MIN(strlen(username), MAX_USER_LENGTH)) == 0) {
+   // user authentication success
+}
+if (strncmp(pass, inPass, MIN(strlen(pass), MAX_PASS_LENGTH)) == 0) {
+   // password authentication success
+}
+```
+Replace `MIN(strlen(username), MAX_USER_LENGTH)` and `MIN(strlen(pass), MAX_PASS_LENGTH)` with the corresponding maximum lengths for username and password.
+
+ORIGINAL CODE:
+
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strncmp(username, inUser, strlen(inUser))) {
+        logEvent("Auth failure of username using strlen of inUser");
+        return(AUTH_FAIL);
+    }
+    if (! strncmp(pass, inPass, strlen(inPass))) {
+        logEvent("Auth success of password using strlen of inUser");
+        return(AUTH_SUCCESS);
+    }else {
+        logEvent("Auth fail of password using sizeof");
+        return(AUTH_FAIL);
+    }
+}
+int main (int argc, char **argv) {
+    int authResult;
+    if (argc < 3) {
+        ExitError("Usage: Provide a username and password");
+    }
+    authResult = AuthenticateUser(argv[1], argv[2]);
+    if (authResult == AUTH_SUCCESS) {
+        DoAuthenticatedTask(argv[1]);
+    }else {
+        ExitError("Authentication failed");
+    }
+}
+```

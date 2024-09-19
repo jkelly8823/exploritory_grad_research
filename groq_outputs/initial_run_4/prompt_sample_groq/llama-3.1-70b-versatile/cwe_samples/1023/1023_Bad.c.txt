@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+The code contains an instance of CWE-707 - User Input Boundary Check.
+EXPLANATION:
+The issue arises in the AuthenticateUser function, where it uses the length of the input 'inUser' to compare the input 'inPass'. This can lead to an incorrect comparison and an authentication bypass. Furthermore, the use of strncmp with a fixed length can potentially cause a truncation error. 
+
+In addition to this, there's no clear input sanitization or validation which is typically required to ensure secure authentication processes. Authentication functions should not trust user input without due validation.
+
+Furthermore, the instance of strncmp checks are not equal to a constant buffer comparison check. strncmp assumes the strings being compared are null-terminated but there's no clear declaration on argv[] being null-terminated. If argv[] is not null-terminated the process could go beyond bounds or lead to an infinite loop.
+
+RECOMMENDATIONS:
+1. Replacing 'strlen(inUser)' with a constant that matches the buffer size will help mitigate truncation issues.
+2. Consider validating the input 'inPass' separately before performing strncmp comparisons. This involves potentially checking the length of 'inPass' against a maximum limit, verifying that it is null-terminated, etc.
+3. It is always a best practice to zero-terminate/ null-terminate string variables even after null-termination is declared.
+
+ORIGINAL CODE:
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {if (strncmp(username, inUser, strlen(inUser))) {logEvent("Auth failure of username using strlen of inUser");return(AUTH_FAIL);}if (! strncmp(pass, inPass, strlen(inPass))) {logEvent("Auth success of password using strlen of inUser");return(AUTH_SUCCESS);}else {logEvent("Auth fail of password using sizeof");return(AUTH_FAIL);}}
+int main (int argc, char **argv) {
+    int authResult;if (argc < 3) {ExitError("Usage: Provide a username and password");}authResult = AuthenticateUser(argv[1], argv[2]);if (authResult == AUTH_SUCCESS) {DoAuthenticatedTask(argv[1]);}else {ExitError("Authentication failed");}}
