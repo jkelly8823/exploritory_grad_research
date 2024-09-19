@@ -37,6 +37,7 @@ This repository contains tools and scripts for conducting research with the GROQ
 - **prompts**: Holds the prompts used for the analysis.
 - **initial_run_5**: Subdirectory for storing results from the current GROQ test.
 - **groq_outputs**: Contains the outputs from the LLM to be parsed.
+- **llm_rag**: Contains files from other student to potentially be used as a template.
 
 ## Notes
 
