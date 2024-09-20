@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION: Potential Buffer Overflow
+EXPLANATION: 
+The `getCurrentDirectory(128, outputDirectoryName)` function call might lead to a buffer overflow if the current directory path is longer than 128 characters.  
+
+RECOMMENDATIONS:
+- Use a dynamically allocated buffer for `outputDirectoryName` to avoid fixed-size buffer overflows. 
+
+Example:
+```c
+char *createOutputDirectory(char *name) {
+   char *outputDirectoryName = NULL; 
+   size_t directoryLength = 0;
+
+   if (getCurrentDirectory(&directoryLength, outputDirectoryName) != 0) { 
+       return NULL; // Handle error
+   }
+
+   // Ensure outputDirectoryName is allocated correctly
+   outputDirectoryName = (char *)realloc(outputDirectoryName, directoryLength + 1); 
+   if (outputDirectoryName == NULL) {
+       return NULL; // Handle realloc error
+   }
+
+   if (!PathAppend(outputDirectoryName, "output")) {
+       return NULL;
+   }
+   if (!PathAppend(outputDirectoryName, name)) {
+       return NULL;
+   }
+
+   if (SHCreateDirectoryEx(NULL, outputDirectoryName, NULL) != ERROR_SUCCESS) {
+       return NULL;
+   }
+
+   return outputDirectoryName;
+}
+```
+
+ORIGINAL CODE: 
+```c
+                  char *createOutputDirectory(char *name) {
+                        char outputDirectoryName[128];if (getCurrentDirectory(128, outputDirectoryName) == 0) {return null;}if (!PathAppend(outputDirectoryName, "output")) {return null;}if (!PathAppend(outputDirectoryName, name)) {
+                              
+                                 return null;
+                           }if (SHCreateDirectoryEx(NULL, outputDirectoryName, NULL) != ERROR_SUCCESS) {
+                              
+                                 return null;
+                           }return StrDup(outputDirectoryName);
+                     }
+               
+               ```

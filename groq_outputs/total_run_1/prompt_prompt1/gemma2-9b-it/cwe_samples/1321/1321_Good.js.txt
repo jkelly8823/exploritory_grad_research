@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION: Prototype Pollution Vulnerability
+EXPLANATION:
+
+The provided `setValueByPath` function is vulnerable to prototype pollution. This occurs when an attacker can manipulate an object's prototype chain, potentially adding malicious properties to the original object's constructor or the prototypes of other objects.
+
+Specifically, the vulnerability lies in the line  `objectToModify[attr] = {};`
+
+If an attacker controls the `path` parameter, they could craft a path that leads to the prototype of an object.  By manipulating the values in the `path`, they could add their own properties to the prototype, which would then be inherited by all instances of the object. This can lead to serious security implications, as attackers could potentially hijack object functions, introduce malicious behavior, or gain unauthorized access to sensitive data.
+
+
+RECOMMENDATIONS:
+* **Sanitize the `path` input:** Instead of blindly trusting the `path` parameter, thoroughly sanitize and validate it to prevent malicious paths that target prototypes.  You could use a whitelist approach, allowing only specific attributes, or use a library that specializes in path validation.
+* **Deep cloning:**  Consider using a deep clone of the input `object` before modifying it. This will create a separate copy that is not linked to the original object's prototype chain, preventing prototype pollution.  Many JavaScript libraries provide utilities for deep cloning.
+
+ORIGINAL CODE:
+
+```javascript
+function setValueByPath (object, path, value) {
+    
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+    
+        // Ignore attributes which resolve to object prototype
+        if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+    
+            continue;
+        }
+    
+        if (typeof objectToModify[attr] !== "object") {
+    
+            objectToModify[attr] = {};
+        }
+    
+        objectToModify = objectToModify[attr];
+    }
+    
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```

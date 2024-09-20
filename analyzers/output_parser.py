@@ -11,7 +11,7 @@ def main():
 
     cols = ['TRIAL', 'PROMPT', 'MODEL', 'SOURCE', 'DATA_ID', 'FILENAME', 'VULN_MODEL', 'VULN_TRUTH']
     df = pd.DataFrame(columns=cols)
-
+    print(os.getenv('parser_dir'))
     for root, dirs, files in os.walk(os.getenv('parser_dir')):
         for filename in files:
             file_path = os.path.join(root, filename)
@@ -50,9 +50,10 @@ def main():
             # Add the new row
             df.loc[len(df)] = new_row
 
-    df.to_csv('analyzers/parsed_outputs.csv', index=True, index_label='INDEX')
+    out_filename = os.getenv('parser_dir').replace('\\','_').replace('/','_')
+    df.to_csv(f"analyzers/{out_filename}_parsed_outputs.csv", index=True, index_label='INDEX')
 
-    with open("analyzers/parser_fail_log.txt", 'w+') as file:
+    with open(f"analyzers/{out_filename}_fail_log.txt", 'w+') as file:
         file.writelines(fail_log)
 
 if __name__ == "__main__":

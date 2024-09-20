@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-8
+VULNERABILITY_DESCRIPTION:  Improper resource handling and potential deadlock 
+EXPLANATION: 
+The code uses `flock` to attempt to acquire an exclusive lock on the `logFile.log` file. While this is generally a good practice to prevent race conditions when writing to a log file, there is a potential vulnerability:
+
+* **Deadlock:**  If another process holds a lock on the log file, this script could be stuck in the `if (flock($logfile, LOCK_EX))` block indefinitely, waiting for the lock to be released. This can lead to a deadlock situation where neither process can proceed.
+
+* **Resource Leak:** If an error occurs within the `if` block (e.g., a write error), the `flock($logfile, LOCK_UN)`  statement might not be executed, leaving the lock held by the script even if it fails.
+
+RECOMMENDATIONS:
+
+1. **Error Handling:** Implement robust error handling within the `if` block. If an error occurs while writing to the log file, release the lock using `flock($logfile, LOCK_UN)` to prevent resource leaks and deadlocks.
+
+2. **Timeout Mechanism:** Consider adding a timeout to the lock acquisition using `set_time_limit()` or similar mechanisms. This will prevent the script from getting stuck indefinitely if a lock is not available within a reasonable time frame. 
+
+3. **Alternative Locking Strategies:** Explore alternative locking strategies, such as using file-system locking mechanisms or using a database with built-in locking features.
+
+
+ORIGINAL CODE:
+                  function writeToLog($message){$logfile = fopen("logFile.log", "a");
+                        //attempt to get logfile lock
+                        if (flock($logfile, LOCK_EX)) {fwrite($logfile,$message);
+                           // unlock logfile
+                           flock($logfile, LOCK_UN);}else {print "Could not obtain lock on logFile.log, message not recorded\n";}}fclose($logFile);
+               
+               
+
+
+
+

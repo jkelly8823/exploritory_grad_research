@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2 
+VULNERABILITY_DESCRIPTION: Double Checked Locking
+EXPLANATION: 
+The code snippet exhibits a pattern known as "double-checked locking" which, while arguably necessary for performance in simple scenarios, is considered problematic in many situations.  
+
+Here's why:
+
+* **Synchronization Overhead:** While `synchronized (this)` is intended to protect the access to `helper`, the potential for repeated synchronizations within the `if` statement can introduce performance issues.
+
+* **ABA Problem:**  A more serious concern is the "ABA" problem. This arises when another thread concurrently creates an instance of `Helper`, which then appears to be null to the original thread, leading to false sharing and synchronization issues.
+
+RECOMMENDATIONS:
+* **Preferred: Use a Lazy Initialization Holder:** The cleanest and most robust approach is to use a lazy initialization holder and double-checked locking.
+
+```java
+private Helper helper;
+
+private static class HelperHolder {
+    static final Helper INSTANCE = new Helper();
+}
+
+public Helper getHelper() {
+    if (helper == null) {
+        synchronized (this) {
+            if (helper == null) {
+                helper = HelperHolder.INSTANCE;
+            }
+        }
+    }
+    return helper;
+}
+```
+
+* **Alternatively: Use `volatile` (with caution):**
+
+   Using a `volatile` variable can be a simpler alternative but is less robust against some ABA variations.
+
+```java
+private volatile Helper helper;
+
+public Helper getHelper() {
+    if (helper == null) {
+        synchronized (this) {
+            if (helper == null) {
+                helper = new Helper();
+            }
+        }
+    }
+    return helper;
+}
+```
+
+
+
+ORIGINAL CODE:
+```java
+                  if (helper == null) {
+                        synchronized (this) {if (helper == null) {helper = new Helper();}}
+                     }return helper;
+;               
+               
+```
+
+
+

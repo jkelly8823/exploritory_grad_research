@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 10
+VULNERABILITY_DESCRIPTION:  Reflected Cross-Site Scripting (XSS) vulnerability
+
+EXPLANATION:
+The code creates a `JavaScriptInterface` which exposes a `getUserInfo` method to JavaScript running within the WebView.  This interface is created with the intent of allowing JavaScript to access data from the Android application. The critical issue is that the `getUserInfo` method directly returns the result of  `currentUser.Info()`.  Without proper sanitization, this could lead to reflected XSS.
+
+**How it works:**
+
+1.  An attacker could inject malicious JavaScript code into the `index.html` file loaded into the WebView.
+2.  This malicious JavaScript could call the `getUserInfo` method on the `JavaScriptInterface`.
+3.  If `currentUser.Info()` returns user-supplied data (e.g., from a form or database) that includes the attacker's malicious JavaScript, this malicious code will be reflected back into the web page.
+
+**Impact:**
+
+*   The attacker's malicious JavaScript could:
+
+    *   Steal sensitive user information.
+    *   Redirect users to malicious websites.
+    *   Modify the content of the web page.
+    *   Take control of the user's device.
+
+RECOMMENDATIONS:
+1.  **Sanitize User Input:**  Before calling `currentUser.Info()`, sanitize any user-supplied input to remove potentially dangerous JavaScript code.
+
+2.  **Encode Outputs:** Encode any data returned by `getUserInfo` to prevent it from being interpreted as JavaScript code. Techniques like HTML encoding or URL encoding are commonly used.
+
+3. **Review `index.html`:** Ensure that the `index.html` file does not contain any unexpected or malicious JavaScript code.
+
+**Example Fix (Using HTML Encoding):**
+
+```java
+  public String getUserInfo() {
+    String userInfo = currentUser.getInfo(); // Sanitize getUserInfo()
+    return Html.escapeHtml(userInfo); // Encode the user info to prevent XSS
+  }
+``` Make sure to use a robust sanitization library appropriate for your specific application.
+
+
+
+ORIGINAL CODE:
+
+
+```java
+                  public class WebViewGUI extends Activity {
+                        WebView mainWebView;
+                           public void onCreate(Bundle savedInstanceState) {super.onCreate(savedInstanceState);mainWebView = new WebView(this);mainWebView.getSettings().setJavaScriptEnabled(true);mainWebView.addJavascriptInterface(new JavaScriptInterface(), "userInfoObject");mainWebView.loadUrl("file:///android_asset/www/index.html");setContentView(mainWebView);}
+                           final class JavaScriptInterface {
+                              JavaScriptInterface () {}
+                                 public String getUserInfo() {return currentUser.Info();}
+                           }
+                     }
+               
+}
+               
+               
+```

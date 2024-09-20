@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-17
+VULNERABILITY_DESCRIPTION: Buffer Overflow Vulnerability
+EXPLANATION:
+The code is susceptible to a buffer overflow vulnerability due to the use of a fixed-size buffer (`buf[BUFFER_SIZE]`) without proper bounds checking when reading data from the socket.
+
+The `gen_recv` function is not provided, but it's assumed to read data from the socket into the `buf`. If the data received exceeds `BUFFER_SIZE`, it will overwrite adjacent memory locations, potentially leading to a buffer overflow.
+
+Line 10 shows the risk, `sscanf` function can read more data than intended if the buffer doesn't contain enough data.
+
+RECOMMENDATIONS:
+
+1. **Input Validation:** Enforce strict bounds checking on the input received from the socket. Ensure the received data size does not exceed `BUFFER_SIZE`.
+2. **Dynamic Buffer Allocation:** Allocate the buffer dynamically based on the expected data size received from the socket. 
+
+3. **Safe String Handling:**  Consider using safer alternatives to `sscanf` such as `strtol` and `strtoll` which provide mechanisms for input validation and error handling. 
+
+4. **Use a Message Queue or Buffering Technique:** If the message sizes are unknown beforehand, implement a message queue or buffering mechanism to handle variable-length data streams safely. This avoids reliance on fixed-size buffers.
+
+ORIGINAL CODE: 
+
+```c
+/* capture the sizes of all messages */
+int getsizes(int sock, int count, int *sizes) {
+    char buf[BUFFER_SIZE];
+    int ok;
+    int num, size;
+
+    // read values from socket and added to sizes array
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0) {
+
+        // continue read from socket until buf only contains '.'
+        if (DOTLINE(buf))
+            break;
+        else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+            if (num > 0 && num <= (unsigned)count)
+                sizes[num - 1] = size;
+            else
+
+                /* warn about possible attempt to induce buffer overflow */
+                report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+
+
+        }
+    }
+}
+
+
+
+
+
+
+```
+
+
+
+Let me know if you have any other code snippets you'd like me to analyze!

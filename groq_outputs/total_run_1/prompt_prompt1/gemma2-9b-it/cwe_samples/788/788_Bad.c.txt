@@ -1,0 +1,42 @@
+## Vulnerability Analysis
+
+**VULNERABLE:** YES
+**VULNERABLE_LINES:** Lines 2-7
+**VULNERABILITY_DESCRIPTION:**  Buffer Overflow Vulnerability
+
+**EXPLANATION:**
+
+The code uses `strcpy(hostname, hp->h_name)` to copy the hostname retrieved from `gethostbyaddr` into the `hostname` buffer.  The `hostname` buffer is only 64 characters long, but the `h_name` field from `struct hostent` is not guaranteed to be within this size limit.  
+
+If a long hostname is returned by `gethostbyaddr`, `strcpy` will write past the end of the `hostname` buffer, leading to a buffer overflow. This can potentially overwrite adjacent memory locations, allowing an attacker to inject malicious code or cause a program crash.
+
+**RECOMMENDATIONS:**
+
+1. **Bound the hostname copy:** Use a safer string copy function, such as `strncpy`, that takes a maximum length as an argument. Limit the copy to 63 characters to leave room for the null terminator.
+
+   ```c
+   strncpy(hostname, hp->h_name, sizeof(hostname) - 1);
+   hostname[sizeof(hostname) - 1] = '\0'; 
+   ```
+
+2. **Validate hostname length:** Before copying, check the length of `hp->h_name`.  If it exceeds the `hostname` buffer size, handle it appropriately (e.g., truncate it or return an error).
+
+3. **Consider using a dynamic buffer:**  Allocate a buffer of sufficient size based on the length of `h_name`. This allows for flexibility in handling hostnames of varying lengths.
+
+
+
+**ORIGINAL CODE:**
+
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;
+    in_addr_t *addr;
+    char hostname[64];
+    // ... 
+    /*routine that ensures user_supplied_addr is in the right format for conversion */ 
+    validate_addr_form(user_supplied_addr);
+    addr = inet_addr(user_supplied_addr);
+    hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);
+    strcpy(hostname, hp->h_name);
+}
+```

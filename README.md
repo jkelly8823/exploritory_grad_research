@@ -9,6 +9,7 @@ This repository contains tools and scripts for conducting research with the GROQ
 
      ```plaintext
      groq_key=               # Your GROQ API key
+     groq_key2=              # GROQ API key for a second account to avoid rate limits
      groq_limit=             # Number of files to run, -1 to run all
      groq_models=            # Array of model names (e.g., '["llama-3.1-70b-versatile", "gemma2-9b-it"]')
 

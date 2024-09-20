@@ -1,0 +1,99 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 20, 21, 28
+VULNERABILITY_DESCRIPTION: Potential Integer Overflow in PMP Configuration
+
+EXPLANATION:
+
+The code snippet uses a `pmp` module to configure Memory Protection Mechanisms (PMP). However, there is a risk of integer overflow within the `pmpcfg_i` and `pmpaddr_i` inputs.  
+
+Line 16 declares `input [7:0] [16-1:0] pmpcfg_i;` and line 17 declares `input logic [16-1:0][53:0] pmpaddr_i;`.
+
+* **`pmpcfg_i`**: This input uses a 8-bit wide register (7:0) indexed by a 16-bit wide array (16-1:0).  
+
+* **`pmpaddr_i`**: This input uses a 54-bit wide register indexed by a 16-bit wide array (16-1:0). 
+
+It's possible that unintended values could be assigned to these arrays, leading to:
+
+*  **Index Out of Bounds**: If the index (16-1:0) exceeds the valid range of the arrays,  it could cause out-of-bounds memory access. 
+
+* **Integer Overflow**: The shifting operation `(16-1:0)` might result in an integer overflow depending on the specific value of the index.
+
+ 
+
+RECOMMENDATIONS:
+
+1. **Bounds Checking**: Implement dedicated bounds checks before accessing elements within the `pmpcfg_i` and `pmpaddr_i` arrays.
+
+2. **Index Validation**: Carefully validate the indices used to access elements within the arrays, ensuring they fall within the valid range (0 to the array size minus 1).  
+
+3. **Type Validation**: Consider using a data type that can accommodate the maximum expected index value and the data size of `pmpcfg_i` and `pmpaddr_i`. If dealing with potential user-provided input, ensure proper type validation to prevent unexpected or malicious index values.
+
+
+
+
+ORIGINAL CODE: 
+
+
+					module dma # (...)(...);
+					...
+						
+						input [7:0] [16-1:0] pmpcfg_i;   
+						input logic [16-1:0][53:0]     pmpaddr_i;
+						...
+						reg [7:0] [16-1:0] pmpcfg_reg;
+						reg [16-1:0][53:0] pmpaddr_reg;
+						...
+						//// Save the input command
+						always @ (posedge clk_i or negedge rst_ni)
+							
+							begin: save_inputs
+							if (!rst_ni)
+								
+								begin
+								...
+								pmpaddr_reg <= 'b0 ;
+								pmpcfg_reg <= 'b0 ;
+								end
+								
+							else 
+								
+								begin
+									
+									if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE) 
+									begin
+									...
+									pmpaddr_reg <= pmpaddr_i;
+									pmpcfg_reg <= pmpcfg_i;
+									end
+									
+								end 
+								
+							end // save_inputs
+							...
+							// Load/store PMP check
+							pmp #(
+								
+								.XLEN       ( 64                     ),
+								.PMP_LEN    ( 54                     ),
+								.NR_ENTRIES ( 16           )
+								
+							) i_pmp_data (
+								
+								.addr_i        ( pmp_addr_reg        ),
+								.priv_lvl_i    ( riscv::PRIV_LVL_U   ), // we intend to apply filter on
+								// DMA always, so choose the least privilege
+								.access_type_i ( pmp_access_type_reg ),
+								// Configuration
+								.conf_addr_i   ( pmpaddr_reg           ),
+								.conf_i        ( pmpcfg_reg            ),
+								.allow_o       ( pmp_data_allow      )
+								
+							);
+							
+						
+					endmodule
+					endmodule
+					
+
+
+

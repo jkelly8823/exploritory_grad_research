@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7, 9
+VULNERABILITY_DESCRIPTION: SQL Injection
+EXPLANATION: 
+The code is vulnerable to SQL injection because it directly inserts user-supplied input (`username` and `accountNumber`) into the SQL query without proper sanitization. This allows an attacker to manipulate the query, potentially leading to unauthorized data access, modification, or even execution of arbitrary code on the database server.
+
+For example, an attacker could craft a malicious `accountNumber` value that includes SQL commands like `'; DROP TABLE accounts; -- ` which, if executed, would delete the entire `accounts` table.
+
+RECOMMENDATIONS:
+1. **Use parameterized queries:** Instead of directly embedding user input into the SQL string, use parameterized queries. This separates the SQL code from the data, preventing attackers from injecting malicious code.
+
+   ```java
+   query = "SELECT * FROM accounts WHERE owner = ? AND accountID = ?";
+   PreparedStatement pstmt = conn.prepareStatement(query);
+   pstmt.setString(1, username);
+   pstmt.setString(2, accountNumber); 
+   ResultSet queryResult = pstmt.executeQuery(); 
+   ```
+
+2. **Input validation:** Validate and sanitize user input before using it in SQL queries. Escape special characters to prevent them from being interpreted as SQL commands. 
+
+   ```java
+   // Example validation - consider more robust approaches
+   if (!accountNumber.matches("\\d+")) {
+       throw new IllegalArgumentException("Invalid account number format");
+   }
+   ```
+
+3. **Principle of least privilege:** Limit database user permissions to only the actions necessary for the application to function. This minimizes the potential damage from a successful attack.
+
+
+
+ORIGINAL CODE:
+                  public BankAccount getUserBankAccount(String username, String accountNumber) {
+                        BankAccount userAccount = null;String query = null;try {if (isAuthorizedUser(username)) {query = "SELECT * FROM accounts WHERE owner = "+ username + " AND accountID = " + accountNumber;DatabaseManager dbManager = new DatabaseManager();Connection conn = dbManager.getConnection();Statement stmt = conn.createStatement();ResultSet queryResult = stmt.executeQuery(query);userAccount = (BankAccount)queryResult.getObject(accountNumber);}} catch (SQLException ex) {String logMessage = "Unable to retrieve account information from database,\nquery: " + query;Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);}return userAccount;
+                     }  
+               
+
+
+
+

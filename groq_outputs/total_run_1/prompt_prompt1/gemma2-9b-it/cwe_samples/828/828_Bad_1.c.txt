@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:  Potential Use-After-Free Vulnerability
+EXPLANATION: 
+The `sh` function frees memory pointed to by `global1` and `global2` using `free(global2)` and `free(global1)`.  There's a risk that these memory locations might be accessed after they've been freed, leading to a use-after-free vulnerability. This could allow an attacker to execute arbitrary code or cause a crash.
+
+RECOMMENDATIONS:
+1. **Careful Memory Management:** Ensure that `global1` and `global2` are not accessed after they have been freed.  
+
+    * A safer approach is to use a mechanism to track whether the memory has been freed, such as setting a flag.
+2. **Avoid Implicitly Freeing Memory in Signal Handlers:** Signal handlers are often called asynchronously. Freeing memory in a signal handler can lead to unpredictable behavior if the freed memory is still in use elsewhere. 
+    * Consider using a more robust strategy for handling cleanup tasks, such as a dedicated thread or a cleanup function that is explicitly called when necessary.  
+
+
+
+
+ORIGINAL CODE:
+```c
+                  #include <signal.h>#include <syslog.h>#include <string.h>#include <stdlib.h>
+                     void *global1, *global2;char *what;void sh (int dummy) {
+                        syslog(LOG_NOTICE,"%s\n",what);free(global2);free(global1);
+                           /* Sleep statements added to expand timing window for race condition */
+                           
+                           sleep(10);exit(0);
+                     }
+                     int main (int argc,char* argv[]) {
+                        what=argv[1];global1=strdup(argv[2]);global2=malloc(340);signal(SIGHUP,sh);signal(SIGTERM,sh);
+                           /* Sleep statements added to expand timing window for race condition */
+                           
+                           sleep(10);exit(0);
+                     }
+               
+               ``` 

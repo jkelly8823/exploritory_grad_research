@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: Potential for a Denial of Service (DoS) vulnerability due to an always_comb block potentially triggering at too high a frequency.
+EXPLANATION: 
+The code snippet utilizes an `always @ (posedge clk or negedge rst_n)` block. This implies a combinational logic update for `data_out` on every positive clock edge or rising edge of the reset signal (`rst_n`).
+
+The vulnerability arises from the `assign grant_access = (usr_id == 3'h4) ? 1'b1 : 1'b0;` statement. This assignment within the combinatorial logic block can lead to a potential DoS issue if the `usr_id` input is frequently changing, causing the `grant_access` signal to constantly transition, hence triggering the `always` block repeatedly. This continuous triggering could lead to excessive computational load, impacting system performance and potentially causing a denial of service.
+
+
+RECOMMENDATIONS:
+1. **Investigate the `usr_id` update frequency:** Determine the frequency at which `usr_id` is expected to change.
+2. **Reassess the use of `always @ (posedge clk or negedge rst_n)`:**
+    - If the `usr_id` updates infrequently, consider changing the `always` block trigger to only respond to changes in `usr_id` using a sensitivity list. 
+    - If the `usr_id` updates frequently, explore the possibility of using a sequential logic block (`always @(posedge clk)` or similar) for  `grant_access` to limit its update frequency to clock cycle changes.
+
+3. **Optimize logic:**  If the logic for determining `grant_access` is complex, explore ways to optimize it to reduce the number of operations and minimize the potential for performance bottlenecks.
+
+
+ORIGINAL CODE:
+```verilog
+       			module foo_bar(data_out, usr_id, data_in, clk, rst_n);
+       			output reg [7:0] data_out;
+       			input wire [2:0] usr_id;
+       			input wire [7:0] data_in; 
+       			input wire clk, rst_n;
+       			wire grant_access;
+       			always @ (posedge clk or negedge rst_n)
+       			begin
+       			
+				  if (!rst_n)
+				  
+					data_out = 0;
+				  
+				  else
+				  
+					data_out = (grant_access) ? data_in : data_out;
+					assign grant_access = (usr_id == 3'h4) ? 1'b1 : 1'b0;
+				  
+			    
+			    end
+			    endmodule
+			  
+```

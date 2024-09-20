@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 21 
+VULNERABILITY_DESCRIPTION:  Potential for race condition
+EXPLANATION:
+The code appears to have a potential race condition in the `lock_status` register update logic. Specifically, if the `Lock` input changes state rapidly between lines 16 and 19, the `lock_status` could be left in an unintended state. This could lead to unpredictable behavior and security issues if the register is accessed while in an inconsistent state.
+
+**Detailed Explanation:**
+
+* Lines 16 and 19 both write to `lock_status`.  If `Lock` transitions from `0` to `1` and back to `0` quickly, the `else if (~Lock)` block in line 19 might be triggered before the `lock_status <= 1'b1` assignment in line 17 completes.
+* This could result in `lock_status` remaining at 1'b1 even if `Lock` is now low.
+
+
+RECOMMENDATIONS:
+1. **Weaker locking mechanism:** Instead of just using `Lock`, consider employing a more robust mechanism like a mutex or semaphore for synchronizing access to the register.
+2. **Deadlock Avoidance:** If you can't change the locking mechanism, carefully analyze the data path and identify potential deadlocks. You might need to introduce explicit unlock mechanisms or change the order of operations to avoid scenarios where concurrent access to the register leads to a deadlock.
+
+
+ORIGINAL CODE:
+```systemverilog
+          module Locked_register_example
+          (
+		  input [15:0] Data_in,
+		  input Clk,
+		  input resetn,
+		  input write,
+		  input Lock,
+		  input scan_mode,
+		  input debug_unlocked,
+		  output reg [15:0] Data_out
+		  );
+          
+          reg lock_status;
+          
+          always @(posedge Clk or negedge resetn)
+		  
+			if (~resetn) // Register is reset resetn
+			begin
+			
+			  lock_status <= 1'b0;
+			
+			end
+			else if (Lock)
+			begin
+			
+			  lock_status <= 1'b1;
+			
+			end
+			else if (~Lock)
+			begin
+			
+			  lock_status <= lock_status
+			
+			end
+		  
+		  always @(posedge Clk or negedge resetn)
+		  
+			if (~resetn) // Register is reset resetn
+			begin
+			
+			  Data_out <= 16'h0000;
+			
+			end
+			else if (write & (~lock_status | scan_mode | debug_unlocked) ) // Register protected by Lock bit input, overrides supported for scan_mode & debug_unlocked
+			begin
+			
+			  Data_out <= Data_in;
+			
+			end
+			else if (~write)
+			begin
+			
+			  Data_out <= Data_out;
+			
+			end
+		  
+		  endmodule
+		
+        endmodule  
+```

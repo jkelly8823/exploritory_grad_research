@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 15, 16, 17
+VULNERABILITY_DESCRIPTION: Potential Cross-Site Scripting (XSS) Vulnerability
+EXPLANATION:
+The code snippet you provided processes user-uploaded files through a `doPost` method. There's a risk of Cross-Site Scripting (XSS) because the filename extracted from the HTTP header (`filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\"))`) is directly used in the file path (`uploadLocation + filename`).  An attacker could manipulate the HTTP header to include malicious JavaScript within the filename, which could then be executed when the vulnerable application attempts to read or process the file.
+
+RECOMMENDATIONS:
+1. **Sanitize User Input:** Before using the extracted filename in the file path, thoroughly sanitize it to remove any potentially harmful characters or scripts.  You should encode the filename using a method like URL encoding or HTML escaping.
+2. **Validate Filename Extensions:**  Check that the filename extension is allowed and corresponds to the expected type of file being uploaded (e.g., images, documents, etc.). This helps prevent the upload of files with malicious extensions that could execute code.
+3. **Use a Secure File Upload Library:** Utilize a well-regarded file upload library that has built-in security features to mitigate XSS vulnerabilities and other common file upload risks.
+
+ORIGINAL CODE:
+```java
+                  public class FileUploadServlet extends HttpServlet {
+                     
+                        ...
+                           protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                           
+                              response.setContentType("text/html");PrintWriter out = response.getWriter();String contentType = request.getContentType();
+                                 // the starting position of the boundary headerint ind = contentType.indexOf("boundary=");String boundary = contentType.substring(ind+9);
+                                 String pLine = new String();String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+                                 // verify that content type is multipart form dataif (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+                                 
+                                    // extract the filename from the Http headerBufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));...pLine = br.readLine();String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+                                       // output the file to the local upload directorytry {
+                                          BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));for (String line; (line=br.readLine())!=null; ) {if (line.indexOf(boundary) == -1) {bw.write(line);bw.newLine();bw.flush();}} //end of for loopbw.close();
+                                       
+                                       
+                                       } catch (IOException ex) {...}// output successful upload response HTML page
+                                 }// output unsuccessful upload response HTML pageelse{...}
+                           }...
+                        
+                     }
+               
+               ```

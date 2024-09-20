@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 9
+VULNERABILITY_DESCRIPTION:  Potential Elevation of Privilege Vulnerability
+
+EXPLANATION:
+The code snippet checks for access to protected CSRs based on the current privilege level and a debug mode flag. However, the conditional checks within the `if` statements might lead to an elevation of privilege vulnerability.
+
+* **Line 6:** The first `if` statement checks `(riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)`. An attacker with sufficient knowledge of the CSR address space and privilege levels could potentially craft a malicious CSR access request that bypasses this check, leading to unauthorized access to privileged instructions or data.
+* **Line 9:** The second `if` statement checks if `csr_addr_i[11:4] == 8'h7b && !debug_mode_q`. This check specifically targets debug mode CSRs. If the debug mode flag `debug_mode_q` is not properly secured and an attacker can manipulate it, they might be able to bypass the protection and access sensitive debug information or modify the system state.
+
+RECOMMENDATIONS:
+1. **Strengthen Privilege Checks:**  Carefully review the logic of the privilege level checks (`riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl)`). Ensure that they are robust enough to prevent bypass techniques. Consider using a more detailed and secure mechanism for privilege management.
+2. **Secure Debug Mode Flag:**  Implement robust access control mechanisms for the `debug_mode_q` flag. Prevent unauthorized modification of this flag, either through code access controls or hardware-level security measures.
+
+
+
+ORIGINAL CODE: 
+
+```
+						if (csr_we || csr_read) begin
+							
+								if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)) begin
+								
+									csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+									csr_exception_o.valid = 1'b1;
+								
+								end
+								// check access to debug mode only CSRs
+								if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin
+								
+									csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+									csr_exception_o.valid = 1'b1;
+								
+								end
+							
+							end
+						       
+       
+					
+				```  
+
+
+

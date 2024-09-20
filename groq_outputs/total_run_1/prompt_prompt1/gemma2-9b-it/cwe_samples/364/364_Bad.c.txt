@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: Use-after-free vulnerability 
+EXPLANATION:
+The vulnerability lies in the `handler` function.  Here's why:
+
+1. **`free(logMessage);`**: This line attempts to free the memory pointed to by `logMessage`. 
+2. **`syslog(LOG_NOTICE, "%s\n", logMessage);`**: This line, immediately preceding the `free()`, uses `logMessage`  *after* it has been freed. This leads to a use-after-free vulnerability.  
+
+When memory is freed, it's no longer valid to access it. Attempting to do so can result in crashes, unpredictable program behavior, or even security exploits. An attacker could potentially overwrite the freed memory with malicious data, leading to arbitrary code execution.
+
+RECOMMENDATIONS:
+  * **Do not use the freed memory:**  Remove the `syslog()` call from within the `handler` function. Alternatively, if `syslog()` is necessary, ensure that `logMessage` has not been freed before using it. You could possibly copy the contents of `logMessage` into a new buffer before freeing it. 
+
+ORIGINAL CODE:
+
+                  char *logMessage;
+                     void handler (int sigNum) {
+                        syslog(LOG_NOTICE, "%s\n", logMessage);free(logMessage);
+                           /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+                           
+                           sleep(10);exit(0);
+                     }
+                     int main (int argc, char* argv[]) {
+                        logMessage = strdup(argv[1]);
+                           /* Register signal handlers. */
+                           
+                           signal(SIGHUP, handler);signal(SIGTERM, handler);
+                           /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+                           
+                           sleep(10);
+                     }
+
+
+
+

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: Buffer Overflow Vulnerability
+EXPLANATION: 
+The vulnerability lies in the `fgets(buf, BUF_SZ, f)` line. While `fgets` is designed to read a line from a file and limit the input to the size of the buffer (`BUF_SZ`), there's no guarantee that user-supplied input (`fName`) won't be manipulated to exceed `BUF_SZ`.
+
+An attacker could craft a filename that, when combined with the path, results in a string longer than `BUF_SZ`.  When `fgets` tries to read this data, it will write past the end of the `buf` array, potentially overwriting critical memory areas. This can lead to crashes, unexpected program behavior, or even code execution by an attacker.
+
+RECOMMENDATIONS:
+1. **Input Validation:** Before opening the file, rigorously validate the filename (`fName`) to ensure its length is within acceptable bounds. This can involve checking its length and potentially restricting allowed characters.
+
+2. **Safe String Handling:** Use safer string manipulation functions like `strnlen` or `snprintf` that allow you to specify a maximum length for copying strings.
+
+3. **Dynamic Buffer Allocation:** Instead of using a fixed-size buffer (`buf`), consider dynamically allocating memory based on the expected file size or using a safer alternative like `read()` with a manually controlled buffer size.
+
+
+
+ORIGINAL CODE: 
+```c
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];
+    FILE* f = fopen(fName, "r");
+    if (!f) {
+        printf("cannot open %s\n", fName);
+        return DECODE_FAIL;
+    } else {
+        while (fgets(buf, BUF_SZ, f)) {
+            if (!checkChecksum(buf)) {
+                return DECODE_FAIL;
+            } else {
+                decodeBlock(buf);
+            }
+        }
+    }
+    fclose(f);
+    return DECODE_SUCCESS;
+}
+```

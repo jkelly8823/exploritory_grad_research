@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11, 12
+VULNERABILITY_DESCRIPTION: Command Injection Vulnerability
+EXPLANATION: The `run_ping` function directly embeds the user-supplied `ip` argument into the `ping` command without proper sanitization. This allows an attacker to potentially inject malicious commands into the `subprocess.call` execution. For example, an attacker might provide an IP address like `192.168.1.1;; rm -rf /` which, if not properly handled, could lead to the execution of the `rm -rf /` command, potentially deleting all files on the system.
+
+RECOMMENDATIONS:
+* **Use parameterized commands:**  Instead of directly concatenating the `ip` argument, use parameterized commands provided by libraries like `shlex` or `argparse`. This will prevent attackers from injecting malicious code.
+
+* **Sanitize user input:** Carefully validate and sanitize any user-supplied input before using it in commands.  Remove potentially dangerous characters and ensure the input conforms to the expected format for IP addresses. 
+
+ORIGINAL CODE:
+```python
+  import subprocess
+
+  def validate_ip(ip: str):
+    split_ip = ip.split('.')
+    if len(split_ip) > 4 or len(split_ip) == 0:
+      raise ValueError("Invalid IP length")
+
+    for octet in split_ip:
+      try:
+        int(octet, 10)
+      except ValueError as e:
+        raise ValueError(f"Cannot convert IP octet to int - {e}")
+
+    # Returns original IP after ensuring no exceptions are raised
+    return ip
+
+
+
+  def run_ping(ip: str):
+    validated = validate_ip(ip)
+    # The ping command treats zero-prepended IP addresses as octal
+    result = subprocess.call(["ping", validated])
+    print(result)
+``` 
+
+
+

@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION: Logic flaw in authorization check
+EXPLANATION:
+The line `assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0;` attempts to determine if `incoming_id` has write access by checking if it matches any of the entries in the `acl_oh_allowlist`. However, the use of the bitwise OR operator (`|`) and the ternary operator (`? :`) is incorrect and could lead to unexpected behavior.
+
+Due to the way the ternary operator is used, if `incoming_id & acl_oh_allowlist` results in any '1' bit, the `write_auth` signal will be asserted. This means that even a partial match with the allowlist could grant write access, potentially leading to a vulnerability where unauthorized users or data could be written to the memory location.
+
+RECOMMENDATIONS:
+1. **Precisely Implement Authorization:** Instead of using bitwise OR and the ternary operator, a more precise authorization check should be implemented. For example:
+```verilog
+assign write_auth = (incoming_id == acl_oh_allowlist) ? 1 : 0; 
+```
+
+This checks for an exact match between the `incoming_id` and the `acl_oh_allowlist`. 2. **Sanitize Input:** Sanitize the `incoming_id` input to ensure it is within expected ranges and formats.
+
+ORIGINAL CODE:
+
+
+```verilog
+module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+output [31:0] data_out;
+input [31:0] data_in, incoming_id, address;
+input clk, rst_n;
+wire write_auth, addr_auth;
+reg [31:0] data_out, acl_oh_allowlist, q;
+assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+always @*
+        acl_oh_allowlist <= 32'h8312; 
+assign addr_auth = (address == 32'hF00) ? 1: 0;
+always @ (posedge clk or negedge rst_n)    
+    if (!rst_n)    
+        begin    
+            q <= 32'h0;    
+            data_out <= 32'h0;    
+        end    
+    else    
+        begin    
+            q <= (addr_auth & write_auth) ? data_in: q;
+            data_out <= q;    
+        end            
+endmodule
+```
+
+
+
+

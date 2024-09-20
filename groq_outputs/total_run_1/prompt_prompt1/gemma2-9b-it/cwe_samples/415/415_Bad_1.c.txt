@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7, 17
+VULNERABILITY_DESCRIPTION: Use-after-free Vulnerability
+EXPLANATION:
+The code exhibits a use-after-free vulnerability due to the premature deallocation of memory buffers `buf1R1` and `buf2R1`.  After these buffers are freed, the program attempts to access `buf1R1` in line 17.
+
+* Lines 6 & 7: `buf1R1` and `buf2R1` are allocated memory using `malloc`.
+* Line 11:  `buf1R1` and `buf2R1` are freed using `free`, making the memory no longer accessible.
+* Line 17:  An attempt is made to use `buf1R1` again, which has already been freed. This will lead to undefined behavior and likely a crash.  
+
+RECOMMENDATIONS:
+1. **Ensure Proper Memory Management:**  
+    * Do not free memory that is still being used. 
+    * Carefully track the lifetimes of dynamically allocated buffers.
+    * If a buffer is no longer needed, free it *before* attempting to use it again.
+
+2. **Consider Error Handling:**
+
+* Implement checks to make sure `malloc` succeeds before using the allocated memory.
+    * Address potential memory allocation failures gracefully.
+
+
+
+
+ORIGINAL CODE:
+```c
+                  #include <stdio.h>
+#include <unistd.h>
+#define BUFSIZE1 512
+#define BUFSIZE2 ((BUFSIZE1/2) - 8)
+int main(int argc, char **argv) {
+  char *buf1R1; 
+  char *buf2R1;
+  char *buf1R2;
+  buf1R1 = (char *) malloc(BUFSIZE2);getchar();
+  buf2R1 = (char *) malloc(BUFSIZE2);
+  free(buf1R1);free(buf2R1);
+  buf1R2 = (char *) malloc(BUFSIZE1);
+  strncpy(buf1R2, argv[1], BUFSIZE1-1); 
+  free(buf2R1);
+  free(buf1R2);
+}   
+```

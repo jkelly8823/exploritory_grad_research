@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8,9,12
+VULNERABILITY_DESCRIPTION: Buffer Overflow and Memory Corruption 
+EXPLANATION: 
+The vulnerability lies in the lines handling the allocation and assignment of the `messageBody` variable.  
+
+1. **Buffer Overflow (Potential):**  
+   - Line 8: `messageBody = (char*)malloc(length*sizeof(char));` allocates memory based on the `length` of the message, but there's no check to ensure that `length` doesn't exceed the maximum allowed size (`MAX_MESSAGE_SIZE`). If a malicious input provides a `length` larger than `MAX_MESSAGE_SIZE`, this can lead to a buffer overflow. This means  more data is written to `messageBody` than it can hold, potentially overwriting adjacent memory locations. 
+2. **Memory Corruption:**
+   - Line 9: `messageBody = &message[1][0];` assigns the `messageBody` pointer to an address within the `message` array at index 1.  The potential issue here is that the original `messageBody` allocated via `malloc` might not be large enough to hold all the data from `message[1][0]`.  Attempting to access or modify this memory outside the bounds of the allocated buffer can lead to undefined behavior and potentially crash the program. 
+
+RECOMMENDATIONS:
+1. **Bounds Checking:**
+   - Before reallocating memory, rigorously check the value of `length` against `MAX_MESSAGE_SIZE`. If `length` exceeds the maximum allowed size, handle it appropriately (e.g., reject the message, log an error).
+2. **Address Safety:**
+   - Avoid directly assigning memory from arrays like `message` to the pointer `messageBody`.  
+
+   Here are more robust handling of the  message `messageBody`.
+
+
+   ```c
+   // More robust handling of message allocation
+   int processMessage(char **message) {
+       int result = SUCCESS;
+       int length = getMessageLength(message[0]); 
+
+       if ((length > 0) && (length < MAX_MESSAGE_SIZE)) {
+           messageBody = (char*)malloc(length * sizeof(char));
+           if (messageBody == NULL) {
+               printf("Error allocating memory\n");
+               result = ERROR; 
+           } else {
+               strncpy(messageBody, message[1], length); // Safe string copy
+               messageBody[length] = '\0';  // Null-terminate
+               int success = processMessageBody(messageBody);
+               if (success == ERROR) {
+                   result = ERROR;
+                   free(messageBody); 
+               }
+           }
+       } else {
+           printf("Unable to process message; invalid message length\n");
+           result = FAIL;
+       }
+
+       if (result == ERROR) {
+           logError("Error processing message", messageBody); 
+       }
+       return result;
+   }
+   ```
+
+   - **Safe String Copy:** `strncpy` ensures that we don't write beyond the allocated buffer's bounds, preventing buffer overflows. 
+   - **Null Termination:** `messageBody[length] = '\0';` ensures that the string is properly terminated.
+
+
+
+ORIGINAL CODE:  
+```c
+                #define FAIL 0#define SUCCESS 1#define ERROR -1#define MAX_MESSAGE_SIZE 32
+                     int processMessage(char **message){
+                        int result = SUCCESS;
+                           int length = getMessageLength(message[0]);char *messageBody;
+                           if ((length > 0) && (length < MAX_MESSAGE_SIZE)) {
+                           
+                              messageBody = (char*)malloc(length*sizeof(char));messageBody = &message[1][0];
+                                 int success = processMessageBody(messageBody);
+                                 if (success == ERROR) {result = ERROR;free(messageBody);}
+                           }else {printf("Unable to process message; invalid message length");result = FAIL;}
+                           if (result == ERROR) {logError("Error processing message", messageBody);}
+                           return result;
+                     }
+               
+               ``` 
+
+
+
+
+

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11
+VULNERABILITY_DESCRIPTION: Buffer Overflow
+
+EXPLANATION: 
+The code snippet utilizes the `strncpy()` function to copy data from command-line arguments (`argv[1]` and `argv[2]`) into the `Filename` and `Pattern` buffers respectively.  The issue lies in the fact that `strncpy()`  doesn't automatically truncate the input to the specified buffer size. If the length of `argv[1]` or `argv[2]` exceeds the size of `Filename` or `Pattern`, respectively, a buffer overflow will occur. This can lead to data being written outside the intended memory boundaries, potentially overwriting critical data or even allowing an attacker to execute malicious code.
+
+RECOMMENDATIONS: 
+
+1. **Use safer string functions:** Replace `strncpy()` with functions like `snprintf()` or `strlcpy()`. These functions ensure that the output is truncated to the specified buffer size, preventing buffer overflows.
+
+   ```c
+   snprintf(Filename, sizeof(Filename), "%s", argv[1]); 
+   snprintf(Pattern, sizeof(Pattern), "%s", argv[2]); 
+   ```
+2. **Validate user input:** Before copying data into buffers, always validate the length of the input. Ensure that the input length is less than or equal to the buffer size minus one (to accommodate the null terminator). 
+
+   ```c
+   int filename_len = strlen(argv[1]);
+   if (filename_len >= sizeof(Filename) - 1) {
+       // Handle error: filename too long
+       return -1;
+   }
+   strncpy(Filename, argv[1], sizeof(Filename) - 1);
+   Filename[sizeof(Filename) - 1] = '\0'; // Ensure null termination
+
+   int pattern_len = strlen(argv[2]);
+   if (pattern_len >= sizeof(Pattern) - 1) {
+       // Handle error: pattern too long
+       return -1;
+   }
+
+   strncpy(Pattern, argv[2], sizeof(Pattern) - 1);
+   Pattern[sizeof(Pattern) - 1] = '\0'; 
+   ```
+
+
+
+ORIGINAL CODE:
+
+```c
+int main(int argc, char **argv){
+                     char Filename[256];char Pattern[32];
+                        
+                        /* Validate number of parameters and ensure valid content */
+                        ...
+                        
+                        /* copy filename parameter to variable, may cause off-by-one overflow */
+                        strncpy(Filename, argv[1], sizeof(Filename));
+                        
+                        /* copy pattern parameter to variable, may cause off-by-one overflow */
+                        strncpy(Pattern, argv[2], sizeof(Pattern));
+                        printf("Searching file: %s for the pattern: %s\n", Filename, Pattern);Scan_File(Filename, Pattern);}
+               
+               );}
+``` 

@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES:  Line2, Line5, Line8
+VULNERABILITY_DESCRIPTION: Potential for information disclosure through CSR Access
+
+EXPLANATION:
+
+The code snippet checks for unauthorized access to CSRs (Control and Status Registers). While the logic aims to prevent illegal access, there's a potential for an information disclosure vulnerability if the `csr_addr` data structure is not properly sanitized.
+
+Specifically, consider these lines:
+
+- **Line 2:**  `if (csr_we || csr_read) begin` 
+    - This allows access based on `csr_we` (write enable) or `csr_read` (read enable). If an attacker can manipulate these flags, they might be able to trigger unintended access.
+
+- **Line 5:** `if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl) && !(csr_addr.address==riscv::CSR_MEPC)) begin` and 
+   - **Line 8:** `if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin`
+   - These lines check the privilege level of the accessing program against the CSR and debug mode. However, if `csr_addr` itself contains sensitive information or can be manipulated by an attacker to reveal unintended data, this vulnerability can be exploited.
+
+RECOMMENDATIONS:
+
+1. **Sanitize `csr_addr`:** Implement strict input sanitization for `csr_addr`. Validate and restrict the format and contents to prevent injection or manipulation of sensitive information. 
+
+2. **Enhance Privilege Checks:** Review the privilege level checks (`csr_addr.csr_decode.priv_lvl`, `debug_mode_q`) to ensure they are comprehensive and secure. Consider adding additional checks or implementing a more robust access control mechanism. 3.  **Logging and Monitoring:** Implement robust logging and monitoring mechanisms to track all CSR access attempts, including unsuccessful attempts. This can help detect suspicious activity and aid in investigations.
+
+ORIGINAL CODE:
+```
+						if (csr_we || csr_read) begin
+
+								if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl) && !(csr_addr.address==riscv::CSR_MEPC)) begin
+
+									csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+									csr_exception_o.valid = 1'b1;
+
+								end
+								// check access to debug mode only CSRs
+								if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin
+
+									csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+									csr_exception_o.valid = 1'b1;
+
+								end
+
+							end
+						       
+				
+				
+```
+
+
+

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8, 9
+VULNERABILITY_DESCRIPTION: Buffer Overflow Vulnerability
+EXPLANATION:
+The code snippet is susceptible to a buffer overflow vulnerability because it fails to adequately validate the lengths of the received `username` and `password` strings. The `getNextMessage` function is assumed to receive these strings from an untrusted source (likely a client connection), and it doesn't perform any checks to ensure that the received data doesn't exceed the size of the allocated buffers (`username` and `password`).
+
+If an attacker sends a `username` or `password` string longer than `USERNAME_SIZE` and `PASSWORD_SIZE` respectively, it will overwrite adjacent memory locations, potentially leading to:
+
+* **Program crashes:** Overwriting critical data structures can cause the program to crash unexpectedly.
+* **Arbitrary code execution:**  An attacker could carefully craft malicious input to overwrite the return address on the stack, redirecting program flow to execute their own code.
+* **Denial of service:**  Overflowing the buffers could corrupt program state, making it impossible to function correctly.
+
+RECOMMENDATIONS:
+1. **Bounds Checking:**  Enforce strict bounds checking on the received data within `getNextMessage`. Read only up to the size of the allocated buffers and truncate any excess data. For example:
+
+ ```c
+ //  Example of improved getNextMessage function (assuming it's redefined)
+ int getNextMessage(int socket, char *buffer, size_t buffer_size) {
+     size_t bytes_read = recv(socket, buffer, buffer_size - 1, 0); // Read up to buffer_size-1 to leave space for null terminator
+
+     if (bytes_read < 0) {
+         // Handle error
+     } else if (bytes_read == 0) {
+         // End of stream
+     } else {
+         buffer[bytes_read] = '\0'; // Ensure null termination
+     }
+
+     return bytes_read;
+ }
+ ```
+
+2. **Safe String Handling:** Use safer string functions that handle buffer sizes appropriately, such as `snprintf` or libraries like `stringutil` that offer robust bounds-checking mechanisms.
+3. **Input Validation:** Implement additional input validation to ensure that usernames and passwords meet expected format and length criteria.
+
+ORIGINAL CODE:
+```c
+int validateUser(char *host, int port){
+    int socket = openSocketConnection(host, port);
+    if (socket < 0) {
+        printf("Unable to open socket connection");
+        return(FAIL);
+    }
+    int isValidUser = 0;
+    char username[USERNAME_SIZE];
+    char password[PASSWORD_SIZE];
+    while (isValidUser == 0) {
+        if (getNextMessage(socket, username, USERNAME_SIZE) > 0) {
+            if (getNextMessage(socket, password, PASSWORD_SIZE) > 0) {
+                isValidUser = AuthenticateUser(username, password);
+            }
+        }
+    }
+    return(SUCCESS);
+}
+``` 

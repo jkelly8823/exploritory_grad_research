@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 14 
+VULNERABILITY_DESCRIPTION: Potential Logic Error 
+EXPLANATION:  The code assigns arbitrary values to `p0_mreqinfo_o_temp[6:0]` based on the value of `y` and `ocp_mreqinfo`.  Without knowing the purpose or origin of `y`, it's difficult to determine if this is intentional or if it could lead to unexpected behavior.
+
+If `y` is  not meant to be part of the hardware identity calculation, its inclusion could result in incorrect mapping of OCP MReqInfo to AHB HPROT, potentially leading to functionality issues or security vulnerabilities.
+
+
+RECOMMENDATIONS:
+
+1. **Analyze the Purpose of `y`:**  
+   * Determine the intended role of the `y` signal in the logic. 
+   * If it's not directly related to hardware identity, remove it from the assignment to `p0_mreqinfo_o_temp`.
+
+2. **Validate the Mapping:** 
+   * Thoroughly review the mapping between OCP MReqInfo and AHB HPROT values. 
+   * Ensure that the mapping logic accurately reflects the desired behavior based on the hardware specifications.
+
+3. **Add Documentation:** 
+   * Document the purpose of `y`, its source, and its role in the overall mapping logic. This will improve code clarity and maintainability.
+
+ORIGINAL CODE:
+
+
+	       module ocp2ahb
+	      ( 
+	      
+	        ahb_hprot, 
+	        ocp_mreqinfo 
+	      
+	      ); 
+	      
+	      output [1:0] ahb_hprot;        // output is 2 bit signal for AHB HPROT
+	      input [4:0] ocp_mreqinfo;      // input is 5 bit signal from OCP MReqInfo
+	      wire [6:0] p0_mreqinfo_o_temp; // OCP signal that transmits hardware identity of bus controller
+	       
+	      wire y;
+	      
+	      reg [1:0] ahb_hprot;
+	      
+	      // hardware identity of bus controller is in bits 5:1 of p0_mreqinfo_o_temp signal
+	      assign p0_mreqinfo_o_temp[6:0] = {1'b0, ocp_mreqinfo[4:0], y};
+	      
+	      always @*
+	      begin
+	      
+	        case (p0_mreqinfo_o_temp[4:2])
+		
+	          000: ahb_hprot = 2'b11;    // OCP MReqInfo to AHB HPROT mapping
+	          001: ahb_hprot = 2'b00;
+	          010: ahb_hprot = 2'b00;
+	          011: ahb_hprot = 2'b01;
+	          100: ahb_hprot = 2'b00;
+	          101: ahb_hprot = 2'b00;
+	          110: ahb_hprot = 2'b10;
+	          111: ahb_hprot = 2'b00;
+		
+	        endcase
+	      
+	      end
+	      endmodule
+	     	     
+	     
+
+
+

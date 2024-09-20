@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-20
+VULNERABILITY_DESCRIPTION: Potential Race Condition
+EXPLANATION:
+The provided code snippet shows a conditional write operation to a CSR register (riscv::CSR_SIE) based on the `csr_addr.address` value and the `csr_we` flag. Within the `riscv::CSR_SIE` case, the `mie_d` register is updated using a combination of the `mie_q`, `mideleg_q`, and `csr_wdata` values.  The concern arises from the potential for race conditions. 
+
+There's a possibility that while the `mie_d` register is being updated, another concurrent write operation or read operation to any of the registers `mie_q`, `mideleg_q`, or `csr_wdata` could occur, leading to an unexpected and potentially erroneous result. This race condition could occur if the write operation to `mie_d` is not atomic.
+
+RECOMMENDATIONS:
+* **Atomic Update:** Ensure that the update to `mie_d` is atomic. This means ensuring that all the operations within the logic block performing the update happen as a single, indivisible unit. This can often be achieved using atomic hardware instructions or locking mechanisms specific to your hardware platform or programming language.
+* **Synchronization:**  Implement proper synchronization mechanisms if atomic updates are not possible. Use mechanisms like mutexes, semaphores, or similar constructs to ensure that only one thread or process can access and modify the registers involved (`mie_q`, `mideleg_q`, `csr_wdata`, and `mie_d`) at a time.
+
+ORIGINAL CODE:
+
+
+
+                  module csr_regfile #(...)(...);
+                  ...
+                  // ---------------------------
+                  // CSR Write and update logic
+                  // ---------------------------
+                  ...
+                     
+                     if (csr_we) begin
+                        
+                        unique case (csr_addr.address)
+                        ...
+                           
+                           riscv::CSR_SIE: begin
+                                 
+                                 // the mideleg makes sure only delegate-able register
+                                 //(and therefore also only implemented registers) are written
+                                 mie_d = (mie_q & ~mideleg_q) | (csr_wdata & mideleg_q) | utval_q;
+                                 
+                           end
+                           ...
+                           
+                        endcase
+                        
+                     end
+                     
+                  endmodule
+
+
+
+

@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-77
+VULNERABILITY_DESCRIPTION: Unvalidated File Upload
+
+EXPLANATION:
+The code snippet demonstrates a file upload functionality which lacks proper validation of the uploaded filenames.  An attacker could leverage this vulnerability by uploading a file with a maliciously crafted filename, potentially leading to a variety of exploits like:
+
+* **Directory Traversal:** If the filename includes malicious path components (e.g., "..") an attacker could attempt to access files outside the intended upload directory.
+* **Overwrite Existing Files:** An attacker could overwrite existing files by using a filename that already exists in the target directory.
+* **Code Execution:** In some cases,  an attacker could upload a specially crafted file designed to execute arbitrary code on the server.
+
+The vulnerability stems from the direct use of the uploaded filename without any sanitization. It relies solely on the `request` object's `Content-Type` header and the assumption that the filename is correctly encoded.
+
+RECOMMENDATIONS:
+
+1. **Sanitize File Names:**
+    * Use a whitelist of allowed characters or file extensions.
+    *  Remove potentially dangerous path characters (e.g., "..", "/", ":", "*").
+    *  Always encode filenames before using them in file system operations.
+2. **Validate Content Type:** 
+    * Ensure the `Content-Type` header correctly identifies the upload as `multipart/form-data`.
+    *  Consider validating additional parameters within the `Content-Type` to ensure proper formatting.
+3. **Use Secure File Handling Practices:**
+    * Implement proper permissions for the upload directory and files.
+    * Avoid using relative paths in filenames.
+    * If possible, use a temporary file storage location before moving it to the final destination.
+
+ORIGINAL CODE:
+
+```java
+                  public class FileUploadServlet extends HttpServlet {
+                     
+                        ...
+                           protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                           
+                              response.setContentType("text/html");PrintWriter out = response.getWriter();String contentType = request.getContentType();
+                                 // the starting position of the boundary headerint ind = contentType.indexOf("boundary=");String boundary = contentType.substring(ind+9);
+                                 String pLine = new String();String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+                                 // verify that content type is multipart form dataif (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+                                 
+                                    // extract the filename from the Http headerBufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));...pLine = br.readLine();String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+                                       // output the file to the local upload directorytry {
+                                          BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));for (String line; (line=br.readLine())!=null; ) {if (line.indexOf(boundary) == -1) {bw.write(line);bw.newLine();bw.flush();}} //end of for loopbw.close();
+                                       
+                                       
+                                       } catch (IOException ex) {...}// output successful upload response HTML page
+                                 }// output unsuccessful upload response HTML pageelse{...}
+                           }...
+                        
+                     }
+               
+               ```
+
+
+

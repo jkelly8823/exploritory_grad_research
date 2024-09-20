@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8,16,24
+VULNERABILITY_DESCRIPTION: Privilege Level Bypass
+EXPLANATION: 
+The code exhibits a potential privilege level bypass vulnerability.  It appears that the `debug_mode_d` signal is directly assigned the value of either `dcsr_q.ebreakm` or `dcsr_q.ebreaku` depending on the current privilege level (`priv_lvl_o`). 
+
+However,  the assignment `priv_lvl_o = (debug_mode_q && umode_i) ? riscv::PRIV_LVL_M : priv_lvl_q;`  allows a potential attacker with user-level (`riscv::PRIV_LVL_U`) privileges to potentially manipulate the `debug_mode_q` and `umode_i` signals to switch into supervisor (`riscv::PRIV_LVL_M`) mode unexpectedly. 
+
+RECOMMENDATIONS:
+1. **Robust Privilege Checks:** Implement stronger privilege checks before assigning `debug_mode_d`.  Ensure that the code only allows transitions to supervisor mode if the current privilege level and other relevant conditions (e.g., system calls, valid debug instructions) explicitly warrant it.
+2. **Secure Secure Debug Control:** Scrutinize the logic related to  `dcsr_q.ebreakm` and `dcsr_q.ebreaku` to ensure they are designed with security in mind. Consider using hardware-based mechanisms for privilege escalation during debugging.
+
+ORIGINAL CODE:
+```
+                    ...
+                    // check that we actually want to enter debug depending on the privilege level we are currently in
+                        unique case (priv_lvl_o)
+                            
+                            riscv::PRIV_LVL_M: begin
+                                
+                                debug_mode_d = dcsr_q.ebreakm;
+                                
+                            
+                        
+                    ...
+                        
+                            
+                            riscv::PRIV_LVL_U: begin
+                                
+                                debug_mode_d = dcsr_q.ebreaku;
+                                
+                            
+                        
+                    ...
+                        
+                        assign priv_lvl_o = (debug_mode_q && umode_i) ? riscv::PRIV_LVL_M : priv_lvl_q;
+                        
+                    ...
+                        
+                        debug_mode_q  <= debug_mode_d;
+                        
+                    ...
+                    
+...
+                    
+                ``` 
+
+
+

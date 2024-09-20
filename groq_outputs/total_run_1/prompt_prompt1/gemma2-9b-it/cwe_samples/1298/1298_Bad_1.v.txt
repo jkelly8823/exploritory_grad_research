@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line Numbers: 10, 11, 12, 13
+VULNERABILITY_DESCRIPTION: Incorrect Array Access and Potential Out-of-Bounds
+EXPLANATION:
+The code snippet demonstrates a potential vulnerability due to incorrect array access.  
+
+* **Line 10:** `input [7:0] [16-1:0] pmpcfg_i;`
+* **Line 11:** `input logic [16-1:0][53:0]     pmpaddr_i;` 
+
+The syntax `[16-1:0]` is incorrect for defining arrays in Verilog. The valid syntax is `[0:15]` or similar. In this case, we see that arrays are accessed using values inversely ordered and this is likely a typo. If a corrected range was intended, the calculation should handle potential out-of-bounds memory access when assigning values to these arrays. 
+
+Accessing memory beyond the defined bounds can lead to unpredictable behavior, potentially causing security flaws by corrupting data or allowing unauthorized access.
+
+RECOMMENDATIONS:
+
+1. **Correct the Array Indexing:** 
+   -  Change the array syntax to use valid ranges like `[0:15]` or `[15:0]` depending on the intended dimensions.
+
+2. **Bound Checking:** 
+   - Consider implementing bounds checking before accessing elements within the arrays to prevent out-of-bounds errors. This can involve comparing indices to the array size and raising an error or taking appropriate actions if an index is out of range. 
+
+ORIGINAL CODE:
+```verilog
+module dma # (...)(...);
+...
+
+input [7:0] [16-1:0] pmpcfg_i;  //Incorrect Array Access
+input logic [16-1:0][53:0]     pmpaddr_i; //Incorrect Array Access
+
+...
+
+//// Save the input command
+always @ (posedge clk_i or negedge rst_ni)
+	begin: save_inputs
+	if (!rst_ni)
+		begin
+		...
+		end
+	else
+		begin
+			if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE)
+			begin
+			...
+			end
+		end
+	end // save_inputs
+...
+// Load/store PMP check
+pmp #(
+	.XLEN       ( 64                     ),
+	.PMP_LEN    ( 54                     ),
+	.NR_ENTRIES ( 16           )
+
+) i_pmp_data (
+	.addr_i        ( pmp_addr_reg        ),
+	.priv_lvl_i    ( riscv::PRIV_LVL_U   ),
+	.access_type_i ( pmp_access_type_reg ),
+	// Configuration
+	.conf_addr_i   ( pmpaddr_i           ),
+	.conf_i        ( pmpcfg_i            ),
+	.allow_o       ( pmp_data_allow      )
+	
+);
+
+
+
+endmodule
+endmodule
+``` 
+
+
+
+

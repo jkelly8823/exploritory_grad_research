@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 12, 13
+VULNERABILITY_DESCRIPTION:  Potential for Timing Side-Channel Attack
+EXPLANATION: 
+
+The provided code snippet demonstrates a vulnerability to timing side-channel attacks specifically related to the update of the `hmac_key_reg` register. 
+
+Here's why:
+
+* **Sensitive Data Update:** The `hmac_key_reg` holds the cryptographic key used in the HMAC computation.  
+* **Conditional Update:** The key is loaded from the input `hmac_key_i` only when `hmac_patch_en` is high. 
+* **Timing Dependency:** The `always_ff` block updates `hmac_key_reg` on the rising edge of `tck_i` or falling edge of `trst_ni`.  An attacker could measure the time it takes for this update to occur.
+* **Key Disclosure:** Since the update is conditional on `hmac_patch_en`, an attacker could infer information about bits of the `hmac_key_i` by observing the timing variations.
+
+**Example:**  If an attacker knows `hmac_patch_en` will be asserted only for certain key values, they might be able to deduce bits of the key by analyzing the timing of the register update.
+
+RECOMMENDATIONS:
+
+1. **Remove Timing-Dependent Dependencies:**  Explore ways to make the key update deterministic and independent of external triggers like `hmac_patch_en`. Consider using a separate, dedicated mechanism for key loading that doesn't rely on sensitive timing.
+
+2. **Protect Key Update:** Implement measures to mitigate timing side-channel attacks during the key update process. This could include:
+   * **Constant-Time Execution:**  Ensure that the logic for updating `hmac_key_reg` is executed in a constant time regardless of the value being loaded.
+   * **Blinding Techniques:** Introduce randomness into the key update process to make it more difficult for an attacker to correlate timing variations with specific key bits.
+
+3. **Secure Key Handling:** Follow best practices for cryptographic key management. Consider techniques like key rotation, secure storage, and access control.
+
+
+
+ORIGINAL CODE:
+```systemverilog
+					module dmi_jtag(...
+					) (
+						
+						input logic [255:0] hmac_key_i,
+						input logic         hmac_patch_en,
+						... 
+						reg [255:0] hmac_key_reg;
+						...
+						
+					);
+					...
+						
+						always_ff @(posedge tck_i or negedge trst_ni) begin
+						...
+						if (hmac_patch_en)
+							
+							hmac_key_reg <= hmac_key_i;
+							
+						...
+						end
+						
+					...
+						
+						hmac hmac(
+						...
+						.key_i(hmac_key_reg),
+						...
+						);
+						
+					...
+					endmodule
+					
+				endmodule
+					
+					
+				```
+
+
+Let me know if you have any other code snippets you'd like me to analyze!

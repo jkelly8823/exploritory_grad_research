@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-10
+VULNERABILITY_DESCRIPTION:  Buffer Overflow 
+EXPLANATION:
+The code snippet you provided demonstrates a potential buffer overflow vulnerability. The issue resides within the `while` loop where data is read from the socket (`gen_recv`) into a fixed-size buffer (`buf`).
+
+Here's why this is problematic:
+* **Unbounded Input:** The `gen_recv` function reads data into the `buf` until it encounters a specific condition (in this case, a line containing only `.`) However, there's no explicit check on the length of the received data.
+* **Vulnerability Point:** If the data sent from the socket exceeds the size of the `BUFFER_SIZE`, it will overflow into adjacent memory locations. This can corrupt other data structures, potentially leading to crashes or more serious security exploits.
+
+RECOMMENDATIONS:
+1. **Bound Input Length:** Implement a mechanism to limit the amount of data read from the socket. Consider using `recv_from` (or similar functions) that allow specifying the maximum amount of data to receive.
+
+2. **Length Verification:**
+*  Always verify the length of received data before interpreting it.
+
+3. **Dynamic Buffer Allocation:** If the size of the incoming data is unpredictable, allocate the buffer dynamically, increasing its size as needed.  Ensure proper memory management (using functions like `realloc` for dynamic resizing and `free` for deallocation).
+   
+```c
+
+while ((ok = gen_recv(sock, buf, BUFFER_SIZE)) > 0) {
+    // ... process data from buf (check length here!)
+    // ... 
+}
+```
+
+ORIGINAL CODE:
+
+                    /* capture the sizes of all messages */
+                    int getsizes(int sock, int count, int *sizes) {
+                        ...char buf[BUFFER_SIZE];int ok;int num, size;
+                           
+                           // read values from socket and added to sizes array
+                           while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+                              
+                                 // continue read from socket until buf only contains '.'
+                                 if (DOTLINE(buf))break;
+                                 else if (sscanf(buf, "%d %d", &num, &size) == 2)sizes[num - 1] = size;
+                              
+                           }...
+                        
+                     }
+
+
+
+
+
+
+Remember that static analysis tools can help identify potential vulnerabilities, but always perform thorough testing and code reviews to ensure security.

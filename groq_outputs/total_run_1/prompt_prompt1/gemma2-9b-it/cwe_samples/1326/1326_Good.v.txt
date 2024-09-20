@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION: Potential out-of-bounds memory access.
+EXPLANATION:
+The line `raddr_q <= addr_i[$clog2(RomSize)-1+3:3];` assigns the value of `addr_i` from bits `$clog2(RomSize)-1+3` to `$clog2(RomSize)-1+3` to `raddr_q`.  
+
+If `addr_i` exceeds the valid address range of the memory (which is presumably `0` to `RomSize-1`), it can lead to an out-of-bounds memory access when `rdata_o` is calculated, potentially causing a crash or security vulnerability. 
+
+RECOMMENDATIONS:
+1. **Validate `addr_i`**: Before using `addr_i` in the calculation, ensure that it falls within the bounds of `0` to `RomSize-1`. Implement checks to clamp values or raise an error if `addr_i` is out of range. 
+2. **Use a safer indexing approach**: Instead of relying on direct bit-selection like `$clog2(RomSize)-1+3:3`, consider using a parameterized indexing method or a bit-width check to ensure the index is valid.
+
+
+ORIGINAL CODE:
+```systemverilog
+                        ...
+                            always_ff @(posedge clk_i) begin
+                                if (req_i) begin
+										raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+									end
+								end
+                        	...
+							
+								// this prevents spurious Xes from propagating into the speculative fetch stage of the core
+							
+							assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;
+							...
+							
+							
+					
+				```

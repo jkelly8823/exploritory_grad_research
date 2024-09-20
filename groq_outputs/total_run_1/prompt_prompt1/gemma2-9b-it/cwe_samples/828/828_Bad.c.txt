@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 3, Line 10, Line 13
+VULNERABILITY_DESCRIPTION:  Use-After-Free Vulnerability
+EXPLANATION:
+The code exhibits a potential use-after-free vulnerability. In the `handler` function, `logMessage` is freed using `free(logMessage)`. However, the code then attempts to print `logMessage` using `syslog(LOG_NOTICE, "%s\n", logMessage)`.  After freeing the memory, it's no longer valid to access `logMessage`.  Attempting to use it in this way leads to undefined behavior, which could result in a crash or allow an attacker to compromise the program.
+
+RECOMMENDATIONS:
+1. **Delayed Freeing:** Avoid freeing `logMessage` until after it's no longer needed within the `handler` function.  
+2. **Error Handling:** Implement error handling to check the return value of `strdup()` and handle potential allocation failures.
+3. **Proper Memory Management:** Utilize a memory management library or carefully track memory allocations and deallocations to prevent memory leaks and use-after-free vulnerabilities.
+
+ORIGINAL CODE:
+
+```c
+char *logMessage;
+
+void handler (int sigNum) {
+   syslog(LOG_NOTICE, "%s\n", logMessage);
+   free(logMessage);
+   /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+
+   sleep(10);
+   exit(0);
+}
+int main (int argc, char* argv[]) {
+   logMessage = strdup(argv[1]);
+   /* Register signal handlers. */
+
+   signal(SIGHUP, handler);
+   signal(SIGTERM, handler);
+   /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+
+   sleep(10);
+}
+``` 
+
+

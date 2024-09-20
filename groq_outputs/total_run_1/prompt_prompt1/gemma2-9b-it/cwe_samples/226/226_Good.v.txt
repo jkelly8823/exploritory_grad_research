@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11, 17
+VULNERABILITY_DESCRIPTION: Potential for race condition due to separate case branches. 
+
+EXPLANATION: 
+
+The code snippet presents multiple conditional blocks within an `always` block triggered by `posedge clk_i`. While the individual branches might appear logically distinct at a glance, the absence of a clear synchronization mechanism between them raises the possibility of a race condition.
+
+Let's break down the potential issue:
+
+* **Simultaneous Execution:** If `rst_ni && ~rst_1` and `ct_valid` are both true (unlikely) for a specific cycle, both the `if` and `else if` blocks might execute simultaneously. The unclear interaction between these branching paths could lead to unexpected and erroneous behavior.
+* **Volatile Variables:** The code deals with variables like `p_c` that are potentially modified in different branches. If these variables are read and modified concurrently within the separate branches, a race condition could occur, leading to inconsistencies or undefined output.
+* **Data Dependency:**  If the code's logic relies on data across different branches, the lack of synchronization can introduce dependencies where one branch's operations influence another in an uncontrolled manner.
+
+RECOMMENDATIONS:
+
+1. **Mutual Exclusion:** Consider implementing a mutex or semaphore to ensure that only one branch executes at a time. This would prevent simultaneous access to shared resources and mitigate the risk of race conditions.
+
+2. **Conditional Assignment:** Instead of separate `else if` blocks, explore restructuring the logic to use conditional assignments within a single `if` statement or a more structured control flow (e.g., a state machine). This reduces the possibility of overlapping execution paths.
+
+3. **Timing Analysis:**  Conduct a thorough timing analysis to ensure that any potential dependencies between branches are resolved within a single clock cycle.
+
+4. **Read Acquisition:** If reading the value of volatile variables is shared between branches, introduce specific read acquisition mechanisms to ensure that the value read is consistent and reflects the latest modification.
+
+**Remember:** Race conditions can be subtle and hard to detect. Formal verification techniques and rigorous testing are essential to ensure the correctness of code that handles concurrent operations. 
+
+
+
+ORIGINAL CODE:
+
+		   
+		   module aes0_wrapper #(...)(...);
+		   ...
+		   always @(posedge clk_i)
+		   
+			 begin
+			 
+			   if(~(rst_ni && ~rst_1)) //clear p_c[i] at reset
+			   
+				 ...
+			   
+			   else if(ct_valid) //encryption process complete, clear p_c[i]
+			   
+				 begin
+				 
+				   p_c[0] <= 0;
+				   p_c[1] <= 0;
+				   p_c[2] <= 0;
+				   p_c[3] <= 0;
+				 
+				 end
+			   
+			   else if(en && we)
+			   
+				 case(address[8:3])
+				 ...
+				 endcase
+			   
+			   end // always @ (posedge wb_clk_i)
+			 
+			 endmodule
+			 
+		   
+		 
+	   
+
+

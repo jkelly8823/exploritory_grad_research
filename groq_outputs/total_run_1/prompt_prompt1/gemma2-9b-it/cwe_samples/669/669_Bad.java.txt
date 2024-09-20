@@ -1,0 +1,61 @@
+## Vulnerability Analysis
+
+**VULNERABLE:** YES 
+**VULNERABLE_LINES:** Lines 15-26
+**VULNERABILITY_DESCRIPTION:** Blind File Upload Vulnerability
+
+**EXPLANATION:**
+
+The provided code snippet demonstrates a vulnerability known as a Blind File Upload.  This vulnerability arises from the way the code handles file names extracted from the incoming HTTP request. 
+
+Specifically, the code relies on the following logic:
+
+1. **Filename Extraction:** `filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));`  This line extracts the filename from the `pLine` string. It assumes that the filename is enclosed in double quotes (`"`) and separated from other data by a backslash (`\`). 
+
+2. **Direct Use for File Path:** The extracted `filename` is directly used to construct the file path for saving the uploaded file: `uploadLocation + filename`.
+
+  **The issue:** This approach lacks proper validation and sanitize the extracted `filename`. An attacker can manipulate the content they upload to exploit this vulnerability. By sending a specially crafted request with a crafted filename that includes directory traversal sequences (e.g., "../", "./"), the attacker could potentially overwrite or access files outside the designated `UPLOAD_DIRECTORY_STRING`.
+
+**RECOMMENDATIONS:**
+
+1. **Validate and Sanitize Filenames:** 
+   * **Whitelisting:**  Define an allowed set of characters for filenames (alphanumeric, hyphens, underscores, etc.) and reject any filenames containing disallowed characters.
+   * **Path Traversal Prevention:** Use a library or function specifically designed to prevent directory traversal attempts. It should sanitize the filename by removing invalid characters and ensuring the path remains within the allowed upload directory.
+
+2. **Secure Upload Directory:**
+   * **Restricted Permissions:** Grant only the necessary permissions to the upload directory and the web server process.
+   * **Avoid Default Directories:** Do not use the default web application directory as the upload location.
+
+3. **Content-Type Validation:** While the code checks for `multipart/form-data`, it's crucial to ensure the content type is indeed valid and not spoofed.
+
+
+**ORIGINAL CODE:**
+
+
+
+```java
+                  public class FileUploadServlet extends HttpServlet {
+                     
+                        ...
+                           protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                           
+                              response.setContentType("text/html");PrintWriter out = response.getWriter();String contentType = request.getContentType();
+                                 // the starting position of the boundary headerint ind = contentType.indexOf("boundary=");String boundary = contentType.substring(ind+9);
+                                 String pLine = new String();String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+                                 // verify that content type is multipart form dataif (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+                                 
+                                    // extract the filename from the Http headerBufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));...
+                                    pLine = br.readLine();String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+                                       // output the file to the local upload directorytry {
+                                          BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));for (String line; (line=br.readLine())!=null; ) {if (line.indexOf(boundary) == -1) {bw.write(line);bw.newLine();bw.flush();}} //end of for loopbw.close();
+                                       
+                                       
+                                       } catch (IOException ex) {...}// output successful upload response HTML page
+                                 }// output unsuccessful upload response HTML pageelse{...}
+                           }...
+                        
+                     }
+               
+               ``` 
+
+

@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION: Command Injection Vulnerability 
+EXPLANATION: 
+
+The provided code snippet demonstrates a command injection vulnerability. Specifically, the line `Process exec = rt.exec("cmd.exe /C latlon2utm.exe -" + latlonCoords);` is susceptible to attack.  Here's why:
+
+* **Directly Constructing the Command:** The code takes the user-supplied `latlonCoords` string and directly incorporates it into the command string passed to `Runtime.getRuntime().exec()`.
+* **Lack of Sanitization:** There is no input validation or sanitization performed on `latlonCoords`. An attacker could provide malicious input that alters the intended command, potentially allowing them to execute arbitrary code on the system.
+
+**Example Attack:**
+
+Imagine a malicious user provides the following input for `coordinates`:
+
+```
+; rm -rf /
+```
+
+The resulting command executed by the system would be:
+
+```
+cmd.exe /C latlon2utm.exe -; rm -rf /
+```
+
+This would likely lead to the deletion of all files on the system's root directory.
+
+RECOMMENDATIONS:
+
+* **Use a Safer Method for External Command Execution:** Avoid using `Runtime.getRuntime().exec()` directly. Consider using libraries designed for safer command execution, such as:
+    * Spring's `CommandLineRunner`
+    * Apache Commons Exec
+* **Sanitize User Input:**  Always validate and sanitize user input before using it in commands.  
+
+Here's a basic example of how to sanitize input using Java's `String.replaceAll()` method:
+
+```java
+String sanitizedInput = latlonCoords.replaceAll("[\\[\\]();]", "").trim(); 
+
+// ... pass sanitizedInput to the command
+``` 
+
+**Important Note:** Input sanitization is often not sufficient on its own. It should always be combined with other security measures, such as input validation, output encoding, and secure coding practices.
+
+
+
+ORIGINAL CODE: 
+
+```java
+                  public String coordinateTransformLatLonToUTM(String coordinates){
+                        String utmCoords = null;try {
+                              String latlonCoords = coordinates;Runtime rt = Runtime.getRuntime();Process exec = rt.exec("cmd.exe /C latlon2utm.exe -" + latlonCoords);
+                                 // process results of coordinate transform
+                                 
+                                 
+                                 // ...
+                                 
+                              
+                           }catch(Exception e) {...}return utmCoords;
+                     }
+               
+               
+```

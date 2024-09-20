@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:  Memory Disclosure Vulnerability
+EXPLANATION:
+Lines 4 reads a byte from the memory location pointed to by `rcx`.  Without proper bounds checking or addressing limitations, this could lead to reading from arbitrary kernel memory, potentially disclosing sensitive information.  
+
+The code uses a "retry" loop and a conditional jump (`jz retry`) to repeatedly attempt to read data until a non-zero value is encountered. This behavior suggests an attempt to probe for memory locations containing interesting data.
+
+The data read is then multiplied by a page size (4KB) and used to index into the `rbx` pointer, indicating the use of a cache covert channel.  This channel transmits the outcome of the memory read potentially to an attacker in a hidden way.
+
+
+RECOMMENDATIONS:
+-  Add rigorous bounds checking to ensure that `rcx` always points within a valid memory range.
+-  Limit the number of retries to prevent excessive memory access attempts.
+-  Avoid the use of cache covert channels, as these can be exploited for sensitive information leakage.
+-  Sanitize any input used to determine the memory address `rcx` to prevent out-of-bounds access or malicious manipulation.
+
+
+
+ORIGINAL CODE:
+				  1 ; rcx = kernel address, rbx = probe array
+				  2 xor rax, rax                # set rax to 0
+				  3 retry:
+				  4 mov al, byte [rcx]          # attempt to read kernel memory
+				  5 shl rax, 0xc                # multiply result by page size (4KB)
+				  6 jz retry                    # if the result is zero, try again
+				  7 mov rbx, qword [rbx + rax]  # transmit result over a cache covert channel
+				  
+
+
+

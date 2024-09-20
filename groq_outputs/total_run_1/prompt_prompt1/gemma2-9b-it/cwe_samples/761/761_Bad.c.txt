@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 12-16, 20
+VULNERABILITY_DESCRIPTION: Buffer Overflow and Potential Dangling Pointer
+EXPLANATION:
+The `contains_char` function is vulnerable to a buffer overflow. The `strcpy(str, "Search Me!")` line copies the string "Search Me!" into the dynamically allocated buffer `str`.  If `str` is not large enough to hold the entire string plus the null terminator, it will overflow.
+
+Additionally, the code potentially uses a dangling pointer in the loop and even when freeing the string. These pointers might point to invalid memory locations, leading to unpredictable behavior or crashes.
+
+RECOMMENDATIONS:
+1. **Limit `strcpy` To Safe Lengths:**
+   - Use `strncpy` instead of `strcpy`. `strncpy` allows you to specify the maximum number of characters to copy, preventing buffer overflows.
+
+   ```c
+   strncpy(str, "Search Me!", sizeof(str) - 1); 
+   str[sizeof(str) - 1] = '\0'; // Ensure null termination
+   ```
+
+2. **Address Dangling Pointers:**
+   -  The loop condition `while ( *str != NULL )` should be changed to `while ( *str ) ` because `NULL` is a special value that compares to zero.
+
+   -  **Outside of the `while` loop (line 20), `free(str)` is called right after the string is potentially modified. The pointer may be pointing to an invalid memory location after modification of the same string.  ** 
+
+   -   **The use of `str = str + 1;` is problematic because it treats a dynamic string as an array of integers. This may lead to undefined behavior.  **
+
+
+   - **Revised Logic:**
+     ```c
+     int contains_char(char c) {
+        char *str = (char*)malloc(20 * sizeof(char));
+        strncpy(str, "Search Me!", sizeof(str) - 1); 
+        str[sizeof(str) - 1] = '\0';
+
+        for (int i = 0; str[i] != '\0'; ++i) {
+           if (str[i] == c) {
+               free(str);
+               return SUCCESS;
+           }
+        }
+
+        free(str);
+        return FAILURE;
+     }
+     ```
+
+
+
+ORIGINAL CODE:
+
+
+
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+int contains_char(char c){
+char *str;
+str = (char*)malloc(20*sizeof(char));
+strcpy(str, "Search Me!");
+while( *str != NULL){
+if( *str == c ){
+              /* matched char, free string and return success */
+              free(str);
+              return SUCCESS;
+}
+/* didn't match yet, increment pointer and try next char */
+str = str + 1;
+}
+/* we did not match the char in the string, free mem and return failure */
+free(str);
+return FAILURE;
+}
+```
+
+
+

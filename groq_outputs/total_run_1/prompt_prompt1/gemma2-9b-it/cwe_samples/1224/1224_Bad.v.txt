@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 13
+VULNERABILITY_DESCRIPTION: Data Dependency/Control Flow - The `Write_once_status` is directly set by the `Data_in[0]` bit in the `else if (write & ~Write_once_status)` block. This creates a data dependency where an attacker can control the Write_once_status by manipulating the input data.
+
+EXPLANATION:
+The `Write_once_status` is intended to prevent repeated writes to the `Data_out` register after the first write. However, the current implementation makes it vulnerable to attacks where an attacker can control the input data (`Data_in[0]`) and thereby control whether the register is written again or not.  
+
+RECOMMENDATIONS:
+1. **Use a Dedicated Write Enable Signal:** Instead of relying on a bit in the input data, introduce a dedicated `write_enable` signal. This signal should be logically independent of the `Data_in` and should be used to control when the `Data_out` is updated.
+
+2. **Consider a One-Time Programming Mechanism:** If the write should genuinely only occur once, explore techniques like one-time programmable (OTP) memory elements. 
+
+ORIGINAL CODE:
+
+
+```verilog
+                      module register_write_once_example
+		      ( 
+		      input [15:0] Data_in, 
+		      input Clk, 
+		      input ip_resetn, 
+		      input global_resetn,
+		      input write,
+		      output reg [15:0] Data_out 
+		      );
+		      
+		      reg Write_once_status; 
+                      
+		      always @(posedge Clk or negedge ip_resetn)
+		      
+			if (~ip_resetn)
+			begin
+			
+			  Data_out <= 16'h0000;
+			  Write_once_status <= 1'b0; 
+			
+			end 
+			else if (write & ~Write_once_status)
+			begin
+			
+			  Data_out <= Data_in & 16'hFFFE;
+			  Write_once_status <= Data_in[0]; // Input bit 0 sets Write_once_status
+			
+			end
+			else if (~write)
+			begin 
+			
+			  Data_out[15:1] <= Data_out[15:1]; 
+			  Data_out[0] <= Write_once_status; 
+			
+			end 
+			
+			endmodule
+                    endmodule
+                    
+                    ``` 
+

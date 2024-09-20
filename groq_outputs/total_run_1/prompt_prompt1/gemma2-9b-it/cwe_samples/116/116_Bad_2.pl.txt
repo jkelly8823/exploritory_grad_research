@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20, 22
+VULNERABILITY_DESCRIPTION: Command Injection
+EXPLANATION: 
+The `doit` subroutine is vulnerable to command injection. It takes untrusted input from the `GetUntrustedInput` subroutine, which reads the first argument from the command line. This input is then encoded using the `encode` subroutine. However, the encoded string is directly used in a system command (`system("cd /home/$uname; /bin/ls -l");`), which allows an attacker to inject arbitrary commands.
+
+For example, if the user provides the input `'; rm -rf /'` as the first argument, the command executed would be:
+
+`cd /home/; rm -rf /'`
+
+This would delete all files on the system, demonstrating the danger of command injection.
+
+RECOMMENDATIONS:
+- Sanitize all user input before using it in system commands. Do not rely on simple encoding for security.
+
+- Use a safer alternative to `system`, such as `exec` or `Perl's IPC::System`. These methods provide more control over the execution environment and can help mitigate the risk of command injection.
+- Consider using parameterized queries or other techniques to separate user data from the command itself.
+
+ORIGINAL CODE:
+```perl
+sub GetUntrustedInput {return($ARGV[0]);}
+sub encode {my($str) = @_;$str =~ s/\&/\&amp;/gs;$str =~ s/\"/\&quot;/gs;$str =~ s/\'/\&apos;/gs;$str =~ s/\</\&lt;/gs;$str =~ s/\>/\&gt;/gs;return($str);}
+sub doit {my $uname = encode(GetUntrustedInput("username"));print "<b>Welcome, $uname!</b><p>\n";system("cd /home/$uname; /bin/ls -l");
+}
+```

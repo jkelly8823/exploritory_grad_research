@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 12 
+VULNERABILITY_DESCRIPTION: Buffer Overflow 
+EXPLANATION:
+The code is vulnerable to a buffer overflow because `jnklen` might be larger than `pre_len - msg_len`.  If `jnklen` is larger, `proc_msg` will attempt to write more data to the `buf` array than it can hold, leading to a buffer overflow.
+
+Here's a breakdown:
+
+1. **Variable Initialization:** `int pre_len = sizeof("preamble: ");` sets the expected preamble length.
+2. **Buffer Allocation:** `char buf[pre_len - msg_len];` allocates a buffer `buf`  whose size depends on the difference between the preamble length and the message length (`msg_len`).
+3. **Potential Overflow:**  The code snippet you provided has:
+    -  `char *sl = strchr(s, ':');` which finds the position of the first colon (':') in the string `s`.
+    -  `int jnklen = sl == NULL ? 0 : sl - s;` calculates the length of the string up to the colon.
+    -  `int ret_val = proc_msg ("s",  jnklen);` calls the `proc_msg` function, passing the string up to the colon and its length  `jnklen`.
+     The problem is that if `jnklen`  is bigger than `pre_len - msg_len`, the call to `proc_msg` will try to write more data into `buf` than it can accommodate.
+
+4. **Consequences:** A buffer overflow can lead to:
+    - **Crash:** The program may crash due to memory corruption.
+    - **Data Overwrite:**  Data beyond `buf` could be overwritten, corrupting critical variables or program state.
+    - **Code Execution:** In severe cases, an attacker could exploit a buffer overflow to inject and execute malicious code.
+
+
+
+RECOMMENDATIONS:
+1. **Input Validation:** Carefully validate the input (`jnklen`) before using it to determine the buffer size. Ensure that `jnklen` is always less than or equal to `pre_len - msg_len`.
+
+2. **Safe Buffer Sizes:**  Avoid using fixed-size buffers when dealing with potentially varying input lengths. Consider using dynamic memory allocation (`malloc`) to allocate a buffer large enough to handle the input. 
+
+3. **Bounds Checking:** Implement bounds checking to prevent writing outside the allocated buffer bounds.
+
+4. **Security Libraries:**  Use secure string functions (often found in standard libraries or specialized security libraries) that perform input validation and bounds checking automatically.
+
+
+ORIGINAL CODE:
+```c
+		 int proc_msg(char *s, int msg_len)
+		 {
+                  
+		    // Note space at the end of the string - assume all strings have preamble with space
+		    int pre_len = sizeof("preamble: ");
+		    char buf[pre_len - msg_len];
+		    ... Do processing here if we get this far
+		  
+		  }
+		  char *s = "preamble: message\n";
+		  char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+		  int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+		  int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack
+               stack         
+``` 
+
+
+Let me know if you'd like me to analyze another code segment.

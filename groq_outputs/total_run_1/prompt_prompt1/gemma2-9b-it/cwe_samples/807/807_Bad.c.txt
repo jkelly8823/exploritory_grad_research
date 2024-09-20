@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:  DNS Rebinding Vulnerability
+EXPLANATION:
+The code uses `gethostbyaddr` to query the system's hostname database based on an IP address obtained from `inet_addr(ip_addr_string)`. The problem is that the `tHost` variable, which presumably contains a trusted hostname, is compared directly against `hp->h_name` using `strncmp`. 
+
+An attacker could craft a specially designed IP address that, when resolved using `gethostbyaddr`, returns a different hostname under attacker's control, effectively hijacking the `trusted` flag. This is known as a DNS Rebinding attack.
+
+RECOMMENDATIONS:
+1. Do not directly trust the results of `gethostbyaddr`.
+2.  Validate the hostname using a more robust method, such as:
+    *  **Sanitize the input (`ip_addr_string`)**:  Ensure it contains only valid IP addresses. Consider using libraries or functions specifically designed for IP address validation.
+    *  **Use a trusted DNS server**: Configure your application to use a DNS server you control or a reputable public DNS server known to be less susceptible to manipulation.
+    *   **Verify the hostname against a known list of trusted domains**: Keep a list of allowed hostnames and compare the resolved hostname against this list.
+    *   **Implement Transport Layer Security (TLS)**: If the communication involves sensitive data, use TLS to encrypt the connection and establish a secure channel.
+
+
+ORIGINAL CODE:
+```c
+                  struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";myaddr.s_addr=inet_addr(ip_addr_string);
+                     hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {trusted = true;} else {trusted = false;}
+               ;}
+               
+               
+```
+
+
+
+
+

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1 & 4-9
+VULNERABILITY_DESCRIPTION: Command Injection Vulnerability
+EXPLANATION:
+The code is susceptible to command injection because it directly executes user-supplied input (`$inputString`) without proper sanitization. Specifically:
+
+1. **`$inputString = GetUntrustedArgument("command");`**:  This line retrieves an argument from a potentially untrusted source.  
+2. **`($cmd, $argstr) = split(/\s+/, $inputString, 2);`**: The input is split into two parts based on whitespace. This means an attacker could craft input that includes malicious commands and arguments, which will be interpreted and executed.
+3. **`print $fh "$cmd $argstr\n";`**: This line constructs a command from `$cmd` and `$argstr` and sends it to the file server. Since `$argstr` originates from user input, an attacker could inject harmful commands into this string.
+
+RECOMMENDATIONS:
+1. **Sanitize User Input:**  Before using `$inputString`, thoroughly sanitize it to remove or escape potentially dangerous characters. Depending on the context, you might:
+    * **Whitelist Allowed Commands:** Only allow a predefined set of safe commands.
+    * **Escape Special Characters:** Replace characters like  `'` , `"` , `;`, and `&` with their safe equivalents to prevent command manipulation.
+    * **Use Parameterized Queries:** If interacting with a database, use parameterized queries to prevent SQL injection, which is a related vulnerability.
+
+2. **Avoid Direct Command Execution:** If possible, consider alternative approaches to achieve the desired functionality. For example:
+    * **Using a Library:** Utilize a library designed for interacting with systems, which often includes built-in security features.
+    * **Separate Logic and Execution:** Separate the decision of what command to execute from the actual execution process.
+
+3. **Validate Input Length:**  Set limits on the maximum size of user input to reduce the impact of potential buffer overflows.
+4. **Principle of Least Privilege:**
+Run the script with the minimum necessary permissions to limit potential damage if a vulnerability is exploited.
+
+
+
+ORIGINAL CODE:
+
+```perl
+                  $inputString = GetUntrustedArgument("command");($cmd, $argstr) = split(/\s+/, $inputString, 2);
+                     
+                     # removes extra whitespace and also changes CRLF's to spaces
+                     $argstr =~ s/\s+/ /gs;
+                     $argstr = UrlEncode($argstr);if (($cmd eq "BAN") && (! IsAdministrator($username))) {die "Error: you are not the admin.\n";}
+                     
+                     # communicate with file server using a file handle
+                     $fh = GetServerFileHandle("myserver");
+                     print $fh "$cmd $argstr\n";               
+```

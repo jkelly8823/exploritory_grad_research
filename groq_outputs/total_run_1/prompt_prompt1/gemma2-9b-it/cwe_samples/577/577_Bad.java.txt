@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:  Improper Socket Handling
+EXPLANATION: 
+
+The code snippet demonstrates potentially insecure socket handling.  Here's why:
+
+* **Unclosed Sockets:** The code opens a `ServerSocket` and a `Socket` within the constructor but doesn't explicitly close them. This leaves the sockets open indefinitely, potentially leading to:
+    * **Resource Leaks:** Consuming system resources even after the object is no longer needed.
+    * **Denial of Service (DoS) Risks:**  An attacker might be able to exploit open sockets to initiate a DoS attack, flooding the server with connections.
+
+* **Missing Exception Handling:** The `try-catch` blocks for `IOException` only catch the exceptions but don't handle the closed sockets. In case of errors, the sockets remain open.
+
+
+RECOMMENDATIONS:
+
+1. **Explicitly Close Sockets:** Ensure that both `serverSocket` and `clientSocket` are closed in a `finally` block within the constructor. This guarantees proper resource cleanup, regardless of whether exceptions occur.
+
+2. **Robust Exception Handling:**  In the `try` and `catch` blocks, include more specific exception handling.  Determine the root cause of the `IOException` and take appropriate actions. You might log errors, retry attempts, or shut down the server based on the exception type.
+
+3. **Consider Timeout Mechanisms:** Set timeouts on socket connections to prevent the server from getting stuck on unresponsive clients.
+
+Here's an example of how to improve the code:
+
+```java
+@Stateless
+public class StockSymbolBean implements StockSymbolRemote {
+
+    private ServerSocket serverSocket;
+    private Socket clientSocket;
+
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+            log.info("Server started on port: " + Constants.SOCKET_PORT);
+            clientSocket = serverSocket.accept();
+            log.info("Client connected: " + clientSocket.getInetAddress()); 
+        } catch (IOException ex) {
+            log.error("Error creating or accepting socket connection", ex);
+            // Implement appropriate error handling
+        } finally {
+            if (serverSocket != null) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    log.error("Error closing server socket", e);
+                }
+            }
+            if (clientSocket != null) {
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    log.error("Error closing client socket", e);
+                }
+            }
+        }
+    }
+    
+    // ... Other methods ...
+} 
+```
+
+  
+
+ Remember, security is crucial, and proper socket management is fundamental for building secure and reliable network applications.
+
+
+
