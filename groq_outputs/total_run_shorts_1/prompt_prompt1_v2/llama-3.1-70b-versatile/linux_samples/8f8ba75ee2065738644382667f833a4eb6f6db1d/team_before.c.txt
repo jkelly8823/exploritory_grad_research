@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 27-30, 35-37
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability and Lack of Error Handling
+EXPLANATION:
+The code in lines 27-30 and 35-37 contains double-free vulnerability. In the `team_netpoll_setup` function, when `team_port_enable_netpoll` fails, the error path calls `__team_netpoll_cleanup` which presumably frees the resources. However, when an error occurs during `team_port_enable_netpoll` in the previous function call stack, `kfree` is already called on the same resource (`np`). Later, when `__team_netpoll_cleanup` is called in `team_netpoll_setup`, this same resource is attempted to be freed again, resulting in a double-free vulnerability. Furthermore, when an error occurs during `team_port_enable_netpoll` and `kfree` is called, subsequent errors in the same function call stack may not be caught properly because of the early return. Lack of proper error handling in the rest of the function can lead to memory leaks or undefined behavior.
+RECOMMENDATIONS:
+To avoid the double-free vulnerability, make sure to check if the resource has already been freed before calling `kfree` again in the error path. It is recommended to check if the resource is `NULL` before freeing it. Additionally, improve error handling by considering all potential error cases and ensuring that resources are properly released in all cases.
+
+ORIGINAL CODE:
+```c
+#ifdef CONFIG_NET_POLL_CONTROLLER
+static int team_port_enable_netpoll(struct team *team, struct team_port *port)
+{
+	struct netpoll *np;
+	int err;
+
+	np = kzalloc(sizeof(*np), GFP_KERNEL);
+	if (!np)
+		return -ENOMEM;
+
+	err = __netpoll_setup(np, port->dev);
+	if (err) {
+		kfree(np);
+		return err;
+	}
+}
+
+#else
+static int team_port_enable_netpoll(struct team *team, struct team_port *port)
+{
+	return 0;
+}
+static void team_port_disable_netpoll(struct team_port *port)
+	}
+
+	if (team_netpoll_info(team)) {
+		err = team_port_enable_netpoll(team, port);
+		if (err) {
+			netdev_err(dev, "Failed to enable netpoll on device %s\n",
+				   portname);
+			goto err_enable_netpoll;
+}
+
+static int team_netpoll_setup(struct net_device *dev,
+			      struct netpoll_info *npifo)
+{
+	struct team *team = netdev_priv(dev);
+	struct team_port *port;
+	int err = 0;
+
+	mutex_lock(&team->lock);
+	list_for_each_entry(port, &team->port_list, list) {
+		err = team_port_enable_netpoll(team, port);
+		if (err) {
+			__team_netpoll_cleanup(team);
+			break;
+		}
+```

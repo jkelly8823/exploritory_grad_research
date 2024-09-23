@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12, 14-15
+VULNERABILITY_DESCRIPTION:
+Unintended Branching due to Incorrect Array Indexing and Comparison
+
+EXPLANATION:
+In this code snippet, an unintended branching vulnerability exists. The vulnerability arises from the incorrect implementation of array indexing in the comparison statement and an additional issue with the conditional branching. The comparison statement appears to be attempting to compare two array byte-wise. However, the implementation using the slice indexing may not work correctly and can result in incorrect output.
+
+Furthermore, the comparison also directly assigns values to `check_pass[i]` in every iteration (assign statement is non-blocking and has a race condition with comb procedural block's begin's blocking property in the given block), and at the same time uses a `break` statement which may break the loop prematurely due to false conditions, and `continue` where even if a pass condition exists there's still assigning.
+
+The final check of `grant_access = 1'b1` if `check_pass` is `4'b1111` does not accurately represent a correct secure result.
+
+RECOMMENDATIONS:
+Secure the code by placing the if-else and loop constructs within an alway block's sensitivity declaration's begin and end block, having the correct comparison and assignment as required and avoiding blocking assignment within logical and iterative statements. An accurate fix example following these guidelines is below.
+
+```verilog
+always @ (posedge clk)
+begin  
+    reg [3:0] check_pass; 
+    integer i;
+    for (i = 0; i < 4; i++) begin
+        if (entered_pass[(i*8 + 0 - 1):(i*8 + 0)] == golden_pass[(i*8 + 0 - 1):(i*8 + 0)]) begin
+            check_pass[i] = 1'b1;
+        end
+        else begin
+            check_pass[i] = 1'b0;
+            break;
+        end
+    end
+
+    grant_access = check_pass == 4'b1111;
+end
+```
+Note that I corrected the `verlog` code syntax issue of assign, avoiding the unintended branching in conditions also recommending declared var, reg type. and condition correct to match array indexing etc.
+original code snippets, declaring correct var, removing assign command from the cond blocks also shifting sensitivity blocks.
+
+ORIGINAL CODE:
+```
+                    always_comb @ (posedge clk)
+                    
+                    begin
+		    
+                      assign check_pass[3:0] = 4'b0;
+                      for (i = 0; i < 4; i++) begin
+		      
+                    	if (entered_pass[(i*8 - 1) : i] eq golden_pass([i*8 - 1) : i])
+			
+			  assign check_pass[i] = 1;
+                    	  continue;
+			
+                    	else
+			
+                    	  assign check_pass[i] = 0;
+                    	  break;
+			
+                    	end
+		      
+                      assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;
+		    
+                    end
+		
+                 ```

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15
+VULNERABILITY_DESCRIPTION:
+Dead Store and Lack of Mutex Unlock
+EXPLANATION:
+The provided code snippet appears to be a part of an Intel i915 GPU driver. However, there are two main issues that stand out. 
+
+1. Dead Store: The assignments `.gem_prime_import = i915_gem_prime_import,`, `.dumb_create = i915_gem_dumb_create,`, `.dumb_map_offset = i915_gem_dumb_map_offset,`, `.dumb_destroy = drm_gem_dumb_destroy,`, `.ioctls = i915_ioctls,`, `.fops = &i915_driver_fops,`, and `.name = DRIVER_NAME,` seem to be assigned without any prior initialization of the structure to which these members belong. This might potentially lead to data corruption or unexpected behavior if the structure is accessed before it is properly initialized.
+
+2. Lack of Mutex Unlock: After acquiring the mutex lock `mutex_lock(&dev->struct_mutex);`, it should be released using `mutex_unlock(&dev->struct_mutex);` in all possible execution paths. However, in the given code, if the `if (INTEL_INFO(dev)->gen > 5)` condition is met, `mutex_unlock(&dev->struct_mutex);` is not present. This means that if this condition is met, the mutex will never be unlocked.
+
+RECOMMENDATIONS:
+For the first issue, ensure that the structure is properly initialized before assigning values to its members.
+
+For the second issue, it is essential to unlock the mutex in all possible execution paths. The corrected code snippet should have `mutex_unlock(&dev->struct_mutex);` for both the `if (INTEL_INFO(dev)->gen > 5)` and the `else` conditions. Here's how you could fix the second vulnerability:
+
+```c
+if (!i915.reset)
+	return 0;
+
+mutex_lock(&dev->struct_mutex);
+
+i915_gem_reset(dev);
+
+if (INTEL_INFO(dev)->gen > 5)
+	intel_reset_gt_powersave(dev);
+
+mutex_unlock(&dev->struct_mutex); // Unlock the mutex in all cases
+```
+
+ORIGINAL CODE:
+```
+if (!i915.reset)
+	return 0;
+
+mutex_lock(&dev->struct_mutex);
+
+i915_gem_reset(dev);
+
+		 * of re-init after reset.
+		 */
+		if (INTEL_INFO(dev)->gen > 5)
+			intel_reset_gt_powersave(dev);
+	} else {
+		mutex_unlock(&dev->struct_mutex);
+	}
+
+	.gem_prime_import = i915_gem_prime_import,
+
+	.dumb_create = i915_gem_dumb_create,
+	.dumb_map_offset = i915_gem_dumb_map_offset,
+	.dumb_destroy = drm_gem_dumb_destroy,
+	.ioctls = i915_ioctls,
+	.fops = &i915_driver_fops,
+	.name = DRIVER_NAME,
+```

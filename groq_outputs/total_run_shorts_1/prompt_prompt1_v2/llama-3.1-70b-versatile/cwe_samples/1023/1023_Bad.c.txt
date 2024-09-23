@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code snippet is CWE-127: Buffer Under-read. This is caused by comparing the lengths of the input passwords and usernames using `strlen()`, but not validating whether the input passwords and usernames are null-terminated.
+
+EXPLANATION:
+The `AuthenticateUser()` function takes in two character pointers, `inUser` and `inPass`, and compares them to the pre-defined username and password using `strncmp()` and `strlen()`. However, `strlen()` does not account for null-termination, and `strncmp()` may read past the end of the input strings if they are not null-terminated. This can lead to undefined behavior and potentially allow an attacker to bypass authentication.
+
+Additionally, the `AuthenticateUser()` function has a logic error. It checks for authentication failure of the username using `strlen(inUser)` but then checks for authentication success of the password using `strlen(inPass)`. This means that the authentication result of the password will always be valid if the username has been successfully authenticated, even if the password is incorrect.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to ensure that the input strings are null-terminated and that we validate the lengths of the input strings before comparing them. Here is a recommended fix:
+- Use `strcmp()` instead of `strncmp()` with `strlen()` to compare the input strings. This will ensure that the function checks for null-termination.
+- Validate the lengths of the input strings before comparing them.
+
+Here's how you could modify the `AuthenticateUser()` function to implement these fixes:
+
+```c
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strcmp(username, inUser) != 0) {
+        logEvent("Auth failure of username");
+        return(AUTH_FAIL);
+    }
+    if (strcmp(pass, inPass) == 0) {
+        logEvent("Auth success of password");
+        return(AUTH_SUCCESS);
+    } else {
+        logEvent("Auth fail of password");
+        return(AUTH_FAIL);
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin";char *pass = "password";
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strncmp(username, inUser, strlen(inUser))) {
+        logEvent("Auth failure of username using strlen of inUser");
+        return(AUTH_FAIL);
+    }
+    if (! strncmp(pass, inPass, strlen(inPass))) {
+        logEvent("Auth success of password using strlen of inUser");
+        return(AUTH_SUCCESS);
+    }else {
+        logEvent("Auth fail of password using sizeof");
+        return(AUTH_FAIL);
+    }
+}
+int main (int argc, char **argv) {
+    int authResult;
+    if (argc < 3) {
+        ExitError("Usage: Provide a username and password");
+    }
+    authResult = AuthenticateUser(argv[1], argv[2]);
+    if (authResult == AUTH_SUCCESS) {
+        DoAuthenticatedTask(argv[1]);
+    }else {
+        ExitError("Authentication failed");
+    }
+}
+```

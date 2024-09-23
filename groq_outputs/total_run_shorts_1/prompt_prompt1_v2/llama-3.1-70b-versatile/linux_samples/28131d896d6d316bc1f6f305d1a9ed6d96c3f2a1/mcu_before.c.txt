@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 30-39
+VULNERABILITY_DESCRIPTION:
+The code appears to be vulnerable to potential out-of-bounds memory access within the `mt7915_mcu_set_sta_mcs` and related functions. The code uses pointer arithmetic and casts without proper validation of the pointer and object sizes. This might lead to accessing memory outside the bounds of the objects being manipulated.
+
+EXPLANATION:
+The vulnerability appears in the `mt7915_mcu_sta_rate_ctrl_tlv` function where a cast to `__le32 *` is performed on `ra->ht_mcs` and the memory is accessed as an array. Similarly, in the `mt7915_mcu_sta_rate_ctrl_tlv` and `mt7915_mcu_add_he` functions, pointer arithmetic and casting is performed on `sta` and `vif` without validating the pointer and object sizes.
+
+RECOMMENDATIONS:
+1. Add proper validation of pointer and object sizes before performing pointer arithmetic and casting. This includes checking the size of `skb`, `sta`, `vif`, `mvif`, and `msta` before accessing their members.
+2. Use correct casting methods, such as `container_of`, to ensure that the pointers are correctly aligned and valid.
+3. Use compiler flags, such as `-Wcast-align`, to warn about potential alignment issues when performing pointer arithmetic and casting.
+
+ORIGINAL CODE:
+(return snippet for mt7915_mcu_sta_rate_ctrl_tlv function)
+
+static void
+mt7915_mcu_sta_rate_ctrl_tlv(struct sk_buff *skb, struct mt7915_dev *dev,
+			     struct ieee80211_vif *vif, struct ieee80211_sta *sta)
+{
+    ...
+    if (sta->ht_cap.ht_supported) {
+        const u8 *mcs_mask = mask->control[band].ht_mcs;
+
+        ra->supp_mode |= MODE_HT;
+        ra->af = sta->ht_cap.ampdu_factor;
+        ra->ht_gf = !!(sta->ht_cap.cap & IEEE80211_HT_CAP_GRN_FLD);
+
+        if (sta->ht_cap.cap & IEEE80211_HT_CAP_LDPC_CODING)
+            cap |= STA_CAP_LDPC;
+
+        mt7915_mcu_set_sta_ht_mcs(sta, ra->ht_mcs, mcs_mask);
+        ra->supp_ht_mcs = *(__le32 *)ra->ht_mcs; // potentially vulnerable line
+    }
+    ...
+}

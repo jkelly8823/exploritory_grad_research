@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-14
+VULNERABILITY_DESCRIPTION:
+A use-after-free vulnerability is present in the given code snippet. This occurs when the function `softreq_destroy(sr)` is called before `callback(cb_arg, err)`.
+
+EXPLANATION:
+The `softreq_destroy(sr)` function call implies that the `sr` object is about to be deallocated. However, the code immediately afterwards calls `callback(cb_arg, err)`, which may still use the `sr` object. This can lead to undefined behavior if the callback function accesses the `sr` object after it has been destroyed.
+
+Furthermore, the use of `READ_ONCE(*sr->resp.orh)` suggests that the code is trying to access the `sr->resp.orh` field in a thread-safe way. However, this does not prevent the `sr` object from being destroyed before the callback function is called.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to reorder the function calls so that `callback(cb_arg, err)` is called before `softreq_destroy(sr)`. This ensures that the callback function is executed before the `sr` object is destroyed.
+
+Additionally, the callback function should be reviewed to ensure it does not access the `sr` object or any of its fields after the callback function has been called.
+
+ORIGINAL CODE:
+( Original code was provided )
+
+struct nitrox_device *ndev = cmdq->ndev;
+struct nitrox_softreq *sr;
+int req_completed = 0, err = 0, budget;
+completion_t callback;
+void *cb_arg;
+
+    /* check all pending requests */
+budget = atomic_read(&cmdq->pending_count);
+
+    smp_mb__after_atomic();
+    /* remove from response list */
+response_list_del(sr, cmdq);
+    /* ORH error code */
+err = READ_ONCE(*sr->resp.orh) & 0xff;
+callback = sr->callback;
+cb_arg = sr->cb_arg;
+softreq_destroy(sr);
+if (callback)
+    callback(cb_arg, err);
+
+req_completed++;
+}

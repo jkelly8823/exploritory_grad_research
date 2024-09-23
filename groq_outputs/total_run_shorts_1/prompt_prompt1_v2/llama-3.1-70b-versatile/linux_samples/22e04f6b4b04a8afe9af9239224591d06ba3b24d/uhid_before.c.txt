@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13, 17-19
+VULNERABILITY_DESCRIPTION: Memory leak and potential resource starvation due to unlocked usage of spin_lock_irqsave/restore, potential DoS (Denial of Service) attacks, and sensitive usage of GFP_ATOMIC.
+EXPLANATION:
+The uhid_hid_input function is vulnerable to several issues:
+
+*   The `spin_lock_irqsave` and `spin_unlock_irqrestore` mechanism is used, which saves the current interrupt state, disables interrupts, and then locks the spinlock. However, the spinlock routines might be interrupted by an NMI/irq, which can result in a partial unlock before it is reacquired. Since there's a time gap between the lock/unlock calls, an out of order execution can happen leading to undefined behavior.
+*   GFP_ATOMIC flag usage. GFP_ATOMIC allocations can cause OOM (out of memory) kill if the allocation fails. It's recommended to avoid GFP_ATOMIC allocations as they might lead to potential resource starvation or deadlocks when used in interrupt handlers.
+*   Potential memory leak: kzalloc() does not automatically perform garbage collection when resource-starved, such example of potential DoS (Denial of Service) attack. A properly-written function would involve maintaining pool of memory.
+*   Unlocking might cause deadlocks. Spin_unlockIRQrestore() occurs before the memory is processed, might leave resources idle and thus cause additional contention.
+
+RECOMMENDATIONS:
+
+1.  Use a different synchronization mechanism: Using `spin_lock_irqsave/restore` may lead to undefined behavior. A safer alternative would be to use `spin_lock_irq/irqrestore` because it always re-enables interrupts without affecting other threads operating the IRQ.
+2.  Implement a more suitable allocation strategy: Instead of GFP_ATOMIC, `krealloc()` or `vmalloc()` is usually recommended when the resource needs atomic allocation. However, if this is an interrupt handler use `GFP_NOWAIT` to prevent the risk of disabling preemption within kernel interrupt handlers to result in resource deadlocks or starvations of requests for reclaiming tasks, and race and deadlocks caused by disabling kernel interrupts from one context as part, running in parallel from a context still requiring resource reclaim.
+3.  Memory deallocation: Consider using `kmalloc()` instead, to manually manage memory; This has the benefit of ensuring any pending allocation that leads to running out of resources on potential multiple allocation when GFP_ATOMIC fails (`krealloc` or `vmalloc`).
+
+ORIGINAL CODE:
+
+```c
+    uhid_queue_event(uhid, UHID_CLOSE);
+}
+
+static int uhid_hid_input(struct input_dev *input, unsigned int type,
+			  unsigned int code, int value)
+{
+    struct hid_device *hid = input_get_drvdata(input);
+    struct uhid_device *uhid = hid->driver_data;
+    unsigned long flags;
+    struct uhid_event *ev;
+
+    ev = kzalloc(sizeof(*ev), GFP_ATOMIC);
+    if (!ev)
+        return -ENOMEM;
+
+    ev->type = UHID_OUTPUT_EV;
+    ev->u.output_ev.type = type;
+    ev->u.output_ev.code = code;
+    ev->u.output_ev.value = value;
+
+    spin_lock_irqsave(&uhid->qlock, flags);
+    uhid_queue(uhid, ev);
+    spin_unlock_irqrestore(&uhid->qlock, flags);
+
+    return 0;
+}
+
+static int uhid_hid_parse(struct hid_device *hid)
+{
+    struct uhid_device *uhid = hid->driver_data;
+
+    .stop = uhid_hid_stop,
+    .open = uhid_hid_open,
+    .close = uhid_hid_close,
+    .hidinput_input_event = uhid_hid_input,
+    .parse = uhid_hid_parse,
+};
+
+#ifdef CONFIG_COMPAT
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("David Herrmann <dh.herrmann@gmail.com>");
+MODULE_DESCRIPTION("User-space I/O driver support for HID subsystem");
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Insecure file handling and lack of error handling in fwrite function.
+
+EXPLANATION:
+The provided code snippet uses the fwrite function to write to a log file. However, this function is vulnerable to data truncation attacks if an incomplete message is written to the file. Furthermore, it does not check for any errors that may occur during the file write operation before unlocking the file lock.
+
+Additionally, the fclose() call contains a typo. It should be fclose($logfile) instead of fclose($logFile). 
+
+Another issue with this code snippet is that the file path "logFile.log" is hard-coded. This can be a security risk if the log file is located in a directory that can be accessed by malicious users.
+
+RECOMMENDATIONS:
+- Use fopen() function with 'a+' mode to truncate the file in case of incomplete writes, which can help prevent data truncation attacks.
+- Check if fwrite() was successful and handle any errors that may occur.
+- Use a more secure way to handle file paths, such as defining them as constants or using environment variables.
+- Fix the typo in fclose() function call.
+- Consider using a more secure logging mechanism, such as using a logging library that handles file locking and errors more securely.
+
+ORIGINAL CODE:
+```php
+function writeToLog($message){$logfile = fopen("logFile.log", "a");
+    //attempt to get logfile lock
+    if (flock($logfile, LOCK_EX)) {fwrite($logfile,$message);
+       // unlock logfile
+       flock($logfile, LOCK_UN);}else {print "Could not obtain lock on logFile.log, message not recorded\n";}
+}fclose($logFile);
+```
+
+Improved version of the code:
+```php
+function writeToLog($message){
+    $logFilePath = getenv('LOG_FILE_PATH'); // Define log file path as an environment variable
+    $logfile = fopen($logFilePath, "a+");
+    if ($logfile === false) {
+        print "Failed to open log file.\n";
+        return;
+    }
+    // Attempt to get logfile lock
+    if (flock($logfile, LOCK_EX)) {
+        $len = fwrite($logfile, $message);
+        if ($len !== strlen($message)) {
+            print "Error writing to log file.\n";
+        }
+        // Unlock logfile
+        flock($logfile, LOCK_UN);
+    } else {
+        print "Could not obtain lock on $logFilePath, message not recorded\n";
+    }
+    fclose($logfile);
+}
+```

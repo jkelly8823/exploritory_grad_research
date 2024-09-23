@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9, 15, 17
+VULNERABILITY_DESCRIPTION:
+A potential use-after-free vulnerability exists in the given code snippet. The code increments the refcount of `bss_from_pub(bss->pub.hidden_beacon_bss)` and `bss_from_pub(bss->pub.transmitted_bss)` without ensuring that these structures are still valid. Similarly, the code accesses `tmp->pub.proberesp_ies` and `new->pub.transmitted_bss` without null pointer checks.
+
+EXPLANATION:
+In the given code, the refcount of `bss_from_pub(bss->pub.hidden_beacon_bss)` and `bss_from_pub(bss->pub.transmitted_bss)` is incremented without checking if the returned pointer is valid. If `bss_from_pub` returns a null pointer, or if the returned structure is no longer valid, the code will access memory out of bounds or dereference a null pointer.
+
+Additionally, the code accesses `tmp->pub.proberesp_ies` and `new->pub.transmitted_bss` without null pointer checks. These accesses can also lead to null pointer dereferences if these pointers are null.
+
+RECOMMENDATIONS:
+1. Add null pointer checks before accessing `bss_from_pub(bss->pub.hidden_beacon_bss)`, `bss_from_pub(bss->pub.transmitted_bss)`, `tmp->pub.proberesp_ies`, and `new->pub.transmitted_bss`.
+
+```c
+if (bss->pub.hidden_beacon_bss) {
+    struct cfg80211_internal_bss *hidden_bss = bss_from_pub(bss->pub.hidden_beacon_bss);
+    if (hidden_bss) {
+        hidden_bss->refcount++;
+    }
+}
+
+if (bss->pub.transmitted_bss) {
+    struct cfg80211_internal_bss *transmitted_bss = bss_from_pub(bss->pub.transmitted_bss);
+    if (transmitted_bss) {
+        transmitted_bss->refcount++;
+    }
+}
+
+if (tmp && tmp->pub.proberesp_ies) {
+    // access tmp->pub.proberesp_ies safely
+}
+
+if (new->pub.transmitted_bss) {
+    // access new->pub.transmitted_bss safely
+}
+```
+2. Ensure that `bss_from_pub` returns a valid pointer to a structure that is still allocated and not freed already. If the pointer can become invalid before the refcount is incremented, the code needs to be altered to ensure that this situation cannot occur.
+
+ORIGINAL CODE:
+```c
+lockdep_assert_held(&rdev->bss_lock);
+
+bss->refcount++;
+
+if (bss->pub.hidden_beacon_bss)
+	bss_from_pub(bss->pub.hidden_beacon_bss)->refcount++;
+
+if (bss->pub.transmitted_bss)
+	bss_from_pub(bss->pub.transmitted_bss)->refcount++;
+
+static inline void bss_ref_put(struct cfg80211_registered_device *rdev,
+			       struct cfg80211_internal_bss *bss)
+	new->refcount = 1;
+	INIT_LIST_HEAD(&new->hidden_list);
+	INIT_LIST_HEAD(&new->pub.nontrans_list);
+	/* we'll set this later if it was non-NULL */
+	new->pub.transmitted_bss = NULL;
+
+	if (rcu_access_pointer(tmp->pub.proberesp_ies)) {
+		hidden = rb_find_bss(rdev, tmp, BSS_CMP_HIDE_ZLEN);
+		if (!hidden)
+		spin_lock_bh(&rdev->bss_lock);
+		if (cfg80211_add_nontrans_list(non_tx_data->tx_bss,
+					       &res->pub)) {
+			if (__cfg80211_unlink_bss(rdev, res)) {
+				rdev->bss_generation++;
+				res = NULL;
+			}
+		}
+		spin_unlock_bh(&rdev->bss_lock);
+
+		if (!res)
+			return NULL;
+	}
+
+	trace_cfg80211_return_bss(&res->pub);
+	/* cfg80211_bss_update gives us a referenced result */
+}

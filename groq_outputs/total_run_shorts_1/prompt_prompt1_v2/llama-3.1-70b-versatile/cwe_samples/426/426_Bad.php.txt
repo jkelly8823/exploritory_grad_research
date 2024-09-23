@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+The provided code snippet employs user input (`$userName`) in a system command without proper input validation or sanitization, thus introducing a potential Command Injection vulnerability.
+
+EXPLANATION:
+Although it's assumed that `getCurrentUser()` returns an alphanumeric username, minimizing the risk of a basic CWE-78 (Command Injection) attack, it's still possible to inject malicious commands using more complex techniques, such as inserting shell escape sequences, terminating the grep command and using other system commands. Furthermore, attackers can manipulate command invocations to produce desired output.
+
+However, considering the username returned is guaranteed to be alphanumeric and not containing shell escape sequences or other special characters, the more likely issue in this code snippet is a Command Injection related to an unexpected or potentially oversized `grep` output. Essentially this can result in CPU usage problems when grep commands produce an excessive number of results.
+
+Another major consideration is security of information as any information inadvertently returned by `grep` (process wise, would be logged if log_sys logging is enabled such that authorized users could gain sensitive privilege specific info), would pose information disclosure concern. In order to prevent both issues associated here would likely need review of all system command use throughout your project if a more manageable audit would be needed.
+
+RECOMMENDATIONS:
+1. Consider using more platform-independent methods of gathering user process information. PHP provides an interface with proc_*() native php functions for processing that wouldn't require the use of system commands vulnerable as the existing methodology.
+   An alternative but higher-security risk would avoid system commands overall - would be similar such:
+   exec('ps -ef | grep ' . escapeshellarg($userName), $out);
+   (if you must do so, consider input-safe 'escapeshellarg' on the input $UserName arguments - don't eliminate possibilities other mitigations)
+
+2. Implement filtering/logging to guard against excessive `grep` data on `$output`.
+
+3. Ensure the privilege your PHP thread is running your script as should remain consistent and ideally not run with higher levels of privilege than the PHP task in hand actually demands.
+
+ORIGINAL CODE:
+```php
+$userName = getCurrentUser();$command = 'ps aux | grep ' . $userName;system($command);
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-18
+VULNERABILITY_DESCRIPTION:
+Potential NULL pointer dereference and memory leak vulnerability.
+
+EXPLANATION:
+In the provided code snippet, on lines 12-18, a memory leak and potential NULL pointer dereference vulnerability is present. This is because the variable 'av' is being decremented with Py_DECREF, which may cause the object to be freed, but the variable 'av' is later used again on line 13 to assign sys.argv with PySys_SetObject. This call to PySys_SetObject has the potential to dereference a pointer to already freed memory.
+
+Additionally, it is possible that the call to PySys_SetObject could fail, in which case an error would be propagated and av would not be decremented (at line 12), meaning memory associated with 'av' would be leaked.
+
+RECOMMENDATIONS:
+Instead of using Py_DECREF on 'av' directly after setting sys.argv with PySys_SetObject, ensure that the object 'av' is explicitly incremented with Py_INCREF when creating it, and then it can be safely decremented in both the success and failure paths after setting sys.argv.
+
+Furthermore, error checking for the return value of PySys_SetObject should be performed to handle potential failures. 
+
+ORIGINAL CODE:
+}
+void
+PySys_SetArgv(int argc, char **argv)
+{
+#if defined(HAVE_REALPATH)
+    char fullpath[MAXPATHLEN];
+#elif defined(MS_WINDOWS) && !defined(MS_WINCE)
+        Py_FatalError("no mem for sys.argv");
+    if (PySys_SetObject("argv", av) != 0)
+        Py_FatalError("can't assign sys.argv");
+    if (path != NULL) {
+        char *argv0 = argv[0];
+        char *p = NULL;
+        Py_ssize_t n = 0;
+        PyObject *a;
+    Py_DECREF(av);
+}

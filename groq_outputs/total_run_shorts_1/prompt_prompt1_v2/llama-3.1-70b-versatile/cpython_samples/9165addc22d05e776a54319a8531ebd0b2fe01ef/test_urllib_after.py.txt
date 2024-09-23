@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15, 29, 33
+VULNERABILITY_DESCRIPTION: 
+Potential HTTP Header Injection vulnerability due to the construction of URLs with untrusted input.
+
+EXPLANATION:
+The test cases `test_url_path_with_newline_header_injection_rejected` and `test_url_host_with_newline_header_injection_rejected` are designed to test the rejection of URLs with newline header injection. However, within these tests, the `host` variable is set to a value containing a newline character. Although these are test cases, they actually contain a piece of the vulnerability in that they demonstrate how easy it is to create a URL that contains newline characters which could be used to inject false headers. However, the real problem lies outside of these test cases.  At lines 15, 29, 33 there is no validation on the value being assigned to `schemeless_url` (or its component parts) and this variable is directly used to create a URL with `urlopen`.  It's possible for an attacker to insert newline characters here to inject headers.
+
+RECOMMENDATIONS:
+- Validate and sanitize any untrusted input before it is assigned to `schemeless_url` or its component parts. 
+- Regularly check the values of `schemeless_url` to ensure that they do not contain newline characters or other unauthorized data.
+- Ensure all URLs are properly encoded to prevent any injection attacks.
+
+ORIGINAL CODE:
+
+            self.unfakehttp()
+
+    @unittest.skipUnless(ssl, "ssl module required")
+    def test_url_path_with_control_char_rejected(self):
+        for char_no in list(range(0, 0x21)) + [0x7f]:
+            char = chr(char_no)
+            schemeless_url = f"//localhost:7777/test{char}/"
+            self.fakehttp(b"HTTP/1.1 200 OK\r\n\r\nHello.")
+                self.unfakehttp()
+
+    @unittest.skipUnless(ssl, "ssl module required")
+    def test_url_path_with_newline_header_injection_rejected(self):
+        self.fakehttp(b"HTTP/1.1 200 OK\r\n\r\nHello.")
+        host = "localhost:7777?a=1 HTTP/1.1\r\nX-injected: header\r\nTEST: 123"
+        schemeless_url = "//" + host + ":8080/test/?test=a"
+        try:
+        finally:
+            self.unfakehttp()
+
+    @unittest.skipUnless(ssl, "ssl module required")
+    def test_url_host_with_control_char_rejected(self):
+        for char_no in list(range(0, 0x21)) + [0x7f]:
+            char = chr(char_no)
+            schemeless_url = f"//localhost{char}/test/"
+            self.fakehttp(b"HTTP/1.1 200 OK\r\n\r\nHello.")
+            try:
+                escaped_char_repr = repr(char).replace('\\', r'\\')
+                InvalidURL = http.client.InvalidURL
+                with self.assertRaisesRegex(
+                    InvalidURL, f"contain control.*{escaped_char_repr}"):
+                    urlopen(f"http:{schemeless_url}")
+                with self.assertRaisesRegex(InvalidURL, f"contain control.*{escaped_char_repr}"):
+                    urlopen(f"https:{schemeless_url}")
+            finally:
+                self.unfakehttp()
+
+    @unittest.skipUnless(ssl, "ssl module required")
+    def test_url_host_with_newline_header_injection_rejected(self):
+        self.fakehttp(b"HTTP/1.1 200 OK\r\n\r\nHello.")
+        host = "localhost\r\nX-injected: header\r\n"
+        schemeless_url = "//" + host + ":8080/test/?test=a"
+        try:
+            InvalidURL = http.client.InvalidURL
+            with self.assertRaisesRegex(
+                InvalidURL, r"contain control.*\\r"):
+                urlopen(f"http:{schemeless_url}")
+            with self.assertRaisesRegex(InvalidURL, r"contain control.*\\n"):
+                urlopen(f"https:{schemeless_url}")
+        finally:
+            self.unfakehttp()
+
+    def test_read_0_9(self):
+        # "0.9" response accepted (but not "simple responses" without
+        # a status line)
+        self.check_read(b"0.9")

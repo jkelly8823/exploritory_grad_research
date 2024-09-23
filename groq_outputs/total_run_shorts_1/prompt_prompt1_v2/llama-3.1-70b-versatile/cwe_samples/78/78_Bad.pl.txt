@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3, 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Command Injection attacks. This occurs when user input is injected into a command string without proper sanitization, allowing an attacker to execute arbitrary system commands.
+
+EXPLANATION:
+The vulnerability is caused by directly using the user input (`param('name')`) in the system command string (`"/path/to/nslookup $name"`) without proper validation or sanitization. This allows an attacker to inject malicious input and manipulate the command to execute arbitrary system commands. Additionally, the code does not properly quote the command argument, making it susceptible to word splitting and globbing attacks. 
+
+Furthermore, the code uses an insecure method to display the output of the command, as the escapeHTML function is used, but it does not prevent execution of malicious scripts (like XSS). However, since we are not provided with more information about the input from `escapeHTML`, we cannot assess its actual security posture.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly validate and sanitize the user input, and use a safe method to execute the system command with separation between the command and arguments. 
+
+Here's an example of how to fix the vulnerability:
+```perl
+use CGI qw(:standard);
+use Path::Class qw(file dir);
+
+# Define the system command with the argument separate
+$nslookup = "/usr/bin/nslookup";
+
+# Validate and sanitize the user input
+my $name = param('name');
+$name =~ s/[^a-zA-Z0-9.-]//g;  # Only allow a limited set of characters
+
+# Use the system childed opened method for safe execution
+open(my $fh, '-|', $nslookup, $name);
+
+# Read the command output
+while (<$fh>) {
+    print escapeHTML($_);
+    print "<br>\n";
+}
+close($fh);
+```
+
+ORIGINAL CODE:
+use CGI qw(:standard);
+$name = param('name');
+$nslookup = "/path/to/nslookup";
+print header;
+if (open($fh, "$nslookup $name|")) {
+    while (<$fh>) {
+    print escapeHTML($_);
+    print "<br>\n";
+    }
+    close($fh);
+}

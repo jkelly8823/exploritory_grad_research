@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 6
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability, specifically a socket leak.
+
+EXPLANATION:
+The provided code snippet creates a `ServerSocket` and a `Socket` in the constructor of the `StockSymbolBean` class. However, in the event of an exception when trying to create or accept the socket, there is no guarantee that the sockets will be properly closed. This could lead to resource leaks and potentially cause the server to become unresponsive or run out of available sockets. Additionally, even if an exception does not occur, the sockets are not explicitly closed, leading to a resource leak once the `StockSymbolBean` object is garbage collected.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the sockets should be properly closed in all cases. A `finally` block can be used to ensure that the sockets are closed regardless of whether an exception occurs.
+
+For example:
+```java
+public StockSymbolBean() {
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    try {
+        serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        clientSocket = serverSocket.accept();
+    } catch (IOException e) {
+        // Handle the exception
+    } finally {
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                // Log the exception or handle it
+            }
+        }
+        if (clientSocket != null) {
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                // Log the exception or handle it
+            }
+        }
+    }
+}
+```
+Alternatively, Java 7 and later versions provide the `try-with-resources` statement, which can be used to automatically close the sockets.
+
+For example:
+```java
+public StockSymbolBean() {
+    try (ServerSocket serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+         Socket clientSocket = serverSocket.accept()) {
+        // Use the sockets
+    } catch (IOException e) {
+        // Handle the exception
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+@Stateless
+public class StockSymbolBean implements StockSymbolRemote {
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        } catch (IOException ex) {
+            // ...
+        }
+        try {
+            clientSocket = serverSocket.accept();
+        } catch (IOException e) {
+            // ...
+        }
+    }
+    public String getStockSymbol(String name) {
+        // ...
+    }
+    public BigDecimal getStockValue(String symbol) {
+        // ...
+    }
+    private void processClientInputFromSocket() {
+        // ...
+    }
+}
+```

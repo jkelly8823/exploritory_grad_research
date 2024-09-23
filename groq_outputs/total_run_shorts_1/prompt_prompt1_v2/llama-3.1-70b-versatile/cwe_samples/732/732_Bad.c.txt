@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to CWE-59: Improper Link Following. Additionally, the code may be vulnerable to CWE-78: Improper Neutralization of Directives in Dynamically Evaluated Code (Format String) and CWE-117: Improper Output Sanitization.
+
+EXPLANATION:
+The code attempts to create a new file named "hello.out" using fopen(). If the file already exists, the file will be overwritten without consideration for potential security implications. Furthermore, there is no input validation or sanitization of the filename, which could potentially lead to unexpected behavior. Finally, fprintf() is used to write to the file without proper handling of special characters in the printed string, which might allow an attacker to inject malicious commands into the output.
+
+RECOMMENDATIONS:
+To address CWE-59, the file name should be constructed securely using snprintf() or similar function to prevent arbitrary path manipulation. Additionally, functions like access() or stat should be used to ensure that the file does not exist before writing to it.
+
+To address CWE-78 and CWE-117, consider using a safer alternative to fprintf() such as fwrite(), which directly writes the bytes without interpreting any format specifier. Additionally, make sure that the filename is correctly sanitized and validated.
+
+Here is an example of how the code could be improved:
+```c
+#define OUTFILE "hello.out"
+
+char fullpath[PATH_MAX];
+snprintf(fullpath, PATH_MAX, "%s", OUTFILE);
+
+umask(0);
+FILE *out;
+
+if (!access(fullpath, F_OK)) {
+    // file exists, do something else
+} else {
+    out = fopen(fullpath, "w");
+    if (out) {
+        char message[] = "hello world!\n";
+        fwrite(message, 1, strlen(message), out);
+        fclose(out);
+    }
+}
+```
+ORIGINAL CODE:
+```c
+#define OUTFILE "hello.out"
+umask(0);FILE *out;
+/* Ignore link following (CWE-59) for brevity */
+out = fopen(OUTFILE, "w");if (out) {fprintf(out, "hello world!\n");fclose(out);}
+```

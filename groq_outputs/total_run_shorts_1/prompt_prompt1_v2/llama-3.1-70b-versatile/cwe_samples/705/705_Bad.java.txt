@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a DNS Rebinding Attack.
+
+EXPLANATION:
+The vulnerability arises from the fact that the `Addr` object is created by resolving the client's IP address to a hostname using `InetAddress.getByName(ip)`. This operation can be slow and can potentially be blocked by an attacker. Moreover, if an attacker is able to control the DNS server responsible for resolving the client's IP address, they can use DNS rebinding to execute malicious actions.
+
+However, the main concern here is how the resultant hostname is used in `out.println("hello " + addr.getHostName())`. The usage of `out.println` indicates a web page is being generated, likely for consumption by a client's web browser. When the browser interprets the resulting HTML page, a malicious hostname could cause malicious behavior to be triggered on clients interpreting this HTML response.
+
+Additionally, the hostname string could potentially lead to NoSQL injection attacks or File Injection Attacks if not used carefully downstream, though more information from the entire project and other portions of the relevant .java file would be necessary to definitively declare those vulnerabilities.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the hostname to prevent malicious DNS resolving results. A safe implementation would involve filtering allowed characters from `addr.getHostName()` to prevent manipulation of server-generated responses. This validation should be implemented based on domain name syntax rules (RFC 1123).
+
+2. It is also worth considering enforcing Rate-Limiting for your `doPost` endpoint to thwart exploit delivery. Implementing rate-limiting can make your web applications less appealing to an attacker executing automated hacking attempts against exposed endpoints on your web application.
+
+3. Be cautious when processing and inputting `out.println("hello " + addr.getHostName())` to down-stream processes that may involve interaction with the database (like writing user generated strings to a database) and verify the absence of opportunities to inject malicious SQL commands through abuse of the `getHostName()` function generated results.
+
+ORIGINAL CODE:
+protected void doPost (HttpServletRequest req, HttpServletResponse res) throws IOException {
+    String ip = req.getRemoteAddr();
+    InetAddress addr = InetAddress.getByName(ip);
+    ...
+    out.println("hello " + addr.getHostName());
+}

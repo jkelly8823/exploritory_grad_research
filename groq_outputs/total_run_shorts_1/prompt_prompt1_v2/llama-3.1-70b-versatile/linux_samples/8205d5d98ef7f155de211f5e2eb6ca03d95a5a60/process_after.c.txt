@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+The `Warn_On` macro does not handle the condition where a potential floating point operation is attempted with an invalid MSR (Machine State Register) configuration.
+
+EXPLANATION:
+The provided code snippet checks if the MSR register has the flags MSR_FP (Floating Point) and MSR_VEC (Vector) set, in addition to MSR_VSX. However, the presence of `WARN_ON` is not sufficient to prevent a potential vulnerability if this condition is met. It will trigger a warning, but it will not prevent the execution of code paths that may rely on an invalid MSR configuration.
+
+RECOMMENDATIONS:
+Instead of using `WARN_ON`, consider adding additional checks and error handling to ensure the MSR register configuration is properly set before executing code that relies on it. For example, you could add a function that checks for an invalid MSR configuration and takes corrective action if necessary. Alternatively, consider replacing `WARN_ON` with a more robust assertion mechanism.
+
+ORIGINAL CODE:
+```c
+if (!tsk->thread.regs)
+	return;
+
+check_if_tm_restore_required(tsk);
+
+usermsr = tsk->thread.regs->msr;
+
+if ((usermsr & msr_all_available) == 0)
+	return;
+
+msr_check_and_set(msr_all_available);
+
+WARN_ON((usermsr & MSR_VSX) && !((usermsr & MSR_FP) && (usermsr & MSR_VEC)));
+
+#ifdef CONFIG_PPC_FPU
+```

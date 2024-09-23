@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 6
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow in sprintf, due to potential integer overflow when printing 'cpu' into 'dir'.
+
+EXPLANATION:
+The use of sprintf is a common source of buffer overflow vulnerabilities. When the unsinged integer 'cpu' is printed into 'dir', it is not checked whether this operation will exceed the allocated buffer size. Furthermore, the '%u' format specifier allows for integer value overflows when printing 'cpu', potentially leading to writing beyond the buffer boundaries, because the destination buffer 'dir' is only 32 bytes in length.
+
+Additionally, although not a buffer overflow, there is the assumption of a non-negative return from scanf to set the string to 31 characters plus the terminator, but the first 32 character it could meet, from "availability", can set state to a fixed buffer overflow.
+
+
+RECOMMENDATIONS:
+To fix the vulnerability:
+   * Replace the sprintf call with a safer function that checks the buffer length, such as snprintf (e.g., snprintf(dir, sizeof(dir), "cpu/%u", cpu)).
+   * Avoid magic numbers, and instead declare constants for buffer sizes (e.g., '#define BUFFER_SIZE 32', and then declare 'char dir[BUFFER_SIZE]', and use 'BUFFER_SIZE' when calling snprintf).
+   * Verify the length of 'dir' and 'state' before calling xenbus_scanf.
+
+
+ORIGINAL CODE:
+```c
+static int vcpu_online(unsigned int cpu)
+{
+	int err;
+	char dir[32], state[32];
+
+	sprintf(dir, "cpu/%u", cpu);
+	err = xenbus_scanf(XBT_NIL, dir, "availability", "%s", state);
+	if (err != 1) {
+		if (!xen_initial_domain())
+			printk(KERN_ERR "XENBUS: Unable to read cpu state\n");
+		return err;
+```

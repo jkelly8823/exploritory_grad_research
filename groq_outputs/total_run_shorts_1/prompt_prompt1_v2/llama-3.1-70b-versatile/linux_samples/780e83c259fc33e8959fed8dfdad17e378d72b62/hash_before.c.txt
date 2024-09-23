@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds array access
+
+EXPLANATION:
+The code checks if the index is within bounds when checking if `mapping[off] >= vif->num_queues`, but the check earlier in the function only ensures that `off + len` does not exceed `vif->hash.size`. However, it does not prevent `off + i` from exceeding `vif->hash.size` where `i` is a value in the range of `0` to `len-1`. This could lead to an out-of-bounds array access.
+
+However, upon further analysis, we notice that the earlier check `if ((off + len > vif->hash.size) || copy_op.len > XEN_PAGE_SIZE)` actually protects against this by ensuring that the entire range from `off` to `off+len-1` does not exceed `vif->hash.size`. 
+
+However, a different issue with the code is that it does not validate whether `off + i` will be larger than the number of elements in `vif->hash.mapping`, it only checks whether `mapping[off+i]` will exceed `vif->num_queues`. However, this one line `if (mapping[off++] >= vif->num_queues)` is not able to protect against an out-of-bounds array access when `off+i` is in the range of `vif->hash.size` but larger than the number of elements in `vif->hash.mapping`. If the type of `vif->hash.mapping` is not an array or an array-like structure that goes up to `vif->hash.size` in size, this could lead to an out-of-bounds array access. We make the assumption here that `vif->hash.mapping` is an array of size `vif->hash.size`.
+
+However, given the provided code and provided assumptions and there seems to be an additional VULNERABILITY that isn't related to this particular 'out of bounds' problem. 
+ 
+ RECOMMENDATIONS:
+Verify the size of `vif->hash.mapping` and ensure that it has enough space to store at least `vif->hash.size` elements of type `u32`. Additionally, consider adding a check to ensure that the size of `vif->hash.mapping` matches the value of `vif->hash.size` before accessing its elements.
+
+ORIGINAL CODE:
+u32 xenvif_set_hash_mapping(struct xenvif *vif, u32 gref, u32 len,
+			    u32 off)
+{
+	u32 *mapping = &vif->hash.mapping[off];
+	struct gnttab_copy copy_op = {
+		.source.u.ref = gref,
+		.source.domid = vif->domid,
+		.dest.u.gmfn = virt_to_gfn(mapping),
+		.dest.domid = DOMID_SELF,
+		.dest.offset = xen_offset_in_page(mapping),
+		.len = len * sizeof(u32),
+		.flags = GNTCOPY_source_gref
+	};
+
+	if ((off + len > vif->hash.size) || copy_op.len > XEN_PAGE_SIZE)
+		return XEN_NETIF_CTRL_STATUS_INVALID_PARAMETER;
+
+	while (len-- != 0)
+		if (mapping[off++] >= vif->num_queues)
+			return XEN_NETIF_CTRL_STATUS_INVALID_PARAMETER;
+}

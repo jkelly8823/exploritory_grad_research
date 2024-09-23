@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+Lines interacting with efivars->ops->set_variable, efivars->ops->query_variable_info 
+are not present in this code block, but lines: efivars->ops->set_variable(...) calls 
+indirectly imply allocations through efivars->ops functions
+VULNERABILITY_DESCRIPTION:
+Memory allocation vulnerabilities using kmalloc, allocation sizes could be affected 
+by external and potentially malicious sources or firmware state (EFI and UEFI system firmware)
+EXPLANATION:
+Although the given segment of code does not seem to directly present vulnerable memory 
+allocations, calls like efivars->ops->set_variable may still indirectly be 
+affecting the sizes of the allocations in lines like data = kmalloc(datasize, GFP_KERNEL). 
+Use of data = kmalloc(datasize, GFP_KERNEL) without corresponding input validation 
+on datasize leaves the function open to external attacks or errors (data corruption 
+and the exploitation of data corruption due to uninitiated segments in memory). 
+Besides, kernel's unchecked calls to kmalloc also introduce memory leaks, mainly on 
+cases with missing or improper calls to kfree. 
+
+The source of datasize = count - sizeof(attributes) makes it unclear as to the accuracy 
+of count that describes the amount of data to be copied to the allocated memory. 
+If this count value was under external sources (that can be manipulated for malicious 
+purposes), buffer overflow will lead to multiple vulnerabilities not limiting to code 
+segment overwrites. Multiple instances of spin_lock_irq also imply critical 
+code segments that rely on acquiring lock to be safe.
+
+RECOMMENDATIONS:
+1) Ensure the size passed to kmalloc (datasize) is within expected bounds to mitigate 
+the chance of buffer overflow and potential code corruption during the execution.
+2) Include bounds checking for returned pointer to prevent and handle (for erroneous 
+code) out-of-bounds memory access conditions. Checking for non-null pointers will aid 
+in nullifying use-after-free errors. Include code checks for when kmalloc fails, making 
+you catch and handle these errors instead of skipping over them.
+3) Store constant sizes for safe static code segment allocations, do not use variables 
+for sizing if possible.
+
+ORIGINAL CODE:
+```
+...
+	ssize_t bytes = 0;
+
+	if (count < sizeof(attributes))
+		return -EINVAL;
+...
+	u64 storage_space, remaining_size, max_size;
+...
+	if (datasize > remaining_size)
+		return -ENOSPC;
+
+	data = kmalloc(datasize, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+...
+	status = efivars->ops->set_variable(var->var.VariableName,
+					    &var->var.VendorGuid,
+					    attributes, datasize,
+					    data);
+...
+```

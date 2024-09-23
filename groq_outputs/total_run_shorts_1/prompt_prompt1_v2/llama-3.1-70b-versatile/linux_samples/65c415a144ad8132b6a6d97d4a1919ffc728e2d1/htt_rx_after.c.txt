@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code does not validate the offset value before using it to index skb->data, which could lead to a buffer overflow or out-of-bounds read.
+
+EXPLANATION:
+The code uses the offset value to index(skb->data) without validating its value. If the offset value is greater than or equal to the length of(skb->data), this would result in an out-of-bounds read, potentially accessing memory that is not part of the skb buffer. This could lead to a crash or potentially allow an attacker to access sensitive data.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, ensure that the offset value is within the bounds of skb->data before using it to index the buffer. This can be achieved by checking if the offset value is less than the length of(skb->data). For example:
+if (offset < skb->len) {
+	hdr = (struct ieee80211_hdr *)(skb->data + offset);
+	...
+}
+Additionally, consider using memset to zero out the skb buffer and skb_put to allocate space at the end of the buffer, this way you can be certain the offset is within bounds.
+
+ORIGINAL CODE:
+(return pn;
+}
+
+static bool ath10k_htt_rx_h_frag_multicast_check(struct ath10k *ar,
+						 struct sk_buff *skb,
+						 u16 offset)
+{
+	struct ieee80211_hdr *hdr;
+
+	hdr = (struct ieee80211_hdr *)(skb->data + offset);
+	return !is_multicast_ether_addr(hdr->addr1);
+}
+
+static bool ath10k_htt_rx_h_frag_pn_check(struct ath10k *ar,
+					  struct sk_buff *skb,
+					  u16 peer_id,
+					  u16 offset,
+	bool is_decrypted;
+	bool is_mgmt;
+	u32 attention;
+	bool frag_pn_check = true, multicast_check = true;
+
+	if (skb_queue_empty(amsdu))
+		return;
+
+								      0,
+								      enctype);
+
+		if (frag)
+			multicast_check = ath10k_htt_rx_h_frag_multicast_check(ar,
+									       msdu,
+									       0);
+
+		if (!frag_pn_check || !multicast_check) {
+			/* Discard the fragment with invalid PN or multicast DA
+			 */
+			temp = msdu->prev;
+			__skb_unlink(msdu, amsdu);
+			dev_kfree_skb_any(msdu);
+			msdu = temp;
+			frag_pn_check = true;
+			multicast_check = true;
+			continue;
+		}
+
+		ath10k_htt_rx_h_csum_offload(msdu);

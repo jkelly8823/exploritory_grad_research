@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 14
+VULNERABILITY_DESCRIPTION: 
+Uncontrolled Format String in printf-like functions, and Lack of Error Handling for string formatting functions.
+
+EXPLANATION:
+The `rs_pretty_print_rate_v1` and `rs_pretty_print_rate` functions are called with user-provided input (`pretty_rate`) which is then passed to `IWL_DEBUG_RATE` statements that resemble printf-like functions. The `rs_pretty_print_rate_v1` and `rs_pretty_print_rate` functions could potentially format the `pretty_rate` string in such a way that it contains format specifiers that could be interpreted by the `IWL_DEBUG_RATE` statements, leading to a format string vulnerability. 
+
+Furthermore, there is a lack of error handling in case the `rs_pretty_print_rate_v1` and `rs_pretty_print_rate` functions fail to format the string properly, potentially causing unexpected behavior.
+
+RECOMMENDATIONS:
+Use `snprintf` with explicit format specifiers to prevent any unintended interpretation of format specifiers in the `pretty_rate` string. Also, check the return values of the `rs_pretty_print_rate_v1` and `rs_pretty_print_rate` functions to handle any potential errors.
+
+```c
+char pretty_rate[100];
+size_t formatted_len = rs_pretty_print_rate_v1(pretty_rate, sizeof(pretty_rate), le32_to_cpu(notif->rate));
+if (formatted_len >= sizeof(pretty_rate)) {
+    IWL_ERR(mvm, "Failed to format rate string\n");
+}
+IWL_DEBUG_RATE(mvm, "Got rate in old format. Rate: %s. Converting.\n", pretty_rate);
+```
+
+```c
+size_t formatted_len = rs_pretty_print_rate(pretty_rate, sizeof(pretty_rate), lq_sta->last_rate_n_flags);
+if (formatted_len >= sizeof(pretty_rate)) {
+    IWL_ERR(mvm, "Failed to format rate string\n");
+}
+IWL_DEBUG_RATE(mvm, "new rate: %s\n", pretty_rate);
+```
+
+ORIGINAL CODE:
+```
+fw_chains |= IWL_TLC_MNG_CHAIN_A_MSK;
+if (chains & ANT_B)
+	fw_chains |= IWL_TLC_MNG_CHAIN_B_MSK;
+
+return fw_chains;
+}
+
+
+if (flags & IWL_TLC_NOTIF_FLAG_RATE) {
+	char pretty_rate[100];
+
+	if (iwl_fw_lookup_notif_ver(mvm->fw, DATA_PATH_GROUP,
+				    TLC_MNG_UPDATE_NOTIF, 0) < 3) {
+		rs_pretty_print_rate_v1(pretty_rate, sizeof(pretty_rate),
+					le32_to_cpu(notif->rate));
+		IWL_DEBUG_RATE(mvm,
+			       "Got rate in old format. Rate: %s. Converting.\n",
+			       pretty_rate);
+		lq_sta->last_rate_n_flags =
+			iwl_new_rate_from_v1(le32_to_cpu(notif->rate));
+	} else {
+		lq_sta->last_rate_n_flags = le32_to_cpu(notif->rate);
+	}
+		rs_pretty_print_rate(pretty_rate, sizeof(pretty_rate),
+				     lq_sta->last_rate_n_flags);
+		IWL_DEBUG_RATE(mvm, "new rate: %s\n", pretty_rate);
+}
+```

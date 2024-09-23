@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+Null pointer dereference vulnerability and potential memory leak.
+
+EXPLANATION:
+The code checks if `c` is null before attempting to use it. However, if `c` is null, it only sets an error flag (`p->error_indicator = 1;`) and returns null. This could potentially cause issues downstream if the caller does not properly handle the null return value. It is also worth noting that if `c` is null, the code does not attempt to release any resources that may be associated with it.
+
+In the second vulnerability, if `_PyArena_AddPyObject(p->arena, c)` fails and returns a negative value, it re-uses a potentially dangling pointer (`c`). If `c` points to a Python object that is being added to the arena, and adding it fails for any reason, then any further usage of `c` could potentially lead to undefined behavior.
+
+Additionally, it is not clear if the resources associated with `p->arena` are properly cleaned up in case of failure. This could potentially cause a resource leak.
+
+RECOMMENDATIONS:
+1. Ensure that `c` is not used downstream after it has been detected as null. Consider propagating the error further and handling it more gracefully.
+
+2. In the case of `_PyArena_AddPyObject(p->arena, c)` failure, consider error handling that will ensure that any dangling pointers are properly cleaned up or no longer referenced. This may include releasing the resources associated with `c`.
+
+3. Verify that the resources associated with `p->arena` are properly cleaned up in case of failure. This may involve releasing them explicitly or using a mechanism that ensures they are cleaned up in all scenarios.
+
+ORIGINAL CODE:
+
+```c
+#include <Python.h>
+#include "pycore_ast.h"           // _PyAST_Validate(),
+#include <errcode.h>
+
+#include "tokenizer.h"
+#include "pegen.h"
+
+    if (c == NULL) {
+        p->error_indicator = 1;
+        return NULL;
+    }
+
+    if (_PyArena_AddPyObject(p->arena, c) < 0) {
+```

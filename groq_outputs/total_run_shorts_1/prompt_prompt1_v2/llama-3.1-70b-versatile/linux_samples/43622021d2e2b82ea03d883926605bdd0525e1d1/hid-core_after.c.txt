@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 17
+VULNERABILITY_DESCRIPTION:
+The given code snippet contains a potential null pointer dereference vulnerability and resource leaks.
+
+EXPLANATION:
+The code has two potential issues. First, at lines 8-10, the code checks if `parser->global.report_id` is valid, and if not, it returns an error. However, in the case where `parser->global.report_id` is 0, it also returns an error. The problem is that 0 is a valid report ID, and this check might prevent the code from processing valid reports. Additionally, at line 17, a struct `hid_report` is freed, but it's not checked if it's actually allocated before freeing it, which can lead to a null pointer dereference.
+
+However, there is another issue that makes the code vulnerable: at lines 9-10, a failure to free the memory allocated at line 7 is observed in case an error occurs while parsing `parser->global.report_id`. This can result in a memory leak.
+
+RECOMMENDATIONS:
+- Remove the check for `parser->global.report_id == 0`, as 0 is a valid report ID.
+- In the error path of `parser->global.report_id`, call `kfree(report)` to prevent a memory leak.
+- Before freeing `report_enum->report_id_hash[j]` at line 17, check if it's not NULL.
+
+ORIGINAL CODE:
+
+	struct hid_report_enum *report_enum = device->report_enum + type;
+	struct hid_report *report;
+
+	if (id >= HID_MAX_IDS)
+		return NULL;
+	if (report_enum->report_id_hash[id])
+		return report_enum->report_id_hash[id];
+
+	report = kzalloc(sizeof(struct hid_report), GFP_KERNEL);
+
+	case HID_GLOBAL_ITEM_TAG_REPORT_ID:
+		parser->global.report_id = item_udata(item);
+		if (parser->global.report_id == 0 ||
+		    parser->global.report_id >= HID_MAX_IDS) {
+			hid_err(parser->device, "report_id %u is invalid\n",
+			(parser->global.report_id));
+			/* kfree(report); */
+			return -1;
+		}
+		return 0;
+
+	for (i = 0; i < HID_REPORT_TYPES; i++) {
+		struct hid_report_enum *report_enum = device->report_enum + i;
+
+		for (j = 0; j < HID_MAX_IDS; j++) {
+			struct hid_report *report = report_enum->report_id_hash[j];
+			if (report)
+				hid_free_report(report);
+		}

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a modification of an undefined variable 'id'.
+
+EXPLANATION:
+In the given code snippet, the variable 'id' is modified in line 17. However, the variable 'id' is not defined anywhere in this snippet. It can be assumed that 'id' is an array or struct that holds the device's ATA identification data, which is typically obtained from the device using the ATA IDENTIFY command. If the base of the 'id' array or struct is not correctly defined or obtained, writing to this memory location can cause unexpected behavior, crashes, or even arbitrary code execution.
+
+RECOMMENDATIONS:
+It is recommended to ensure that 'id' is properly initialized and defined before modifying it. Additionally, using the correct method to retrieve the ATA identification data and clear the reserved bits is crucial. You can use the ATA IDENTIFY command to obtain the data and then clear the bits. Here's a possible alternative:
+```c
+unsigned short *id = ahci_atapi_get_id_data(); // Retrieve the id data using a valid method
+id[ATA_ID_FEATURE_SUPP] &= cpu_to_le16(~(1 << 8)); // Clear the DEVSLP bit
+```
+
+ORIGINAL CODE:
+```c
+ * xgene_ahci_qc_issue - Issue commands to the device
+ * @qc: Command to issue
+ *
+ * Due to Hardware errata for IDENTIFY DEVICE command and PACKET
+ * command of ATAPI protocol set, the controller cannot clear the BSY bit
+ * after receiving the PIO setup FIS. This results in the DMA state machine
+ * going into the CMFatalErrorUpdate state and locks up. By restarting the
+ * DMA engine, it removes the controller out of lock up state.
+ */
+static unsigned int xgene_ahci_qc_issue(struct ata_queued_cmd *qc)
+{
+	struct ata_port *ap = qc->ap;
+	struct xgene_ahci_context *ctx = hpriv->plat_data;
+	int rc = 0;
+
+	if (unlikely((ctx->last_cmd[ap->port_no] == ATA_CMD_ID_ATA) ||
+	    (ctx->last_cmd[ap->port_no] == ATA_CMD_PACKET)))
+		xgene_ahci_restart_engine(ap);
+
+	rc = ahci_qc_issue(qc);
+
+	 *
+	 * Clear reserved bit 8 (DEVSLP bit) as we don't support DEVSLP
+	 */
+	id[ATA_ID_FEATURE_SUPP] &= cpu_to_le16(~(1 << 8));
+
+	return 0;
+}
+```

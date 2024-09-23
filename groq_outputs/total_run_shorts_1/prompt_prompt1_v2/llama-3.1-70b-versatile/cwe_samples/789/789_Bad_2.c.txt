@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability in Buffer Allocation
+
+EXPLANATION:
+The function `proc_msg` allocates a buffer `buf` based on the difference between `pre_len` and `msg_len`. However, in the current implementation, `pre_len` is a constant value (the length of the string "preamble: "), whereas `msg_len` is an input parameter. 
+
+If `msg_len` is larger than `pre_len`, it will result in a negative value being passed to the buffer allocation, causing an integer overflow. This can lead to a significant increase in the allocated buffer size, potentially causing a buffer overflow when the rest of the processing occurs.
+
+Additionally, the `proc_msg` function invocation with `jnklen` as the `msg_len` argument can violated the assumption of preamble length, as the code explicitly states. The value of `jnklen` can be manipulated by the input string, which can lead to the vulnerability.
+
+RECOMMENDATIONS:
+- Validate the `msg_len` input parameter against the expected preamble length before buffer allocation.
+- Ensure the `msg_len` value is not larger than the expected preamble length.
+- Consider using a safer buffer allocation function like `calloc` that takes the number of elements and element size as arguments instead of `char *buf[size]`.
+- Add bounds checking for buffer operations after allocation.
+
+ORIGINAL CODE:
+		 int proc_msg(char *s, int msg_len)
+		 {
+                  
+		    // Note space at the end of the string - assume all strings have preamble with space
+		    int pre_len = sizeof("preamble: ");
+		    char buf[pre_len - msg_len];
+		    ... Do processing here if we get this far
+		  
+		  }
+		  char *s = "preamble: message\n";
+		  char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+		  int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+		  int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack

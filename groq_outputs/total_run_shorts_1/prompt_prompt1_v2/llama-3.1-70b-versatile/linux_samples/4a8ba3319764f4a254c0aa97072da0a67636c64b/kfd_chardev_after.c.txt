@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 246-248, 265-266
+VULNERABILITY_DESCRIPTION:
+The provided code is vulnerable to potential use after free errors and resource leaks due to the placement of `kfree` calls in the `kfd_ioctl` function. Specifically, the `kfree` call is placed after the `retcode` value has been set to a non-zero value, indicating an error condition. If an error occurs when copying data from user space or when executing the ioctl function, the `kfree` call will not be executed, resulting in a memory leak.
+
+In addition, if an error occurs after the `kfree` call, but before the return statement, the `kdata` pointer will be freed, but the error value will still be returned, potentially causing a use after free error in the calling function.
+
+EXPLANATION:
+The placement of the `kfree` call in the `kfd_ioctl` function can lead to potential use after free errors and resource leaks. Specifically, when an error occurs, the `kfree` call is not executed, resulting in a memory leak. Additionally, if an error occurs after the `kfree` call, but before the return statement, the `kdata` pointer will be freed, but the error value will still be returned, potentially causing a use after free error in the calling function.
+
+To avoid these issues, the `kfree` call should be moved to a location where it will always be executed, regardless of the error condition.
+
+RECOMMENDATIONS:
+The `kfree` call should be moved to a location where it will always be executed, regardless of the error condition. One possible location is before the return statement, as follows:
+```
+if (!ioctl)
+	dev_dbg(kfd_device, "invalid ioctl: pid=%d, cmd=0x%02x, nr=0x%02x\n",
+			  task_pid_nr(current), cmd, nr);
+
+if (kdata != stack_kdata)
+	kfree(kdata);
+
+return retcode;
+```
+Alternatively, the `kfree` call can be moved to a separate error handling path, as follows:
+```
+err_i1:
+	if (kdata != stack_kdata)
+		kfree(kdata);
+	return retcode;
+```
+In either case, the `kfree` call should be executed regardless of the error condition, ensuring that the `kdata` pointer is always properly freed.
+
+ORIGINAL CODE:
+```
+static long kfd_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+{
+	...
+	if (!ioctl)
+		dev_dbg(kfd_device, "invalid ioctl: pid=%d, cmd=0x%02x, nr=0x%02x\n",
+			  task_pid_nr(current), cmd, nr);
+
+	if (kdata != stack_kdata)
+		kfree(kdata);
+
+	return retcode;
+}
+```

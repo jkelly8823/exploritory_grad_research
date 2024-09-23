@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+A potential Time-of-Check-to-Time-of-Use (TOCTOU) vulnerability in the file's synchronization mechanism when handling concurrent writes.
+
+EXPLANATION:
+The existing synchronization mechanism via `mutex_lock(&inode->i_mutex)` does not handle concurrent modification properly. In cases where there are multiple concurrent writes, the `BUG_ON` statement only ensures that the `iocb->ki_pos` value is synchronized with the `pos` parameter. However, this synchronization might not hold after acquiring the mutex and executing the write operation.
+
+The fundamental issue arises when the lock check (`cifs_find_lock_conflict`) and the ensuing write operation are not atomic. If another process modifies the file's lock state between these two points, the expected behavior may not be achieved, ultimately leading to an inconsistent state.
+
+RECOMMENDATIONS:
+To mitigate this issue, consider the following recommendations:
+1. Strengthen the synchronization mechanism:  Instead of relying solely on `mutex_lock(&inode->i_mutex)` for synchronization, investigate whether locks from higher layers, such as `cifs_find_lock_conflict`, can be leveraged or extended to provide a consistent and atomic operation.
+2. Re-check after acquiring the mutex: Re-evaluate the lock status immediately after acquiring the mutex to ensure consistency in handling concurrent writes.
+3. Atomic check and write: Implement atomic check-and-write mechanisms using atomic file operations APIs or combine these steps using an underlying atomic operation at the filesystem layer.
+
+ORIGINAL CODE:
+```c
+struct cifsInodeInfo *cinode = CIFS_I(inode);
+struct TCP_Server_Info *server = tlink_tcon(cfile->tlink)->ses->server;
+ssize_t rc = -EACCES;
+
+BUG_ON(iocb->ki_pos != pos);
+
+/*
+ * We need to hold the sem to be sure nobody modifies lock list
+ * with a brlock that prevents writing.
+ */
+down_read(&cinode->lock_sem);
+if (!cifs_find_lock_conflict(cfile, pos, iov_length(iov, nr_segs),
+				     server->vals->exclusive_lock_type, NULL,
+				     CIFS_WRITE_OP)) {
+	 mutex_lock(&inode->i_mutex);
+	 rc = __generic_file_aio_write(iocb, iov, nr_segs,
+						&iocb->ki_pos);
+	 mutex_unlock(&inode->i_mutex);
+}
+
+if (rc > 0) {
+	ssize_t err;
+
+	err = generic_write_sync(file, iocb->ki_pos - rc, rc);
+	if (err < 0)
+		rc = err;
+}
+
+up_read(&cinode->lock_sem);
+return rc;
+```

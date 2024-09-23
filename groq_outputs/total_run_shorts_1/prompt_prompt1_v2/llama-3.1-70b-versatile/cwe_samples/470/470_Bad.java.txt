@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-4
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Reflection and Instantiation of classes in Java
+EXPLANATION:
+This code is vulnerable to a remote code execution (RCE) attack due to its use of user input to dynamically load and instantiate classes. The `Class.forName()` and `.newInstance()` methods can load and execute arbitrary classes, which may lead to an attacker running malicious code on the server.
+
+The `getParameter()` function takes user input from the request, which makes the system vulnerable to an untrusted source being passed directly to sensitive methods.
+
+Furthermore, if an attacker is able to manipulate the `ctl` variable to contain something other than a string value ending in "Command", this could lead to unintended behavior and potentially allow the attacker to execute their own commands.
+
+Lastly, casting the randomly instantiated class to a specific class `Worker` using `(Worker) cmdClass.newInstance()`, if the instantiated class is not an instance of `Worker` will cause ClassCastException.
+
+RECOMMENDATIONS:
+The main issue in this code is that it does not validate the input `ctl`. A better approach would be to define a list of acceptable commands (which implements Worker class so they can be type casted), check if the `ctl` value falls within those values before proceeding. An example might look something like this:
+
+```java
+String[] allowedCommands = {"Command1", "Command2"};
+String ctl = request.getParameter("ctl");
+for(String command : allowedCommands) {
+    if(ctl.equals(command + "Command") && Class.forName(ctl + "Command").implements Worker.class) {
+        // Safe to load the class and instantiate.
+    }
+}
+```
+
+Note: A null check and the proper exception handling should also be considered, but considering lack of variable declaration we will assume they are handled at different place in the code. 
+
+Note: Above example assumes `Worker` is implemented by all allowedCommands. `Worker.class.isAssignableFrom(Class.forName(ctl + "Command"))` would return true for `Worker.class`, any of its subclasses, and anyone implementing Worker interface.
+
+
+ORIGINAL CODE:
+                  String ctl = request.getParameter("ctl");Class cmdClass = Class.forName(ctl + "Command");Worker ao = (Worker) cmdClass.newInstance();ao.doAction(request);

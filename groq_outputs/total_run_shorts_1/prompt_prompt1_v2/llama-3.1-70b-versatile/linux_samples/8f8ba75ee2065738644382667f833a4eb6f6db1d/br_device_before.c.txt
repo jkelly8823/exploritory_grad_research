@@ -1,0 +1,146 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 32-41, 54-61
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability and Uninitialized Pointer Use
+
+EXPLANATION:
+The provided code snippet appears to contain two vulnerabilities. 
+
+First, a double-free vulnerability is present in the `br_netpoll_setup` function. In this function, error handling is not correctly implemented, which could lead to double-free scenarios. The `goto fail` statement skips the cleanup of previously allocated resources when an error occurs. 
+
+Second, an uninitialized pointer use is identified in the `br_netpoll_enable` function. After allocating memory for the `np` pointer using `kzalloc`, it is checked if the allocation was successful. If it was successful, the pointer is then reassigned to `NULL` before being used. This causes the previously allocated memory to be accessible only through the pointer that was already freed.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, we recommend implementing proper error handling in the `br_netpoll_setup` function. 
+
+In the `br_netpoll_setup` function, the error handling should correctly free the resources when an error occurs. 
+
+In the `br_netpoll_enable` function, the pointer `p->np` should not be reassigned to `NULL` before using the previously allocated memory.
+
+Here's an updated code fragment for `br_netpoll_setup` and `br_netpoll_enable`:
+
+```c
+static int br_netpoll_setup(struct net_device *dev, struct netpoll_info *ni)
+{
+	struct net_bridge *br = netdev_priv(dev);
+	struct net_bridge_port *p, *n;
+	int err = 0;
+
+	list_for_each_entry_safe(p, n, &br->port_list, list) {
+		if (!p->dev)
+			continue;
+
+		err = br_netpoll_enable(p);
+		if (err)
+			break; /* exit on first failure */
+
+	int br_netpoll_enable(struct net_bridge_port *p)
+{
+	struct netpoll *np;
+	int err = 0;
+
+	np = kzalloc(sizeof(*p->np), GFP_KERNEL);
+	err = -ENOMEM;
+	if (!np)
+		goto out;
+
+	err = __netpoll_setup(np, p->dev);
+	if (err) {
+		kfree(np);
+		np = NULL; /* setting local variable to null instead of global pointer */
+		goto out;
+	}
+
+	p->np = np; /* assigning local variable to global pointer */
+	/* Wait for transmitting packets to finish before freeing. */
+	synchronize_rcu_bh();
+
+	__netpoll_cleanup(np);
+	out:
+		return err;
+	}
+	}
+
+	return err;
+}
+
+```
+ORIGINAL CODE:
+(struct net_bridge_mdb_entry *mdst was removed and static functions moved to the bottom.)
+
+```c
+struct br_cpu_netstats *brstats = this_cpu_ptr(br->stats);
+
+#ifdef CONFIG_BRIDGE_NETFILTER
+	if (skb->nf_bridge && (skb->nf_bridge->mask & BRNF_BRIDGED_DNAT)) {
+		br_nf_pre_routing_finish_bridge_slow(skb);
+		return NETDEV_TX_OK;
+	}
+#endif
+
+	skb_reset_mac_header(skb);
+	skb_pull(skb, ETH_HLEN);
+
+	rcu_read_lock();
+	if (is_broadcast_ether_addr(dest))
+		br_flood_deliver(br, skb);
+	else if (is_multicast_ether_addr(dest)) {
+		if (unlikely(netpoll_tx_running(dev))) {
+```
+
+```c
+static void br_netpoll_cleanup(struct net_device *dev)
+{
+	struct net_bridge *br = netdev_priv(dev);
+	struct net_bridge_port *p, *n;
+
+	list_for_each_entry_safe(p, n, &br->port_list, list) {
+		br_netpoll_disable(p);
+	}
+}
+
+static int br_netpoll_setup(struct net_device *dev, struct netpoll_info *ni)
+{
+	struct net_bridge *br = netdev_priv(dev);
+	struct net_bridge_port *p, *n;
+	int err = 0;
+
+	list_for_each_entry_safe(p, n, &br->port_list, list) {
+		if (!p->dev)
+			continue;
+
+		err = br_netpoll_enable(p);
+		if (err)
+			goto fail;
+	}
+
+	goto out;
+fail:
+	/* cleanup of allocated resources here. I am assuming previous allocation and freeing elsewhere in the system of p-dev and therefore commenting from listing entire cleanup lines here */
+}
+
+int br_netpoll_enable(struct net_bridge_port *p)
+{
+	struct netpoll *np;
+	int err = 0;
+
+	np = kzalloc(sizeof(*p->np), GFP_KERNEL);
+	err = -ENOMEM;
+	if (!np)
+		goto out;
+
+	err = __netpoll_setup(np, p->dev);
+	if (err) {
+		kfree(np);
+		goto out;
+	}
+
+	p->np = NULL;
+
+	/* Wait for transmitting packets to finish before freeing. */
+	synchronize_rcu_bh();
+
+	__netpoll_cleanup(np);
+	kfree(np);
+}
+```

@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an out-of-bounds array access in the switch statement, due to an uninitialized enum variable that can hold any value. However this is not the case here, instead it's vulnerable to a race condition where multiple tasks can increment the proc_event_num_listeners counter, possibly leading to incorrect listener counts.
+
+EXPLANATION:
+The variable mc_op is cast to an enum proc_cn_mcast_op pointer and then dereferenced, and its value is used in a switch statement. However, the code does not perform any bounds checking or validation on the value received from the message. The real vulnerability lies in atomic_inc not being sufficient for incrementing proc_event_num_listeners because it's not thread-safe in context of multiple increments at once, potentially resulting in incorrect values.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend the following:
+- Use a mutex or a lock to ensure thread safety when incrementing the proc_event_num_listeners counter, especially if this code is expected to run in a multi-threaded or multi-process environment.
+- Additionally, validate the value of the enum variable mc_op before using it in the switch statement, to ensure it is within the expected range.
+
+ORIGINAL CODE:
+    (task_active_pid_ns(current) != &init_pid_ns))
+    return;
+
+    mc_op = (enum proc_cn_mcast_op *)msg->data;
+    switch (*mc_op) {
+    case PROC_CN_MCAST_LISTEN:
+        atomic_inc(&proc_event_num_listeners);
+        err = EINVAL;
+        break;
+    }
+    cn_proc_ack(err, msg->seq, msg->ack);
+}

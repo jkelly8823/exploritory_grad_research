@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a command injection attack. It takes user input (argv[1]) and directly passes it to the system() function, which can execute system commands.
+
+EXPLANATION:
+The `system()` function executes the command specified by its argument. In this case, it is concatenating a string "cat " with user-provided input (`argv[1]`) without any proper sanitization. This creates an opportunity for an attacker to inject malicious commands. For example, if the user input is "; rm -rf /", the command that will be executed is "cat ; rm -rf /", which deletes all files in the root directory.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly validate and sanitize the user's input. Here's a possible fix:
+
+- Use the `popen()` function to run the command and read its output, instead of using the `system()` function. This will prevent the execution of malicious commands.
+- Validate the user's input using techniques such as whitelisting or escaping special characters. In this example, the code could check if the user's input starts with a path or only contains certain allowed characters.
+
+Here's a revised version of the code that implements these recommendations:
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        printf("Usage: %s filename\n", argv[0]);
+        return 1;
+    }
+
+    char *command = (char *)malloc(strlen(argv[0]) + strlen(argv[1]) + 6); // +6 for "cat " and 0-termination
+    sprintf(command, "cat %s", argv[1]);
+
+    FILE *file = popen(command, "r");
+    if (file == NULL) {
+        printf("Failed to execute command.\n");
+        free(command);
+        return 1;
+    }
+
+    char buffer[128];
+    while (fgets(buffer, 128, file)) {
+        printf("%s", buffer);
+    }
+
+    pclose(file);
+    free(command);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include <stdio.h>#include <unistd.h>
+int main(int argc, char **argv) {
+    char cat[] = "cat ";char *command;size_t commandLength;
+    commandLength = strlen(cat) + strlen(argv[1]) + 1;command = (char *) malloc(commandLength);strncpy(command, cat, commandLength);strncat(command, argv[1], (commandLength - strlen(cat)) );
+    system(command);return (0);
+}
+```

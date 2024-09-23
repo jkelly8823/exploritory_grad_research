@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Use-after-free error and double free vulnerability.
+
+EXPLANATION:
+The code has two distinct issues. Firstly, a use-after-free error occurs because the `delete[] p` statement frees the memory that `p` points to, but before this, `p` may point to `localArray` which is already going out of scope at the end of the function. Although the memory for `localArray` is not explicitly deleted, the memory it points to is still invalid after the function returns. 
+
+Secondly, if `heap` is `true`, then `p` is assigned to point to memory on the heap. This memory is not freed when `p` is reassigned to point to `localArray` and instead points to memory that may not be meant to be deleted. Then, when `delete[] p` is called, this can result in undefined behavior if `localArray` was not dynamically allocated.
+
+However, the issue with memory pointed to by localArray being used after it was went out of scope was not possible in this code sample,  as calls to new are called before delete and the calls to new are conditional based on the variable 'heap'.
+
+The variable p was dynamically allocated on the heap when heap variable is set to true. However, the pointer was reassigned to point to 'localArray' before the call to delete. This is a double free as 'localarray' is local variable, was never dynamically allocated so there is no call to delete for the object but also its pointer was passed to the function delete. 
+
+If heap was false, then this leads to double-free and a bug when 'heap' is set to true because pointer to array of local variables was passed to delete which was incorrect.
+
+
+RECOMMENDATIONS:
+The fix for this bug would be to ensure that the memory pointed to by `p` was always dynamically allocated before calling `delete[]`. Here is the corrected code.
+
+```cpp
+void A::foo(bool heap) {
+    int *p;
+    if (heap) {
+        p = new int[2];
+    } else {
+        p = new int[2] {11, 22};
+    }
+    delete[] p;
+}
+```
+However, this would mean that the `localArray` and its initial values are always on the heap which may have different performance implications.
+
+Alternatively, consider using a smart pointer like `std::unique_ptr` to manage the memory automatically. This will prevent memory leaks and ensure that the memory is freed correctly. Here is how you can use a smart pointer:
+
+```cpp
+std::unique_ptr<int[]> A::foo(bool heap) {
+    if (heap) {
+        return std::make_unique<int[]>(2);
+    } else {
+        int localArray[2] = {11, 22};
+        // copy the array to the heap, then return a unique_ptr to the heap memory
+        auto heapArray = std::make_unique<int[]>(2);
+        for (int i = 0; i < 2; i++) {
+            heapArray[i] = localArray[i];
+        }
+        return heapArray;
+    }
+}
+```
+This way, you don't have to worry about manually freeing the memory.
+
+ORIGINAL CODE:
+```cpp
+class A{void foo(bool);};void A::foo(bool heap) {int localArray[2] = {11,22};int *p = localArray;if (heap){p = new int[2];}delete[] p;}
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) due to a potentially infinite loop condition.
+
+EXPLANATION:
+The given code snippet reads 64-bit free running counters using a while loop condition `while (--loop_limit)`. The loop's exit condition relies on reading the same value twice in a row for `*msw` (`KONA_GPTIMER_STCHI_OFFSET`) register. 
+
+However, if these two consecutive readings never match, the loop limit `loop_limit` becomes 0, triggering an error message but not stopping the function execution. The problem here lies in potentially reading from an unstable counter value, leading to an infinite loop. On top of this, resource exhaustion issues like increasing system load or consuming CPU time, making it hard to predict its throughput and behavior.
+
+RECOMMENDATIONS:
+Recommended fixes include using a failsafe after n number of attempts. Limit the number of retries within the loop. Additionally, you can also implement a time-based lockout to prevent brute-force resource exhaustion.
+
+Additionally, implementing a failsafe maximum number of attempts of this while loop should mitigate these risks:
+
+```c
+int max_attempts = 10;
+int attempt_count = 0;
+while (attempt_count < max_attempts) {
+   *msw = readl(timer_base + KONA_GPTIMER_STCHI_OFFSET);
+   *lsw = readl(timer_base + KONA_GPTIMER_STCLO_OFFSET);
+   if (*msw == readl(timer_base + KONA_GPTIMER_STCHI_OFFSET))
+      break;
+   attempt_count++;
+}
+if (attempt_count == max_attempts) {
+    /* execute failure handler logic */
+}
+```
+
+ORIGINAL CODE:
+```c
+}
+
+static void
+kona_timer_get_counter(void __iomem *timer_base, uint32_t *msw, uint32_t *lsw)
+{
+	int loop_limit = 4;
+
+	/*
+	 * Read 64-bit free running counter
+	 */
+
+	while (--loop_limit) {
+		*msw = readl(timer_base + KONA_GPTIMER_STCHI_OFFSET);
+		*lsw = readl(timer_base + KONA_GPTIMER_STCLO_OFFSET);
+		if (*msw == readl(timer_base + KONA_GPTIMER_STCHI_OFFSET))
+			break;
+	}
+	if (!loop_limit) {
+		pr_err("bcm_kona_timer: getting counter failed.\n");
+```

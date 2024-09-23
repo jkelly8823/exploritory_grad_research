@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds indexing vulnerability.
+
+EXPLANATION:
+The vulnerability arises because there is no bounds checking before indexing into the `rdesc` array. The code assumes that `rdesc` will have at least 117 elements (rdesc[116]), but this is not guaranteed. In some cases, this could lead to accessing memory beyond the allocated size of `rdesc`, resulting in undefined behavior or potential crashes.
+
+RECOMMENDATIONS:
+1. Add bounds checking before indexing into the `rdesc` array to prevent out-of-bounds indexing.
+2. Use safer functions like `memcpy` or `memmove` instead of manual indexing to prevent buffer overflows.
+3. Consider using an enum or named constants for magic numbers like `135`, `0x0c`, `0x01`, `0x2a`, `0x2f`, `0x05`, etc., to improve code readability and maintainability.
+
+ORIGINAL CODE:
+```c
+0xC0                          /*  End Collection                  */
+};
+
+static __u8 *kye_report_fixup(struct hid_device *hdev, __u8 *rdesc,
+		unsigned int *rsize)
+{
+	switch (hdev->product) {
+		}
+		break;
+	case USB_DEVICE_ID_GENIUS_GILA_GAMING_MOUSE:
+		/*
+		 * the fixup that need to be done:
+		 *   - change Usage Maximum in the Comsumer Control
+		 *     (report ID 3) to a reasonable value
+		 */
+		if (*rsize >= 135 &&
+			/* Usage Page (Consumer Devices) */
+			rdesc[104] == 0x05 && rdesc[105] == 0x0c &&
+			/* Usage (Consumer Control) */
+			rdesc[106] == 0x09 && rdesc[107] == 0x01 &&
+			/*   Usage Maximum > 12287 */
+			rdesc[114] == 0x2a && rdesc[116] > 0x2f) {
+			hid_info(hdev,
+				 "fixing up Genius Gila Gaming Mouse "
+				 "report descriptor\n");
+			rdesc[116] = 0x2f;
+		}
+		break;
+	}
+	return rdesc;
+}
+				USB_DEVICE_ID_KYE_EASYPEN_M610X) },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_KYE,
+				USB_DEVICE_ID_GENIUS_GILA_GAMING_MOUSE) },
+	{ }
+};
+MODULE_DEVICE_TABLE(hid, kye_devices);
+```

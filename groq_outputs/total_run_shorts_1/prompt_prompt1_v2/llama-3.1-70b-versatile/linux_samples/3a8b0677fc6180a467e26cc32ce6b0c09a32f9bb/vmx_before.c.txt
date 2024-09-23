@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+Potential denial-of-service (DoS) vulnerability due to unchecked access in hlist_for_each_entry.
+EXPLANATION:
+The hlist_for_each_entry function does not check for NULL pointers before dereferencing the 'e' pointer. In this case, 'e' is used to access the 'type' member, which could cause a segmentation fault if 'e' is NULL. 
+
+However, in this context, the more pressing issue is not the potential NULL pointer dereference but rather the lack of bounds checking and input validation for the 'guest_irq' value before using it to index the 'irq_rt->map' array.
+
+RECOMMENDATIONS:
+Before accessing the 'irq_rt->map' array, ensure that the 'guest_irq' value is within valid bounds by adding a check. Additionally, consider checking for NULL pointers before dereferencing 'e' to avoid potential crashes.
+
+```c
+if (guest_irq >= 0 && guest_irq < irq_rt->nr_rt_entries) {
+    hlist_for_each_entry(e, &irq_rt->map[guest_irq], link) {
+        if (e && e->type != KVM_IRQ_ROUTING_MSI)
+            continue;
+        ...
+    }
+}
+```
+ORIGINAL CODE:
+```c
+struct kvm_lapic_irq irq;
+struct kvm_vcpu *vcpu;
+struct vcpu_data vcpu_info;
+int idx, ret = -EINVAL;
+
+if (!kvm_arch_has_assigned_device(kvm) ||
+    !irq_remapping_cap(IRQ_POSTING_CAP) ||
+    !kvm_vcpu_apicv_active(kvm->vcpus[0]))
+
+idx = srcu_read_lock(&kvm->irq_srcu);
+irq_rt = srcu_dereference(kvm->irq_routing, &kvm->irq_srcu);
+BUG_ON(guest_irq >= irq_rt->nr_rt_entries);
+
+hlist_for_each_entry(e, &irq_rt->map[guest_irq], link) {
+    if (e->type != KVM_IRQ_ROUTING_MSI)
+        continue;
+```

@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-14
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability due to a lack of bounds checking in a custom memcpy and memmove implementation.
+
+EXPLANATION:
+The code snippet defines custom implementations of memcpy, memmove, and memset. In the case of a buffer overflow, this can lead to arbitrary code execution. In lines 8-14, the implementation uses `__memcpy` and `__memset` without providing any bounds checking or validation for the arguments `dst`, `src`, `len`, and `c`. 
+
+Additionally, the use of `#define` to override the standard library functions can lead to confusion and potential security vulnerabilities.
+
+Furthermore, the use of inline functions (`__inline_memcpy`) may not be properly inlined by the compiler, and may lead to unexpected behavior.
+
+RECOMMENDATIONS:
+1. Ensure proper bounds checking is performed on the input arguments for the custom memcpy, memmove, and memset functions. 
+2. Avoid using `#define` to override standard library functions.
+3. Instead of using custom inline functions, consider using compiler intrinsics (if available) or standard library functions.
+4. Implement error handling for the custom memcpy and memmove functions.
+
+ORIGINAL CODE:
+```c
+extern void *memcpy(void *to, const void *from, size_t len);
+extern void *__memcpy(void *to, const void *from, size_t len);
+
+#ifndef CONFIG_KMEMCHECK
+#if (__GNUC__ == 4 && __GNUC_MINOR__ < 3) || __GNUC__ < 4
+#define memcpy(dst, src, len)					\
+({								\
+ */#define memcpy(dst, src, len) __inline_memcpy((dst), (src), (len))
+#endif
+
+#define __HAVE_ARCH_MEMSET
+void *memset(void *s, int c, size_t n);
+void *__memset(void *s, int c, size_t n);
+#define memcpy(dst, src, len) __memcpy(dst, src, len)
+#define memmove(dst, src, len) __memmove(dst, src, len)
+#define memset(s, c, n) __memset(s, c, n)
+#endif
+
+#define __HAVE_ARCH_MEMCPY_MCSAFE 1
+__must_check int memcpy_mcsafe_unrolled(void *dst, const void *src, size_t cnt);
+```

@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability.
+
+EXPLANATION:
+The vulnerability exists due to the use of an unconditional load instruction (`ld	r11,0(r10)`) which can potentially read data from any memory location depending on the value in the `r10` register. Without proper validation and bounds checking of the pointer `r10`, an attacker could potentially control the data that is loaded into `r11` by manipulating the contents of the memory location pointed to by `r10`. This could lead to a buffer overflow or information disclosure.
+
+At the same time, on ARM64 chips, loads like `ld	r11,0(r10)` are common so we are not quite out of the woods yet but since `r10` is being mangled with other numbers on previous lines, this would not be immediately readable by most users. 
+
+Since we're working with relatively low-level PowerPC Assembly here and dealing with registers to manage vsids we have to think also about potential memory disclosures, non-validated pointer dereferences and integer overflows.
+
+`ld	r11,0(r10)` is executing data on a pointer which may lead to the processor fetch the wrong data even if the pointer can actually read and write data, on systems with DEP (Data Execution Prevention), attempts to execute code in the data segment will result in a segmentation fault, which can be caught and handled.
+
+The potential attack surface this code introduces is not massive but since a good understanding of the relationships between the registers has to be discussed in order to exploit this we should never rule out the potential for vulnerability here.
+
+
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should consider validating the value of `r10` before using it to load data into `r11`. This can be done by verifying that `r10` points to a valid memory location and ensuring that the data being loaded does not exceed the bounds of the buffer.
+
+Additionally, consider using a safer alternative to the `ld` instruction, such as `lwz` which loads a word zero-extended, or `lhz` which loads a halfword zero-extended. These instructions will not attempt to execute data from the memory location being loaded.
+
+Using the `bounds` instruction will prevent you from going beyond array limits or off into unknown areas:
+
+bounds	r10, 0(r10), (upper limit of array) + 8
+
+Here I've left (upper limit of array) for context since we don't know the array declaration here, if you have complex 64 bit values ensure you use a long long or int64_t or using another casting convention to get the lengths declared that your system understands.
+
+
+
+ORIGINAL CODE:
+```assembly
+mflr	r10 ;						\
+ld	r12,PACAKBASE(r13) ; 				\
+LOAD_HANDLER(r12, system_call_entry_direct) ;		\
+mtlr	r12 ;						\
+mfspr	r12,SPRN_SRR1 ;					\
+/* Re-use of r13... No spare regs to do this */	\
+li	r13,MSR_RI ;					\
+mtmsrd 	r13,1 ;						\
+GET_PACA(r13) ;	/* get r13 back */			\
+blr ;
+#else
+/* We can branch directly */
+#define SYSCALL_PSERIES_2_DIRECT				\
+mfspr	r12,SPRN_SRR1 ;					\
+_GLOBAL(do_stab_bolted)
+stw	r9,PACA_EXSLB+EX_CCR(r13)	/* save CR in exc. frame */
+std	r11,PACA_EXSLB+EX_SRR0(r13)	/* save SRR0 in exc. frame */
+
+/* Hash to the primary group */
+ld	r10,PACASTABVIRT(r13)
+mfspr	r11,SPRN_DAR
+srdi	r11,r11,28
+rldimi	r10,r11,7,52	/* r10 = first ste of the group */
+
+/* Calculate VSID */
+/* This is a kernel address, so protovsid = ESID | 1 << 37 */
+li	r9,0x1
+rldimi  r11,r9,(CONTEXT_BITS + USER_ESID_BITS),0
+ASM_VSID_SCRAMBLE(r11, r9, 256M)
+rldic	r9,r11,12,16	/* r9 = vsid << 12 */
+
+/* Search the primary group for a free entry */
+1:	ld	r11,0(r10)	/* Test valid bit of the current ste	*/
+and.	r11,r11,0x80
+beq	2f
+```

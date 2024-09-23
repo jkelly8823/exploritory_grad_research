@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference in the line where it accesses the `eg_pi` field of the `ni_pi` struct.
+
+EXPLANATION:
+In the given code snippet, the variable `ni_pi` is declared but never initialized before use. It is then dereferenced in the line `eg_pi = &ni_pi->eg;`. However, there is no guarantee that `ni_pi` points to valid memory. In the current code snippet, `kzalloc` is only called for `si_pi`, not `ni_pi`. If `ni_pi` is actually a null or garbage pointer, this could result in a null pointer dereference, which could potentially lead to a denial-of-service or other security issues.
+
+RECOMMENDATIONS:
+To fix the vulnerability, `ni_pi` should be initialized before its use. This could be done by using a function such as `kzalloc` to allocate memory for the struct and then checking the return value to ensure the allocation was successful.
+
+Here's an example of how to fix this:
+
+```c
+ni_pi = kzalloc(sizeof(struct ni_power_info), GFP_KERNEL);
+if (ni_pi == NULL) {
+    // handle allocation failure
+}
+...
+eg_pi = &ni_pi->eg;
+```
+
+ORIGINAL CODE:
+
+(struct ni_power_info *ni_pi; 
+struct si_power_info *si_pi;
+struct atom_clock_dividers dividers;
+enum pci_bus_speed speed_cap;
+struct pci_dev *root = rdev->pdev->bus->self;
+int ret;
+
+si_pi = kzalloc(sizeof(struct si_power_info), GFP_KERNEL);
+eg_pi = &ni_pi->eg;
+pi = &eg_pi->rv7xx;
+
+speed_cap = pcie_get_speed_cap(root);
+if (speed_cap == PCI_SPEED_UNKNOWN) {
+    si_pi->sys_pcie_mask = 0;
+} else {
+    if (speed_cap == PCIE_SPEED_8_0GT)

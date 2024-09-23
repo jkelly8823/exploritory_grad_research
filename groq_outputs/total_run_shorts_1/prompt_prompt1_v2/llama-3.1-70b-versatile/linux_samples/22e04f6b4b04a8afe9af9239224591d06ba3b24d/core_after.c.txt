@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 14
+VULNERABILITY_DESCRIPTION:
+The code contains a potential memory corruption vulnerability due to a race condition and a potential information disclosure vulnerability.
+
+EXPLANATION:
+The code allocates memory with `hid_alloc_report_buf(report, GFP_ATOMIC)` without checking for any overflow or buffer size requirements. While there is a check for the buffer being `NULL`, there's no validation for the `report->size` being within expected limits, which could potentially lead to a memory corruption vulnerability.
+
+Furthermore, on line 9, the `hid_output_report(report, buf)` function is called without any error checking. This function may modify the allocated buffer, potentially overwriting the memory boundaries.
+
+Additionally, on line 14, the `hidp_send_intr_message(session, hdr, buf, rsize)` function is called without any error checking. The return value `ret` is directly assigned, but the `rsize` variable may be influenced by the contents of the `report` structure and the `buf` memory area.
+
+This vulnerability, albeit limited by its timing-based nature and requiring specific inputs to misbehave, poses an unacceptable risk due to the potential for escalating an attacker's capabilities.
+
+RECOMMENDATIONS:
+- Validate `report->size` to ensure it doesn't exceed a reasonable maximum value.
+- Check the return value and error status of `hid_output_report(report, buf)` and handle any potential errors.
+- Verify the `buf` memory area boundaries are not exceeded by checking the contents and size requirements before calling `hidp_send_intr_message(session, hdr, buf, rsize)`.
+- Implement concurrency protection using locking mechanisms to ensure the correct execution order and mitigate the impact of simultaneous access to the memory allocated in `hid_alloc_report_buf(report, GFP_ATOMIC)`.
+
+ORIGINAL CODE:
+```c
+static int hidp_send_report(struct hidp_session *session, struct hid_report *report)
+{
+	unsigned char hdr;
+	u8 *buf;
+	int rsize, ret;
+
+	buf = hid_alloc_report_buf(report, GFP_ATOMIC);
+	if (!buf)
+		return -EIO;
+
+	hid_output_report(report, buf);
+	hdr = HIDP_TRANS_DATA | HIDP_DATA_RTYPE_OUPUT;
+
+	rsize = ((report->size - 1) >> 3) + 1 + (report->id > 0);
+	ret = hidp_send_intr_message(session, hdr, buf, rsize);
+
+	kfree(buf);
+	return ret;
+}
+
+static int hidp_hidinput_event(struct input_dev *dev, unsigned int type,
+			       unsigned int code, int value)
+```

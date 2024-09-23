@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None (The vulnerability does not originate from the provided code snippet directly)
+VULNERABILITY_DESCRIPTION:
+The provided code snippet shows symptoms of a possible Time-of-Check to Time-of-Use (TOCTOU) vulnerability.
+EXPLANATION:
+The provided code checks the directory entry before taking action but does not account for the possibility that the state of the directory entry could have changed after the check was made. Specifically, it checks for the presence of a directory, whether it can lookup, and the type of file but it does not prevent follow-up code from being executed even if conditions change after the check. 
+Although we cannot see code that follows and uses the results of the check in this snippet, the structure suggests that potential vulnerabilities could arise from TOCTOU. Furthermore, the error variable is used across calls which could lead to interleaved method calls interfering with each other.
+RECOMMENDATIONS:
+- Use more granular locking to ensure the file system state does not change while it is being accessed.
+- Only perform checks immediately before executing a potentially hazardous action.
+- Remove global error state that could be crossed by multiple concurrent invocations of the `get_link` method.
+- Consider using a process to save state right before using this value and discarding these states or using a mechanism for detecting races.
+ORIGINAL CODE:
+```c
+int sysctl_protected_symlinks __read_mostly = 0;
+int sysctl_protected_hardlinks __read_mostly = 0;
+
+/**
+ * may_follow_link - Check symlink following for unsafe situations
+ * @nd: nameidata pathwalk data
+	return -EPERM;
+}
+
+static __always_inline
+const char *get_link(struct nameidata *nd)
+{
+	struct saved *last = nd->stack + nd->depth - 1;
+	if (error)
+		return error;
+	audit_inode(nd->name, nd->path.dentry, 0);
+	error = -EISDIR;
+	if ((open_flag & O_CREAT) && d_is_dir(nd->path.dentry))
+		goto out;
+	error = -ENOTDIR;
+	if ((nd->flags & LOOKUP_DIRECTORY) && !d_can_lookup(nd->path.dentry))
+		goto out;
+	if (!d_is_reg(nd->path.dentry))
+```

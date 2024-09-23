@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 59-61
+VULNERABILITY_DESCRIPTION:
+Deadlock vulnerability due to order of locks.
+
+EXPLANATION:
+A deadlock can occur when the function locks the rcu_read_lock() before checking if the dev_opp_list_lock is held in the opp_rcu_lockdep_assert() macro. This is because the rcu_read_lock() is already held when the macro tries to lock dev_opp_list_lock, but another function may be holding dev_opp_list_lock and waiting for rcu_read_lock() to be released.
+
+However, another instance of deadlock can occur if the opposite happens i.e. a function holds dev_opp_list_lock and calls this function. 
+
+In both the scenarios, due to inconsistency in the lock order, deadlock may occur.
+
+RECOMMENDATIONS:
+To avoid this deadlock, the lock order should be consistent throughout the code. If the code already holds the dev_opp_list_lock and needs to call dev_pm_opp_get_opp_count() function which locks rcu_read_lock(), it's better to restructure the locks. Alternatively, consider reordering the locks so that the locks are always acquired in the same order.
+
+The order of locks in the provided code is inconsistent, hence we could suggest a fix where the lock dev_opp_list_lock is acquired before calling the function dev_pm_opp_get_opp_count(), and the dev_opp_list_lock should be released after the function call.
+
+However, we would need more context about how the locks are being used elsewhere in the code to provide an accurate solution.
+
+ORIGINAL CODE:
+/* Lock to allow exclusive modification to the device and opp lists */
+static DEFINE_MUTEX(dev_opp_list_lock);
+
+...

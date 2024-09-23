@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-21
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a classic Use-After-Free (UAF) vulnerability, as well as a potential signal handling race condition. 
+
+EXPLANATION:
+The signal handler function `sh` is used to catch the SIGHUP and SIGTERM signals. Inside this function, it attempts to access and free the global variables `what`, `global1`, and `global2`. However, if the program receives the signal before these variables are initialized (i.e., before `main` assigns a value to `what` and `global1`) or after they have been freed (i.e., after `sh` has executed once), it will result in undefined behavior. The added sleep statements expand the timing window for this potential race condition.
+
+Furthermore, the syslog call inside the signal handler function uses the global variable `what` which could have already been freed when the signal is caught. This would result in a use-after-free vulnerability.
+
+Additionally, the `global1` and `global2` variables are freed without being checked for null, which can lead to crashes if they have not been initialized or have already been freed.
+
+RECOMMENDATIONS:
+To avoid this vulnerability, avoid accessing or freeing global variables from within a signal handler function. Instead, set a global flag when a signal is caught and handle the signal outside of the signal handler function.
+
+Another recommended practice is to use `sigaction` instead of `signal` to register the signal handler, as `signal` is not thread-safe and can lead to unexpected behavior.
+
+It is also essential to check for null before attempting to free or access global variables.
+
+Here's an example of how the signal handling could be improved:
+
+```c
+static volatile sig_atomic_t signal_flags = 0;
+
+void sh(int signum) {
+    signal_flags |= (1 << signum);
+}
+
+int main(int argc, char* argv[]) {
+    // ...
+    while (1) {
+        if (signal_flags & (1 << SIGHUP)) {
+            signal_flags &= ~(1 << SIGHUP);
+            // Handle SIGHUP signal
+        }
+        if (signal_flags & (1 << SIGTERM)) {
+            signal_flags &= ~(1 << SIGTERM);
+            // Handle SIGTERM signal
+        }
+        // ...
+    }
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include <signal.h>#include <syslog.h>#include <string.h>#include <stdlib.h>
+void *global1, *global2;char *what;void sh (int dummy) {
+    syslog(LOG_NOTICE,"%s\n",what);free(global2);free(global1);
+    /* Sleep statements added to expand timing window for race condition */
+    sleep(10);exit(0);
+}
+int main (int argc,char* argv[]) {
+    what=argv[1];global1=strdup(argv[2]);global2=malloc(340);signal(SIGHUP,sh);signal(SIGTERM,sh);
+    /* Sleep statements added to expand timing window for race condition */
+    sleep(10);exit(0);
+}
+```

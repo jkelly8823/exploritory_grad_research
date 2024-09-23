@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17, 18-22
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability and unchecked pointer arithmetic.
+
+EXPLANATION:
+The code assigns `ip` to `(void *)ip + last_insn_size` without checking if the resulting pointer is still within the bounds of a valid memory buffer. This can lead to a buffer overflow, especially when loading data into `insn.word`. Additionally, the code relies on a magic number `128` for the maximum number of instructions to iterate through, but does not validate the length of the data at `ip` before performing dereferences and increments.
+
+RECOMMENDATIONS:
+1. Validate the length of the data at `ip` using a boundary check before performing the loop, ensuring that `i * 4` (or the correct alignment, assuming 4-byte words) is less than the length of the data. This will prevent a potential buffer overflow.
+2. Use a safer method of incrementing the pointer `ip`, such as using an array index or a checked increment operation. Avoid unchecked pointer arithmetic.
+3. Avoid using magic numbers (e.g., `128`). Instead, define a named constant that represents the maximum number of instructions.
+
+ORIGINAL CODE:
+```c
+static int get_frame_info(struct mips_frame_info *info)
+{
+	bool is_mmips = IS_ENABLED(CONFIG_CPU_MICROMIPS);
+	union mips_instruction insn, *ip;
+	const unsigned int max_insns = 128;
+	unsigned int last_insn_size = 0;
+	unsigned int i;
+	bool saw_jump = false;
+	if (!ip)
+		goto err;
+
+	for (i = 0; i < max_insns; i++) {
+		ip = (void *)ip + last_insn_size;
+
+		if (is_mmips && mm_insn_16bit(ip->halfword[0])) {
+			insn.word = ip->halfword[0] << 16;
+			last_insn_size = 2;
+		} else if (is_mmips) {
+```

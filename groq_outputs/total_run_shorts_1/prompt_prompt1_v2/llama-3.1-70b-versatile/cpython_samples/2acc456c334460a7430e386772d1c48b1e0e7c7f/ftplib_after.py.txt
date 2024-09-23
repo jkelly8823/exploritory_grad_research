@@ -1,0 +1,87 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15, 20-22, 29-31
+VULNERABILITY_DESCRIPTION:
+Insecure Protocol for File Downloads
+
+EXPLANATION:
+The vulnerability is present in the implementation of file downloads. The code uses `readline()` calls with a fixed size limit (`maxline`) but does not handle cases where the server sends multiple fragmented lines or where the fragment is incomplete. This could lead to data being partially parsed and may cause an error or potentially even data corruption.
+
+Moreover, the `passiveserver` attribute is set to `1` which might cause issues when dealing with NATs, firewalls and routers. It is recommended to set this to `0` to enable active mode.
+
+Additionally, it is observed that `B_CRLF` is used but not defined within the given code snippet, assuming this is part of a larger codebase and properly defined elsewhere, its usage should still be considered vulnerable if its value is not as expected. The hardcoded values for B_CRLF may cause unexpected behavior or errors if it doesn't match the actual Bytes representation for Carriage Return and Line Feed, this might depend on the FTP server or platform used.
+
+In terms of encoding considerations when reading from the connection (`conn.makefile('r', encoding=self.encoding)`), if an encryption protocol like SSL is being used with the connection, using it directly may raise an exception or lead to incorrect parsing, this is also considered within the context of evaluating the overall vulnerability of this code.
+
+RECOMMENDATIONS:
+
+1. Use `socket.settimeout()` or equivalent to catch `socket.timeout` exceptions that may be raised when reading data.
+
+2. Implement a `parseFragmentedLines` method that reconstructs fragmented lines.
+
+3. Consider implementing retry logic to handle cases of partial data.
+
+4. Use a secure way to define `B_CRLF`, it's recommended to define this as a static/constant, `b'\r\n'` is a correct and safe value.
+
+5. Validate for null bytes and UnicodeDecodeError when `fp.readline` is reading, or parse an exception.
+
+6. Check error during the processing of the command to identify whether the exception as caught is thrown during the issue processing and accordingly give more related information about what has caused this.
+
+7. Socker exceptions such as `socket.error, socket.timeout, socket.gaierror,` should be assessed and handled.
+
+8. With the combination of the status of any previously performed methods (given the calling scope could vary), validate `conn`, `fp` before executing methods about them.
+
+9. Set `passiveserver` attribute to `0` for best results.
+
+
+
+ORIGINAL CODE:
+
+```python
+# The standard FTP server control port
+FTP_PORT = 21
+# The sizehint parameter passed to readline() calls
+MAXLINE = 8192
+
+# Exception raised when an error or invalid response is received
+class Error(Exception): 
+    pass
+    debugging = 0
+    host = ''
+    port = FTP_PORT
+    maxline = MAXLINE
+    sock = None
+    file = None
+    welcome = None
+    passiveserver = 1
+    # Internal: return one line from the server, stripping CRLF.
+    # Raise EOFError if the connection is closed
+    def getline(self):
+        line = self.file.readline(self.maxline + 1)
+        if len(line) > self.maxline:
+            raise Error("got more than %d bytes" % self.maxline)
+        if self.debugging > 1:
+            print('*get*', self.sanitize(line))
+        if not line:
+            raise EOFError
+        with self.transfercmd(cmd) as conn, \
+                 conn.makefile('r', encoding=self.encoding) as fp:
+            while 1:
+                line = fp.readline(self.maxline + 1)
+                if len(line) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if self.debugging > 2:
+                    print('*retr*', repr(line))
+                if not line:
+                    break
+        self.voidcmd('TYPE A')
+        with self.transfercmd(cmd) as conn:
+            while 1:
+                buf = fp.readline(self.maxline + 1)
+                if len(buf) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if not buf:
+                    break
+                if buf[-2:] != B_CRLF:
+                    if buf[-1] in B_CRLF: 
+                        buf = buf[:-1]
+```

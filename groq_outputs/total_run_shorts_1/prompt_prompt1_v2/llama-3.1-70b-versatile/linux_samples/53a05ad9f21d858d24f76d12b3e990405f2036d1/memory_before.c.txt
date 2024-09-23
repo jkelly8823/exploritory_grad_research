@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-10
+VULNERABILITY_DESCRIPTION:
+The provided code snippet appears to be vulnerable to a potential race condition related to page locking and mapping. This occurs when the code checks the state of a page (PageKsm and page refcount) before locking it, and then checks again after locking it.
+
+EXPLANATION:
+In the given code snippet, the following sequence of events takes place:
+
+1. The code checks if the page is KSM (Kernel Samepage Merging) and its refcount is 1 without holding any locks.
+2. Then, it tries to lock the page using the `trylock_page` function. If the lock is acquired, further checks are made on the page state.
+3. However, between steps 1 and 2, there is a time window during which another process or thread could potentially modify the page state. This could lead to incorrect results in the subsequent checks.
+
+This is a classic example of a Time-of-check to time-of-use (TOCTOU) bug. It's worth noting that the `trylock_page` function does provide some synchronization, but it doesn't entirely eliminate the possibility of this type of vulnerability.
+
+Additionally, even though the `trylock_page` function provides synchronization, there is still a window of time after locking the page and before checking the page state, during which another thread could change the state of the page, potentially causing incorrect results.
+
+RECOMMENDATIONS:
+To avoid this vulnerability, it is recommended to re-structure the code to do all checks while holding the lock. Here are some steps that could be taken:
+
+1. Move the checks for `PageKsm` and `page_count` to after the lock is acquired and before releasing the lock. This would ensure that any changes to the page state after acquiring the lock would be accounted for.
+2. Use a lock that protects the page state to prevent other threads or processes from modifying it while the current thread holds the lock.
+
+Here's an example of how the code could be modified to address this issue:
+
+```c
+if (PageAnon(vmf->page)) {
+	struct page *page = vmf->page;
+
+	if (!trylock_page(page))
+		goto copy;
+	/* Now that we have the lock, re-check the page state */
+	if (PageKsm(page) || page_mapcount(page) != 1 || page_count(page) != 1) {
+		unlock_page(page);
+		goto copy;
+	}
+	/* ... remaining code ... */
+```
+
+However, the optimal solution depends on the specific requirements and context of the code.
+
+ORIGINAL CODE:
+
+```c
+if (PageAnon(vmf->page)) {
+	struct page *page = vmf->page;
+
+	/* PageKsm() doesn't necessarily raise the page refcount */
+	if (PageKsm(page) || page_count(page) != 1)
+		goto copy;
+	if (!trylock_page(page))
+		goto copy;
+	if (PageKsm(page) || page_mapcount(page) != 1 || page_count(page) != 1) {
+		unlock_page(page);
+		goto copy;
+	}
+	/*
+	 * Ok, we've got the only map reference, and the only
+	 * page count reference, and the page is locked,
+	 * it's dark out, and we're wearing sunglasses. Hit it.
+	 */
+	unlock_page(page);
+	wp_page_reuse(vmf);
+	return VM_FAULT_WRITE;
+```

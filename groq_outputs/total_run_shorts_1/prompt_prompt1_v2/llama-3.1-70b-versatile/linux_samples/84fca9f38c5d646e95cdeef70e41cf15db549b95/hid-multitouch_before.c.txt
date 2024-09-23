@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 14, 19
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to buffer overflows in `field->usage[i]` and `td->inputmode_index`. Additionally, there is a duplicate case label `HID_DG_CONTACTMAX` which can lead to incorrect behavior.
+
+EXPLANATION:
+The loop `for (i=0; i < field->maxusage; i++)` does not check if `field->usage[i]` is within boundaries, which can lead to a buffer overflow if `field->maxusage` is larger than the actual size of `field->usage`. This can potentially allow an attacker to execute arbitrary code or crash the program.
+
+The assignment `td->maxcontacts = field->value[0];` assumes that `field->value` is at least of size 1, but it does not validate this. If `field->value` is an empty array, this will result in an out-of-bounds access, potentially causing a segmentation fault or undefined behavior.
+
+The duplicate case label `HID_DG_CONTACTMAX` can lead to unexpected behavior when the code is executed. It may override the value set previously or may cause a logical error.
+
+RECOMMENDATIONS:
+- Validate `field->maxusage` against the actual size of `field->usage` before using it in the loop to prevent buffer overflow.
+- Check if `field->value` has at least one element before accessing its first element.
+- Remove the duplicate case label `HID_DG_CONTACTMAX` and handle the cases correctly.
+
+ORIGINAL CODE:
+```c
+unsigned last_slot_field;	/* the last field of a slot */
+unsigned mt_report_id;	/* the report ID of the multitouch device */
+unsigned pen_report_id;	/* the report ID of the pen device */
+__s8 inputmode;		/* InputMode HID feature, -1 if non-existent */
+__s8 inputmode_index;	/* InputMode HID feature index in the report */
+__s8 maxcontact_report_id;	/* Maximum Contact Number HID feature,
+				   -1 if non-existent */
+__u8 num_received;	/* how many contacts we received */
+__u8 num_expected;	/* expected last contact index */
+__u8 maxcontacts;
+		struct hid_field *field, struct hid_usage *usage)
+{
+	struct mt_device *td = hid_get_drvdata(hdev);
+	int i;
+
+	switch (usage->hid) {
+	case HID_DG_INPUTMODE:
+		td->inputmode = field->report->id;
+		td->inputmode_index = 0; /* has to be updated below */
+
+		for (i=0; i < field->maxusage; i++) {
+			if (field->usage[i].hid == usage->hid) {
+				td->inputmode_index = i;
+				break;
+			}
+		}
+
+		break;
+	case HID_DG_CONTACTMAX:
+		td->maxcontact_report_id = field->report->id;
+		td->maxcontacts = field->value[0];
+			mt_store_field(usage, td, hi);
+			return 1;
+		case HID_DG_CONTACTCOUNT:
+			td->cc_index = field->index;
+			td->cc_value_index = usage->usage_index;
+			return 1;
+		case HID_DG_CONTACTMAX:
+```

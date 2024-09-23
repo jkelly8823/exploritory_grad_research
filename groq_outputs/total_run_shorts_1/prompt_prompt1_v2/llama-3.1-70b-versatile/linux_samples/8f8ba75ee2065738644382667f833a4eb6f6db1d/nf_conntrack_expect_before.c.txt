@@ -1,0 +1,59 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION: 
+No vulnerabilities were identified in this code snippet.
+
+EXPLANATION:
+This code snippet appears to be part of a connection tracking expect handling function in a networking context, likely from the Linux kernel. The functions provided seem to handle timer refreshes and expect matches/clashes. After reviewing this code, no obvious vulnerabilities such as memory leaks, buffer overflows, or format string vulnerabilities were found. The locking mechanism and RCU protection suggest a proper handling of concurrent access and memory consistency.
+
+RECOMMENDATIONS:
+Given that no vulnerabilities were found in this code snippet, no recommendations for fixes are necessary.
+
+ORIGINAL CODE:
+```
+}
+}
+
+static inline int refresh_timer(struct nf_conntrack_expect *i)
+{
+	struct nf_conn_help *master_help = nfct_help(i->master);
+	const struct nf_conntrack_expect_policy *p;
+
+	if (!del_timer(&i->timeout))
+		return 0;
+
+	p = &rcu_dereference_protected(
+		master_help->helper,
+		lockdep_is_held(&nf_conntrack_lock)
+		)->expect_policy[i->class];
+	i->timeout.expires = jiffies + p->timeout * HZ;
+	add_timer(&i->timeout);
+	return 1;
+}
+
+static inline int __nf_ct_expect_check(struct nf_conntrack_expect *expect)
+{
+	const struct nf_conntrack_expect_policy *p;
+	struct nf_conntrack_expect *i;
+	struct nf_conn_help *master_help = nfct_help(master);
+	struct nf_conntrack_helper *helper;
+	struct net *net = nf_ct_exp_net(expect);
+	struct hlist_node *n;
+	unsigned int h;
+	int ret = 1;
+
+	if (!master_help) {
+		goto out;
+	}
+	h = nf_ct_expect_dst_hash(&expect->tuple);
+	hlist_for_each_entry(i, n, &net->ct.expect_hash[h], hnode) {
+		if (expect_matches(i, expect)) {
+			/* Refresh timer: if it's dying, ignore.. */
+			if (refresh_timer(i)) {
+				ret = 0;
+				goto out;
+			}
+		} else if (expect_clash(i, expect)) {
+			ret = -EBUSY;
+			goto out;
+```

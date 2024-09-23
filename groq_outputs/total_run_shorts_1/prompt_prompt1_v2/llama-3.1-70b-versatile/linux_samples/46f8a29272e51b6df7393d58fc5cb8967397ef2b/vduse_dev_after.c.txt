@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory access vulnerability due to missing bounds checking on the 'offset' and 'len' parameters.
+
+EXPLANATION:
+Although the code attempts to check for valid offset values, there is still a possibility for out-of-bounds memory access. On line 6, it's checked if 'offset' is greater than 'dev->config_size', but it's not checked if 'offset' is negative. Similarly, it's checked if 'len' is greater than 'dev->config_size - offset', but it's not checked if 'len' is negative or greater than 'dev->config_size'. The 'memcpy' call on line 8 could then potentially read or write beyond the bounds of the 'dev->config' buffer.
+
+RECOMMENDATIONS:
+1. Ensure that 'offset' is non-negative before proceeding.
+2. Verify that 'len' is within a valid range, ideally not greater than 'dev->config_size' to prevent potential integer overflow when calculating the length of the memcpy in 'len > dev->config_size - offset'.
+3. Validate that 'offset' is less than or equal to 'dev->config_size - len'.
+
+The code should be modified to ensure proper bounds checking for both 'offset' and 'len' parameters.
+
+RECOMMENDATIONS MODIFICATIONS (SNIPPET):
+Replace lines 2-8 with:
+```c
+if (offset < 0 || len < 0) {
+    // Handle the error
+    return;
+}
+
+if (offset + len > dev->config_size) {
+    // Handle the error
+    len = dev->config_size - offset;
+}
+
+if (len) {
+    memset(buf, 0, len);
+    memcpy(buf, dev->config + offset, len);
+}
+```
+ORIGINAL CODE:
+{
+	struct vduse_dev *dev = vdpa_to_vduse(vdpa);
+
+	/* Initialize the buffer in case of partial copy. */
+	memset(buf, 0, len);
+
+	if (offset > dev->config_size)
+		return;
+
+	if (len > dev->config_size - offset)
+		len = dev->config_size - offset;
+
+	memcpy(buf, dev->config + offset, len);
+}
+
+static void vduse_vdpa_set_config(struct vdpa_device *vdpa, unsigned int offset,

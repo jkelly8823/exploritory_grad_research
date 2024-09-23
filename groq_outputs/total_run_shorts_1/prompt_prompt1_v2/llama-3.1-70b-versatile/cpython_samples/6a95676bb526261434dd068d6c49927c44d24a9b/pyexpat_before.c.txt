@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-8
+VULNERABILITY_DESCRIPTION:
+Use of unchecked memory allocation.
+
+EXPLANATION:
+The code uses `Py_XNewRef` without checking the result. If `Py_XNewRef` fails and returns `NULL`, calling methods on the resulting object will result in a segmentation fault or undefined behavior. It is also worth noting that the code does not check the memory allocation result of `PyCapsule_New`, which can also cause a segmentation fault if the memory allocation fails.
+
+RECOMMENDATIONS:
+It is recommended to check the result of `Py_XNewRef` and `PyCapsule_New` to ensure that the memory allocation does not fail. If either of these methods return `NULL`, an error message should be printed and an exception should be raised to handle the scenario. Here's an example of how to do this:
+
+```c
+    self->intern = Py_XNewRef(intern);
+    if (self->intern == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+
+    PyObject *capi_object = PyCapsule_New(capi, PyExpat_CAPSULE_NAME,
+                                          pyexpat_capsule_destructor);
+    if (capi_object == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+```
+
+ORIGINAL CODE:
+```c
+#include "pycore_pyhash.h"        // _Py_HashSecret
+#include "pycore_traceback.h"     // _PyTraceback_Add()
+
+#include <stddef.h>               // offsetof()
+#include "expat.h"
+#include "pyexpat.h"
+
+                                /* NULL if not enabled */
+    int buffer_size;            /* Size of buffer, in XML_Char units */
+    int buffer_used;            /* Buffer units in use */
+    PyObject *intern;           /* Dictionary to intern strings */
+    PyObject **handlers;
+} xmlparseobject;
+
+/*[clinic input]
+pyexpat.xmlparser.Parse
+
+    cls: defining_class
+#if XML_COMBINED_VERSION >= 19505
+    PYEXPAT_XMLPARSER_USEFOREIGNDTD_METHODDEF
+#endif
+    {NULL, NULL}  /* sentinel */
+};
+
+/* ---------- */
+    self->ns_prefixes = 0;
+    self->handlers = NULL;
+    self->intern = Py_XNewRef(intern);
+
+    /* namespace_separator is either NULL or contains one char + \0 */
+    self->itself = XML_ParserCreate_MM(encoding, &ExpatMemoryHandler,
+                                       namespace_separator);
+#else
+    capi->SetHashSalt = NULL;
+#endif
+
+    /* export using capsule */
+    PyObject *capi_object = PyCapsule_New(capi, PyExpat_CAPSULE_NAME,
+                                          pyexpat_capsule_destructor);
+```

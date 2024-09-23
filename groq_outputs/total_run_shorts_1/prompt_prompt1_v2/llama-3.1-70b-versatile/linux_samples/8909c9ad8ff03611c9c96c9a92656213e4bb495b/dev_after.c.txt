@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+Format String Vulnerability
+
+EXPLANATION:
+A format string vulnerability is present in the given code snippet. On line 7, the request_module function is called with a string that is directly derived from user input (the 'name' variable). This input is then passed to a function that ultimately calls into the kernel's module loader. 
+
+The format string vulnerability is present because of the non-validated string (`%s`) as part of the string passed to request_module. While it's noted the 'name' variable originated from outside the immediate module, without additional context or validation checks in place, a malicious actor could potentially craft a filename that could cause unintended behavior when used by request_module().
+
+However, it is also important to note that both request_module() functions are system calls that could result in privilege escalation if not validated. There is potential a buffer overrun taking place if the name within dev_get_by_name_rcu is vulnerable because the parameter 'name' appears to potentially be user-controlled input in this specific context. 
+
+Additional review and research on the current functionality as presented, is ultimately crucial to ensuring security for functions that relate directly with kernel calls.
+
+RECOMMENDATIONS:
+The preferred correction involves passing a pointer to the format and associated arguments as separate parameters. That way, request_module can check if there are any format specifiers (`%s`).
+
+Here is how you could refactor the code:
+```c
+no_module = !dev;
+if (no_module && capable(CAP_NET_ADMIN))
+    no_module = request_module("netdev-%.*s", (int)strlen(name), name);
+if (no_module && capable(CAP_SYS_MODULE)) {
+    if (!request_module("%.*s", (int)strlen(name), name))
+        pr_err("Loading kernel module for a network device "
+               "with CAP_SYS_MODULE (deprecated).  Use CAP_NET_ADMIN and alias netdev-%.*s "
+               "instead\n", (int)strlen(name), name);
+}
+}
+
+```
+The solution helps decrease potential security vulnerabilities through hardcoding possible lengths.
+
+ORIGINAL CODE:
+```c
+void dev_load(struct net *net, const char *name)
+{
+    struct net_device *dev;
+    int no_module;
+
+    rcu_read_lock();
+    dev = dev_get_by_name_rcu(net, name);
+    rcu_read_unlock();
+
+    no_module = !dev;
+    if (no_module && capable(CAP_NET_ADMIN))
+        no_module = request_module("netdev-%s", name);
+    if (no_module && capable(CAP_SYS_MODULE)) {
+        if (!request_module("%s", name))
+            pr_err("Loading kernel module for a network device "
+                   "with CAP_SYS_MODULE (deprecated).  Use CAP_NET_ADMIN and alias netdev-%s "
+                   "instead\n", name);
+    }
+}
+EXPORT_SYMBOL(dev_load);
+
+static int __dev_open(struct net_device *dev)
+```

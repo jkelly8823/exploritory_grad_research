@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Insecure SSL Verification Mode Configuration
+EXPLANATION:
+The code sets the verification mode to SSL_VERIFY_NONE, which means it will not check the server's certificate at all. This is insecure as it leaves the connection vulnerable to man-in-the-middle (MITM) attacks. Even when certreq is PY_SSL_CERT_OPTIONAL, the verification mode is set to SSL_VERIFY_PEER, but it does not verify the hostname or certificate chain.
+
+However, my main concern is line 3 where SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS is disabled which was needed for CVE-2016-2107 aka "DROWN" mitigation.
+
+RECOMMENDATIONS:
+- Set the verification mode to SSL_VERIFY_PEER_ALWAYS instead of SSL_VERIFY_PEER when certreq is PY_SSL_CERT_OPTIONAL to verify the server's certificate and hostname.
+
+- Change line 3 back to enabling empty fragments this would be 
+    SSL_CTX_set_options(self->ctx, SSL_OP_ALL | SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
+
+ORIGINAL CODE:
+    }
+
+    /* ssl compatibility */
+    SSL_CTX_set_options(self->ctx,
+                        SSL_OP_ALL & ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
+
+    verification_mode = SSL_VERIFY_NONE;
+    if (certreq == PY_SSL_CERT_OPTIONAL)
+        verification_mode = SSL_VERIFY_PEER;

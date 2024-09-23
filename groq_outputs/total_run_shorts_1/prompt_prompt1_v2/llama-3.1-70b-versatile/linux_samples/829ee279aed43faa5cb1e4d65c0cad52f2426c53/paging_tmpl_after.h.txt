@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Potential Integer Underflow Vulnerability
+EXPLANATION:
+The bug occurs when `walker->level` is set to zero and then decremented at the beginning of the code snippet. The `BUG_ON` check later tries to prevent this by failing if `walker->level` is less than 1, but this should also handle the decrement operation at the top of the code. After decrementing it checks again on line 9 and is susceptible to underflow. It becomes particularly effective to be protected from an integer underflow because this issue seems simple, yet at the same time its severity should not be underestimated.
+
+One possible successful way an attacker might have exploited it if unchecked. Consider this attack. Suppose the content currently fills 0x7fffffff bytes. An underflow attack has allowed maliciously a request to prepare our content in memory where this variable, declared an unsigned integer, contains value -1 in two's complement expression with the binary value 0xffffffff.
+
+In addition, any memory space exceeding given limit appears allowed. Therefore, a full access issue, indeed.
+
+RECOMMENDATIONS:
+Prior to decrementing --walker->level, the corresponding variable, the code requires a check preventing the issue of integer underflow.
+
+
+Change to:
+```c
+if(walker->level <= 0){
+    // Handle the potential invalid walker->level
+}
+
+--walker->level;
+
+```
+
+
+ORIGINAL CODE:
+
+
+        --walker->level;
+
+        index = PT_INDEX(addr, walker->level);
+        table_gfn = gpte_to_gfn(pte);
+        offset    = index * sizeof(pt_element_t);
+        pte_gpa   = gfn_to_gpa(table_gfn) + offset;
+
+        BUG_ON(walker->level < 1);
+        walker->table_gfn[walker->level - 1] = table_gfn;
+        walker->pte_gpa[walker->level - 1] = pte_gpa;
+
+        real_gfn = mmu->translate_gpa(vcpu, gfn_to_gpa(table_gfn),

@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Use-after-free vulnerability due to missing synchronization with other threads accessing module_alloc_base after __flush_dcache_area.
+
+EXPLANATION:
+The __flush_dcache_area function updates the cache coherence by ensuring the specified memory area is consistent with the cache. However, this function does not imply any memory synchronization with other threads or cores. After the cache area is flushed, other threads or cores may not see the update for some time.
+
+If another thread tries to access module_alloc_base after __flush_dcache_area has cleared its cached value but before the cache is synchronized, it may use a stale or freed version of the module_alloc_base, potentially leading to a use-after-free vulnerability. This could cause unpredictable behavior, including crashes, data corruption, or even code injection.
+
+RECOMMENDATIONS:
+To fix this vulnerability, synchronization mechanisms should be used to ensure all threads and cores see the updated module_alloc_base. Consider using barrier instructions, e.g., sync_core_domain_mask, or synchronization primitives like spinlocks.
+
+```
+sync_core_domain_mask(JMASK | SJMASK | CIACKM);
+__flush_dcache_area(&module_alloc_base, sizeof(module_alloc_base));
+sync_core_domain_mask(JMASK | SJMASK | CIACKM);
+```
+Alternatively, using memory barriers with the Data Memory Barrier (DMB) instruction would also ensure coherence:
+
+```
+dmb synergy;
+__flush_dcache_area(&module_alloc_base, sizeof(module_alloc_base));
+dmb synergy;
+```
+
+ORIGINAL CODE:
+    * we end up running with module randomization disabled.
+    */
+    module_alloc_base = (u64)_etext - MODULES_VSIZE;
+    __flush_dcache_area(&module_alloc_base, sizeof(module_alloc_base));
+
+    /*
+     * Try to map the FDT early. If this fails, we simply bail,
+     * and proceed with KASLR disabled. We will make another

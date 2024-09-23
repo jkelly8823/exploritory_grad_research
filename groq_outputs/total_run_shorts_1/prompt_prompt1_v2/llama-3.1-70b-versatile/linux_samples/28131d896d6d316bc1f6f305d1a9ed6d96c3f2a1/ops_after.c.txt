@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 83-89, 101-106
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow or use of uninitialized memory when using memcpy or memset on `mem` in `iwl_mvm_frob_mem` function.
+
+EXPLANATION:
+The code uses `memset` on `mem` with `buflen` length without checking if the `buflen` exceeds the actual size of the `mem` buffer. This could lead to a potential buffer overflow or use of uninitialized memory, which might result in unintended behavior or crashes.
+
+Similarly, the `frob_hcmd` function uses `memset` on `hcmd` with `frob_end - frob_start` length without checking if `frob_end` exceeds the actual size of the `hcmd` buffer.
+
+RECOMMENDATIONS:
+1. Add a check before calling `memset` to ensure that `buflen` (or `frob_end - frob_start`) does not exceed the actual size of the `mem` (or `hcmd`) buffer.
+2. Consider using `snprintf` or `strncpy` instead of `memcpy` or `memset` to avoid potential buffer overflows.
+3. Ensure that the `mem` buffer is properly initialized and allocated before passing it to `iwl_mvm_frob_mem`.
+
+ORIGINAL CODE:
+... (too large to include in its entirety)
+
+
+```c
+static void iwl_mvm_frob_mem(void *ctx, u32 mem_addr, void *mem, size_t buflen)
+{
+    ...
+    for (i = 0; i < ARRAY_SIZE(mvm->fw->dump_excl); i++) {
+        ...
+        if (end > mem_addr + buflen)
+            end = mem_addr + buflen;
+
+        memset((u8 *)mem + start - mem_addr, 0xAA, end - start);
+    }
+}
+
+static void iwl_mvm_frob_hcmd(void *ctx, void *hcmd, size_t len)
+{
+    ...
+    if (frob_end > len)
+        frob_end = len;
+
+    memset((u8 *)hcmd + frob_start, 0xAA, frob_end - frob_start);
+}
+```

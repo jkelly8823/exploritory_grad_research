@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4-9
+VULNERABILITY_DESCRIPTION:
+The given code snippet uses a potential buffer overflow when setting the fields' values and setting the fixed device values based on ff_bits.
+
+EXPLANATION:
+In the code, there's a switch statement and then a memset for report->field[0]->value with size reported by report->field[0]->maxusage. However, there's no validation in the given snippet if the maxusage value doesn't go beyond the actual allocated buffer size of `report->field[0]->value`. An attacker controlling or altering `maxusage` could lead to a buffer overflow when `memset` tries to write past the end of the buffer.
+
+The same can happen when setting the fixed device values in the for loop. An attacker controlling or altering `ff_bits` could lead to a buffer overflow when `set_bit` tries to write past the end of the allocated buffer.
+
+However, we do not have visibility to the sizes of `value` or `ffbit`, but based on existing code, both can be impacted.
+
+RECOMMENDATIONS:
+1. Add a validation to check if `report->field[0]->maxusage` is within the allocated size of `report->field[0]->value`. This ensures that no buffer overflow occurs.
+
+2. Review the contents of `ff_bits` to make sure it's properly allocated and doesn't exceed the allocated size of `dev->ffbit`. This ensures that no buffer overflow occurs.
+
+Here's an example validation:
+
+```c
+// Validate the value before writing
+if (report->field[0]->maxusage > sizeof(report->field[0]->value)/sizeof(__s32)) {
+    // Handle error
+}
+
+for (i = 0; ff_bits[i] >= 0; i++) {
+    // Check bounds before writing
+    if (ff_bits[i] >= dev->ffbit_size) {
+        // Handle error
+    }
+    set_bit(ff_bits[i], dev->ffbit);
+}
+
+```
+
+ORIGINAL CODE:
+```c
+int x, y;
+
+/*
+ * Maxusage should always be 63 (maximum fields)
+ * likely a better way to ensure this data is clean
+ */
+memset(report->field[0]->value, 0, sizeof(__s32)*report->field[0]->maxusage);
+
+switch (effect->type) {
+case FF_CONSTANT:
+/*
+int lg3ff_init(struct hid_device *hid)
+{
+	struct hid_input *hidinput = list_entry(hid->inputs.next, struct hid_input, list);
+	struct list_head *report_list = &hid->report_enum[HID_OUTPUT_REPORT].report_list;
+	struct input_dev *dev = hidinput->input;
+	struct hid_report *report;
+	struct hid_field *field;
+	const signed short *ff_bits = ff3_joystick_ac;
+	int error;
+	int i;
+
+	/* Find the report to use */
+	if (list_empty(report_list)) {
+		hid_err(hid, "No output report found\n");
+		return -1;
+	}
+
+	/* Check that the report looks ok */
+	report = list_entry(report_list->next, struct hid_report, list);
+	if (!report) {
+		hid_err(hid, "NULL output report\n");
+		return -1;
+	}
+
+	field = report->field[0];
+	if (!field) {
+		hid_err(hid, "NULL field\n");
+		return -1;
+	}
+
+	/* Assume single fixed device G940 */
+	for (i = 0; ff_bits[i] >= 0; i++)
+		set_bit(ff_bits[i], dev->ffbit);
+```

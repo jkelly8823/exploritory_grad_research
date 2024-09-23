@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7, 9-10
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The provided code snippet appears to be handling certain elements within a wlan structure, specifically WLAN_EID_SSID and WLAN_EID_SUPP_RATES. The code uses the memcpy function to copy data from a source location to a destination location, both of which are within a structure.
+
+However, the memcpy function does not check if the destination buffer is large enough to hold the data being copied from the source location. In this case, the code is copying data of length 'element_len' to the destination buffers 'bss_entry->ssid.ssid', 'bss_entry->data_rates', and 'bss_entry->supported_rates'. 
+
+If 'element_len' exceeds the maximum capacity of these destination buffers, a buffer overflow will occur. This can cause the program to overwrite adjacent memory locations, leading to undefined behavior and potentially allowing an attacker to execute arbitrary code.
+
+RECOMMENDATIONS:
+To prevent a buffer overflow, the code should ensure that the destination buffer is large enough to hold the data being copied. This can be achieved by performing a bounds check before calling the memcpy function. 
+
+Specifically, the code should check if 'element_len' is less than or equal to the maximum capacity of the destination buffers. If 'element_len' exceeds the maximum capacity, the code should either truncate the data being copied or handle the error accordingly.
+
+Here's a possible way to modify the code to include the bounds check:
+
+```c
+size_t ssid_len_max = sizeof(bss_entry->ssid.ssid);
+size_t rates_len_max = sizeof(bss_entry->data_rates);
+
+if (element_len <= ssid_len_max) {
+    bss_entry->ssid.ssid_len = element_len;
+    memcpy(bss_entry->ssid.ssid, (current_ptr + 2), element_len);
+} else {
+    // handle error or truncate data
+}
+
+if (element_len <= rates_len_max) {
+    memcpy(bss_entry->data_rates, current_ptr + 2, element_len);
+    memcpy(bss_entry->supported_rates, current_ptr + 2, element_len);
+} else {
+    // handle error or truncate data
+}
+```
+
+ORIGINAL CODE:
+
+```c
+}
+switch (element_id) {
+case WLAN_EID_SSID:
+    bss_entry->ssid.ssid_len = element_len;
+    memcpy(bss_entry->ssid.ssid, (current_ptr + 2),
+           element_len);
+    mwifiex_dbg(adapter, INFO,
+    break;
+
+case WLAN_EID_SUPP_RATES:
+    memcpy(bss_entry->data_rates, current_ptr + 2,
+           element_len);
+    memcpy(bss_entry->supported_rates, current_ptr + 2,
+           element_len);
+```

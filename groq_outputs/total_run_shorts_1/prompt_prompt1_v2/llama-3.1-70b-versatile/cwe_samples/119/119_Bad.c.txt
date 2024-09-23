@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION: 
+Unintended Memory Copy and Potential for Buffer Overflow in host_lookup function.
+
+EXPLANATION:
+The provided code contains a potential buffer overflow vulnerability due to the use of the `strcpy` function. The `strcpy` function copies the entire contents of the source string (`hp->h_name`) into the destination buffer (`hostname`), without any consideration for the actual size of the source string or the destination buffer.
+
+The `strcpy` function returns the destination address and does not return an error in case the source string is larger than the destination buffer. This lack of control makes it vulnerable to buffer overflow attacks. If an attacker is able to manipulate `hp->h_name` in such a way that it is larger than 64 bytes, it can overflow the `hostname` buffer and potentially overwrite adjacent memory, potentially causing a segmentation fault or allowing code injection.
+
+Additionally, the `strcpy` function is generally discouraged due to its known limitations and potential for buffer overflows. A safer alternative, like `strncpy`, `strlcpy`, or `strcpy_s`, that takes the destination buffer size into account should be used instead.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following options:
+
+*   Use `strncpy` instead of `strcpy`, specifying the size of the `hostname` buffer to prevent buffer overflows:
+
+    ```c
+strncpy(hostname, hp->h_name, sizeof(hostname));
+hostname[sizeof(hostname) - 1] = '\0';  // Ensure null-termination
+```
+
+*   Use `strlcpy`, a safer variant of `strncpy`, which always null-terminates the destination string:
+
+    ```c
+strlcpy(hostname, hp->h_name, sizeof(hostname));
+```
+
+*   Verify the source string length before copying, and handle cases where the source string is too large:
+
+    ```c
+if (strlen(hp->h_name) < sizeof(hostname)) {
+    strcpy(hostname, hp->h_name);
+} else {
+    // Handle the case where hp->h_name is too large
+    // (e.g., truncate it or report an error)
+}
+```
+
+ORIGINAL CODE:
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+    
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+    validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+}
+```

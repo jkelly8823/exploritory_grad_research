@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21-23
+VULNERABILITY_DESCRIPTION: 
+Memory leak and potential null pointer dereference due to a lack of error handling for kmalloc memory allocation.
+
+EXPLANATION: 
+The code allocates memory using kmalloc and checks if the memory allocation was successful. If the allocation fails, it returns -ENOMEM, but it does not handle the error properly. It should also free any resources that were allocated before returning. However, the issue is not with the memory allocation itself but with the fact that when kmalloc succeeds and then encounters an error, it does not deallocate the memory correctly.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should free the allocated memory when an error occurs after a successful kmalloc call:
+```c
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+    return -ENOMEM;
+```
+This should be changed to:
+```c
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+    return -ENOMEM;
+
+// Rest of the code...
+
+if (error_occurred) {
+    kfree(lg2ff);
+    return error_code;
+}
+```
+
+ORIGINAL CODE:
+```c
+struct hid_report *report;
+struct hid_input *hidinput = list_entry(hid->inputs.next,
+                    struct hid_input, list);
+struct list_head *report_list =
+        &hid->report_enum[HID_OUTPUT_REPORT].report_list;
+struct input_dev *dev = hidinput->input;
+int error;
+
+if (list_empty(report_list)) {
+    hid_err(hid, "no output report found\n");
+    return -ENODEV;
+}
+
+report = list_entry(report_list->next, struct hid_report, list);
+
+if (report->maxfield < 1) {
+    hid_err(hid, "output report is empty\n");
+    return -ENODEV;
+}
+if (report->field[0]->report_count < 7) {
+    hid_err(hid, "not enough values in the field\n");
+    return -ENODEV;
+}
+
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+    return -ENOMEM;
+```

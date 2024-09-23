@@ -1,0 +1,94 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 137, 140, 144
+VULNERABILITY_DESCRIPTION:
+Potential memory leak and use-after-free vulnerability due to inadequate memory management in the `mt_probe` function.
+
+EXPLANATION:
+In the `mt_probe` function, memory is allocated for `td` and `td->fields` using `devm_kzalloc`. However, if `hid_parse` or `hid_hw_start` fails, the `td->fields` memory is not freed, leading to a potential memory leak. Additionally, if `sysfs_create_group` fails, the `td` memory is not freed, leading to a potential use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add `devm_kfree` calls to free the `td->fields` and `td` memory in the error paths of the `mt_probe` function. The corrected code would look like this:
+
+```c
+td = devm_kzalloc(&hdev->dev, sizeof(struct mt_device), GFP_KERNEL);
+if (!td) {
+    dev_err(&hdev->dev, "cannot allocate multitouch data\n");
+    return -ENOMEM;
+}
+td->pen_report_id = -1;
+hid_set_drvdata(hdev, td);
+
+td->fields = devm_kzalloc(&hdev->dev, sizeof(struct mt_fields),
+                  GFP_KERNEL);
+if (!td->fields) {
+    devm_kfree(&hdev->dev, td);
+    dev_err(&hdev->dev, "cannot allocate multitouch fields data\n");
+    return -ENOMEM;
+}
+
+// ...
+
+ret = hid_parse(hdev);
+if (ret != 0) {
+    devm_kfree(&hdev->dev, td->fields);
+    devm_kfree(&hdev->dev, td);
+    return ret;
+}
+
+ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+if (ret) {
+    devm_kfree(&hdev->dev, td->fields);
+    devm_kfree(&hdev->dev, td);
+    return ret;
+}
+
+ret = sysfs_create_group(&hdev->dev.kobj, &mt_attribute_group);
+if (ret) {
+    devm_kfree(&hdev->dev, td->fields);
+    devm_kfree(&hdev->dev, td);
+    return ret;
+}
+```
+
+ORIGINAL CODE:
+Note that only the relevant part of the code is provided, and the rest is truncated for brevity.
+
+```c
+static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
+{
+    int ret, i;
+    struct mt_device *td;
+    struct mt_class *mtclass = mt_classes; /* MT_CLS_DEFAULT */
+
+    // ...
+
+    td = devm_kzalloc(&hdev->dev, sizeof(struct mt_device), GFP_KERNEL);
+    if (!td) {
+        dev_err(&hdev->dev, "cannot allocate multitouch data\n");
+        return -ENOMEM;
+    }
+    td->pen_report_id = -1;
+    hid_set_drvdata(hdev, td);
+
+    td->fields = devm_kzalloc(&hdev->dev, sizeof(struct mt_fields),
+                                GFP_KERNEL);
+    if (!td->fields) {
+        dev_err(&hdev->dev, "cannot allocate multitouch fields data\n");
+        return -ENOMEM;
+    }
+
+    // ...
+
+    ret = hid_parse(hdev);
+    if (ret != 0)
+        return ret;
+
+    ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+    if (ret)
+        return ret;
+
+    ret = sysfs_create_group(&hdev->dev.kobj, &mt_attribute_group);
+
+    // ...
+}
+```

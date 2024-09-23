@@ -1,0 +1,16 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 102-103
+VULNERABILITY_DESCRIPTION:
+The vulnerability identified is a potential memory leak due to the function `uhid_write` being called with a pointer to a struct `uhid_event` that is modified within the function.
+
+EXPLANATION:
+The `uhid_write` function is called with a pointer to a struct `uhid_event`, passed by value. However, the pointer itself is used within the function, and the function calls itself recursively. This is a potential memory leak because if the function is called multiple times without returning, the memory allocated for the `uhid_event` struct will not be freed. Moreover, the recursive call can cause a stack overflow.
+
+The `uhid_write` function has too many unsanitized recursive calls in its current implementation. Since the recursive call is made within the function and not at the end of the function, stack overflows are more likely.
+
+The 'memset(&ev, 0, sizeof(ev));' function, below the switch statement in the event function also seems vulnerable. If this memset was not successful (for whatever reason), there is potential for data corruption as the following lines of code (input size, data) attempts to write data to the 'ev' variable.
+
+RECOMMENDATIONS:
+1. To prevent potential stack overflow errors due to recursive calls, define a limit for the recursion depth and implement a loop based solution instead of recursion.
+2. Implement error checking to ensure that memory for the struct is properly freed in case of failure, and function calls are properly cleared.
+3. Change the switch case function in event to prevent the memset from failing. Because in C, memset returns a pointer which if used as bool could result in improper bool evaluation in future operations.

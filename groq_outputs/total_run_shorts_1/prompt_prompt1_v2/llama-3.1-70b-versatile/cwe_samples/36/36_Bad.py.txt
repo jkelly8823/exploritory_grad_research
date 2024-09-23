@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a Path Traversal vulnerability. The file path is constructed using user-provided input (`sys.argv[1]`), which could allow an attacker to access unauthorized files.
+
+EXPLANATION:
+In this code, the filename is taken directly from the command-line argument (`sys.argv[1]`) and then joined with the current working directory using `os.path.join()`. This may seem safe, as `os.path.join()` is supposed to handle path separator injections correctly. However, this is not enough to prevent all path traversal attacks. If the user provides a filename with a dot-dot (`..`) sequence, the resulting path could potentially point to a location outside of the current working directory. This could lead to unauthorized file access.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should perform additional validation on the provided filename to ensure it does not contain malicious path sequences. One possible fix is to use the `os.path.abspath()` function to resolve the path and then check that it is within the intended directory. 
+
+Additionally, consider using a secure way to open files, such as using the `pathlib` library, which provides better support for secure file I/O operations.
+
+Here is an example of how to secure the file I/O:
+
+```python
+import os
+import sys
+from pathlib import Path
+
+def main():
+    filename = sys.argv[1]
+    base_path = Path(os.getcwd())
+    file_path = base_path / filename
+
+    # Ensure the path is within the intended directory
+    if not file_path.is_relative_to(base_path):
+        print("Error: invalid filename")
+        return
+
+    try:
+        with file_path.open('r') as f:
+            file_data = f.read()
+    except FileNotFoundError as e:
+        print("Error - file not found")
+
+main()
+```
+
+ORIGINAL CODE:
+```
+import os
+import sys
+def main():
+    filename = sys.argv[1]
+    path = os.path.join(os.getcwd(), filename)
+    try:
+        with open(path, 'r') as f:
+            file_data = f.read()
+    except FileNotFoundError as e:
+        print("Error - file not found")
+main()
+```

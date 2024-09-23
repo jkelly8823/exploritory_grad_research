@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack.
+
+EXPLANATION:
+The vulnerability lies in the fact that the `count` variable is used to validate the value of `num` before assigning `size` to `sizes[num - 1]`. However, `num` is an integer value read from an untrusted source (the socket) and there is no bounds checking on the `num - 1` value to ensure it is a valid index for the `sizes` array. While the code attempts to prevent a potential buffer overflow by checking that `num` is within the range `(0, count]`, this check is not sufficient to prevent a buffer overflow.
+
+The code checks that `num > 0 && num <= (unsigned)count`, but this check will cause problems if `count` is equal to 0. This could cause the program to access memory outside the bounds of the `sizes` array, resulting in undefined behavior. In addition, `num` can be equal to 1 and access memory at index `0` without causing an immediate error, but the loop variable `count` could allow for further indices to be accessed and cause a potential buffer overflow.
+
+RECOMMENDATIONS:
+1. Validate the value of `count` before using it to initialize the `sizes` array to ensure it does not contain any unexpected values that may cause buffer overflow issues.
+
+2. Add bounds checking to ensure that `num` is a valid index for the `sizes` array before assigning `size` to `sizes[num - 1]`. A good way to do this is to add a check to ensure `num` and `num - 1` are less than `sizeof(sizes)/sizeof(sizes[0])`.
+
+Here is how you can implement these recommendations:
+
+```c
+if (count > 0) {
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+        // ...
+    }
+}
+
+if (num > 0 && num <= count && num <= (sizeof(sizes)/sizeof(sizes[0]))) {
+    sizes[num - 1] = size;
+} else {
+    report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+}
+```
+
+ORIGINAL CODE:
+```c
+/* capture the sizes of all messages */
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+       
+    // read values from socket and added to sizes array
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+         
+        // continue read from socket until buf only contains '.'
+        if (DOTLINE(buf))break;
+        else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+            if (num > 0 && num <= (unsigned)count)sizes[num - 1] = size;
+            else
+                // warn about possible attempt to induce buffer overflow
+                 report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+           }
+    }...
+}               
+```

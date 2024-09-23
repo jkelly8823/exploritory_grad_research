@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+A potential null pointer dereference vulnerability exists.
+
+EXPLANATION:
+In the code snippet, there is a call to `list_empty` followed by `list_first_entry`. However, there is no check on the return value of `list_first_entry` before it is dereferenced. If `list_first_entry` returns `NULL`, then `imxdma_xfer_desc(next_desc)` will result in a null pointer dereference. This could potentially crash the program or allow an attacker to execute arbitrary code. This is particularly worrying because `dev_warn` is used after this potentially vulnerable code block; if an error is noticed here, attacker controlled data has already been exercised.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add a check for `NULL` after `list_first_entry` before dereferencing `next_desc`.
+
+The corrected code would be:
+
+```c
+if (!list_empty(&imxdmac->ld_queue)) {
+    next_desc = list_first_entry(&imxdmac->ld_queue,
+                                 struct imxdma_desc, node);
+    if (next_desc != NULL) {
+        list_move_tail(imxdmac->ld_queue.next, &imxdmac->ld_active);
+        if (imxdma_xfer_desc(next_desc) < 0)
+            dev_warn(imxdma->dev, "%s: channel: %d couldn't xfer desc\n",
+                     __func__, imxdmac->channel);
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+{
+    struct imxdma_channel *imxdmac = (void *)data;
+    struct imxdma_engine *imxdma = imxdmac->imxdma;
+    struct imxdma_desc *desc, *next_desc;
+    unsigned long flags;
+
+    spin_lock_irqsave(&imxdma->lock, flags);
+
+    list_move_tail(imxdmac->ld_active.next, &imxdmac->ld_free);
+
+    if (!list_empty(&imxdmac->ld_queue)) {
+        next_desc = list_first_entry(&imxdmac->ld_queue,
+                                     struct imxdma_desc, node);
+        list_move_tail(imxdmac->ld_queue.next, &imxdmac->ld_active);
+        if (imxdma_xfer_desc(next_desc) < 0)
+            dev_warn(imxdma->dev, "%s: channel: %d couldn't xfer desc\n",
+                     __func__, imxdmac->channel);
+    }
+out:
+```

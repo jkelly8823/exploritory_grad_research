@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to incorrect buffer size passed to `memcpy`.
+
+EXPLANATION:
+The `memcpy` function is being used to copy data from `vlanh` to `dst_u8`. However, the size of the buffer being copied into (`dst_u8`) is not validated against the size of the data being copied. The size of the data being copied is determined by `ethlen`, which is calculated based on the current offset and the lengths of various headers. If `ethlen` exceeds the actual size of the `dst_u8` buffer, this will result in a buffer overflow, potentially allowing an attacker to execute arbitrary code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate the size of the buffer being copied into against the size of the data being copied. You can do this by adding a check before the `memcpy` call:
+
+```c
+if (ethlen <= sizeof(dst_u8)) {
+    memcpy(dst_u8, vlanh + offset - vlan_hlen, ethlen);
+}
+```
+
+Or, you could use a safer function like `memmove` which allows for overlapping memory regions, but still requires proper bounds checking.
+
+You should also ensure that `dst_u8` is properly initialized and has the required length to hold `ethlen` bytes.
+
+It's also a good practice to use bounds checking on all copy operations and treat all buffer sizes as potentially untrusted input.
+
+ORIGINAL CODE:
+```c
+			return false;
+
+		if (offset + len > VLAN_ETH_HLEN + vlan_hlen)
+			ethlen -= offset + len - VLAN_ETH_HLEN + vlan_hlen;
+
+		memcpy(dst_u8, vlanh + offset - vlan_hlen, ethlen);
+
+		len -= ethlen;
+```

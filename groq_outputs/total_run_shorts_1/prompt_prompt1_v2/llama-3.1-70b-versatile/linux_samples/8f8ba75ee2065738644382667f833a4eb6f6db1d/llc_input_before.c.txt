@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 15-18
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a null pointer dereference and potential memory leaks in the `llc_add_pack` and anonymous block functions. The `llc_set_station_handler` function also has a potential null pointer dereference. 
+
+Additionally, there is an issue with memory management for `skb` in multiple places.
+
+EXPLANATION:
+In `llc_add_pack`, if `type` is equal to `LLC_DEST_SAP` or `LLC_DEST_CONN`, the corresponding `llc_type_handlers` is set to the provided `handler`. However, in the anonymous block immediately following, this is set to `NULL`, which can result in null pointer dereferences if this handler is called later in the code.
+
+In `llc_set_station_handler`, when a new handler is set, the old handler is overwritten without being freed or called to clean up any allocated resources. This can lead to memory leaks.
+
+Furthermore, the `llc_pdu_type` function (commented out in the provided code) does not correctly handle the case where `rcv` is non-NULL but the handling fails. The `skb` is freed, but if `cskb` is also non-NULL and has the same contents, this could result in memory corruption if `rcv` attempts to use this memory.
+
+In the commented code, there appears to be confusion regarding the `skb` and `cskb` variables. `skb` is freed regardless of whether `rcv` or `llc_type_handlers[dest - 1]` handles the packet, but there is no corresponding `kfree_skb` call for `cskb` if `rcv` handles it. 
+
+However, given the missing context, this appears to be correct since, according to the given code, there is indeed `kfree_skb(skb)` in the end of the code.
+
+RECOMMENDATIONS:
+* In `llc_add_pack`, instead of immediately overwriting the handler, ensure that the old handler is freed before setting the new one. However, since this seems to be a setting function for a callback, consider adding error checking that would reject a NULL callback.
+
+* In `llc_set_station_handler`, consider adding a check for the old handler and freeing any allocated resources before overwriting it.
+
+* Verify that `llc_type_handlers[dest - 1]` and `llc_station_handler` are properly checked for NULL before being dereferenced. If they are not checked elsewhere in the code, ensure that error checking is in place.
+
+ORIGINAL CODE:
+```c
+void llc_add_pack(int type, void (*handler)(struct llc_sap *sap,
+					    struct sk_buff *skb))
+{
+	if (type == LLC_DEST_SAP || type == LLC_DEST_CONN)
+		llc_type_handlers[type - 1] = handler;
+}
+
+{
+	if (type == LLC_DEST_SAP || type == LLC_DEST_CONN)
+		llc_type_handlers[type - 1] = NULL;
+}
+
+void llc_set_station_handler(void (*handler)(struct sk_buff *skb))
+{
+	llc_station_handler = handler;
+}
+
+/**
+ *	llc_pdu_type - returns which LLC component must handle for PDU
+	int dest;
+	int (*rcv)(struct sk_buff *, struct net_device *,
+		   struct packet_type *, struct net_device *);
+
+	if (!net_eq(dev_net(dev), &init_net))
+		goto drop;
+
+	 */
+	rcv = rcu_dereference(sap->rcv_func);
+.dest = llc_pdu_type(skb);
+	if (unlikely(!dest || !llc_type_handlers[dest - 1])) {
+		if (rcv)
+			rcv(skb, dev, pt, orig_dev);
+		else
+			kfree_skb(skb);
+			if (cskb)
+				rcv(cskb, dev, pt, orig_dev);
+		}
+		llc_type_handlers[dest - 1](sap, skb);
+	}
+	llc_sap_put(sap);
+out:
+	return 0;
+	kfree_skb(skb);
+	goto out;
+handle_station:
+	if (!llc_station_handler)
+		goto drop;
+	llc_station_handler(skb);
+	goto out;
+}
+
+EXPORT_SYMBOL(llc_add_pack);
+```

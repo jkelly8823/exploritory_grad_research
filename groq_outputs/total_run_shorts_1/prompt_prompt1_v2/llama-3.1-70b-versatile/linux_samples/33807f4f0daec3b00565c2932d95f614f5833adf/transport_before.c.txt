@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 10
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereferences in smb_send_rqst function.
+EXPLANATION:
+In the smb_send_rqst function, there are null pointer dereferences. Specifically, the code does not check if rqst or iov is null before accessing their members. Additionally, the code does not check if iov[0] is null before accessing its members such as iov_base and iov_len. This could lead to a segmentation fault if any of these pointers are null. Furthermore, the variable `iov` is checked implicitly by accessing its members in line 10 without checking its validity first. 
+
+A null pointer dereference occurs when the code tries to access a null pointer as if it were a valid pointer, which can lead to a segmentation fault.
+
+RECOMMENDATIONS:
+Perform explicit null pointer checks for `rqst`, `iov`, and `iov[0]` before accessing their members. The code should check for the validity of these pointers before proceeding with their usage. Also, consider adding checks for `iov[0].iov_base` and `iov[0].iov_len` to avoid accessing members of a potential null pointer.
+
+Here is a possible fix:
+
+```c
+static int
+smb_send_rqst(struct TCP_Server_Info *server, struct smb_rqst *rqst)
+{
+    if (rqst == NULL) {
+        // Handle error
+        return -EINVAL;
+    }
+    
+    if (rqst->rq_iov == NULL || rqst->rq_nvec <= 0) {
+        // Handle error
+        return -EINVAL;
+    }
+    
+    struct kvec *iov = rqst->rq_iov;
+    // Access iov members only after the above checks
+    unsigned int smb_buf_length = get_rfc1002_length(iov[0].iov_base);
+    ...
+```
+
+ORIGINAL CODE:
+
+        iov->iov_len = rqst->rq_pagesz;
+}
+
+static int
+smb_send_rqst(struct TCP_Server_Info *server, struct smb_rqst *rqst)
+{
+	int rc;
+	struct kvec *iov = rqst->rq_iov;
+	int n_vec = rqst->rq_nvec;
+	unsigned int smb_buf_length = get_rfc1002_length(iov[0].iov_base);
+	unsigned int i;
+	size_t total_len = 0, sent;
+	struct socket *ssocket = server->ssocket;
+	int val = 1;
+	if (ssocket == NULL)
+		return -ENOTSOCK;
+
+	cifs_dbg(FYI, "Sending smb: smb_len=%u\n", smb_buf_length);
+	dump_smb(iov[0].iov_base, iov[0].iov_len);
+
+	/* cork the socket */

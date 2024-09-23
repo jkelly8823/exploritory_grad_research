@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential uncontrolled memory access and buffer overflows due to unchecked casting of potentially unallocated memory regions and potential out-of-bounds access in the `sta->supp_rates[band]` array.
+
+EXPLANATION:
+The code uses pointer casting to assign values to structs (ra_info to sta_rec_ra_info). This may cause uncontrolled memory access if the allocated memory region is not as expected, potentially leading to memory vulnerabilities such as buffer overflows. Additionally, accessing `sta->supp_rates[band]` without checking if the `band` index is within bounds can cause uncontrolled memory access and out-of-bounds access vulnerabilities.
+
+RECOMMENDATIONS:
+1. Check if `mt76_connac_mcu_add_tlv(skb, STA_REC_RA, sizeof(*ra_info))` allocates memory properly and handles allocation errors.
+2. Validate the band index before accessing `sta->supp_rates[band]` to prevent out-of-bounds memory access. Use bounds checking to ensure `band` is within the valid range of `sta->supp_rates`.
+3. Consider using safer memory casting methods, such as those provided by `container_of` or similar API.
+4. Review the allocation of memory for `sta->supp_rates` and ensure it's properly bounded.
+
+ORIGINAL CODE:
+```
+phy->phy_type = mt76_connac_get_phy_mode_v2(mphy, vif, band, sta);
+phy->basic_rate = cpu_to_le16((u16)vif->bss_conf.basic_rates);
+phy->rcpi = rcpi;
+
+tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_RA, sizeof(*ra_info));
+ra_info = (struct sta_rec_ra_info *)tlv;
+ra_info->legacy = cpu_to_le16((u16)sta->supp_rates[band]);
+```

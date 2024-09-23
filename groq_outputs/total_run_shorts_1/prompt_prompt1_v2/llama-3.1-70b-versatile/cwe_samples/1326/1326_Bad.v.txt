@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 11
+VULNERABILITY_DESCRIPTION:
+Out-of-Bounds Array Access and Potential Data Corruption.
+
+EXPLANATION:
+The given code snippet appears to be handling read and write operations on a ROM (Read-Only Memory) with a size defined by `RomSize`. However, there are two potential vulnerabilities present in this code.
+
+Firstly, in the line `raddr_q <= addr_i[$clog2(RomSize)-1+3:3];`, the address calculation for `raddr_q` is being truncated to a specific range without ensuring that the resulting value is within the valid range of the ROM. This could potentially lead to an out-of-bounds array access.
+
+Secondly, in the line `mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;`, the writing of data to the ROM is not validated to ensure that the address is within the valid range of the ROM. This could lead to data corruption or writing to an invalid location.
+
+Lastly, the code also uses an assignment in the line `assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;`. This could result in a '0' being returned if `raddr_q` is greater than or equal to `RomSize`. However, this is less of a vulnerability and more of an attempt to protect against spurious 'X'es from propagating into the speculative fetch stage of the core, but it can also mask potential out-of-bounds errors.
+
+RECOMMENDATIONS:
+
+- Validate the address before using it to access the ROM. This can be achieved by adding a check to ensure that the calculated address is within the valid range of the ROM.
+- Consider using a `if (raddr_q >= RomSize)` check before writing or reading from the ROM to prevent out-of-bounds array accesses.
+- Remove the hardcoding of bit widths in the calculations and use constants instead for better readability and maintainability.
+
+ORIGINAL CODE:
+
+```
+...
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        if (!we_i) begin
+            raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+        end else begin
+            mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;
+        end
+    end
+end
+...
+
+// this prevents spurious Xes from propagating into the speculative fetch stage of the core
+
+assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;
+...
+```

@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION: 
+Integer overflow vulnerability
+
+EXPLANATION:
+The function `ath11k_hw_get_mac_from_pdev_id` takes an `int pdev_idx` as an argument. This `pdev_idx` is not validated or checked whether it's within a certain range before being passed to the function `get_hw_mac_from_pdev_id` of the `ath11k_hw_ops` structure. This function returns a `u8` (an unsigned 8-bit integer), but if `pdev_idx` is a negative number, it will be converted to a large unsigned integer when passed to the function, potentially causing an integer overflow. This can lead to unpredictable behavior or return incorrect values.
+
+RECOMMENDATIONS:
+To prevent this vulnerability from occurring, it is recommended to validate `pdev_idx` before passing it to `get_hw_mac_from_pdev_id`. It is recommended to check if `pdev_idx` is within a valid range, and if not, return an error code. 
+
+Additionally, the `pdev_idx` should be of type `u8` if it can only hold positive values, to prevent the negative number being converted to a large unsigned integer.
+
+Here's an example of how the validation can be implemented:
+
+```c
+static inline
+int ath11k_hw_get_mac_from_pdev_id(struct ath11k_hw_params *hw,
+				   u8 pdev_idx)
+{
+	if(pdev_idx >= ATH11K_EXT_IRQ_GRP_NUM_MAX) {
+		return -EINVAL; // or some other error code
+	}
+	return hw->hwpfn.get_hw_mac_from_pdev_id(pdev_idx);
+}
+```
+
+
+ORIGINAL CODE:
+```c
+#ifndef ATH11K_HW_H
+#define ATH11K_HW_H
+
+#include "wmi.h"
+
+/* Target configuration defines */
+
+	u8 host2rxdma[ATH11K_EXT_IRQ_GRP_NUM_MAX];
+};
+
+struct ath11k_hw_params {
+	const char *name;
+	u16 hw_rev;
+	u8 max_radios;
+	u32 hal_desc_sz;
+	bool fix_l1ss;
+	u8 max_tx_ring;
+};
+
+struct ath11k_hw_ops {
+	u8 (*get_hw_mac_from_pdev_id)(int pdev_id);
+extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qca6390;
+extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qcn9074;
+
+static inline
+int ath11k_hw_get_mac_from_pdev_id(struct ath11k_hw_params *hw,
+				   int pdev_idx)
+```
+
+Please note that code like the above is best practice to handle any potential overflow in code. Make sure to use it wherever needed.

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumbers: 9-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Resource Leak due to missing error handling when requesting a hardware IRQ.
+
+EXPLANATION:
+The code checks if the IRQ number is greater than 0 before requesting it, but it does not check the return value of devm_request_irq(). This function can fail and return an error, but the error is not handled. As a result, if the request fails, the device will continue to operate without interrupt handling, potentially leading to unpredictable behavior.
+
+RECOMMENDATIONS:
+Check the return value of devm_request_irq() and handle any potential errors. If the request fails, it is recommended to either return an error, log the event, or fail the device registration. Here is an example of improved error handling:
+
+```c
+ret = devm_request_irq(&pdev->dev, irq, orion_wdt_pre_irq,
+                       0, pdev->name, dev);
+if (ret) {
+    dev_err(&pdev->dev, "Failed to request IRQ: %d\n", ret);
+    return ret;
+}
+```
+
+ORIGINAL CODE:
+    set_bit(WDOG_HW_RUNNING, &dev->wdt.status);
+
+    /* Request the IRQ only after the watchdog is disabled */
+    irq = platform_get_irq_optional(pdev, 0);
+    if (irq > 0) {
+        /*
+         * Not all supported platforms specify an interrupt for the
+         * watchdog, so let's make it optional.
+    }
+
+    /* Optional 2nd interrupt for pretimeout */
+    irq = platform_get_irq_optional(pdev, 1);
+    if (irq > 0) {
+        orion_wdt_info.options |= WDIOF_PRETIMEOUT;
+        ret = devm_request_irq(&pdev->dev, irq, orion_wdt_pre_irq,
+                               0, pdev->name, dev);

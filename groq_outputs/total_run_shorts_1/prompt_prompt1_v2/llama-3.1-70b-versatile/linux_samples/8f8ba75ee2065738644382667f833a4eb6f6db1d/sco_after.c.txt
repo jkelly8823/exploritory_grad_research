@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code snippet is a potential use-after-free error.
+
+EXPLANATION:
+In this code snippet, the connection `conn` is locked, the socket `sk` is set to `NULL` in `conn`, and then the lock on `conn` is released. Later on, `conn->hcon` is accessed and potentially freed. However, there is no check to ensure that `conn` has not been freed between the time it was unlocked and the time `conn->hcon` is accessed. 
+
+Additionally, `hcon->sco_data` is set to `NULL` without acquiring a lock on `hcon`. This could potentially cause a data race if `hcon` is being accessed by multiple threads concurrently.
+
+However, the main risk is the untimely access of `conn->hcon` while `conn` could be invalid.
+ 
+RECOMMENDATIONS:
+To fix this vulnerability, you should acquire the lock on `hcon` before accessing `hcon->sco_data` and ensure that `conn` is not freed between the time `conn->hcon` is accessed and the time it is used. 
+
+Here's an example of how you can acquire the lock on `hcon`:
+
+```c
+if (conn->hcon)
+{
+    hci_conn_lock(conn->hcon);  // Assuming hci_conn_lock function exists
+    hcon->sco_data = NULL;
+    hci_conn_unlock(conn->hcon);
+    hci_conn_put(conn->hcon);
+}
+```
+
+You should also ensure that any threads that could potentially free `conn` while another thread is trying to access `conn->hcon` are synchronized properly.
+
+ORIGINAL CODE:
+
+```c
+sco_sock_clear_timer(sk);
+sco_chan_del(sk, err);
+bh_unlock_sock(sk);
+
+sco_conn_lock(conn);
+conn->sk = NULL;
+sco_pi(sk)->conn = NULL;
+sco_conn_unlock(conn);
+
+if (conn->hcon)
+    hci_conn_put(conn->hcon);
+
+sco_sock_kill(sk);
+}
+
+hcon->sco_data = NULL;
+
+BT_DBG("sk %p, conn %p, err %d", sk, conn, err);
+
+sk->sk_state = BT_CLOSED;
+sk->sk_err   = err;
+sk->sk_state_change(sk);
+```

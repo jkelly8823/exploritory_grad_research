@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Potential Unchecked Access Vulnerability
+
+EXPLANATION:
+The code checks if a value in an array is non-negative (`view->suboffsets[dest->ndim-1] >= 0`), but does not verify if the array is null before attempting to access its elements. Additionally, the code does not verify if `dest->ndim` is guaranteed to be within the bounds of the array before indexing it. The `ndim` variable is stated in the assumption, but there is no explicit validation that ensures it will not exceed the bounds of the array.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add null checks for the `view->suboffsets` array before attempting to access its elements. Additionally, bounds checking for `dest->ndim` should be added to prevent potential out-of-bounds access.
+
+```c
+#define HAVE_SUBOFFSETS_IN_LAST_DIM(view) \
+    ((view->suboffsets != NULL) && (view->suboffsets[dest->ndim-1] >= 0) && (dest->ndim > 0))
+```
+
+Alternatively, a safer way would be to explicitly check the bounds:
+
+```c
+#define HAVE_SUBOFFSETS_IN_LAST_DIM(view) \
+    ((view->suboffsets != NULL) && (dest->ndim > 0) && (dest->ndim <= view->size) && (view->suboffsets[dest->ndim-1] >= 0))
+```
+
+However, without knowing the size of the `view->suboffsets` array, we can't determine its actual size and thus will have to rely on the programmer knowing this and being careful.
+
+ORIGINAL CODE:
+```c
+/* Assumptions: ndim >= 1. The macro tests for a corner case that should
+   perhaps be explicitly forbidden in the PEP. */
+#define HAVE_SUBOFFSETS_IN_LAST_DIM(view) \
+    (view->suboffsets && view->suboffsets[dest->ndim-1] >= 0)
+
+static inline int
+last_dim_is_contiguous(const Py_buffer *dest, const Py_buffer *src)
+{
+```

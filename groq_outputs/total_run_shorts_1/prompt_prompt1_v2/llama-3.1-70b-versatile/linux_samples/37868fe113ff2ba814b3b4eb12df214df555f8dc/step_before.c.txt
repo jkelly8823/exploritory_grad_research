@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION: 
+Potential Unauthorized Memory Access
+
+EXPLANATION:
+The vulnerability lies in the fact that the function does not validate the 'desc' pointer and uses it directly to access its members ('d'). This could potentially lead to unauthorized memory access or a segmentation fault if 'desc' points to an invalid memory location.
+
+Additionally, the 'get_desc_base' function is not shown, but if it also accesses the 'desc' pointer without validation, it could also lead to unauthorized memory access.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should validate the 'desc' pointer before using it. Here are a few steps that can be taken:
+
+1. Check if 'desc' is a valid pointer: Before accessing the 'desc' pointer, a check should be made to ensure it points to a valid memory location.
+2. Validate the 'desc' pointer within the 'get_desc_base' function: Ensure that the 'desc' pointer is validated within the 'get_desc_base' function before it accesses 'desc'.
+
+Example:
+
+```
+unsigned long convert_ip_to_linear(struct task_struct *child, struct pt_regs *regs)
+{
+	unsigned long addr, seg;
+		seg &= ~7UL;
+
+		mutex_lock(&child->mm->context.lock);
+		if (unlikely((seg >> 3) >= child->mm->context.size))
+			addr = -1L; /* bogus selector, access would fault */
+		else {
+			desc = child->mm->context.ldt + seg;
+			if (desc == NULL || desc < child->mm->context.ldt || 
+				(desc - child->mm->context.ldt) / sizeof(*desc) >= child->mm->context.size) {
+				// Handle invalid 'desc' pointer here
+				return -EINVAL;
+			}
+			base = get_desc_base(desc);
+			if (base == NULL) {
+				// Handle invalid 'base' pointer here
+				return -EINVAL;
+			}
+
+			/* 16-bit code segment? */
+			if (!desc->d)
+```
+
+ORIGINAL CODE:
+```c
+#include <linux/mm.h>
+#include <linux/ptrace.h>
+#include <asm/desc.h>
+
+unsigned long convert_ip_to_linear(struct task_struct *child, struct pt_regs *regs)
+{
+	unsigned long addr, seg;
+		seg &= ~7UL;
+
+		mutex_lock(&child->mm->context.lock);
+		if (unlikely((seg >> 3) >= child->mm->context.size))
+			addr = -1L; /* bogus selector, access would fault */
+		else {
+			desc = child->mm->context.ldt + seg;
+			base = get_desc_base(desc);
+
+			/* 16-bit code segment? */
+			if (!desc->d)
+```

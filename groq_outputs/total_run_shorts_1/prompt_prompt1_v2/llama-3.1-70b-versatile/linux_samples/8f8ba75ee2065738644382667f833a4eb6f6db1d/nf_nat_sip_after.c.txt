@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21
+VULNERABILITY_DESCRIPTION:
+The code uses untrusted user input (`matchend` and `datalen`) to parse and extract data from a SIP header without proper validation or sanitization.
+
+EXPLANATION:
+The function `ct_sip_parse_address_param` is called with user-controlled input `matchend` and `datalen` which are calculated earlier in the code. These values can potentially exceed the allocated buffer size, causing a buffer overflow.
+
+The `matchend` value is calculated by adding `matchoff + matchlen + *datalen - olen`. If `matchlen` or `*datalen` can be influenced by an attacker, this calculation may produce an overflow or exceed the allocated buffer size.
+
+Furthermore, the code does not perform bounds checking or validation on the parsed data. If the `poff` and `plen` values are not within the expected range, it may cause an out-of-bounds read or access.
+
+The `sprintf` function is used to format the extracted IP address. However, the formatted string is less than or equal to the size of the allocated buffer, which is a buffer overflow prevention technique, but still a concern exists because IP address string may contain unusual or malicious data.
+
+RECOMMENDATIONS:
+
+* Validate `matchlen` and `datalen` to prevent potential buffer overflows.
+* Ensure that `poff` and `plen` are within the expected range to prevent out-of-bounds reads or accesses.
+* Use `snprintf` instead of `sprintf` to prevent potential buffer overflows.
+* Implement error checking and handling for `ct_sip_parse_address_param` and `ct_sip_parse_header_uri` to prevent crashes or unexpected behavior.
+
+ORIGINAL CODE:
+```c
+if (ct_sip_parse_header_uri(ct, *dptr, NULL, *datalen,
+				    hdr, NULL, &matchoff, &matchlen,
+				    &addr, &port) > 0) {
+		unsigned int olen, matchend, poff, plen, buflen, n;
+		char buffer[sizeof("nnn.nnn.nnn.nnn:nnnnn")];
+
+		/* We're only interested in headers related to this
+		 * connection */
+				goto next;
+		}
+
+		olen = *datalen;
+		if (!map_addr(skb, dataoff, dptr, datalen, matchoff, matchlen,
+			      &addr, port))
+			return NF_DROP;
+
+		matchend = matchoff + matchlen + *datalen - olen;
+
+		/* The maddr= parameter (RFC 2361) specifies where to send
+		 * the reply. */
+		if (ct_sip_parse_address_param(ct, *dptr, matchend, *datalen,
+					       "maddr=", &poff, &plen,
+					       &addr, true) > 0 &&
+		    addr.ip == ct->tuplehash[dir].tuple.src.u3.ip &&
+		    addr.ip != ct->tuplehash[!dir].tuple.dst.u3.ip) {
+			buflen = sprintf(buffer, "%pI4",
+					&ct->tuplehash[!dir].tuple.dst.u3.ip);
+		 * from which the server received the request. */
+		if (ct_sip_parse_address_param(ct, *dptr, matchend, *datalen,
+					       "received=", &poff, &plen,
+					       &addr, false) > 0 &&
+		    addr.ip == ct->tuplehash[dir].tuple.dst.u3.ip &&
+		    addr.ip != ct->tuplehash[!dir].tuple.src.u3.ip) {
+			buflen = sprintf(buffer, "%pI4",
+					&ct->tuplehash[!dir].tuple.src.u3.ip);
+```

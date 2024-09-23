@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+Insufficient bounds checking on skb_put and skb_copy_bits, potentially leading to a buffer overflow.
+
+EXPLANATION:
+The code appears to be handling TCP segments and potentially copying data from one skb (sk_buff) to another. The issue is that the bounds checking for skb_put and skb_copy_bits is incomplete. The check on `next_skb_size` only compares it with `skb_availroom(skb)`, which does not guarantee that the allocated memory will be sufficient to hold `next_skb_size` bytes of data. This can potentially lead to a buffer overflow.
+
+Moreover, if `skb_put` fails to allocate sufficient memory, `skb_copy_bits` will not account for this and will try to copy data to a possibly unallocated or out-of-bounds location.
+
+RECOMMENDATIONS:
+- Always check the return value of `skb_put` to ensure that sufficient memory has been allocated.
+- Perform bounds checking on `skb_copy_bits` by verifying that the destination buffer has enough capacity to hold `next_skb_size` bytes of data.
+
+ORIGINAL CODE:
+```c
+mss_now -= icsk->icsk_ext_hdr_len;
+
+/* Then reserve room for full set of TCP options and 8 bytes of data */
+if (mss_now < TCP_MIN_SND_MSS)
+	mss_now = TCP_MIN_SND_MSS;
+return mss_now;
+}
+
+/* Calculate MSS. Not accounting for SACKs here.  */
+	if (next_skb_size <= skb_availroom(skb))
+		skb_copy_bits(next_skb, 0, skb_put(skb, next_skb_size),
+			      next_skb_size);
+	else if (!tcp_skb_shift(skb, next_skb, 1, next_skb_size))
+		return false;
+}
+tcp_highest_sack_replace(sk, next_skb, skb);
+```

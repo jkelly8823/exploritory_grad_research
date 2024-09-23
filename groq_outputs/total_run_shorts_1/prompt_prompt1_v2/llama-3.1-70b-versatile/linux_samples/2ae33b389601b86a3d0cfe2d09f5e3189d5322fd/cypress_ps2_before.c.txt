@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 12
+VULNERABILITY_DESCRIPTION:
+A null pointer dereference vulnerability is possible in this code.
+
+EXPLANATION:
+In the function `cypress_query_hardware`, it is possible that `psmouse->private` is a null pointer, which is then dereferenced when assigned to `cytp`. This can lead to a null pointer dereference when attempting to access `cytp->tp_metrics_supported`. Without the full code, it is not entirely clear whether `psmouse` and `psmouse->private` are initialized and validated elsewhere, but based on the provided code, this possibility exists.
+
+However, another obvious issue exists. The lines 11 and 12 perform integer divisions that can potentially result in division by zero errors. This is because the code snippet has no validation that ensures `cytp->tp_width` and `cytp->tp_high` are non-zero before performing the divisions.
+
+RECOMMENDATIONS:
+1. Add checks to ensure that `psmouse->private` is not null before attempting to dereference it. This check should be placed at the start of the `cypress_query_hardware` function.
+
+2. Validate the values of `cytp->tp_width` and `cytp->tp_high` before performing divisions to prevent division by zero errors. This can be achieved by adding simple checks before lines 11 and 12.
+
+Here's how this might look:
+
+```c
+if (!psmouse->private) {
+    // handle error case, return or exit early
+}
+
+// ...
+
+if (cytp->tp_width == 0 || cytp->tp_high == 0) {
+    // handle error case, return or exit early
+} else {
+    cytp->tp_res_x = cytp->tp_max_abs_x / cytp->tp_width;
+    cytp->tp_res_y = cytp->tp_max_abs_y / cytp->tp_high;
+}
+
+ORIGINAL CODE:
+	cytp->fw_version = param[2] & FW_VERSION_MASX;
+	cytp->tp_metrics_supported = (param[2] & TP_METRICS_MASK) ? 1 : 0;
+
+	psmouse_dbg(psmouse, "cytp->fw_version = %d\n", cytp->fw_version);
+	psmouse_dbg(psmouse, "cytp->tp_metrics_supported = %d\n",
+		 cytp->tp_metrics_supported);
+
+	cytp->tp_res_x = cytp->tp_max_abs_x / cytp->tp_width;
+	cytp->tp_res_y = cytp->tp_max_abs_y / cytp->tp_high;
+
+	memset(param, 0, sizeof(param));
+	if (cypress_send_ext_cmd(psmouse, CYTP_CMD_READ_TP_METRICS, param) == 0) {
+		/* Update trackpad parameters. */
+		cytp->tp_max_abs_x = (param[1] << 8) | param[0];
+
+static int cypress_query_hardware(struct psmouse *psmouse)
+{
+	struct cytp_data *cytp = psmouse->private;
+	int ret;
+
+	ret = cypress_read_fw_version(psmouse);
+	if (ret)
+		return ret;
+
+	if (cytp->tp_metrics_supported) {
+		ret = cypress_read_tp_metrics(psmouse);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+```

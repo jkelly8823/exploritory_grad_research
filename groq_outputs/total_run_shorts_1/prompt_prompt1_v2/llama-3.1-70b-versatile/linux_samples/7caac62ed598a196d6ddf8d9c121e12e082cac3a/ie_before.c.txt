@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in the use of memcpy.
+
+EXPLANATION:
+The code uses `memcpy` to copy data from `vs_ie` to `ie->ie_buffer`. However, the size of the buffer `ie->ie_buffer` is not checked before the copy operation, which could lead to a buffer overflow if the sum of the current length of `ie->ie_buffer` and the length of `vs_ie` exceeds the capacity of `ie->ie_buffer`. 
+
+Additionally, the length value `vs_ie->len` is obtained from the input data `vs_ie` which could be potentially malicious and contain a large value. This can cause the program to write beyond the bounds of the buffer, leading to a potential buffer overflow and resulting in undefined behavior or a crash.
+
+RECOMMENDATIONS:
+Before performing the `memcpy`, ensure that the buffer `ie->ie_buffer` has enough capacity to hold the additional data. You can do this by keeping track of the buffer's size and checking it before the copy operation. The correct size check should be done as follows:
+```c
+if (le16_to_cpu(ie->ie_length) + vs_ie->len + 2 <= BUFFER_SIZE) {
+    memcpy(ie->ie_buffer + le16_to_cpu(ie->ie_length),
+           vs_ie, vs_ie->len + 2);
+    le16_unaligned_add_cpu(&ie->ie_length, vs_ie->len + 2);
+} else {
+    // Handle buffer overflow error
+}
+```
+ORIGINAL CODE:
+```c
+vs_ie = (struct ieee_types_header *)vendor_ie;
+memcpy(ie->ie_buffer + le16_to_cpu(ie->ie_length),
+       vs_ie, vs_ie->len + 2);
+le16_unaligned_add_cpu(&ie->ie_length, vs_ie->len + 2);
+ie->mgmt_subtype_mask = cpu_to_le16(mask);
+```

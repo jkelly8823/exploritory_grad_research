@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 16
+VULNERABILITY_DESCRIPTION:
+The code uses pointer arguments in function calls without proper validation. Specifically, the `on_each_cpu` function call passes `NULL` as a pointer argument without checking if the receiver end can handle NULL values.
+
+EXPLANATION:
+In the `flush_tlb_all` and `flush_bp_all` functions, the `on_each_cpu` function is called with a NULL pointer as the second argument. Without the definition of `on_each_cpu`, it's difficult to know how it handles NULL values. However, in general, passing NULL pointers to function calls without proper validation can result in null pointer dereferences or unexpected behavior.
+
+Furthermore, in `flush_tlb_all` function, the variables `start` and `end` are used without declaration. Although it's expected to be a hunk of a commit and we might not have access to the full code, using undefined variables can still introduce vulnerabilities.
+
+RECOMMENDATIONS:
+* Verify that `on_each_cpu` can handle NULL values properly. If not, ensure that non-NULL valid pointers are passed to `on_each_cpu`.
+* In the `flush_tlb_all` function, validate and verify that the variables `start` and `end` are defined and have the expected values before passing them to `local_flush_tlb_kernel_range`.
+
+ORIGINAL CODE:
+```c
+local_flush_tlb_kernel_range(ta->ta_start, ta->ta_end);
+}
+
+static inline void ipi_flush_bp_all(void *ignored)
+{
+	local_flush_bp_all();
+}
+
+void flush_tlb_all(void)
+{
+	if (tlb_ops_need_broadcast())
+		on_each_cpu(ipi_flush_tlb_all, NULL, 1);
+		local_flush_tlb_kernel_range(start, end);
+}
+
+void flush_bp_all(void)
+{
+	if (tlb_ops_need_broadcast())
+		on_each_cpu(ipi_flush_bp_all, NULL, 1);
+	else
+		local_flush_bp_all();
+}
+```

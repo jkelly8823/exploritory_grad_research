@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 444, (Implicit NULL check is skipped when INIT_WORK is called)
+VULNERABILITY_DESCRIPTION:
+A NULL pointer dereference vulnerability in the dln2_gpio_probe function.
+
+EXPLANATION:
+The code does not check if the dln2->irq_work[i].dln2 parameter is NULL before passing it to the INIT_WORK function (INIT_WORK(&dln2->irq_work[i].work, dln2_irq_work);). The dln2_irq_work function, which is called when the work is scheduled, uses this parameter (struct dln2_irq_work *iw = container_of(w, struct dln2_irq_work, work);). If this pointer is NULL, it will cause a NULL pointer dereference and potentially a system crash.
+
+Additionally, in the dln2_gpio_remove function, the work is flushed with flush_work(&dln2->irq_work[i].work); but it is not checked if dln2->irq_work[i].work is initialized before. If it is not initialized and NULL, this will also cause a NULL pointer dereference.
+
+RECOMMENDATIONS:
+Before calling INIT_WORK, check if dln2->irq_work[i].dln2 is NULL. If it is, do not call INIT_WORK and handle the error case accordingly.
+
+Additionally, before calling flush_work, check if dln2->irq_work[i].work is initialized and not NULL. If it is not, do not call flush_work and handle the error case accordingly.
+
+This can be done by adding a NULL check before calling INIT_WORK and flush_work:
+
+```c
+if (dln2 && dln2->irq_work[i].dln2) {
+    INIT_WORK(&dln2->irq_work[i].work, dln2_irq_work);
+}
+
+// ...
+
+if (dln2 && dln2->irq_work[i].work) {
+    flush_work(&dln2->irq_work[i].work);
+}
+```
+
+ORIGINAL CODE:
+(The original code is included above and can not be presented again due to response size requirements)

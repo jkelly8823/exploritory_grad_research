@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16
+VULNERABILITY_DESCRIPTION:
+A race condition with an unguarded combinatorial assignment to a net type variable.
+
+EXPLANATION:
+The issue arises in the always block at the lines 14-16. The assign statement for `grant_access` is outside of the conditional block which exists within the edge-sensitive always block. In VHDL or Verilog, this can create a situation where the combinatorial logic (assign statement) is evaluated at every simulation time step, not just when the conditional block is executed. This can result in a situation where `grant_access` becomes inconsistent with the intended control flow. 
+
+RECOMMENDATIONS:
+To avoid this potential issue, it's recommended to remove the assign statement from its current location and perform the calculation within the conditional block:
+
+```verilog
+if (!rst_n)
+    data_out = 0;
+else
+    if (usr_id == 3'h4)
+        grant_access = 1'b1;
+    else
+        grant_access = 1'b0;
+    data_out = (grant_access) ? data_in : data_out;
+```
+
+To avoid re-declaration error (because grant_access is declared as wire), define grant_access as reg type and replace assign statement with a blocking assignment inside the combinatorial logic section of your code.
+
+```verilog
+reg grant_access;
+always @ (usr_id)
+begin
+    grant_access = (usr_id == 3'h4) ? 1'b1 : 1'b0;
+end
+```
+(Though here it is better to have this grant_access inside the always @(...clock...) if you have any intention of having any registers dependent on this.)

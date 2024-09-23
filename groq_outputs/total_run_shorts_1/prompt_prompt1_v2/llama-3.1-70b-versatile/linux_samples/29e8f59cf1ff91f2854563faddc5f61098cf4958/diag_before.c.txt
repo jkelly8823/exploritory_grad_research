@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized Pointer 'nlh' in nlmsg_end()
+
+EXPLANATION:
+The variable 'nlh' is declared but not initialized before being used in the function nlmsg_end(skb, nlh). This can result in undefined behavior. 
+
+In the code snippet, there is a 'goto' statement at the beginning of the function that skips the initialization of 'nlh' and jumps directly to 'out_nlmsg_trim'. Then, it calls nlmsg_end(skb, nlh) without initialization, causing an issue.
+
+The 'goto' statement can potentially lead to skipping critical parts of the code, making it prone to vulnerabilities. Moreover, using 'goto' in this manner is bad programming practice.
+
+RECOMMENDATIONS:
+The function should initialize 'nlh' before using it in nlmsg_end(skb, nlh). Here is an example of how the code could be modified:
+
+1. Remove the 'goto' statement at the beginning of the function.
+2. Initialize 'nlh' before using it.
+
+For example:
+
+```c
+static int sk_diag_fill(struct sock *sk, struct sk_buff *skb,
+			struct packet_diag_req *req,
+			struct user_namespace *user_ns,
+			u32 portid, u32 seq, u32 flags, int sk_ino)
+{
+	struct nlmsghdr *nlh;
+	nlh = nlmsg_put(skb, portid, seq, 0, 0, flags);
+	if (nlh == NULL)
+		goto out_nlmsg_trim;
+	
+	//... Rest of the code ...
+}
+```
+
+ORIGINAL CODE:
+
+```c
+static int sk_diag_fill(struct sock *sk, struct sk_buff *skb,
+			struct packet_diag_req *req,
+			struct user_namespace *user_ns,
+			u32 portid, u32 seq, u32 flags, int sk_ino)
+{
+	struct nlmsghdr *nlh;
+		goto out_nlmsg_trim;
+
+	if ((req->pdiag_show & PACKET_SHOW_FILTER) &&
+	    sock_diag_put_filterinfo(sk, skb, PACKET_DIAG_FILTER))
+		goto out_nlmsg_trim;
+
+	return nlmsg_end(skb, nlh);
+
+	struct packet_diag_req *req;
+	struct net *net;
+	struct sock *sk;
+
+	net = sock_net(skb->sk);
+	req = nlmsg_data(cb->nlh);
+
+	mutex_lock(&net->packet.sklist_lock);
+	sk_for_each(sk, &net->packet.sklist) {
+		if (!net_eq(sock_net(sk), net))
+			goto next;
+
+		if (sk_diag_fill(sk, skb, req,
+				 sk_user_ns(NETLINK_CB(cb->skb).sk),
+				 NETLINK_CB(cb->skb).portid,
+				 cb->nlh->nlmsg_seq, NLM_F_MULTI,
+				 sock_i_ino(sk)) < 0)
+```

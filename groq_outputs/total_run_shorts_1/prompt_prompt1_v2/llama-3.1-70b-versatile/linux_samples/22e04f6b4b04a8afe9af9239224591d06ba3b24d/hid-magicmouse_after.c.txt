@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9, 18-19
+VULNERABILITY_DESCRIPTION:
+Possible memory leak and void pointer usage in error handling paths.
+EXPLANATION:
+In the error handling paths, the function devm_kzalloc() is used, which allocates memory that is freed when the device is removed. However, if the function hid_parse() or hid_hw_start() fails, the memory allocated by devm_kzalloc() will still be allocated and not explicitly freed, as the error handling path returns without a call to 'kfree'. Furthermore, even though devm_kzalloc() does free the memory on removal of the device, leaving it unhandled without an explicit free could still be an issue if the device isn't removed, but rather the current operation is exited due to an error state.
+
+Moreover, there might be a usage of a void pointer, as we do not see what msc or hdev is, which in itself isn't a vulnerability, but combined with a snippet like this, there could be potential casting vulnerabilities, thus attention should be paid to usage of such types if complete security is desired.
+RECOMMENDATIONS:
+Memory that is explicitly allocated (or, potentially, acquired as a side-effect) within a function that then might return early should be properly cleaned up before returning, or it should ensure that it is cleaned up some other way (like devm_kzalloc() does) in every conceivable path through that function to avoid memory leaks.  In a case like this, the error paths return without freeing msc, which was allocated by devm_kzalloc(). Another way to see that we are doing our due diligence to note that using the kernel function 'devm_kzalloc' already implies the memory gets freed eventually when we exit (due to device removal) hence to fulfill security concerns in any possible paths that might get followed from the specific 10-line snippet; consider doing an explicit kfree() operation on allocated memory or use alternative memory allocations APIs.
+
+Additionally, if hdev or msc are used elsewhere in the code, or without their definition presented, we need to make sure we are using the correct type, and that we are casting the type correctly; otherwise we have a potential issue on hand. Due diligence with security recommendations makes it such that one of us may flag casting usage. Casting with less type inference than a more modern language can lead to errors such as this.
+
+ORIGINAL CODE:
+
+```c
+static unsigned int scroll_speed = 32;
+static int param_set_scroll_speed(const char *val, struct kernel_param *kp) {
+	unsigned long speed;
+	if (!val || kstrtoul(val, 0, &speed) || speed > 63)
+		return -EINVAL;
+	scroll_speed = speed;
+	return 0;
+}
+	struct hid_report *report;
+	int ret;
+
+	msc = devm_kzalloc(&hdev->dev, sizeof(*msc), GFP_KERNEL);
+	if (msc == NULL) {
+		hid_err(hdev, "can't alloc magicmouse descriptor\n");
+		return -ENOMEM;
+	}
+	ret = hid_parse(hdev);
+	if (ret) {
+		hid_err(hdev, "magicmouse hid parse failed\n");
+		return ret;
+	}
+
+	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+	if (ret) {
+		hid_err(hdev, "magicmouse hw start failed\n");
+		return ret;
+	}
+
+	if (!msc->input) {
+		hid_err(hdev, "magicmouse input not registered\n");
+	return 0;
+err_stop_hw:
+	hid_hw_stop(hdev);
+	return ret;
+}
+
+static const struct hid_device_id magic_mice[] = {
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_APPLE,
+		USB_DEVICE_ID_APPLE_MAGICMOUSE), .driver_data = 0 },
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_APPLE,
+	.name = "magicmouse",
+	.id_table = magic_mice,
+	.probe = magicmouse_probe,
+	.raw_event = magicmouse_raw_event,
+	.input_mapping = magicmouse_input_mapping,
+	.input_configured = magicmouse_input_configured,
+}; ```
+This explanation is based on that memory handling and pointer manipulations are being done under strict memory safety as dictated by best practices of Linux driver design patterns found open-source and made public like others 'out there'.

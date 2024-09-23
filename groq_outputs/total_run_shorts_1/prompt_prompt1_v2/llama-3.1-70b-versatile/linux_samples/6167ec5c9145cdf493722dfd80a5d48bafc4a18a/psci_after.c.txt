@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a vulnerability in that it handles the case where the function ID is ARM_SMCCC_ARCH_FEATURES_FUNC_ID, and a feature is not recognized. In such cases, the variable 'val' maintains its previous value, which is PSCI_RET_NOT_SUPPORTED. However, if this 'val' was previously overwritten to a different value, the returning value could be incorrect.
+
+EXPLANATION:
+The code snippet provides no default values or handling for cases where 'feature' has a value other than ARM_SMCCC_ARCH_WORKAROUND_1. This might result in the 'val' variable being assigned an incorrect or previous value. Although this might not be the primary intention of this snippet, the handling of unaccounted features and function IDs should be properly managed to prevent unpredictable behavior.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to assign a proper value or handle cases with unaccounted features:
+
+- Set 'val' to PSCI_RET_NOT_SUPPORTED or an equivalent value for unhandled 'feature' values:
+
+```c
+case ARM_SMCCC_ARCH_FEATURES_FUNC_ID:
+    feature = smccc_get_arg1(vcpu);
+    switch(feature) {
+    case ARM_SMCCC_ARCH_WORKAROUND_1:
+        if (kvm_arm_harden_branch_predictor())
+            val = 0;
+        break;
+    default:
+        val = PSCI_RET_NOT_SUPPORTED;
+        break;
+    }
+    break;
+```
+
+- Handle the 'feature' in some other, more suitable, manner. The correct handling approach would depend on the project requirements and overall code structure.
+
+ORIGINAL CODE:
+```c
+{
+    u32 func_id = smccc_get_function(vcpu);
+    u32 val = PSCI_RET_NOT_SUPPORTED;
+    u32 feature;
+
+    switch (func_id) {
+    case ARM_SMCCC_VERSION_FUNC_ID:
+        val = ARM_SMCCC_VERSION_1_1;
+        break;
+    case ARM_SMCCC_ARCH_FEATURES_FUNC_ID:
+        feature = smccc_get_arg1(vcpu);
+        switch(feature) {
+        case ARM_SMCCC_ARCH_WORKAROUND_1:
+            if (kvm_arm_harden_branch_predictor())
+                val = 0;
+            break;
+        }
+        break;
+    default:
+        return kvm_psci_call(vcpu);
+    }
+```

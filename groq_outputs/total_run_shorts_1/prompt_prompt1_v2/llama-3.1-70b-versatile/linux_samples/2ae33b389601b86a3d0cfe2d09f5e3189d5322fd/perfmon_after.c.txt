@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Potential information leakage via CPU-specific storage.
+EXPLANATION:
+The use of `DEFINE_PER_CPU` macro for `pfm_syst_info`, `pmu_owner`, and `pmu_ctx` may lead to potential information leakage. Since these variables are stored per CPU, they might be readable and writable by multiple parts of the system. This could result in unauthorized access or modification of sensitive data, such as the `pmu_owner` task_struct or the `pmu_ctx` data structure. Additionally, it is essential to verify whether the `pmu_owner` and `pmu_ctx` pointers are properly checked for NULL before being used.
+
+RECOMMENDATIONS:
+1. Use proper synchronization primitives, such as spinlocks or mutexes, to protect access to shared data stored in `pfm_syst_info`, `pmu_owner`, and `pmu_ctx`. 
+2. Verify the presence and integrity of `pmu_owner` and `pmu_ctx` pointers before using them. 
+3. Consider whether the use of `DEFINE_PER_CPU` is necessary; if not, use alternative synchronization methods like spinlocks or mutexes.
+
+ORIGINAL CODE:
+```c
+.mount    = pfmfs_mount,
+.kill_sb  = kill_anon_super,
+};
+MODULE_ALIAS_FS("pfmfs");
+
+DEFINE_PER_CPU(unsigned long, pfm_syst_info);
+DEFINE_PER_CPU(struct task_struct *, pmu_owner);
+DEFINE_PER_CPU(pfm_context_t  *, pmu_ctx);
+```

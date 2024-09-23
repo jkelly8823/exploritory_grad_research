@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20
+VULNERABILITY_DESCRIPTION:
+A potentially exploitable integer overflow vulnerability in the hash calculation.
+
+EXPLANATION:
+The vulnerability exists in the line `hash = hpt_hash(vpn, PAGE_SHIFT, mmu_kernel_ssize)`. The function `hpt_hash` takes three arguments, but its implementation is not shown. Assuming it performs some arithmetic operation on these arguments, it is possible that the result overflows the range of the `hash` variable. This could result in an attacker being able to manipulate the hash value, potentially leading to arbitrary memory accesses or other exploits.
+
+However, a more immediate vulnerability arises from the fact that the hash is then scaled in the next line without bounds checking: `hpteg = ((hash & htab_hash_mask) * HPTES_PER_GROUP);`. If `hash & htab_hash_mask` is large enough, this multiplication can overflow, potentially writing to an arbitrary location in the hash table.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend performing bounds checking on the result of the hash calculation before scaling it. Additionally, using an overflow-safe arithmetic library or implementation can help prevent similar issues in the future.
+
+```c
+// Recommendations:
+hash = hpt_hash(vpn, PAGE_SHIFT, mmu_kernel_ssize);
+if (hash >= (USHRT_MAX / HPTES_PER_GROUP)) {
+    // handle the overflow case
+    BUG_ON(1);  // or some other sensible error handling
+}
+hpteg = ((hash & htab_hash_mask) * HPTES_PER_GROUP);
+```
+
+ORIGINAL CODE:
+```c
+unsigned long vpn  = hpt_vpn(vaddr, vsid, ssize);
+unsigned long tprot = prot;
+
+/* Make kernel text executable */
+if (overlaps_kernel_text(vaddr, vaddr + step))
+    tprot &= ~HPTE_R_N;
+
+/* Initialize stab / SLB management */
+if (mmu_has_feature(MMU_FTR_SLB))
+    slb_initialize();
+
+#ifdef CONFIG_SMP
+void __cpuinit early_init_mmu_secondary(void)
+DBG_LOW("hash_page(ea=%016lx, access=%lx, trap=%lx\n",
+        ea, access, trap);
+
+if ((ea & ~REGION_MASK) >= PGTABLE_RANGE) {
+    DBG_LOW(" out of pgtable range !\n");
+    return 1;
+}
+
+/* Get region & vsid */
+switch (REGION_ID(ea)) {
+case USER_REGION_ID:
+    user_region = 1;
+}
+DBG_LOW(" mm=%p, mm->pgdir=%p, vsid=%016lx\n", mm, mm->pgd, vsid);
+
+/* Get pgdir */
+pgdir = mm->pgd;
+if (pgdir == NULL)
+    return 1;
+/* Get VSID */
+ssize = user_segment_size(ea);
+vsid = get_vsid(mm->context.id, ea, ssize);
+
+/* Hash doesn't like irqs */
+local_irq_save(flags);
+
+hash = hpt_hash(vpn, PAGE_SHIFT, mmu_kernel_ssize);
+hpteg = ((hash & htab_hash_mask) * HPTES_PER_GROUP);
+
+ret = ppc_md.hpte_insert(hpteg, vpn, __pa(vaddr),
+                mode, HPTE_V_BOLTED,
+                mmu_linear_psize, mmu_kernel_ssize);
+BUG_ON (ret < 0);
+```

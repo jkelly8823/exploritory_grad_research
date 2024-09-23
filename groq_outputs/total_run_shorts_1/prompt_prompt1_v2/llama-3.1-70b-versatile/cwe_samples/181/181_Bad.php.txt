@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+The code contains a Directory Traversal Vulnerability.
+
+EXPLANATION:
+The function createDir() constructs a directory path using the $userDir and $dirName variables. Although it checks for the presence of '..', it does not check for other directory traversal sequences. A malicious user could exploit this by providing a directory name that contains sequences like '../', '././', or even Unicode-based directory traversal techniques. 
+
+Furthermore, the code does not validate the input of $userName and $dirName. This can allow an attacker to potentially change the ownership of system directories or create arbitrary file directories.
+
+Additionally, it is recommended to not perform file operation based on user provided input.
+
+RECOMMENDATIONS:
+To fix this vulnerability:
+1. Use a more robust method of validating directory names, such as a whitelist of allowed directory names, and validate the directory name against this list.
+2. Use realpath() function to normalize the path and check for directory traversal attempts.
+3. Use a secure method to create directories and change ownership.
+4. Validate the $userName input to ensure it is a valid system username.
+
+Here's an example of how to fix the vulnerability:
+
+```php
+function createDir($userName,$dirName){
+    // Sanitize input
+    $userName = preg_replace('/[^a-zA-Z0-9_]/', '', $userName);
+    $dirName = preg_replace('/[^a-zA-Z0-9_\-]/', '', $dirName);
+    
+    $userDir = '/users/'. $userName;
+    // Use realpath() to normalize the path
+    $newDir = realpath($userDir . '/' . $dirName);
+    
+    // Check if the directory is within the expected directory
+    if(substr($newDir, 0, strlen($userDir)) !== $userDir){
+        echo 'Directory name contains invalid sequence';
+        return;
+    }
+    
+    // Create directory and change ownership
+    if(!file_exists($newDir)){
+        mkdir($newDir, 0700);
+        chown($newDir,$userName);
+    }
+}
+```
+
+ORIGINAL CODE:
+```php
+function createDir($userName,$dirName){$userDir = '/users/'. $userName;if(strpos($dirName,'..') !== false){echo 'Directory name contains invalid sequence';return;}
+                        //filter out '~' because other scripts identify user directories by this prefix
+                        $dirName = str_replace('~','',$dirName);$newDir = $userDir . $dirName;mkdir($newDir, 0700);chown($newDir,$userName);}
+```

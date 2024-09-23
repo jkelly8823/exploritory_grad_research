@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Null Pointer Dereference Vulnerability
+EXPLANATION:
+The code checks if `fwspec` is null and if `fwspec->ops` is equal to `&mtk_iommu_ops`. However, before this check, the function `of_node_put(iommu_spec.np)` is called which may free the memory `iommu_spec.np` points to. Then, the code dereferences `fwspec` in the if statement without checking if it has been freed or not. If `fwspec` is null, this will result in a null pointer dereference. 
+RECOMMENDATIONS:
+To fix this vulnerability, you should reorder the checks and checks for `fwspec` being null should be done before calling `of_node_put(iommu_spec.np)`. Alternatively, you can also duplicate the null check for `fwspec` before the if statement.
+
+Additionally, you can prevent the null pointer dereference by checking the value of `fwspec->ops` only if `fwspec` is not null. 
+
+The correct order of checks should be:
+
+```c
+if (!fwspec) {
+    // Handle the case where fwspec is null
+}
+
+// rest of the code
+
+of_node_put(iommu_spec.np);
+
+if (fwspec && fwspec->ops != &mtk_iommu_ops) {
+    // Handle the case where fwspec->ops is not &mtk_iommu_ops
+}
+```
+
+ORIGINAL CODE:
+
+```c
+iommu_spec.args_count = count;
+
+mtk_iommu_create_mapping(dev, &iommu_spec);
+
+/* dev->iommu_fwspec might have changed */
+fwspec = dev_iommu_fwspec_get(dev);
+
+of_node_put(iommu_spec.np);
+
+if (!fwspec || fwspec->ops != &mtk_iommu_ops)
+```

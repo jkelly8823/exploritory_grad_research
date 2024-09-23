@@ -1,0 +1,87 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-19, 25-29, 34-40
+VULNERABILITY_DESCRIPTION:
+ 
+The code contains a classic vulnerability of memory leak due to improper handling of resources in a recursive function call. This type of vulnerability is commonly known as resource leak.
+
+EXPLANATION:
+
+This function makes recursive calls to itself and other functions in order to recover data from a journal. In several cases, when the recursive function call is successful, and a stripe_head structure is successfully allocated, the function does not return it immediately. It first sets up a linked list including the stripe_head structure and adds the structure to the list's tail. 
+
+However, the original pointer, which holds the successfully allocated stripe_head structure, is never freed and remains valid for the entire duration of the r5c_recovery_alloc_stripe() function. As the function calls itself recursively and allocates new memory for stripe_head structures without adjusting the current size of the cache, it will inevitably increase memory consumption and could cause memory overflow in extreme situations.
+
+RECOMMENDATIONS:
+
+To address the identified resource leak vulnerability in the code snippet, the suggested modifications are as follows:
+
+1. Before making a recursive call to r5c_recovery_alloc_stripe(), always free any memory that was allocated by previous calls for stripe_head structures. Ensure to properly release any resources, including stripe_head structures, to prevent memory leaks.
+
+2. Before adding a stripe_head structure to a linked list, ensure that the linked list was properly initialized before any elements are added to it.
+
+3. Add proper validation and check any external data passed to the function, such as stripe_sect. Ensure that these parameters cannot be exploited in any way.
+
+4. Verify that stripe_head is not null before dereferencing or manipulating it.
+
+5. Employ additional validation to identify when resources, such as stripe_head structures, have been successfully allocated and cannot be deallocated.
+
+6. Review the functions raid5_get_active_stripe and raid5_set_cache_size to ensure that any resources they allocate are also deallocated in all scenarios.
+
+7. Ensure that variables linked to open files or any shared resource have corresponding code to close the resource when it is no longer in use to prevent resource leaks.
+
+Please note that memory leak issues can be challenging to identify due to the system behavior being very inconsistent and requiring meticulous monitoring to diagnose.
+
+ORIGINAL CODE:
+
+
+}
+static struct stripe_head *
+r5c_recovery_alloc_stripe(
+		struct r5conf *conf,
+		sector_t stripe_sect,
+		int noblock)
+{
+	struct stripe_head *sh;
+
+	sh = raid5_get_active_stripe(conf, stripe_sect, 0, noblock, 0);
+	if (!sh)
+		return NULL;  /* no more stripe available */
+
+	r5l_recovery_reset_stripe(sh);
+						stripe_sect);
+
+		if (!sh) {
+			sh = r5c_recovery_alloc_stripe(conf, stripe_sect, 1);
+			/*
+			 * cannot get stripe from raid5_get_active_stripe
+			 * try replay some stripes
+			 */
+				r5c_recovery_replay_stripes(
+					cached_stripe_list, ctx);
+				sh = r5c_recovery_alloc_stripe(
+					conf, stripe_sect, 1);
+			}
+			if (!sh) {
+				int new_size = conf->min_nr_stripes * 2;
+				pr_debug("md/raid:%s: Increasing stripe cache size to %d to recovery data on journal.\n",
+					mdname(mddev),
+					new_size);
+				ret = raid5_set_cache_size(mddev, new_size);
+				if (conf->min_nr_stripes <= new_size / 2) {
+					pr_err("md/raid:%s: Cannot increase cache size, ret=%d, new_size=%d, min_nr_stripes=%d, max_nr_stripes=%d\n",
+						mdname(mddev),
+						ret,
+						new_size,
+						conf->min_nr_stripes,
+						conf->max_nr_stripes);
+					return -ENOMEM;
+				}
+				sh = r5c_recovery_alloc_stripe(
+					conf, stripe_sect, 0);
+			}
+			if (!sh) {
+				pr_err("md/raid:%s: Cannot get enough stripes due to memory pressure. Recovery failed.\n",
+					mdname(mddev));
+				return -ENOMEM;
+			}
+			list_add_tail(&sh->lru, cached_stripe_list);
+		}

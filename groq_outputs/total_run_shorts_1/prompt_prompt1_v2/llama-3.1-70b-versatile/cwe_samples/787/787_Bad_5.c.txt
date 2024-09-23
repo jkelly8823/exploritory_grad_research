@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-10
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow and Untrusted Data Usage Vulnerability.
+
+EXPLANATION:
+This code snippet contains two major vulnerabilities. Firstly, the `numWidgets` variable is directly used to allocate memory. This value is retrieved from `GetUntrustedSizeValue()`, which suggests that it comes from an untrusted source. This makes it vulnerable to buffer overflow attacks.
+
+Secondly, the loop that assigns `WidgetList[i]` and the assignment `WidgetList[numWidgets] = NULL;` both show a misunderstanding of how arrays work in C. The array `WidgetList` has a length of `numWidgets`, and the indices range from `0` to `numWidgets-1`. However, the loop attempts to access `WidgetList[numWidgets]`, which is out of bounds. 
+
+Moreover, there is no validation or sanitization performed on the value of `numWidgets`. This could lead to a denial of service (DoS) or potentially allow an attacker to execute arbitrary code.
+
+Finally, after a function is called, this function doesn't free the allocated memory, potentially leading to memory leaks.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the value of `numWidgets` before using it to allocate memory. Ensure it does not exceed `MAX_NUM_WIDGETS`.
+2. Use `calloc()` instead of `malloc()` to ensure the allocated memory is initialized to zero.
+3. Ensure the loop only goes up to `numWidgets-1`. 
+4. Remove the line `WidgetList[numWidgets] = NULL;` or adjust it to be within the valid range.
+5. After `showWidgets(WidgetList);`, free the allocated memory using `free(WidgetList);`.
+6. Validate all function calls and handle any potential errors to prevent memory leaks and unexpected behavior.
+
+ORIGINAL CODE:
+```c
+int i;
+unsigned int numWidgets;
+Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+WidgetList = (Widget **)malloc(numWidgets * sizeof(Widget *));
+printf("WidgetList ptr=%p\n", WidgetList);
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```

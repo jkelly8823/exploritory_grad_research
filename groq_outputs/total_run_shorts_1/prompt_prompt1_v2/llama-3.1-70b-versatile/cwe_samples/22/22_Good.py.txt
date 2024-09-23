@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-12
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+EXPLANATION:
+The code is vulnerable to a path traversal vulnerability, which can be exploited by an attacker to read arbitrary files on the system. This vulnerability arises when the code allows user-controlled input (in this case, `sys.argv[1]`) to specify a file path without proper validation or sanitization. This can allow an attacker to traverse the file system, potentially accessing sensitive files like `/etc/passwd` or `/etc/shadow`.
+
+The vulnerable lines (`path = ...` to `with open(path, 'r') as f:`) create a file path using `os.path.normpath()`, which does not prevent traversal attacks. If an attacker were to pass in a specially crafted file path (e.g., `../../../etc/passwd`), the code would resolve it to an absolute path and attempt to read the file.
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate and sanitize the file path provided by the user. A possible approach is to:
+
+1. Use a whitelist of allowed file paths or extensions to restrict access to specific files or directories.
+2. Use `os.path.abspath()` and `os.path.basename()` to verify that the resolved file path does not traverse the intended directory.
+3. Consider using a more secure method of reading files, such as using a library that provides path canonicalization (e.g., `pathlib`).
+
+Example of a possible fix:
+```python
+import os
+import pathlib
+
+...
+
+filename = sys.argv[1]
+allowed_dir = '/path/to/allowed/directory'
+allowed_extensions = ['.txt', '.csv']
+
+file_path = pathlib.Path(filename)
+if not file_path.is_absolute():
+    file_path = pathlib.Path(allowed_dir) / file_path
+
+if file_path.suffix.lower() not in allowed_extensions:
+    print("Error - Invalid file extension")
+    sys.exit(1)
+
+try:
+    with open(file_path, 'r') as f:
+        file_data = f.read()
+except FileNotFoundError as e:
+    print("Error - file not found")
+```
+ORIGINAL CODE:
+```python
+import os
+import sys
+def main():
+    
+    filename = sys.argv[1]
+    path = os.path.normpath(f"{os.getcwd()}{os.sep}{filename}")
+    try:
+       
+        with open(path, 'r') as f:
+           
+            file_data = f.read()
+           
+       
+    except FileNotFoundError as e:
+       
+        print("Error - file not found")
+       
+    main()
+```

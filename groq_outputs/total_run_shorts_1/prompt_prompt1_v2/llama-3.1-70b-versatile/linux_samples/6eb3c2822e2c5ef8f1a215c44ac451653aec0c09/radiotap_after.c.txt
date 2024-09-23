@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION: Potential Unbounded Loop and Lack of Error Handling
+EXPLANATION:
+The given code snippet contains a potential vulnerability in the form of an unbounded while loop. The loop condition depends on the value retrieved by the `get_unaligned_le32` function. However, the loop does not check whether the incremented value of `iterator->_arg` stays within the valid range defined by `iterator->_max_length`. 
+
+Additionally, there is no error handling for the case when `iterator->_arg` becomes NULL or points to an invalid memory location. If any of these conditions are not met, the loop may continue indefinitely, or it may result in a segmentation fault. 
+
+Another issue with this loop is the lack of validation for the comparison at the start of the loop. There is an assumption that `get_unaligned_le32(iterator->_arg)` will always return a valid value that can be compared with `(1 << IEEE80211_RADIOTAP_EXT)`. If this is not the case, the loop may run indefinitely, or it may cause unpredictable behavior.
+
+RECOMMENDATIONS:
+- Add bounds checking for the incremented value of `iterator->_arg`. Ensure it does not exceed `iterator->_max_length`.
+- Validate the return value of `get_unaligned_le32` to ensure it is a valid value that can be compared.
+- Add a check to prevent `iterator->_arg` from becoming NULL, thus causing a segmentation fault.
+- Add error handling for the potential failure of the memory operations within the loop.
+- Consider adding a loop counter with a reasonable maximum value to prevent an infinite loop.
+- Update the loop condition to explicitly check for valid memory access.
+
+ORIGINAL CODE:
+```c
+/* find payload start allowing for extended bitmap(s) */
+
+	if (iterator->_bitmap_shifter & (1<<IEEE80211_RADIOTAP_EXT)) {
+		if ((unsigned long)iterator->_arg -
+		    (unsigned long)iterator->_rtheader + sizeof(uint32_t) >
+		    (unsigned long)iterator->_max_length)
+			return -EINVAL;
+		while (get_unaligned_le32(iterator->_arg) &
+					(1 << IEEE80211_RADIOTAP_EXT)) {
+			iterator->_arg += sizeof(uint32_t);
+```

@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 35-36
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential path traversal vulnerability.
+
+EXPLANATION:
+The code opens a file using the `filp_open` method, but it does not validate the path properly when the `need_nonrelative` flag is set. When `need_nonrelative` is true, the code checks if the first character of `cn.corename` is a forward slash ('/'), but it does not prevent directory traversal attacks. If an attacker can manipulate the `cn.corename` variable to contain relative path components (e.g., '../'), they may be able to write to arbitrary files on the system.
+
+Additionally, the code does not validate the path against symlink attacks. If an attacker can create a symlink to a sensitive file and manipulate `cn.corename` to point to the symlink, the code may write to the sensitive file.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly validate the path before opening the file. This can be done by:
+
+* Using a library that provides path normalization and canonicalization, such as the `realpath` function in Linux.
+* Checking if the path contains any directory traversal components (e.g., '../') and rejecting it if it does.
+* Verifying that the file does not exist before attempting to open it, and failing if it does.
+* Using the `O_NOFOLLOW` flag when opening the file to prevent symlink attacks.
+* Consider using a more robust method of opening and writing to files, such as using a temporary file or a secure file descriptor.
+
+ORIGINAL CODE:
+```c
+int retval = 0;
+int flag = 0;
+int ispipe;
+bool need_nonrelative = false;
+static atomic_t core_dump_count = ATOMIC_INIT(0);
+struct coredump_params cprm = {
+    .signr = signr,
+    .regs = regs,
+if (!cred)
+    goto fail;
+/*
+ * We cannot trust fsuid as being the "true" uid of the process
+ * nor do we know its entire history. We only know it was tainted
+ * so we dump it as root in mode 2, and only into a controlled
+ * environment (pipe handler or fully qualified path).
+ */
+if (__get_dumpable(cprm.mm_flags) == 2) {
+    /* Setuid core dump mode */
+    flag = O_EXCL;        /* Stop rewrite attacks */
+    cred->fsuid = GLOBAL_ROOT_UID;    /* Dump root private */
+    need_nonrelative = true;
+}
+
+retval = coredump_wait(exit_code, &core_state);
+if (retval < 0)
+    if (cprm.limit < binfmt->min_coredump)
+        goto fail_unlock;
+
+    if (need_nonrelative && cn.corename[0] != '/') {
+        printk(KERN_WARNING "Pid %d(%s) can only dump core "\
+            "to fully qualified path!\n",
+            task_tgid_vnr(current), current->comm);
+        printk(KERN_WARNING "Skipping core dump\n");
+        goto fail_unlock;
+    }
+
+    cprm.file = filp_open(cn.corename,
+                O_CREAT | 2 | O_NOFOLLOW | O_LARGEFILE | flag,
+                0600);
+if (IS_ERR(cprm.file))
+```

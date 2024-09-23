@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Use of an unqualified break statement, potentially bypassing important error handling.
+
+EXPLANATION:
+In the provided code snippet, we observe a break statement on line 9 that potentially bypasses error handling initialized by the previous if statement (err). If an error occurred in the line `err = connect_ring(be);` and the `err` value was non-zero, the break statement directly jumps out of the larger construct (most likely a switch statement), bypassing any other necessary error handling that might have been put in place following this point.
+
+Additionally, the statement `update_blkif_status(be->blkif);` immediately preceding the break appears to assume that no error occurred, since it executes regardless of the value of `err`. This could be a mistake, since potentially the status should only be updated if the connection ring operation was successful.
+
+RECOMMENDATIONS:
+A safer approach is to handle the error properly by only breaking out of the current case when there is no error. Alternatively, if breaking out due to an error is the desired behavior, you should aim to handle that error properly before breaking.
+
+```
+	if (dev->state == XenbusStateConnected)
+		break;
+
+	/* Enforce precondition before potential leak point.
+	 * blkif_disconnect() is idempotent.
+	 */
+	blkif_disconnect(be->blkif);
+
+	err = connect_ring(be);
+	if (err) {
+		// Handle error here before breaking.
+		break;
+	} else {
+		update_blkif_status(be->blkif);
+	}
+	break;
+```
+
+ORIGINAL CODE:
+
+```
+	if (dev->state == XenbusStateConnected)
+		break;
+
+	/* Enforce precondition before potential leak point.
+	 * blkif_disconnect() is idempotent.
+	 */
+	blkif_disconnect(be->blkif);
+
+	err = connect_ring(be);
+	if (err)
+		break;
+	update_blkif_status(be->blkif);
+	break;
+	/* fall through if not online */
+	case XenbusStateUnknown:
+		/* implies blkif_disconnect() via blkback_remove() */
+		device_unregister(&dev->dev);
+		break;
+
+	default:
+```

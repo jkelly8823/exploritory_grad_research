@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Integer Overflows when allocating memory using kmem_buckets_alloc.
+
+EXPLANATION:
+The code calculates the size of memory to be allocated as sizeof(*msg) + alen. However, this calculation is vulnerable to integer overflows. If len is a large value close to the maximum value of size_t, adding sizeof(*msg) to it could cause an integer overflow, resulting in a smaller value being passed to kmem_buckets_alloc. This could lead to Allocate Memory Error or Memory Corruption.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the addition of sizeof(*msg) and alen does not overflow. You can use the following code to check for overflows and prevent them:
+
+```c
+size_t new_len = len + sizeof(*msg);
+if (new_len < len || new_len > DATALEN_MSG) {
+    // Handle overflow error
+    return NULL;
+}
+msg = kmem_buckets_alloc(msg_buckets, new_len, GFP_KERNEL);
+```
+
+ORIGINAL CODE:
+```c
+#define DATALEN_MSG	((size_t)PAGE_SIZE-sizeof(struct msg_msg))
+#define DATALEN_SEG	((size_t)PAGE_SIZE-sizeof(struct msg_msgseg))
+
+static kmem_buckets *msg_buckets __ro_after_init;
+
+static int __init init_msg_buckets(void)
+{
+	msg_buckets = kmem_buckets_create("msg_msg", SLAB_ACCOUNT,
+					  sizeof(struct msg_msg),
+					  DATALEN_MSG, NULL);
+
+	return 0;
+}
+subsys_initcall(init_msg_buckets);
+
+static struct msg_msg *alloc_msg(size_t len)
+{
+	struct msg_msg *msg;
+	size_t alen;
+
+	alen = min(len, DATALEN_MSG);
+	msg = kmem_buckets_alloc(msg_buckets, sizeof(*msg) + alen, GFP_KERNEL);
+	if (msg == NULL)
+		return NULL;
+
+	msg->next = NULL;
+}
+```

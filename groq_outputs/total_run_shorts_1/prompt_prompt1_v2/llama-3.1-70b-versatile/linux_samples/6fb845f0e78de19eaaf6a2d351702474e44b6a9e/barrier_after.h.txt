@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 46
+VULNERABILITY_DESCRIPTION:
+The use of the __asm__ keyword with the __volatile__ keyword and a compiler-specific "weaks" syntax flag (__WEAK_LLSC_MB) can make the code vulnerable to being optimized away, potentially allowing instruction reordering to break the memory barrier semantics. This can lead to unexpected behavior in multithreaded applications.
+
+EXPLANATION:
+The code defines a memory barrier, loongson_llsc_mb(), which is intended to provide ordering guarantees for memory accesses on Loongson 3 CPUs. The definition of loongson_llsc_mb() includes the __asm__ keyword with the __volatile__ keyword, indicating that the assembly code should not be optimized away or reordered with surrounding code. However, the use of a non-standard syntax flag (__WEAK_LLSC_MB) with the __asm__ keyword can potentially cause issues with code generation on some compilers, potentially leading to optimization of the memory barrier.
+
+Additionally, the definition of loongson_llsc_mb() uses a variable-argument list with no inputs, outputs, or clobbers specified, other than the "memory" clobber. This may be sufficient to prevent register clobbering, but does not prevent the compiler from optimizing away the entire operation. A more robust approach would be to use a memory fence or lock prefix instruction that is guaranteed to prevent reordering, rather than relying on the compiler to generate correct code.
+
+RECOMMENDATIONS:
+Consider replacing the __asm__ keyword with a memory fence instruction or a lock prefix instruction that is guaranteed to prevent reordering. This could involve using an inline assembly statement that uses the mfence or sfence instructions on Loongson 3 CPUs, or the use of a compiler-provided memory barrier macro. Additionally, review the use of the __WEAK_LLSC_MB syntax flag and consider replacing it with a more standard syntax that is widely supported by compilers.
+
+ORIGINAL CODE:
+```c
+#define __smp_mb__before_atomic()	__smp_mb__before_llsc()
+#define __smp_mb__after_atomic()	smp_llsc_mb()
+
+/*
+ * Some Loongson 3 CPUs have a bug wherein execution of a memory access (load,
+ * store or pref) in between an ll & sc can cause the sc instruction to
+ * erroneously succeed, breaking atomicity. Whilst it's unusual to write code
+ * containing such sequences, this bug bites harder than we might otherwise
+ * expect due to reordering & speculation:
+ *
+ * 1) A memory access appearing prior to the ll in program order may actually
+ *    be executed after the ll - this is the reordering case.
+ *
+ *    In order to avoid this we need to place a memory barrier (ie. a sync
+ *    instruction) prior to every ll instruction, in between it & any earlier
+ *    memory access instructions. Many of these cases are already covered by
+ *    smp_mb__before_llsc() but for the remaining cases, typically ones in
+ *    which multiple CPUs may operate on a memory location but ordering is not
+ *    usually guaranteed, we use loongson_llsc_mb() below.
+ *
+ *    This reordering case is fixed by 3A R2 CPUs, ie. 3A2000 models and later.
+ *
+ * 2) If a conditional branch exists between an ll & sc with a target outside
+ *    of the ll-sc loop, for example an exit upon value mismatch in cmpxchg()
+ *    or similar, then misprediction of the branch may allow speculative
+ *    execution of memory accesses from outside of the ll-sc loop.
+ *
+ *    In order to avoid this we need a memory barrier (ie. a sync instruction)
+ *    at each affected branch target, for which we also use loongson_llsc_mb()
+ *    defined below.
+ *
+ *    This case affects all current Loongson 3 CPUs.
+ */
+#ifdef CONFIG_CPU_LOONGSON3_WORKAROUNDS /* Loongson-3's LLSC workaround */
+#define loongson_llsc_mb()	__asm__ __volatile__(__WEAK_LLSC_MB : : :"memory")
+#else
+#define loongson_llsc_mb()	do { } while (0)
+#endif
+
+#include <asm-generic/barrier.h>
+
+#endif /* __ASM_BARRIER_H */
+```

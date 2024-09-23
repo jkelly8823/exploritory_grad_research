@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 21
+VULNERABILITY_DESCRIPTION:
+Use of memset on a structure containing pointers and potentially other types that do not support memset or initialization with zeros.
+
+EXPLANATION:
+In the provided code snippet, the analyst noticed a potential vulnerability when memset is used on the ev structure. If ev contains pointers or other types that should not be initialized with zeros, this call could cause unexpected behavior or crashes when the code tries to use these members. 
+
+Furthermore, at lines 21, a potential memory leak could occur because skb is leaked after it has been passed to llc_station_ev(skb) and the memory allocation's success has been checked; but if the execution jumps to the label 'out' without freeing skb for any reason that doesn't result in skb being freed, skb will not be freed either.
+
+RECOMMENDATIONS:
+- Use a loop to manually initialize members of the structure to their correct values. This way, it's easy to handle different types correctly and explicitly.
+- Implement a function to ensure all dynamically allocated memory gets freed before returning from the function, if possible, using goto or normal if-else statements.
+
+ORIGINAL CODE:
+	llc_station_state_process(skb);
+}
+
+int __init llc_station_init(void)
+{
+	int rc = -ENOBUFS;
+	struct sk_buff *skb;
+	struct llc_station_state_ev *ev;
+
+	skb_queue_head_init(&llc_main_station.mac_pdu_q);
+	skb_queue_head_init(&llc_main_station.ev_q.list);
+	spin_lock_init(&llc_main_station.ev_q.lock);
+	setup_timer(&llc_main_station.ack_timer, llc_station_ack_tmr_cb,
+			(unsigned long)&llc_main_station);
+	llc_main_station.ack_timer.expires  = jiffies +
+						sysctl_llc_station_ack_timeout;
+	skb = alloc_skb(0, GFP_ATOMIC);
+	if (!skb)
+		goto out;
+	rc = 0;
+	llc_set_station_handler(llc_station_rcv);
+	ev = llc_station_ev(skb);
+	memset(ev, 0, sizeof(*ev));
+	llc_main_station.maximum_retry	= 1;
+	llc_main_station.state		= LLC_STATION_STATE_DOWN;
+	ev->type	= LLC_STATION_EV_TYPE_SIMPLE;
+	ev->prim_type	= LLC_STATION_EV_ENABLE_WITHOUT_DUP_ADDR_CHECK;
+	rc = llc_station_next_state(skb);
+out:
+	return rc;
+}
+
+void __exit llc_station_exit(void)
+{
+	llc_set_station_handler(NULL);
+}

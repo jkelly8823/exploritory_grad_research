@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Potential Null Pointer Dereference
+EXPLANATION:
+The code is dereferencing `iter_data->hw_macaddr` before checking if it is null. This is a potential null pointer dereference vulnerability if `iter_data->hw_macaddr` is null. The vulnerability exists on line 3 in the segment.
+RECOMMENDATIONS:
+To fix this vulnerability, you should reorder the null check and the dereference. You should first check if `iter_data->hw_macaddr` is null, and if it's not, then you can safely dereference it.
+
+```c
+if (iter_data->hw_macaddr != NULL) {
+    // ...
+} else {
+    iter_data->hw_macaddr = mac;
+}
+```
+should be 
+```c
+if (iter_data->hw_macaddr == NULL) {
+    iter_data->hw_macaddr = mac;
+} else {
+    for (i = 0; i < ETH_ALEN; i++)
+        iter_data->mask[i] &= ~(iter_data->hw_macaddr[i] ^ mac[i]);
+}
+```
+However, you can also improve the above check and the assignment in the previous function like this
+```c
+if (iter_data.hw_macaddr == NULL) {
+    iter_data.hw_macaddr = mac;
+    memset(&iter_data.mask, 0xff, ETH_ALEN); // Set mask to all fs if new mac is assigned
+}
+```
+This will set `iter_data.hw_macaddr` and `iter_data.mask` the first time it encounters a new mac.
+
+ORIGINAL CODE:
+```c
+struct ath9k_vif_iter_data *iter_data = data;
+int i;
+
+if (iter_data->hw_macaddr != NULL) {
+    for (i = 0; i < ETH_ALEN; i++)
+        iter_data->mask[i] &= ~(iter_data->hw_macaddr[i] ^ mac[i]);
+} else {
+    iter_data->hw_macaddr = mac;
+}
+```

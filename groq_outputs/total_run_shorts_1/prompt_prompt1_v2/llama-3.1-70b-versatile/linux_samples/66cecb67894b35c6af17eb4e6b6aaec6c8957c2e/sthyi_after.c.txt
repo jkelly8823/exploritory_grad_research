@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 7
+VULNERABILITY_DESCRIPTION:
+Potential Use After Free vulnerability in the `sthyi` function.
+
+EXPLANATION:
+A Use After Free vulnerability can occur if a resource is freed and then accessed later in the program. In this code, `diag204_buf` is freed on line 7. However, it is possible that `ti_hdr` on line 5 is still used later in the program. This could be problematic, as `ti_hdr` points to memory that has already been freed. 
+
+Although we cannot see the declarations or subsequent uses of these variables in this snippet, this has the potential to be a serious vulnerability. This is especially true as it is handling kernel memory.
+
+RECOMMENDATIONS:
+In order to fix this vulnerability, you should ensure that any variables pointing to the freed memory are properly set to a valid location or null. 
+One potential fix for this code snippet is:
+
+1. Before freeing `diag204_buf`, ensure that there are no variables left pointing to it. For example:
+
+`if (ti_hdr == diag204_buf) { ti_hdr = NULL; }`
+ 
+   This ensures that even if the program tries to access `ti_hdr` after `diag204_buf` is freed, a NULL pointer exception will be thrown instead of a Use After Free vulnerability.
+
+2. Ensure that any variables that point to the freed memory are properly checked before they are accessed.
+
+ORIGINAL CODE:
+```c
+if (r < 0)
+	goto out;
+
+diag224_buf = (void *)__get_free_page(GFP_KERNEL | GFP_DMA);
+if (!diag224_buf || diag224(diag224_buf))
+	goto out;
+
+ti_hdr = diag204_buf;
+sctns->par.infpval1 |= PAR_WGHT_VLD;
+
+out:
+free_page((unsigned long)diag224_buf);
+vfree(diag204_buf);
+}
+
+static int sthyi(u64 vaddr)
+```

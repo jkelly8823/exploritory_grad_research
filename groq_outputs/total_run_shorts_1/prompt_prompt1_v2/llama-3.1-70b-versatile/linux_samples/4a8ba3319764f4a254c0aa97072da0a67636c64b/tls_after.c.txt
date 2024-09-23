@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-18
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference
+
+EXPLANATION:
+The code checks if `LDT_empty(info)` or `LDT_zero(info)` are true and if not, calls `fill_ldt(desc, info)`. However, the code does not check if `info` or `desc` are null before calling `fill_ldt(desc, info)` or accessing their members (`desc->a` and `desc->b`).
+
+This is a potential vulnerability because if `info` or `desc` are null, dereferencing them will result in a segmentation fault or undefined behavior.
+
+Additionally, the loop `while (n-- > 0)` will continue even if `info` or `desc` become null or invalid during the iteration, potentially leading to a crash or undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should add checks for null pointers before accessing `info` or `desc`. Here is an example of how the code can be modified:
+```c
+if (!desc || !info) {
+    // handle the error, e.g., return an error code or set a flag
+    return false;
+}
+
+while (n-- > 0) {
+    if (LDT_empty(info) || LDT_zero(info))
+        desc->a = desc->b = 0;
+    else
+        fill_ldt(desc, info);
+    ++info;
+}
+```
+
+Note that the modified code checks for both `desc` and `info` being null before accessing them.
+
+ORIGINAL CODE:
+
+```c
+static bool tls_desc_okay(const struct user_desc *info)
+{
+    if (LDT_empty(info) || LDT_zero(info))
+        return true;
+
+    cpu = get_cpu();
+
+    while (n-- > 0) {
+        if (LDT_empty(info) || LDT_zero(info))
+            desc->a = desc->b = 0;
+        else
+            fill_ldt(desc, info);
+        ++info;
+}
+```

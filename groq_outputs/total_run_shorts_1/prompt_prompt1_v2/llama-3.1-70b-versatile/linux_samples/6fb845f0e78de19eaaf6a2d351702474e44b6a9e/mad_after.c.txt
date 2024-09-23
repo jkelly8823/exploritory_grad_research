@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 15, 17
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability
+EXPLANATION:
+The provided code snippet calls mlx4_ib_destroy_ah function multiple times for the same ah object. This can lead to a double-free vulnerability. In lines 3 and 17, mlx4_ib_destroy_ah is called for sqp->tx_ring[wire_tx_ix].ah and sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah respectively. However, in line 15, mlx4_ib_destroy_ah is again called for sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah which might be same as sqp->tx_ring[wire_tx_ix].ah. 
+
+This double-free vulnerability can cause undefined behavior, potentially allowing an attacker to leverage it to execute arbitrary code.
+
+RECOMMENDATIONS:
+To prevent double-free vulnerability, you should ensure that mlx4_ib_destroy_ah is called only once for each ah object. Here are the recommended changes:
+
+1. Move the mlx4_ib_destroy_ah call for sqp->tx_ring[wire_tx_ix].ah outside the loop or conditional block. 
+
+   Replace the code:
+   ```c
+   if (sqp->tx_ring[wire_tx_ix].ah)
+       mlx4_ib_destroy_ah(sqp->tx_ring[wire_tx_ix].ah, 0);
+   ```
+   with the following:
+   ```c
+   sqp->tx_ring[wire_tx_ix].ah = NULL;
+   ```
+
+2. Remove the mlx4_ib_destroy_ah calls for sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah.
+
+   Replace the code:
+   ```c
+if (!MLX4_TUN_IS_RECV(wc.wr_id)) {
+    mlx4_ib_destroy_ah(sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+```
+   with no code.
+
+   Similarly replace the code in line 15:
+   ```c
+mlx4_ib_destroy_ah(sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+```
+   with no code.
+
+ORIGINAL CODE:
+```c
+	sqp_mad = (struct mlx4_mad_snd_buf *) (sqp->tx_ring[wire_tx_ix].buf.addr);
+	if (sqp->tx_ring[wire_tx_ix].ah)
+		mlx4_ib_destroy_ah(sqp->tx_ring[wire_tx_ix].ah, 0);
+	sqp->tx_ring[wire_tx_ix].ah = ah;
+	ib_dma_sync_single_for_cpu(&dev->ib_dev,
+				   sqp->tx_ring[wire_tx_ix].buf.map,
+				   sizeof (struct mlx4_mad_snd_buf),
+		if (wc.status == IB_WC_SUCCESS) {
+			switch (wc.opcode) {
+			case IB_WC_SEND:
+				mlx4_ib_destroy_ah(sqp->tx_ring[wc.wr_id &
+					      (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+				sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah
+					= NULL;
+				spin_lock(&sqp->tx_lock);
+				 " status = %d, wrid = 0x%llx\n",
+				 ctx->slave, wc.status, wc.wr_id);
+			if (!MLX4_TUN_IS_RECV(wc.wr_id)) {
+				mlx4_ib_destroy_ah(sqp->tx_ring[wc.wr_id &
+					      (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+				sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah
+					= NULL;
+				spin_lock(&sqp->tx_lock);
+```

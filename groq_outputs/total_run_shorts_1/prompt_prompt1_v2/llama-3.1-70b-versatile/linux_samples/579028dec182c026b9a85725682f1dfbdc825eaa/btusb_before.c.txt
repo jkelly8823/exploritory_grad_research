@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-14, 17-26
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability via Unvalidated Input
+
+EXPLANATION:
+The provided code snippet is vulnerable to a path traversal attack due to unvalidated user input. The `fwname` variable, which is constructed from user-provided input (`ver` and `params`), is used to load a firmware file using `request_firmware()`. An attacker could potentially manipulate the `ver` and `params` variables to inject malicious firmware.
+
+The vulnerability arises from the fact that the `btusb_setup_intel_newgen_get_fw_name()` and `btusb_setup_intel_new_get_fw_name()` functions may not properly validate their input parameters. If an attacker can inject a specially crafted string into the `ver` or `params` variables, they could potentially escape the intended directory structure and load arbitrary firmware files.
+
+Additionally, the error handling for the firmware loading process is inadequate. The code checks for errors in the `request_firmware()` function, but does not properly handle the case where the firmware file is successfully loaded, but contains malicious code.
+
+RECOMMENDATIONS:
+
+* Validate the input parameters `ver` and `params` to ensure they conform to the expected format and do not contain malicious characters.
+* Use a whitelist approach to restrict the firmware files that can be loaded to only those that are explicitly allowed.
+* Implement additional error handling to detect and handle cases where the firmware file is successfully loaded, but contains malicious code.
+* Consider using a secure firmware loading mechanism, such as a digitally signed firmware image, to prevent loading of malicious firmware.
+
+ORIGINAL CODE:
+```c
+}
+
+btusb_setup_intel_newgen_get_fw_name(ver, fwname, sizeof(fwname), "sfi");
+err = request_firmware(&fw, fwname, &hdev->dev);
+if (err < 0) {
+    bt_dev_err(hdev, "Failed to load Intel firmware file %s (%d)",
+        fwname, err);
+    return err;
+}
+
+bt_dev_info(hdev, "Found device firmware: %s", fwname);
+err = btusb_setup_intel_new_get_fw_name(ver, params, fwname,
+    sizeof(fwname), "sfi");
+if (err < 0) {
+    bt_dev_err(hdev, "Unsupported Intel firmware naming");
+    return -EINVAL;
+}
+
+err = request_firmware(&fw, fwname, &hdev->dev);
+if (err < 0) {
+    bt_dev_err(hdev, "Failed to load Intel firmware file %s (%d)",
+        fwname, err);
+    return err;
+}
+```

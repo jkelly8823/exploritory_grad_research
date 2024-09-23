@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Unvalidated return value from of_find_matching_node, followed by of_node_put and of_platform_populate, without checking if the node was successfully populated before calling of_node_put.
+
+EXPLANATION:
+In the provided code snippet, of_node_put is called regardless of the outcome of of_platform_populate. If of_platform_populate fails and returns a non-zero value, it is likely that the node was not successfully populated. However, the call to of_node_put is made before the return value of of_platform_populate is evaluated. This could result in the node being released prematurely, potentially causing issues for future operations. Additionally, the code does not handle the potential errors that may arise if the node is not successfully populated.
+
+RECOMMENDATIONS:
+To address this vulnerability, the call to of_node_put should only be made if the node was successfully populated. This can be achieved by moving the call to of_node_put to the return path after platform_driver_register has returned. 
+
+Here's a revised version of the code that implements this:
+
+```c
+    return -ENODEV;
+
+    np = of_find_matching_node(fw_np, s10_of_match);
+    if (!np)
+        return -ENODEV;
+
+    ret = of_platform_populate(fw_np, s10_of_match, NULL, NULL);
+    if (ret)
+        goto out;
+
+    ret = platform_driver_register(&s10_driver);
+    if (ret)
+        goto out;
+
+out:
+    of_node_put(np);
+    return ret;
+```
+
+ORIGINAL CODE:
+```
+	return -ENODEV;
+
+    np = of_find_matching_node(fw_np, s10_of_match);
+    if (!np)
+        return -ENODEV;
+
+    of_node_put(np);
+    ret = of_platform_populate(fw_np, s10_of_match, NULL, NULL);
+    if (ret)
+        return ret;
+
+    return platform_driver_register(&s10_driver);
+```

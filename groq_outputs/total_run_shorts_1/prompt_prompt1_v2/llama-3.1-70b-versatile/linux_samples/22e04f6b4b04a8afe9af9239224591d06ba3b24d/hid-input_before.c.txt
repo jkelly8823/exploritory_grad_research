@@ -1,0 +1,89 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory access due to potential null pointer dereference.
+
+EXPLANATION:
+The vulnerability is located at line 21: `buf[1] <= dev->battery_max)`. There are potential null pointer dereferences for `dev` and `val`. If `dev` or `val` is null, this could lead to a segmentation fault or an out-of-bounds memory access. However, the main concern here is that `ret` is assigned a value based on `dev->hid_get_raw_report()`, but the result of `buf` isn't verifiably checked for `buf[1]`. If `dev->hid_get_raw_report()` returned less than 2 bytes, accessing `buf[1]` would be out-of-bounds as the array `buf` is only allocated for 2 elements (index 0 and 1) and when returning less than 2, `buf[1]` may be unallocated memory, thus leading to an out-of-bounds memory access.
+
+RECOMMENDATIONS:
+The code should verify that `dev` is not null before accessing its members. Additionally, the return value of `dev->hid_get_raw_report()` should be checked for a valid length before accessing the contents of `buf`. We also need to verify that `val` is not null before accessing its members.
+
+```c
+case POWER_SUPPLY_PROP_CAPACITY:
+    if (dev == NULL || val == NULL) {
+        ret = -ENODEV; // or a more suitable error code
+        break;
+    }
+    ret = dev->hid_get_raw_report(dev, dev->battery_report_id, buf, sizeof(buf), dev->battery_report_type);
+
+    if (ret != 2) {
+        ret = -ENODATA;
+        break;
+    }
+    // Check that the value of buf[1] is within valid range before using it.
+    if (buf[1] >= 0 && buf[1] <= dev->battery_max) { 
+        val->intval = (100 * (buf[1] - dev->battery_min)) / (dev->battery_max - dev->battery_min);
+    } else {
+        // Handle out-of-range value
+        ret = -EINVAL;
+        break;
+    }
+    break;
+```
+
+ORIGINAL CODE:
+{
+    struct hid_device *dev = container_of(psy, struct hid_device, battery);
+    int ret = 0;
+    __u8 buf[2] = {};
+
+    switch (prop) {
+    case POWER_SUPPLY_PROP_PRESENT:
+    case POWER_SUPPLY_PROP_ONLINE:
+        break;
+
+    case POWER_SUPPLY_PROP_CAPACITY:
+        ret = dev->hid_get_raw_report(dev, dev->battery_report_id,
+                                      buf, sizeof(buf),
+                                      dev->battery_report_type);
+
+        if (ret != 2) {
+            ret = -ENODATA;
+            break;
+        }
+        ret = 0;
+
+        buf[1] <= dev->battery_max)
+            val->intval = (100 * (buf[1] - dev->battery_min)) /
+                (dev->battery_max - dev->battery_min);
+        break;
+
+    case POWER_SUPPLY_PROP_MODEL_NAME:
+        val->strval = dev->name;
+    EXPORT_SYMBOL_GPL(hidinput_count_leds);
+
+    static int hidinput_open(struct input_dev *dev)
+    {
+        struct hid_device *hid = input_get_drvdata(dev);
+
+        }
+
+    input_set_drvdata(input_dev, hid);
+    input_dev->event = hid->ll_driver->hidinput_input_event;
+    input_dev->open = hidinput_open;
+    input_dev->close = hidinput_close;
+    input_dev->setkeycode = hidinput_setkeycode;
+    input_dev->getkeycode = hidinput_getkeycode;
+    int i, j, k;
+
+    INIT_LIST_HEAD(&hid->inputs);
+
+    if (!force) {
+        for (i = 0; i < hid->maxcollection; i++) {
+            struct hid_collection *col = &hid->collection[i];
+    input_unregister_device(hidinput->input);
+    kfree(hidinput);
+    }
+    }
+    EXPORT_SYMBOL_GPL(hidinput_disconnect);

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) vulnerability due to missing bounds validation and input sanitization on user-controllable input in the uaccess_flush_set function.
+
+EXPLANATION:
+The uaccess_flush_set function takes user input (val) and uses it to determine whether to enable or disable the uaccess_flush feature. However, the validation performed on the input is incomplete. The function checks if the input is equal to 1 or 0 but does not handle cases where the input might be a non-integer value, a string, or an out-of-bounds integer value. In some cases, this could potentially allow an attacker to manipulate the system's state by exploiting this lack of validation. Additionally, the function uses a boolean value (enable) which is assigned based on user input, without proper sanitization.
+
+RECOMMENDATIONS:
+To fix the vulnerability, we recommend implementing proper input validation and sanitization in the uaccess_flush_set function. Here are some steps to achieve this:
+
+* Validate the input to ensure it is a non-negative integer value and falls within the expected range (0 or 1 in this case).
+* Implement input whitelisting or blacklisting to restrict the input to a predefined set of values.
+* Sanitize the input by removing any unnecessary characters or extraneous data.
+
+Additionally, consider using a more secure data type instead of storing the input value in a user-controllable variable (enable) which is then used to control system behavior.
+
+ORIGINAL CODE:
+```c
+static int uaccess_flush_set(void *data, u64 val)
+{
+	bool enable;
+
+	if (val == 1)
+		enable = true;
+	else if (val == 0)
+		enable = false;
+	else
+		return -EINVAL;
+
+	/* Only do anything if we're changing state */
+	if (enable != uaccess_flush)
+		uaccess_flush_enable(enable);
+
+	return 0;
+}
+```

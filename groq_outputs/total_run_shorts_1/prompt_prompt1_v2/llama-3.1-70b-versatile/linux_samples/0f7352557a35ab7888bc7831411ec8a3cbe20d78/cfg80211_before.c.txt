@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-14
+VULNERABILITY_DESCRIPTION: 
+Uncontrolled resource deallocation and potential use-after-free vulnerability.
+
+EXPLANATION:
+The code snippet appears to be dealing with aborting a scan operation and releasing associated resources. However, the order of deallocation and the potential for use-after-free bugs is concerning. Specifically, the `cfg->wiphy` pointer is being dereferenced after `wiphy_unregister(cfg->wiphy)` and `brcmf_free_wiphy(cfg->wiphy)` calls, which could indicate that `cfg->wiphy` may still be accessed after it's unregistered or freed. Additionally, `cfg` itself is `kfree()`'d at the end, but it's dereferenced in the `brcmf_btcoex_detach(cfg)` and `wl_deinit_priv(cfg)` calls. This may indicate that these functions are accessing memory that may no longer be valid or has been deallocated.
+
+RECOMMENDATIONS:
+To address the potential use-after-free vulnerability, ensure that all functions that access `cfg` and `cfg->wiphy` are properly synchronized to prevent simultaneous access to freed resources. Consider reordering the deallocation calls to prevent any potential use-after-free issues. Additionally, it's crucial to verify that all pointers are valid and points to allocated memory before dereferencing them.
+
+ORIGINAL CODE:
+
+```c
+scan_request = cfg->scan_request;
+cfg->scan_request = NULL;
+
+if (timer_pending(&cfg->escan_timeout))
+	del_timer_sync(&cfg->escan_timeout);
+
+if (fw_abort) {
+	/* Do a scan abort to stop the driver's scan engine */
+	brcmf_dbg(SCAN, "ABORT scan in firmware\n");
+brcmf_btcoex_detach(cfg);
+wiphy_unregister(cfg->wiphy);
+wl_deinit_priv(cfg);
+brcmf_free_wiphy(cfg->wiphy);
+kfree(cfg);
+```

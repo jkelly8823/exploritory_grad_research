@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+VULNERABILITY_DESCRIPTION: OS Command Injection via Untrusted Environment Variable
+EXPLANATION:
+The code snippet is vulnerable to an OS command injection attack via the 'REQUEST_METHOD' environment variable, which is checked to determine if the script is running as a CGI. If an attacker can manipulate the environment variable 'REQUEST_METHOD', they could potentially inject malicious commands. However, this vulnerability may be limited by the fact that the only operation performed based on this variable is popping an item from a dictionary.
+ 
+Additionally, the 'proxies' dictionary is populated based on environment variables. These variables may be set by untrusted sources if the script is running as a CGI or if the environment variables are otherwise manipulated by an attacker. This could potentially lead to an attacker setting a proxy, allowing them to intercept traffic.
+
+RECOMMENDATIONS:
+1. Validate and sanitize environment variables before using them in the code.
+2. Instead of relying solely on the presence of 'REQUEST_METHOD' environment variable to determine if the script is running as a CGI, consider using more robust methods.
+3. Use a whitelist of trusted proxy settings instead of allowing any environment variable to set the proxy.
+ 
+ORIGINAL CODE:
+    name = name.lower()
+    if value and name[-6:] == '_proxy':
+        proxies[name[:-6]] = value
+
+    # CVE-2016-1000110 - If we are running as CGI script, forget HTTP_PROXY
+    # (non-all-lowercase) as it may be set from the web server by a "Proxy:"
+    # header from the client
+    if 'REQUEST_METHOD' in os.environ:
+        proxies.pop('http', None)
+
+    return proxies
+
+def proxy_bypass_environment(host):
+    """Test if proxies should not be used for a particular host.

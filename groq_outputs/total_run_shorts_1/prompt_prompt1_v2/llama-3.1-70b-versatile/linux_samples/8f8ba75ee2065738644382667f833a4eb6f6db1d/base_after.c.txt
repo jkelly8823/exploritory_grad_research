@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-16
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a potential use-after-free vulnerability. The `of_node_get(next)` function call increments the reference count of the `next` node, but the `of_node_put(prev)` call decrements the reference count of the `prev` node. If `prev` is not NULL and is also the last reference to a node, this will free the memory of the `prev` node while it is still being used in the loop.
+
+EXPLANATION:
+In the given code snippet, the `of_node_get(next)` call increments the reference count of the `next` node, ensuring it stays valid. However, immediately before this, `of_node_put(prev)` is called, which decrements the reference count of the `prev` node. If `prev` is not NULL and is also the last reference to a node, this will cause the memory of the `prev` node to be freed while it is still being used in the loop. This could potentially cause the program to access freed memory, resulting in undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `of_node_put(prev)` call should be moved to after the loop, where `prev` is no longer being used. This will ensure that the reference count of the `prev` node is not decremented until it is safe to do so. Here's the recommended fix:
+
+```c
+struct device_node *of_get_next_available_child(const struct device_node *node,
+	struct device_node *prev)
+{
+	struct device_node *next;
+
+	read_lock(&devtree_lock);
+	next = prev ? prev->sibling : node->child;
+	for (; next; next = next->sibling) {
+		if (!of_device_is_available(next))
+			continue;
+		if (of_node_get(next))
+			break;
+	}
+	read_unlock(&devtree_lock);
+	if (prev)
+		of_node_put(prev);
+	return next;
+}
+```
+
+ORIGINAL CODE:
+}
+EXPORT_SYMBOL(of_get_next_child);
+
+/**
+ *	of_get_next_available_child - Find the next available child node
+ *	@node:	parent node
+ *	@prev:	previous child of the parent node, or NULL to get first
+ *
+ *      This function is like of_get_next_child(), except that it
+ *      automatically skips any disabled nodes (i.e. status = "disabled").
+ */
+struct device_node *of_get_next_available_child(const struct device_node *node,
+	struct device_node *prev)
+{
+	struct device_node *next;
+
+	read_lock(&devtree_lock);
+	next = prev ? prev->sibling : node->child;
+	for (; next; next = next->sibling) {
+		if (!of_device_is_available(next))
+			continue;
+		if (of_node_get(next))
+			break;
+	}
+	of_node_put(prev);
+	read_unlock(&devtree_lock);
+	return next;
+}
+EXPORT_SYMBOL(of_get_next_available_child);
+
+/**
+ *	of_find_node_by_path - Find a node matching a full OF path
+ *	@path:	The full path to match
+ *

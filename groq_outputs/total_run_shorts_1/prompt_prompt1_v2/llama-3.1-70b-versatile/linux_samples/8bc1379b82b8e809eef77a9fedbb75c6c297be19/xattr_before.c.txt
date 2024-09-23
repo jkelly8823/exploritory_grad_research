@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-24
+VULNERABILITY_DESCRIPTION:
+ Uncontrolled Loops via Symlinks in the filesystem and double free bugs
+
+
+EXPLANATION:
+The evaluated code seems to handle setting inode x-attributes. However, if error == -ENOSPC occurs when ext4_xattr_set_entry doesn't have enough space, an additional error prone operation ext4_xattr_set_entry is attempted. 
+
+If ext4_xattr_set_entry still returns an error, there are additional potential errors which could have been previously written. There is no guarantee that ext4_try_to_evict_inline_data resets the state of the xattribute, and therefore the error in the first x-attribute attempt will propagate, requiring the 2nd attempt to use the modified data. 
+
+EXT4_xattr_ibody_find frees memory, however if that fails, and another xattribute is written with EXT4_xattr_set_entry the affected state variables could cause a double free scenario.
+
+
+RECOMMENDATIONS:
+1.  Reset or restore state and variables modified after the failure to reach the correct source state before retry. Such retry logic will prevent passing a previously used source data in later modified versions.
+
+2.  Prevent the risk of double frees by restoring state variables after freeing the original data.
+
+3.  Analyze path to determine if an edge or corner case condition could result in hanging on the loop of additional recovery sequences.
+
+4.  Take care to evaluate and consolidate and validate additional path corrections and recovery attempt logic.
+
+ORIGINAL CODE:
+
+	if (EXT4_I(inode)->i_extra_isize == 0)
+		return -ENOSPC;
+	error = ext4_xattr_set_entry(i, s, handle, inode, false /* is_block */);
+	if (error) {
+		if (error == -ENOSPC &&
+		    ext4_has_inline_data(inode)) {
+			error = ext4_try_to_evict_inline_data(handle, inode,
+					EXT4_XATTR_LEN(strlen(i->name) +
+					EXT4_XATTR_SIZE(i->value_len)));
+			if (error)
+				return error;
+			error = ext4_xattr_ibody_find(inode, i, is);
+			if (error)
+				return error;
+			error = ext4_xattr_set_entry(i, s, handle, inode,
+						     false /* is_block */);
+		}
+		if (error)
+			return error;
+	}
+	header = IHDR(inode, ext4_raw_inode(&is->iloc));
+	if (!IS_LAST_ENTRY(s->first)) {
+		header->h_magic = cpu_to_le32(EXT4_XATTR_MAGIC);
+		ext4_set_inode_state(inode, EXT4_STATE_XATTR);

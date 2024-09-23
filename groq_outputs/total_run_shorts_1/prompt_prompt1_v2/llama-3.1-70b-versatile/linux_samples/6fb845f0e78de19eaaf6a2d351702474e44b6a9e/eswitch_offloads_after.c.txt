@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 11
+VULNERABILITY_DESCRIPTION:
+ Unchecked Bitwise AND Operation and Potential Information Disclosure
+
+EXPLANATION:
+The code snippet performs bitwise operations and checks the values of certain attributes. However, it assumes that the `attr` structure has been validated previously. If the `attr` structure has not been validated, a malicious attacker could potentially provide an `attr->tunnel_match_level` or `attr->match_level` value that, when used in the bitwise operations, could lead to unintended behavior or information disclosure. Furthermore, the `flow_act.modify_id` assignment directly uses the value of `attr->mod_hdr_id` without any validation, which could potentially lead to unintended modifications to the `modify_id` field. 
+
+Additionally, the code uses the `MLX5_SET_TO_ONES` macro on the `fte_match_set_misc` field, but it assumes that the `misc` field is correctly defined and validated. If not, this could lead to information disclosure or unintended behavior.
+
+RECOMMENDATIONS:
+1. Validate the `attr` structure before using its members to prevent potential information disclosure or unintended behavior.
+2. Ensure that the `misc` field is correctly defined and validated before using the `MLX5_SET_TO_ONES` macro.
+3. Implement input validation for the `attr->tunnel_match_level`, `attr->match_level`, and `attr->mod_hdr_id` fields to prevent potential security vulnerabilities.
+4. Consider using secure coding practices, such as using secure data types and bounds checking, to prevent potential security vulnerabilities.
+
+ORIGINAL CODE:
+```c
+MLX5_SET_TO_ONES(fte_match_set_misc, misc,
+                 source_eswitch_owner_vhca_id);
+
+spec->match_criteria_enable = MLX5_MATCH_MISC_PARAMETERS;
+if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_DECAP) {
+    if (attr->tunnel_match_level != MLX5_MATCH_NONE)
+        spec->match_criteria_enable |= MLX5_MATCH_OUTER_HEADERS;
+    if (attr->match_level != MLX5_MATCH_NONE)
+        spec->match_criteria_enable |= MLX5_MATCH_INNER_HEADERS;
+} else if (attr->match_level != MLX5_MATCH_NONE) {
+    spec->match_criteria_enable |= MLX5_MATCH_OUTER_HEADERS;
+}
+
+if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)
+    flow_act.modify_id = attr->mod_hdr_id;
+```

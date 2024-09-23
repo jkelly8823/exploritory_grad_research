@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Recursion
+
+EXPLANATION:
+The vulnerability is present in the `nft_set_lookup_byid` function. The function calls itself recursively without any base case or limit on the number of recursive calls. This can lead to a stack overflow, causing the program to crash or potentially allowing an attacker to execute arbitrary code. 
+
+In addition, the recursive call is not properly guarded against infinite recursion. This is because the function is called with the same arguments (`net`, `table`, `nla_set_id`, and `genmask`) that were passed to the original function call. If `nla_set_id` is not null, the function will continue to call itself indefinitely.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add a base case or a limit on the number of recursive calls to the `nft_set_lookup_byid` function. One way to do this is to keep track of the number of recursive calls and return an error if this number exceeds a certain threshold. Alternatively, rewrite the function to use a loop instead of recursion. Additionally, consider checking the return value of the recursive call and handling any potential errors.
+
+ORIGINAL CODE:
+```c
+static struct nft_set *nft_set_lookup_byid(const struct net *net,
+					   const struct nft_table *table,
+					   const struct nlattr *nla, u8 genmask)
+{
+	struct nftables_pernet *nft_net = nft_pernet(net);
+	u32 id = ntohl(nla_get_be32(nla));
+			struct nft_set *set = nft_trans_set(trans);
+
+			if (id == nft_trans_set_id(trans) &&
+			    set->table == table &&
+			    nft_active_genmask(set, genmask))
+				return set;
+		}
+	}
+		if (!nla_set_id)
+			return set;
+
+		set = nft_set_lookup_byid(net, table, nla_set_id, genmask);
+	}
+	return set;
+}
+EXPORT_SYMBOL_GPL(nft_set_lookup_global);
+```

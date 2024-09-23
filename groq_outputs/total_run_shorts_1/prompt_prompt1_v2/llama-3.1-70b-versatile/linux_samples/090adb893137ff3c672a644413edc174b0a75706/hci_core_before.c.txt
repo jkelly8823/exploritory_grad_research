@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+A resource leak vulnerability at line 7 is present, due to a missing error handling mechanism for the queue_delayed_work function.
+EXPLANATION:
+In this code snippet, the queue_delayed_work function may fail and return an error. However, the error value is not checked, and the function will silently fail if there's a problem scheduling the delayed work. This could result in the intended delayed work being missed, potentially leaving the system in an unexpected state.
+
+RECOMMENDATIONS:
+It is recommended to check the return value of queue_delayed_work to handle potential errors and take corrective actions if necessary. For example, it could be handled by logging an error message and/or rescheduling the work.
+
+```c
+if (queue_delayed_work(hdev->req_workqueue, &hdev->power_off, HCI_AUTO_OFF_TIMEOUT)) {
+    BT_DBG("Failed to queue power off work");
+}
+```
+
+Additionally, error handling could be performed by rescheduling the work if the queue_delayed_work fails.
+
+```c
+while (queue_delayed_work(hdev->req_workqueue, &hdev->power_off, HCI_AUTO_OFF_TIMEOUT)) {
+    // handle retry or limit
+    // for example: msleep(10);  // sleep for 10ms and retry
+}
+```
+
+ORIGINAL CODE:
+
+```c
+static void hci_power_on(struct work_struct *work)
+{
+    struct hci_dev *hdev = container_of(work, struct hci_dev, power_on);
+
+    BT_DBG("%s", hdev->name);
+
+    if (hci_dev_open(hdev->id) < 0)
+        return;
+
+    if (test_bit(HCI_AUTO_OFF, &hdev->dev_flags))
+        queue_delayed_work(hdev->req_workqueue, &hdev->power_off,
+                HCI_AUTO_OFF_TIMEOUT);
+}
+```

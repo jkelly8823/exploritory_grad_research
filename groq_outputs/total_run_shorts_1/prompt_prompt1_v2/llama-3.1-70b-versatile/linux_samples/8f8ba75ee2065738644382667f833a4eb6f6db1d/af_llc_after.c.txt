@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16, 17-18
+VULNERABILITY_DESCRIPTION:
+ Double-Fetch Vulnerability and Potential Information Leak
+
+EXPLANATION:
+The analyzed code snippet contains two potential security vulnerabilities. The first issue arises from the `llc_sysctl_init()` function call, where its return code is checked, but it does not handle potential errors in `llc_proc_init()` function. If an error occurs in `llc_proc_init()` and a subsequent call to `llc_sysctl_init()` fails, it may cause the `llc_sysctl_exit()` and `llc_proc_exit()` to be called unconditionally. This can potentially leak sensitive information due to inconsistent error handling. 
+
+The second issue is related to the use of a double-fetch on `rc` variable in the `if (rc) { ... }` block after `llc_sysctl_init()` function call and an `if (rc != 0)` check after the `llc_proc_init()` function. Both of these issue can be subject to TOCTOU (Time-of-Check-to-Time-of-Use) error, more commonly known as a Double-Fetch vulnerability if context allows.
+
+However, it's essential to analyze the context and larger codebase to ensure that any mitigations implemented do not break functionality.
+
+RECOMMENDATIONS:
+- Implement consistent error handling to prevent potential information leaks.
+- Ensure that `llc_sysctl_exit()` and `llc_proc_exit()` are conditionally called only when no errors occurred.
+- Evaluate and refactor the use of TOCTOU-patterns, specially around double-fetches and implement synchronization or other secure practices.
+- Potential fix:
+
+```c
+if (rc != 0) {
+    printk(llc_proc_err_msg);
+    goto out;
+}
+
+if ((rc = llc_sysctl_init()) != 0) {
+    printk(llc_sysctl_err_msg);
+    llc_sysctl_exit();
+    llc_proc_exit();
+    proto_unregister(&llc_proto);
+    goto out;
+}
+```
+
+ORIGINAL CODE:
+```c
+struct sockaddr_llc sllc;
+struct sock *sk = sock->sk;
+struct llc_sock *llc = llc_sk(sk);
+int rc = -EBADF;
+
+memset(&sllc, 0, sizeof(sllc));
+lock_sock(sk);
+if (sock_flag(sk, SOCK_ZAPPED))
+    goto out;
+*uaddrlen = sizeof(sllc);
+if (peer) {
+    rc = -ENOTCONN;
+    if (sk->sk_state != TCP_ESTABLISHED)
+        goto out;
+rc = llc_proc_init();
+if (rc != 0) {
+    printk(llc_proc_err_msg);
+    goto out_station;
+}
+rc = llc_sysctl_init();
+if (rc) {
+    printk(llc_sysctl_err_msg);
+llc_sysctl_exit();
+out_proc:
+    llc_proc_exit();
+out_station:
+    llc_station_exit();
+    proto_unregister(&llc_proto);
+    goto out;
+}
+```

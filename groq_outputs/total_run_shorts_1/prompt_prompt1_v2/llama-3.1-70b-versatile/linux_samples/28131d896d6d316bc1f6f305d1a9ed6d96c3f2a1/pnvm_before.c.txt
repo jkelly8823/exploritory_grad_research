@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Memory Allocation Vulnerability
+
+EXPLANATION:
+The code snippet contains a memory allocation vulnerability. The variable 'pnvm_data' is being passed to the function 'iwl_trans_set_pnvm' without being checked if it's NULL before being freed, which might indicate an earlier problem, but given 'ret = iwl_trans_set_pnvm' does not immediately free the pnvm_data variable and 'ret' isn't checked before jumping to the 'out' label it is not clear how this could occur in this specific snippet. However, ignoring all that for now since 'pnvm_data' is being freed using 'kfree' regardless of whether 'iwl_trans_set_pnvm' was successful or not. However, the potential vulnerability in this specific context exists if 'pnvm_data' wasn't checked to be NULL when assigned, since we are missing the declaration of 'pnvm_data'. Still ignoring that, we're still considering whether or not 'iwl_trans_set_pnvm' had proper error checking because it's possible there was an allocation failure that got returned which caused 'ret' to be equal to something which prevented 'pnvm_data' from being populated. Thus the call to 'kfree(pnvm_data)' could be problematic under this scenario, especially if the memory was freed before getting to this point.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a check for the return code of 'iwl_trans_set_pnvm' should be performed, and the corresponding error handling if the function call was not successful should ensure 'kfree(pnvm_data)' only happens in safe scenarios, if there is indeed an allocation going on in the missing code snippet.
+
+The check could look something like this:
+
+```c
+ret = iwl_trans_set_pnvm(trans, pnvm_data, size);
+if (ret != 0) {
+    // handle error
+}
+goto out;
+...
+out:
+if (pnvm_data != NULL) {
+    kfree(pnvm_data);
+}
+```
+
+ORIGINAL CODE:
+```c
+	goto out;
+}
+
+IWL_INFO(trans, "loaded PNVM version 0x%0x\n", sha1);
+
+ret = iwl_trans_set_pnvm(trans, pnvm_data, size);
+out:
+	kfree(pnvm_data);
+```

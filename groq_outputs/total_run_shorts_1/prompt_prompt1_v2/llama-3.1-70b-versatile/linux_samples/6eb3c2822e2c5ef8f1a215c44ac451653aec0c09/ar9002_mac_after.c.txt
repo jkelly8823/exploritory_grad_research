@@ -1,0 +1,119 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 29, 38
+VULNERABILITY_DESCRIPTION:
+Race condition vulnerability in the ISR handling code, which can lead to inconsistent interrupt status or corruption of sensitive data.
+
+EXPLANATION:
+The vulnerability arises due to the race condition between reading and writing of ISR (Interrupt Status Register) in different parts of the code. Specifically, in the lines 29 and 38, the ISR is read into 's0_s' and 's5_s', but these reads are not guaranteed to be atomic with the subsequent writes to other parts of the ISR. This means that between the reads and writes, the ISR could be changed by an interrupt or another part of the code, resulting in inconsistent interrupt status or corruption of sensitive data.
+
+Additionally, the write to 'ah->intr_txqs' (in lines 35-38) and 'ah->intr_gen_timer_trigger' and 'ah->intr_gen_timer_thresh' (in lines 43-45) depends on the value of the ISR. However, the ISR is being written in line 53 ('REG_WRITE(ah, AR_ISR, isr)'), which can potentially overwrite the changes made by the previous writes, leading to inconsistent interrupt status.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should ensure that all reads and writes to the ISR are atomic. This can be achieved by adding locks or critical sections around the ISR read-write operations. Additionally, consider reordering the code to ensure that the ISR is read and written in a consistent manner.
+
+Here are some example changes:
+
+* Around the ISR read-write operations, add a lock or critical section to ensure atomicity:
+```c
+ spin_lock_irqsave(&ah->lock, flags);
+
+// ISR read-write operations
+
+ spin_unlock_irqrestore(&ah->lock, flags);
+```
+* Reorder the code to ensure that the ISR is read and written in a consistent manner:
+```c
+// First, store the ISR value in a local variable
+u32 isr_local = isr;
+
+// Then, perform the read-write operations using isr_local
+ah->intr_txqs |= MS(s0_s, AR_ISR_S0_QCU_TXOK);
+...
+
+// Finally, restore the ISR value
+REG_WRITE(ah, AR_ISR, isr_local);
+```
+
+ORIGINAL CODE:
+
+```
+.mask2 |= ATH9K_INT_CST;
+			if (isr2 & AR_ISR_S2_TSFOOR)
+				mask2 |= ATH9K_INT_TSFOOR;
+
+			if (!(pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED)) {
+				REG_WRITE(ah, AR_ISR_S2, isr2);
+				isr &= ~AR_ISR_BCNMISC;
+			}
+		}
+
+		if (pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED)
+			isr = REG_READ(ah, AR_ISR_RAC);
+
+		if (isr == 0xffffffff) {
+			*masked = 0;
+			return false;
+		}
+
+			*masked |= ATH9K_INT_TX;
+
+			if (pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED) {
+				s0_s = REG_READ(ah, AR_ISR_S0_S);
+				s1_s = REG_READ(ah, AR_ISR_S1_S);
+			} else {
+				s0_s = REG_READ(ah, AR_ISR_S0);
+				REG_WRITE(ah, AR_ISR_S0, s0_s);
+				s1_s = REG_READ(ah, AR_ISR_S1);
+				REG_WRITE(ah, AR_ISR_S1, s1_s);
+
+				isr &= ~(AR_ISR_TXOK |
+					 AR_ISR_TXDESC |
+					 AR_ISR_TXERR |
+					 AR_ISR_TXEOL);
+			}
+
+			ah->intr_txqs |= MS(s0_s, AR_ISR_S0_QCU_TXOK);
+			ah->intr_txqs |= MS(s0_s, AR_ISR_S0_QCU_TXDESC);
+			ah->intr_txqs |= MS(s1_s, AR_ISR_S1_QCU_TXERR);
+			ah->intr_txqs |= MS(s1_s, AR_ISR_S1_QCU_TXEOL);
+		}
+
+		*masked |= mask2;
+	}
+
+	if (!AR_SREV_9100(ah) && (isr & AR_ISR_GENTMR)) {
+		u32 s5_s;
+
+		if (pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED) {
+			s5_s = REG_READ(ah, AR_ISR_S5_S);
+		} else {
+			s5_s = REG_READ(ah, AR_ISR_S5);
+		}
+
+		ah->intr_gen_timer_trigger =
+				MS(s5_s, AR_ISR_S5_GENTIMER_TRIG);
+
+		ah->intr_gen_timer_thresh =
+		if ((s5_s & AR_ISR_S5_TIM_TIMER) &&
+		    !(pCap->hw_caps & ATH9K_HW_CAP_AUTOSLEEP))
+			*masked |= ATH9K_INT_TIM_TIMER;
+
+		if (!(pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED)) {
+			REG_WRITE(ah, AR_ISR_S5, s5_s);
+			isr &= ~AR_ISR_GENTMR;
+		}
+	}
+
+	if (!(pCap->hw_caps & ATH9K_HW_CAP_RAC_SUPPORTED)) {
+		REG_WRITE(ah, AR_ISR, isr);
+		REG_READ(ah, AR_ISR);
+	}
+
+	if (AR_SREV_9100(ah))
+		return true;
+
+	if (sync_cause) {
+		ath9k_debug_sync_cause(common, sync_cause);
+		fatal_int =
+			(sync_cause & 
+```

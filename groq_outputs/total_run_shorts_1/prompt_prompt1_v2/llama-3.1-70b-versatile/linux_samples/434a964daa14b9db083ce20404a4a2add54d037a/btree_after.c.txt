@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-17
+VULNERABILITY_DESCRIPTION:
+Use of an error code as a boolean value can cause incorrect behavior.
+
+EXPLANATION:
+In the given code snippet, the function `read_mapping_page` returns an error code, which is then checked using the `IS_ERR` macro. However, if `read_mapping_page` successfully reads the page but with an error, the check `IS_ERR(page)` might not catch it. This is because `read_mapping_page` can return an actual valid page pointer with some warning flags set. 
+
+In the current implementation, it just checks if `page` is an error code and if not it does not verify whether it is a valid page. The vulnerability is here as any error that might occur during `read_mapping_page` would be masked.
+
+RECOMMENDATIONS:
+Instead of just checking if the page is an error code, it should be checked that the returned value is either NULL or an actual page pointer that can be successfully dereferenced. Also, if the page read successfully but with some errors, it would be better to verify those errors and take action accordingly.
+
+Additionally, the error should be printed out to provide more information about what went wrong during the page read operation.
+
+ORIGINAL CODE:
+
+```c
+case HFS_EXT_CNID:
+	hfs_inode_read_fork(tree->inode, mdb->drXTExtRec, mdb->drXTFlSize,
+				mdb->drXTFlSize, be32_to_cpu(mdb->drXTClpSiz));
+	if (HFS_I(tree->inode)->alloc_blocks >
+				HFS_I(tree->inode)->first_blocks) {
+		printk(KERN_ERR "hfs: invalid btree extent records\n");
+		unlock_new_inode(tree->inode);
+		goto free_inode;
+	}
+
+	tree->inode->i_mapping->a_ops = &hfs_btree_aops;
+	break;
+case HFS_CAT_CNID:
+	hfs_inode_read_fork(tree->inode, mdb->drCTExtRec, mdb->drCTFlSize,
+				mdb->drCTFlSize, be32_to_cpu(mdb->drCTClpSiz));
+
+	if (!HFS_I(tree->inode)->first_blocks) {
+		printk(KERN_ERR "hfs: invalid btree extent records "
+							"(0 size).\n");
+		unlock_new_inode(tree->inode);
+		goto free_inode;
+	}
+
+	tree->inode->i_mapping->a_ops = &hfs_btree_aops;
+	break;
+default:
+	BUG();
+}
+unlock_new_inode(tree->inode);
+
+mapping = tree->inode->i_mapping;
+page = read_mapping_page(mapping, 0, NULL);
+if (IS_ERR(page))
+	goto free_inode;
+```

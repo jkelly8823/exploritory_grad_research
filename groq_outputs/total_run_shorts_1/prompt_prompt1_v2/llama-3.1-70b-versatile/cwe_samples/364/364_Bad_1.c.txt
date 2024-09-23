@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 18
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a use-after-free vulnerability. Specifically, the `global1` and `global2` variables are freed in the `sh` function, but the program continues to run for 10 seconds after they are freed, potentially allowing them to be accessed before the program exits.
+
+EXPLANATION:
+In this code, the `global1` and `global2` variables are dynamically allocated and then freed in the `sh` function. However, the `sh` function is called in response to a signal, and the program continues to run for 10 seconds after the `sh` function is called. This creates a timing window in which a use-after-free vulnerability can occur, if the freed memory is accessed before the program exits.
+
+The use-after-free vulnerability is exacerbated by the sleep statements that have been added to expand the timing window for the race condition. This allows an attacker more time to attempt to exploit the vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the program should be structured such that it does not access the `global1` and `global2` variables after they have been freed. One possible fix is to exit the program immediately after the `sh` function is called, rather than sleeping for 10 seconds. This can be achieved by replacing the sleep statements with calls to `exit(0)`. Additionally, the program should ensure that any other functions or threads that access the `global1` and `global2` variables are properly synchronized to prevent access after they have been freed.
+
+ORIGINAL CODE:
+
+```c
+#include <signal.h>
+#include <syslog.h>
+#include <string.h>
+#include <stdlib.h>
+
+void *global1, *global2;
+char *what;
+
+void sh (int dummy) {
+    syslog(LOG_NOTICE,"%s\n",what);
+    free(global2);
+    free(global1);
+
+    /* Sleep statements added to expand timing window for race condition */
+
+    sleep(10);
+    exit(0);
+}
+
+int main (int argc, char* argv[]) {
+    what=argv[1];
+    global1=strdup(argv[2]);
+    global2=malloc(340);
+    signal(SIGHUP,sh);
+    signal(SIGTERM,sh);
+
+    /* Sleep statements added to expand timing window for race condition */
+
+    sleep(10);
+    exit(0);
+}
+```

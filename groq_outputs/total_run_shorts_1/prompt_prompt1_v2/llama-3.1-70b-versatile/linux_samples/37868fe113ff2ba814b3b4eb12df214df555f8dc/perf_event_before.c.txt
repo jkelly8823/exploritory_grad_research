@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-23
+VULNERABILITY_DESCRIPTION: Unchecked NULL Pointer Dereference
+EXPLANATION:
+The code snippet does not check if `current->active_mm->context.ldt` and `gdt_page.gdt` are NULL before dereferencing them. This could lead to a NULL pointer dereference if either `current->active_mm`, `current->active_mm->context`, `gdt_page`, or `gdt_page.gdt` are NULL.
+
+Additionally, the snippet also does not validate the `get_desc_base` function call. It assumes that `desc + idx` is a valid pointer, but if `desc` is not a valid pointer or if `idx` is out of bounds, this could also lead to a NULL pointer dereference or an invalid memory address.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add NULL checks for `current->active_mm`, `current->active_mm->context`, `gdt_page`, and `gdt_page.gdt` before dereferencing them.
+
+```c
+int idx = segment >> 3;
+
+if ((segment & SEGMENT_TI_MASK) == SEGMENT_LDT) {
+    if (idx > LDT_ENTRIES)
+        return 0;
+
+    if (idx > current->active_mm->context.size)
+        return 0;
+
+    if (current->active_mm && current->active_mm->context.ldt)
+        desc = current->active_mm->context.ldt;
+    else
+        return 0; // or handle this error
+} else {
+    if (idx > GDT_ENTRIES)
+        return 0;
+
+    if (gdt_page.gdt)
+        desc = raw_cpu_ptr(gdt_page.gdt);
+    else
+        return 0; // or handle this error
+}
+
+if (desc)
+    return get_desc_base(desc + idx);
+else
+    return 0; // or handle this error
+```
+
+ORIGINAL CODE:
+```c
+int idx = segment >> 3;
+
+if ((segment & SEGMENT_TI_MASK) == SEGMENT_LDT) {
+    if (idx > LDT_ENTRIES)
+        return 0;
+
+    if (idx > current->active_mm->context.size)
+        return 0;
+
+    desc = current->active_mm->context.ldt;
+} else {
+    if (idx > GDT_ENTRIES)
+        return 0;
+
+    desc = raw_cpu_ptr(gdt_page.gdt);
+}
+
+return get_desc_base(desc + idx);
+}
+#ifdef CONFIG_COMPAT
+```

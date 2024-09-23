@@ -1,0 +1,81 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-22, 25, 31-34, 36
+VULNERABILITY_DESCRIPTION:
+Uncontrolled recursion caused by missing checks and allocations in array and pointer handling.
+EXPLANATION:
+In several locations throughout this function, there is a lack of checking for null pointers prior to their use. An example of this can be seen in the line `de = (struct ext4_dir_entry_2 *) bh->b_data;` on line 6, where `bh` is used without first checking that it is not null. 
+
+This can also be seen where the struct is accessed and modified in the lines: `if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data, bh->b_size, 0) || le32_to_cpu(de->inode) != inode->i_ino || strcmp(".", de->name))`. 
+Here again, `bh`, `de` and `inode` are used without any null checks.
+
+Later in the code (lines 31-34 and 36), we can see the same issue where `bh` is used in memory operations (`brelse(bh)` and `le32_to_cpu(de->inode)`) without a null check.
+
+Furthermore, in the lines where `ext4_check_dir_entry` is called, if `bh` and `de` are invalid, the function would likely not behavior as expected, resulting in potentially recursive outcomes.
+
+Another potential vulnerability lies in memory handling, as new memory is allocated for a new buffer block. However, in some situations, error handling appears not to remove this allocation from memory. For instance, if an error does occur within the function and `brelse(bh)` is not called, the allocation from `ext4_read_dirblock(inode, lblock, EITHER)` remains, and hence creates memory leaks.
+
+RECOMMENDATIONS:
+- Verify that `bh`, `de`, and `inode` are not null before using them. Using a simple `if (bh == NULL)` check before each instance of `bh->b_data` would suffice.
+
+- Verify that the values from `ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data, bh->b_size, 0)` is valid and not null before being passed into memory operations to prevent runaway errors and memory exposure.
+
+- Add try-catch block for new memory allocations. For allocations like those in `ext4_read_dirblock(inode, lblock, EITHER)`, ensure to implement a system for removing these allocations in the event of an error so as to reduce memory leaks.
+
+- Implement `brelse(bh)` in all error cases within the `while` loop to clean up all unallocated memory locations.
+
+ORIGINAL CODE:
+```c
+{
+	unsigned int offset;
+	struct buffer_head *bh;
+	struct ext4_dir_entry_2 *de;
+	struct super_block *sb;
+
+	if (ext4_has_inline_data(inode)) {
+		int has_inline_data = 1;
+		return true;
+
+	de = (struct ext4_dir_entry_2 *) bh->b_data;
+	if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data, bh->b_size,
+				 0) ||
+	    le32_to_cpu(de->inode) != inode->i_ino || strcmp(".", de->name)) {
+		ext4_warning_inode(inode, "directory missing '.'");
+		brelse(bh);
+		return true;
+	}
+	offset = ext4_rec_len_from_disk(de->rec_len, sb->s_blocksize);
+	de = ext4_next_entry(de, sb->s_blocksize);
+	if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data, bh->b_size,
+				 offset) ||
+	    le32_to_cpu(de->inode) == 0 || strcmp("..", de->name)) {
+		ext4_warning_inode(inode, "directory missing '..'");
+		brelse(bh);
+		return true;
+	}
+	offset += ext4_rec_len_from_disk(de->rec_len, sb->s_blocksize);
+	while (offset < inode->i_size) {
+		if (!(offset & (sb->s_blocksize - 1))) {
+			unsigned int lblock;
+			brelse(bh);
+			lblock = offset >> EXT4_BLOCK_SIZE_BITS(sb);
+			bh = ext4_read_dirblock(inode, lblock, EITHER);
+			}
+			if (IS_ERR(bh))
+				return true;
+		}
+		de = (struct ext4_dir_entry_2 *) (bh->b_data +
+					(offset & (sb->s_blocksize - 1)));
+		if (ext4_check_dir_entry(inode, NULL, de, bh,
+					 bh->b_data, bh->b_size, offset)) {
+			offset = (offset | (sb->s_blocksize - 1)) + 1;
+			continue;
+		}
+		if (le32_to_cpu(de->inode)) {
+			return false;
+		}
+	.offset += ext4_rec_len_from_disk(de->rec_len, sb->s_blocksize);
+	}
+	brelse(bh);
+	return true;
+}
+```

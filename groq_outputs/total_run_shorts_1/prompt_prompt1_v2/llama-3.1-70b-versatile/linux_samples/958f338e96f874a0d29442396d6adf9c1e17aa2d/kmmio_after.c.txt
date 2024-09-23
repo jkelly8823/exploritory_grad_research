@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 15
+VULNERABILITY_DESCRIPTION: Uninitialized Variable and Wrong Assumptions
+EXPLANATION: 
+The `clear_pmd_presence` and `clear_pte_presence` functions make assumptions about the initial state of the `clear` variable and its past values. The functions assume that `clear` was `true` previously when `clear` is `false`. However, this is not guaranteed and might lead to incorrect behavior.
+
+Moreover, the initialization of the `new_pmd` and `old` values in the `clear_pmd_presence` and `clear_pte_presence` functions are not checked for any errors. The `pte_clear` function in `clear_pte_presence` is called without checking if the pte is already cleared which might lead to undefined behavior.
+
+Another issue is the assumption that the `init_mm` is already initialized and can be used in the `pte_clear` function call.
+
+RECOMMENDATIONS: 
+- Add error checking for the `new_pmd` and `old` values initialization.
+- Ensure that the `clear` variable is properly initialized and its state is tracked.
+- Consider using a state machine or flags to track the pmd and pte presence state instead of relying on the `clear` variable.
+- Verify the initialization of `init_mm` before using it in the `pte_clear` function call.
+
+ORIGINAL CODE:
+
+```c
+static void clear_pmd_presence(pmd_t *pmd, bool clear, pmdval_t *old)
+{
+	pmd_t new_pmd;
+	pmdval_t v = pmd_val(*pmd);
+	if (clear) {
+		*old = v;
+		new_pmd = pmd_mknotpresent(*pmd);
+	} else {
+		/* Presume this has been called with clear==true previously */
+		new_pmd = __pmd(*old);
+	}
+	set_pmd(pmd, new_pmd);
+}
+
+static void clear_pte_presence(pte_t *pte, bool clear, pteval_t *old)
+{
+	pteval_t v = pte_val(*pte);
+	if (clear) {
+		*old = v;
+		/* Nothing should care about address */
+		pte_clear(&init_mm, 0, pte);
+	} else {
+		/* Presume this has been called with clear==true previously */
+		set_pte_atomic(pte, __pte(*old));
+	}
+}
+
+static int clear_page_presence(struct kmmio_fault_page *f, bool clear)
+{ 
+```
+
+Please note that a thorough review of the entire codebase and its intentions is required to provide a complete solution. The code provided seems to be part of a larger operating system or kernel related project.

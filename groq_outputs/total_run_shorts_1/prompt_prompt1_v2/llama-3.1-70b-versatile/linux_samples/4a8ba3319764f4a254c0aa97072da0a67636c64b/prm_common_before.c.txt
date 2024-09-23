@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-18, 25-26
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable due to Null pointer dereferences and invalid memory accesses.
+
+EXPLANATION:
+In this code segment, two potential vulnerabilities have been found. 
+
+Firstly, on Line 16, we have a null pointer dereference. After setting `prcm_irq_setup->priority_mask` to NULL on Line 6, the function still uses `prcm_irq_setup->irq` on Lines 16 without checking if `prcm_irq_setup` itself is NULL before dereferencing it. This could lead to segmentation faults and an abnormal termination of the program. 
+
+Secondly, Lines 25 and 26 contain possibly invalid memory accesses if `irq_setup` is NULL. While this specific vulnerability may not always be triggered since `irq_setup` will likely be set before this function is called, checks should be put in place to handle potential null values to avoid unexpected application crashes.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the following modifications could be made:
+- Before accessing any member variables of `prcm_irq_setup` after setting its member `priority_mask` to NULL, ensure that `prcm_irq_setup` itself is not NULL. 
+- Add checks before using `irq_setup` to prevent null pointer dereferences.
+
+To specifically correct the code inside `omap_prcm_irq_cleanup(void)`, you can check to see if the value at `prcm_irq_setup` has been set to NULL after creating the local variable `i` i.e. before starting the second `if` condition, just check to see if `prcm_irq_setup` is NULL. 
+
+```c
+if(prcm_irq_setup != NULL){
+    irq_set_chained_handler(prcm_irq_setup->irq, NULL);
+}
+```
+Similar checks should be applied before accessing `irq_setup->irq` to avoid potential null pointer dereferences.
+
+Additionally, consider putting checks to ensure you do not access memory you are not allocated, to improve the safety and security of your application.
+
+ORIGINAL CODE:
+*/
+void omap_prcm_irq_cleanup(void)
+{
+	int i;
+
+	if (!prcm_irq_setup) {
+		pr_err("PRCM: IRQ handler not initialized; cannot cleanup\n");
+	kfree(prcm_irq_setup->priority_mask);
+	prcm_irq_setup->priority_mask = NULL;
+
+	irq_set_chained_handler(prcm_irq_setup->irq, NULL);
+
+	if (prcm_irq_setup->base_irq > 0)
+		irq_free_descs(prcm_irq_setup->base_irq,
+			prcm_irq_setup->nr_regs * 32);
+	int offset, i;
+	struct irq_chip_generic *gc;
+	struct irq_chip_type *ct;
+
+	if (!irq_setup)
+		return -EINVAL;
+
+				1 << (offset & 0x1f);
+	}
+
+	irq_set_chained_handler(irq_setup->irq, omap_prcm_irq_handler);
+
+	irq_setup->base_irq = irq_alloc_descs(-1, 0, irq_setup->nr_regs * 32,
+		0);
+```

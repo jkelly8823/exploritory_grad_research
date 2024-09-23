@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19, 43-44
+VULNERABILITY_DESCRIPTION:
+The code contains a potential double-free vulnerability and use of an uninitialized variable.
+
+EXPLANATION:
+The double-free vulnerability occurs because the `spin_lock_irqsave` and `spin_unlock_irqrestore` used in `int_error_stop` could be called on `dws->buf_lock`, after `spin_lock` and `spin_unlock` have already been called on the same lock in `dw_writer` or `dw_reader` functions if they are executed concurrently. 
+
+Furthermore, `ret = request_irq(dws->irq, dw_spi_irq, IRQF_SHARED, dev_name(dev),` call does not handle failure. It does not check if the `request_irq` was successful and can result in an usage-after-free if the interrupt handler tries to access `dws` after it was freed. The initialization of `dws` happens before this line.
+
+The lock is used for synchronization between the interrupt handler and the main thread. This is an improper use of locks as `spin_lock_irqsave` and `spin_unlock_irqrestore` are used for interrupt handlers, while `spin_lock` and `spin_unlock` are used for kernel threads.
+
+Additionally, `ret` is not checked after calling `request_irq` function. If `request_irq` fails, `dws->irq` will be garbage, and using it later will cause bug.
+
+RECOMMENDATIONS:
+* Replace `spin_lock` and `spin_unlock` with `spin_lock_irqsave` and `spin_unlock_irqrestore` in `dw_writer` and `dw_reader` functions.
+* Check the return value of `request_irq` function to ensure successful registration of the interrupt handler. If it fails, handle the error condition to avoid using `dws->irq`.
+* Avoid using the same spinlock for both interrupt handlers and kernel threads.
+
+ORIGINAL CODE:
+[see above provided code]

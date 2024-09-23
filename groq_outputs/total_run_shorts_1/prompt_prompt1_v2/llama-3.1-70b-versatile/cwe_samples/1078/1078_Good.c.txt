@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow via fgets
+
+EXPLANATION:
+The given code snippet uses fgets to read input from stdin into a fixed-size buffer. The fgets function limits the input to the specified buffer size minus one character, to ensure a null-terminated string. However, if the user input exceeds the specified buffer size, fgets will truncate the input to fit the buffer size minus one character without warning, potentially losing data. Furthermore, fgets does not account for error conditions such as end-of-file or read errors. However, in this case, the code limits the input buffer size to MAX_BUFFER_SIZE, excluding the possibility of a full buffer overflow.
+
+However, one vulnerable scenario exists with this fgets call. 
+
+Although fgets does stop reading input once the buffer size minus one character is met, it does check if there is remaining input in the stream. fgets will return NULL when it encounters an error or the end of the file, but if fgets encounters a new line in the buffer, fgets will also return NULL as it can indicate it filled the buffer entirely, excluding a null-character.
+
+So, the fgets potentially presents a vulnerability due to its handling of error conditions and what it populates the buffer with when its MAX buffer size is met.   When fgets cannot load an entire line in its character buffer due to character restrictions imposed by the MAX_BUFER_SIZE, one will encounter the NULL, indicating fgets has nothing more to return (either due to a completely populated buffer (excluding null-character) or for actual error conditions.) However, when fgets stores only characters up to the buffer size into a buffer (Buffer - 1), leaving Room for a null-character it does indicate it saved away all it could from the standard stream - you now have a populated buffer that will indicate that 'the null-character ended off the stream at character spot x - excluding null' when it cannot indicate a true NULL or zero result.
+
+
+
+RECOMMENDATIONS:
+A better fgets call would be to replace fgets with a custom function that will handle these error conditions and return as soon as the buffer is populated with data up to its buffer minus null, using getc and setting buffer indexes,  rather than relying on fgets. You will also have greater control monitoring and manipulating the data entering the buffer through this methodology.
+
+
+
+Furthermore, add checks for possible error conditions such as:
+* File end or I/O error
+* Completely populated buffer (indicating a potential line truncation)
+
+By performing these checks and utilizing a custom buffer population function, you can securely handle input and minimize the risk of buffer-related vulnerabilities.
+
+
+
+ORIGINAL CODE:
+enum { MAX_BUFFER_SIZE = 1024 };...char buffer[MAX_BUFFER_SIZE];...fgets(buffer, MAX_BUFFER_SIZE, stdin);

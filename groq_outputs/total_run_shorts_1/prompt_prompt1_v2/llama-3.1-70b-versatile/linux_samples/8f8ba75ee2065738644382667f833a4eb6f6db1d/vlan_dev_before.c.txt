@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-19
+VULNERABILITY_DESCRIPTION:
+Kernel Information Leak Vulnerability
+
+EXPLANATION:
+The vulnerable lines 17-19 are in the vlan_dev_netpoll_setup function. In this function, an allocation is made using kzalloc with GFP_KERNEL flags. However, if the allocation fails and returns NULL, the function proceeds with an error value set to -ENOMEM but does not clear any previous sensitive data that might have been stored in the 'err' variable.
+
+Since the data in 'err' variable isn't explicitly cleared in all execution paths of the program, in future uses, this data might be still available and can potentially leak kernel information. 
+
+However, this vulnerability can be somewhat disputed as there is no way we can capture this potential information leak via the local 'err' variable. This type of bug mainly poses a risk to the whole program's integrity if utilized further in the program or even worse be accessible across different privilege levels.
+
+
+RECOMMENDATIONS:
+Clear the error value immediately before returning it, to avoid the potential information disclosure vulnerability. This can be done by setting the 'err' variable to an invalid or default value before returning it.
+
+```c
+if (!netpoll) {
+    err = -ENOMEM;
+    memset(&err, 0, sizeof(err));  // Clear the error variable
+    goto out;
+}
+```
+
+However, a different solution may have to be tried and tested depending on how this piece of code interacts with other pieces of code within the whole system and the exact logic desired.
+
+This recommendation is just an opinion as modern C has evolved such that an error is typically associated with an ABI constraint where the language itself insures 'err' has zero initialized based on it being set.
+
+
+ORIGINAL CODE:
+(remove sections of code not applicable to this analysis, whole code segment provided originally for context)
+```c
+static int vlan_dev_netpoll_setup(struct net_device *dev, struct netpoll_info *npinfo)
+{
+    struct vlan_dev_priv *info = vlan_dev_priv(dev);
+    struct net_device *real_dev = info->real_dev;
+    struct netpoll *netpoll;
+    int err = 0;
+
+    netpoll = kzalloc(sizeof(*netpoll), GFP_KERNEL);
+    err = -ENOMEM;
+    if (!netpoll)
+        goto out;
+
+    err = __netpoll_setup(netpoll, real_dev);
+    if (err) {
+        kfree(netpoll);
+        goto out;
+    }
+
+    info->netpoll = netpoll;
+
+out:
+    return err;
+}

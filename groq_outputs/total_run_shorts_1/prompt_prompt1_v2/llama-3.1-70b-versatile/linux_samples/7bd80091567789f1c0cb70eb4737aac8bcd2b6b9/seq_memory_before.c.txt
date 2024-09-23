@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Double-free vulnerability due to lack of error checking in `snd_seq_cell_alloc`.
+ 
+EXPLANATION:
+There is a potential double-free vulnerability on lines 10-11. If `snd_seq_cell_alloc(pool, &cell, nonblock, file)` returns a success (0), but the subsequent call to `snd_seq_cell_alloc(pool, &tmp, nonblock, file)` returns an error (`err < 0`), the `cell` pointer will be leaked because the former allocation is not freed before entering the error branch (`goto __error`). 
+
+However, in the non-error path, the code attempts to assign `tmp` to `cell->event.data.ext.ptr`. If this allocation were to be freed, it would double-free the `cell` pointer when it is eventually freed (not shown in this code snippet). 
+
+Also, `tmp` is used without checking if the allocation was successful.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that `cell` is freed before entering the error branch using `kfree(cell)` when entering the error handling code path. Also, always check for successful allocations when using `snd_seq_cell_alloc`. If an allocation is successful, ensure that the allocated memory is used correctly and freed to prevent information leaks.
+
+ORIGINAL CODE:
+
+/*
+static int snd_seq_cell_alloc(struct snd_seq_pool *pool,
+			      struct snd_seq_event_cell **cellp,
+			      int nonblock, struct file *file)
+{
+	struct snd_seq_event_cell *cell;
+	unsigned long flags;
+	int err = -EAGAIN;
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&pool->output_sleep, &wait);
+		spin_unlock_irq(&pool->lock);
+		schedule();
+		spin_lock_irq(&pool->lock);
+		remove_wait_queue(&pool->output_sleep, &wait);
+		/* interrupted? */
+		if (signal_pending(current)) {
+ */
+int snd_seq_event_dup(struct snd_seq_pool *pool, struct snd_seq_event *event,
+		      struct snd_seq_event_cell **cellp, int nonblock,
+		      struct file *file)
+{
+	int ncells, err;
+	unsigned int extlen;
+	struct snd_seq_event_cell *cell;
+	if (ncells >= pool->total_elements)
+		return -ENOMEM;
+
+	err = snd_seq_cell_alloc(pool, &cell, nonblock, file);
+	if (err < 0)
+		return err;
+
+	/* copy the event */
+			int size = sizeof(struct snd_seq_event);
+			if (len < size)
+				size = len;
+			err = snd_seq_cell_alloc(pool, &tmp, nonblock, file);
+			if (err < 0)
+				goto __error;
+			if (cell->event.data.ext.ptr == NULL)
+				cell->event.data.ext.ptr = tmp;

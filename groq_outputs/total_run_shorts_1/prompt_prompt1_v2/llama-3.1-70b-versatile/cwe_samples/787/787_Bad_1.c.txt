@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow
+
+EXPLANATION:
+The code is vulnerable to a buffer overflow due to a possible subtraction from an unsigned value. If `returnChunkSize(destBuf)` returns 0 (or a small value), `(returnChunkSize(destBuf)-1)` will result in a large value due to integer underflow. This large value will be used as the length parameter in the `memcpy` function, potentially leading to a buffer overflow.
+
+The `returnChunkSize` function claims to return the size of usable memory, but it is unclear how this size relates to the capacity of `destBuf`. Furthermore, if `returnChunkSize` returns -1 to indicate an error, the line `(returnChunkSize(destBuf)-1)` will result in an underflow, and may also lead to a buffer overflow.
+
+Additionally, it's always a good practice to validate and sanitize user input before it reaches memory related operations.
+
+RECOMMENDATIONS:
+- Ensure `returnChunkSize(destBuf)` returns an accurate value for usable memory size that does not exceed the capacity of `destBuf`.
+- Validate the return value of `returnChunkSize` to ensure it does not result in underflow, which will lead to potential buffer overflows.
+- Bounds-check the destination buffer `destBuf` and enforce copying limits.
+
+Here's an example of the modified code:
+```c
+int returnChunkSize(void *) {
+    // ...
+}
+
+int main() {
+    size_t chunkSize = returnChunkSize(destBuf);
+    if(chunkSize <= 0 || chunkSize > destBufSize) {
+        // handle the error
+        return -1;
+    }
+    memcpy(destBuf, srcBuf, std::min(chunkSize-1, destBufSize));
+}
+```
+ORIGINAL CODE:
+```
+int returnChunkSize(void *) {
+    ...
+} int main() {...memcpy(destBuf, srcBuf, (returnChunkSize(destBuf)-1));...}
+```

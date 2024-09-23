@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 63-70
+VULNERABILITY_DESCRIPTION:
+dereference of ptr without null check before having checked it for NULL
+EXPLANATION:
+The vulnerability exists in the code snippet within the `arch_sync_kernel_mappings` function. The code checks if `vmalloc_fault(address)` is greater than or equal to 0 before returning. However, it does not check for `vmalloc_fault(address)` returning a non-NULL value before calling `vmalloc_fault(address)`. 
+
+This makes the code vulnerable to a segmentation fault if `pmd_k` is NULL and then used without checking, leading to a potential NULL pointer dereference.
+
+RECOMMENDATIONS:
+Add a NULL check before calling `vmalloc_fault(address)`. Also, ensure that the function `vmalloc_fault(address)` handles NULL pointer scenarios and returns a value that indicates an error.
+
+Additionally, it is good practice to check the return value of `vmalloc_fault(address)` and handle the scenario where it returns an error or NULL.
+
+ORIGINAL CODE:
+(vmalloc_fault function and vmalloc_sync_one function are not included here as they were not in your code)
+```c
+void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
+{
+	unsigned long addr;
+
+	 */
+	WARN_ON_ONCE(hw_error_code & X86_PF_PK);
+
+#ifdef CONFIG_X86_32
+	/*
+	 * We can fault-in kernel-space virtual memory on-demand. The
+	 * 'reference' page table is init_mm.pgd.
+	 *
+	 * NOTE! We MUST NOT take any locks for this case. We may
+	 * be in an interrupt or a critical region, and should
+	 * only copy the information from the master page table,
+	 * nothing more.
+	 *
+	 * Before doing this on-demand faulting, ensure that the
+	 * fault is not any of the following:
+	 * 1. A fault on a PTE with a reserved bit set.
+	 * 2. A fault caused by a user-mode access.  (Do not demand-
+	 *    fault kernel memory due to user-mode accesses).
+	 * 3. A fault caused by a page-level protection violation.
+	 *    (A demand fault would be on a non-present page which
+	 *     would have X86_PF_PROT==0).
+	 *
+	 * This is only needed to close a race condition on x86-32 in
+	 * the vmalloc mapping/unmapping code. See the comment above
+	 * vmalloc_fault() for details. On x86-64 the race does not
+	 * exist as the vmalloc mappings don't need to be synchronized
+	 * there.
+	 */
+	if (!(hw_error_code & (X86_PF_RSVD | X86_PF_USER | X86_PF_PROT))) {
+		if (vmalloc_fault(address) >= 0)
+			return;
+	}
+#endif
+
+	/* Was the fault spurious, caused by lazy TLB invalidation? */
+	if (spurious_kernel_fault(hw_error_code, address))
+		return;
+}

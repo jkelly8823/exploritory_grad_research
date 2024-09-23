@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-21
+VULNERABILITY_DESCRIPTION:
+Unprotected Access to Shared Resources with Inconsistent Locking
+
+EXPLANATION:
+The code snippet has inconsistent locking protection for shared resources. The `trylock_page` function is used to acquire the lock for the `page` resource. However, if the lock is successfully acquired, it is released later in the code with `unlock_page`. This raises a concern about the atomicity of the operations performed on the `page` resource while it is unlocked. Between these two operations, another thread or process could potentially access and modify the `page` resource, leading to unpredictable behavior or data corruption.
+
+Additionally, if `PageKsm(page)` or `page_count(page) != 1` after acquiring the lock, the lock is released and the function branches to the `copy` label. In this case, the function may leave the `page` resource in an inconsistent state.
+
+Another concern is the function `try_to_free_swap(page)` is called without checking if the page is locked. If another thread tries to access the `page` while it's being swapped out, it can cause data corruption or page faults.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, ensure that the page is consistently locked throughout the critical section of code that accesses or modifies shared resources. Consider the following:
+
+1. Reorder the operations to minimize the time the page is unlocked. Move the call to `try_to_free_swap(page)` under the protection of the page lock.
+2. Ensure that all operations on the `page` resource are atomic and do not rely on intermediate states.
+3. Use more robust locking mechanisms, such as a spinlock or a mutex, to protect the `page` resource. This would ensure that only one process or thread can access the resource at a time.
+
+ORIGINAL CODE:
+
+	if (PageAnon(vmf->page)) {
+		struct page *page = vmf->page;
+
+		/*
+		 * We have to verify under page lock: these early checks are
+		 * just an optimization to avoid locking the page and freeing
+		 * the swapcache if there is little hope that we can reuse.
+		 *
+		 * PageKsm() doesn't necessarily raise the page refcount.
+		 */
+		if (PageKsm(page) || page_count(page) > 1 + PageSwapCache(page))
+			goto copy;
+		if (!trylock_page(page))
+			goto copy;
+		if (PageSwapCache(page))
+			try_to_free_swap(page);
+		if (PageKsm(page) || page_count(page) != 1) {
+			unlock_page(page);
+			goto copy;
+		}
+		/*
+		 * Ok, we've got the only page reference from our mapping
+		 * and the page is locked, it's dark out, and we're wearing
+		 * sunglasses. Hit it.
+		 */
+		unlock_page(page);
+		wp_page_reuse(vmf);
+		return VM_FAULT_WRITE;

@@ -1,0 +1,111 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 45-47
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to a timing issue related to a race condition in the asynchronous reset handling of the `save_inputs` always block. When the `rst_ni` signal is negated, the `pmpaddr_reg` and `pmpcfg_reg` are asynchronously reset to 'b0, but the synchronous load of these registers can occur on the same clock cycle if the `dma_ctrl_reg` is in a valid state, potentially causing a data inconsistency.
+
+EXPLANATION:
+The `save_inputs` always block is designed to capture the input values of `pmpaddr_i` and `pmpcfg_i` when the `dma_ctrl_reg` is in the `CTRL_IDLE` or `CTRL_DONE` states. However, the asynchronous reset of `pmpaddr_reg` and `pmpcfg_reg` can occur on the same clock cycle as the synchronous load, potentially causing a data inconsistency. This inconsistency can lead to incorrect values being stored in the `pmpaddr_reg` and `pmpcfg_reg` registers.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to introduce a synchronizer to ensure that the asynchronous reset of `pmpaddr_reg` and `pmpcfg_reg` is properly synchronized with the synchronous load. This can be achieved by introducing a reset synchronizer, such as a two-stage reset synchronizer.
+
+```vhdl
+reg [7:0] [16-1:0] pmpcfg_reset;
+reg [16-1:0][53:0] pmpaddr_reset;
+reg pmp_sync_rst;
+
+always @ (posedge clk_i)
+begin
+  pmp_sync_rst <= ~rst_ni;
+end
+
+always @ (posedge clk_i)
+begin
+  if (~rst_ni)
+  begin
+    pmpaddr_reset <= 'b0;
+  end
+  else
+  begin
+    pmpaddr_reset <= pmpaddr_i;
+  end
+end
+
+always @ (posedge clk_i)
+begin
+  if (~rst_ni)
+  begin
+    pmpcfg_reset <= 'b0;
+  end
+  else
+  begin
+    pmpcfg_reset <= pmpcfg_i;
+  end
+end
+```
+
+The corrected `save_inputs` block would use the `pmpaddr_reset` and `pmpcfg_reset` registers, like this:
+```vhdl
+always @ (posedge clk_i or negedge rst_ni)
+begin: save_inputs
+  if (!rst_ni)
+  begin
+    ...
+  end
+  else
+  begin
+    if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE)
+    begin
+      pmpaddr_reg <= pmpaddr_reset;
+      pmpcfg_reg <= pmpcfg_reset;
+    end
+  end
+end
+```
+
+ORIGINAL CODE:
+```vhdl
+module dma # (...)(...);
+...
+  input [7:0] [16-1:0] pmpcfg_i;   
+  input logic [16-1:0][53:0]     pmpaddr_i;
+  ...
+  reg [7:0] [16-1:0] pmpcfg_reg;
+  reg [16-1:0][53:0] pmpaddr_reg;
+  ...
+  //// Save the input command
+  always @ (posedge clk_i or negedge rst_ni)
+  begin: save_inputs
+    if (!rst_ni)
+    begin
+      ...
+      pmpaddr_reg <= 'b0 ;
+      pmpcfg_reg <= 'b0 ;
+    end
+    else 
+    begin
+      if (dma_ctrl_reg == CTRL_IDLE || dma_ctrl_reg == CTRL_DONE) 
+      begin
+        pmpaddr_reg <= pmpaddr_i;
+        pmpcfg_reg <= pmpcfg_i;
+      end
+    end 
+  end // save_inputs
+  ...
+  // Load/store PMP check
+  pmp #(
+    .XLEN       ( 64                     ),
+    .PMP_LEN    ( 54                     ),
+    .NR_ENTRIES ( 16           )
+  ) i_pmp_data (
+    .addr_i        ( pmp_addr_reg        ),
+    .priv_lvl_i    ( riscv::PRIV_LVL_U   ), // we intend to apply filter on
+    // DMA always, so choose the least privilege
+    .access_type_i ( pmp_access_type_reg ),
+    // Configuration
+    .conf_addr_i   ( pmpaddr_reg           ),
+    .conf_i        ( pmpcfg_reg            ),
+    .allow_o       ( pmp_data_allow      )
+  );
+endmodule
+```

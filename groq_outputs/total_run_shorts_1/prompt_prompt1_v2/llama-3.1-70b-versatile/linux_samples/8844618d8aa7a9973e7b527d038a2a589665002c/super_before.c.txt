@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 9
+VULNERABILITY_DESCRIPTION:
+Potential Memory Leak and Dangling Pointer
+
+EXPLANATION:
+The given code snippet contains a potential memory leak and dangling pointer vulnerability. The function `ext4_get_group_desc` allocates memory for the `struct ext4_group_desc` type, but this memory is never released in the given snippet. However, since this snippet is incomplete, we will focus on the remaining potential issue.
+
+The `gdp` pointer is not checked for null before it's dereferenced in lines 7 and 9. Although a null check is present, it does not cover all scenarios. For instance, if `ext4_get_group_desc` fails after the null check but before line 7, then line 9 would still try to access the memory location pointed by `gdp` which could be null, leading to undefined behavior.
+
+RECOMMENDATIONS:
+Add a null check before accessing the memory location pointed to by `gdp`, and also ensure that memory allocated by `ext4_get_group_desc` is properly released once it's no longer needed.
+
+```c
+gdp = ext4_get_group_desc(sb, group, NULL);
+if (!gdp)
+    continue;
+if (!(gdp->bg_flags & cpu_to_le16(EXT4_BG_INODE_ZEROED))){
+    // memory allocated by ext4_get_group_desc might be released here before continue statement
+    break;
+}
+```
+Additionally, consider error handling for `ext4_get_group_desc` function, if it returns a valid error value.
+
+ORIGINAL CODE:
+```c
+ext4_group_t group, ngroups = EXT4_SB(sb)->s_groups_count;
+struct ext4_group_desc *gdp = NULL;
+
+for (group = 0; group < ngroups; group++) {
+    gdp = ext4_get_group_desc(sb, group, NULL);
+    if (!gdp)
+        continue;
+
+    if (!(gdp->bg_flags & cpu_to_le16(EXT4_BG_INODE_ZEROED)))
+        break;
+}
+
+return group;
+```

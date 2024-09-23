@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24
+VULNERABILITY_DESCRIPTION:
+A potential use-after-free vulnerability exists in the given code snippet.
+
+EXPLANATION:
+The vulnerability arises because the `cpa_flush` function calls `fix_addr` which takes an `unsigned long addr` as an argument. However, we do not see where `addr` is declared or defined in the provided code snippet. Without knowing its declaration, it is assumed that it could potentially be a pointer to memory that has already been freed. 
+
+Additionally, in the `__cpa_addr` function, there is a `for` loop that iterates `cpa->numpages` times. Within the loop, the `__flush_tlb_one_kernel` function is called with the result of `fix_addr(__cpa_addr(cpa, i))` as its argument. However, `__cpa_addr(cpa, i)` is recursively calling itself, which could lead to undefined behavior or a stack overflow if `cpa->numpages` is a large number.
+
+Moreover, the `clflush_cache_range_opt` function is called with the result of `fix_addr` as its argument. If `addr` has already been freed, this could lead to a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following changes are recommended:
+
+1. Ensure that the `addr` variable is declared and defined before being used in the `cpa_flush` function.
+2. Verify that the `addr` variable is not a pointer to memory that has already been freed before being used in the `cpa_flush` function.
+3. Avoid recursive function calls or add a termination condition to prevent potential stack overflows.
+4. Add proper error handling and bounds checking to prevent undefined behavior.
+
+ORIGINAL CODE:
+#endif
+
+/*
+ * See set_mce_nospec().
+ *
+ * Machine check recovery code needs to change cache mode of poisoned pages to
+ * UC to avoid speculative access logging another error. But passing the
+ * address of the 1:1 mapping to set_memory_uc() is a fine way to encourage a
+ * speculative access. So we cheat and flip the top bit of the address. This
+ * works fine for the code that updates the page tables. But at the end of the
+ * process we need to flush the TLB and cache and the non-canonical address
+ * causes a #GP fault when used by the INVLPG and CLFLUSH instructions.
+ *
+ * But in the common case we already have a canonical address. This code
+ * will fix the top bit if needed and is a no-op otherwise.
+ */
+static inline unsigned long fix_addr(unsigned long addr)
+{
+#ifdef CONFIG_X86_64
+	return (long)(addr << 1) >> 1;
+#else
+	return addr;
+#endif
+}
+
+static unsigned long __cpa_addr(struct cpa_data *cpa, unsigned long idx)
+{
+	if (cpa->flags & CPA_PAGES_ARRAY) {
+		struct page *page = cpa->pages[idx];
+	unsigned int i;
+
+	for (i = 0; i < cpa->numpages; i++)
+		__flush_tlb_one_kernel(fix_addr(__cpa_addr(cpa, i)));
+}
+
+static void cpa_flush(struct cpa_data *data, int cache)
+{
+		 * Only flush present addresses:
+		 */
+		if (pte && (pte_val(*pte) & _PAGE_PRESENT))
+			clflush_cache_range_opt((void *)fix_addr(addr), PAGE_SIZE);
+	}
+	mb();
+}
+
+	return ret;
+}
+
+static int change_page_attr_set_clr(unsigned long *addr, int numpages,
+				    pgprot_t mask_set, pgprot_t mask_clr,
+				    int force_split, int in_flag,
+				    struct page **pages)

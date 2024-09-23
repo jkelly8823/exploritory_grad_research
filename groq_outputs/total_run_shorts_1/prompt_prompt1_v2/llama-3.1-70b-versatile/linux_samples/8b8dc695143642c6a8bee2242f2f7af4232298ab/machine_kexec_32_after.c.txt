@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-10, 11-11
+VULNERABILITY_DESCRIPTION:
+The provided code segment is vulnerable to a buffer overflow attack and potential function pointer overwrite due to the use of an extern variable without proper validation or bounds checking. Additionally, there is a potential buffer overflow due to incorrect signature of function pointer 'relocate_new_kernel_t'.
+ 
+EXPLANATION:
+Upon reviewing the code snippet, several issues come to light. The most pressing issue revolves around the treatment of 'relocate_new_kernel_t rnk' and how it gets called. There appears to be no validation of 'rnk' as a valid function, nor is there an examination of whether its function signature aligns with that being invoked with "(page_list, reboot_code_buffer_phys, image->start)". At line 11, a function pointer 'rnk' is directly invoked without examining whether the called function is a valid pointer. This renders the function susceptible to an incorrect initialization of 'rnk' or deliberate injection of malicious values, ensuing the hijacking of the function call.
+
+Moreover, there is concern in regards to manipulating and calling functions with unreviewed parameters. Line 10 reveals such usage of parameters when "(page_list, reboot_code_buffer_phys, image->start)" are directly passed into function 'rnk'. The invoked pointer holds the possibility of operating upon diverse functions due to its unsigned definition.
+
+Lastly, a partial buffer overflow, or related operation outside intended buffer constraints is identified in manipulating "reboot_code_buffer + KEXEC_CONTROL_PAGE_SIZE". Based on its invocation near a 'char * relocations' procedure and a 'phys' relocation in another portion of code (not presented), buffer overflow detection is suspect, but cannot confirm due to lack of a full source code review.
+
+RECOMMENDATIONS:
+
+- Validate 'relocate_new_kernel_t rnk' prior to initialization.
+- Define a standardized return type to define the error type if the input does not abide by the system guidelines
+- Add Input Validation to establish trustworthiness for 'page_list', 'reboot_code_buffer_phys' and 'image->start'.
+- Use Code review practices to ensure intended function return types prior to invoking functions on unexamined input within relocated kernels.
+
+ORIGINAL CODE:
+/*
+void default_machine_kexec(struct kimage *image)
+{
+	extern const unsigned int relocate_new_kernel_size;
+	unsigned long page_list;
+	unsigned long reboot_code_buffer, reboot_code_buffer_phys;
+	relocate_new_kernel_t rnk;
+				reboot_code_buffer + KEXEC_CONTROL_PAGE_SIZE);
+	printk(KERN_INFO "Bye!\n");
+
+	if (!IS_ENABLED(CONFIG_FSL_BOOKE) && !IS_ENABLED(CONFIG_44x))
+		relocate_new_kernel(page_list, reboot_code_buffer_phys, image->start);
+
+	/* now call it */
+	rnk = (relocate_new_kernel_t) reboot_code_buffer;
+	(*rnk)(page_list, reboot_code_buffer_phys, image->start);
+}

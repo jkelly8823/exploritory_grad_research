@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds Read Vulnerability
+
+EXPLANATION:
+The vulnerability is found in lines 4-5, specifically in the lines `uf.event_mask[0] = *((u32 *) f->event_mask + 0);` and `uf.event_mask[1] = *((u32 *) f->event_mask + 1);`. 
+The code attempts to access and copy event mask values from a pointer `f->event_mask` using pointer arithmetic. However, there is no validation or bounds checking performed on the pointer to ensure it points to an array of at least size 2. If the pointer points to a smaller buffer, this would result in an out-of-bounds read.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to validate the `f->event_mask` pointer and ensure it points to a large enough buffer before accessing its elements. One possible solution is to add a check for the size of the buffer and ensure it is at least 2 'u32' pointers long.
+
+```c
+if (f->event_mask && (f->event_mask_size >= 2 * sizeof(u32))) {
+    uf.event_mask[0] = *((u32 *) f->event_mask + 0);
+    uf.event_mask[1] = *((u32 *) f->event_mask + 1);
+} else {
+    // Handle error or invalid input
+}
+```
+Note that the example above assumes that `f->event_mask_size` is a valid field representing the size of the `f->event_mask` buffer.
+
+ORIGINAL CODE:
+```c
+*addr_len = sizeof(*haddr);
+haddr->hci_family = AF_BLUETOOTH;
+haddr->hci_dev    = hdev->id;
+
+release_sock(sk);
+return 0;
+}
+		{
+			struct hci_filter *f = &hci_pi(sk)->filter;
+
+			uf.type_mask = f->type_mask;
+			uf.opcode    = f->opcode;
+			uf.event_mask[0] = *((u32 *) f->event_mask + 0);
+			uf.event_mask[1] = *((u32 *) f->event_mask + 1);
+```

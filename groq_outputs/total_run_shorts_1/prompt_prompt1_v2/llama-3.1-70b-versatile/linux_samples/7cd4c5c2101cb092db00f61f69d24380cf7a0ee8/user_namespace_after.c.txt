@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Double-Use of kmem_cache_zalloc's returned memory pointer without null pointer check can lead to a potential Null Pointer Dereference.
+EXPLANATION:
+The code uses kmem_cache_zalloc() to allocate memory and stores the returned pointer in 'ns'. If kmem_cache_zalloc() fails to allocate memory, it returns a NULL pointer. However, there's no validation check to ensure 'ns' is not NULL before using it in subsequent operations. This can lead to a null pointer dereference if kmem_cache_zalloc() fails, potentially causing the system to crash or become unstable. 
+Additionally, a good practice would be to include an explicit check for null, if GFP_KERNEL is involved in the memory allocation.
+RECOMMENDATIONS:
+It's essential to validate 'ns' for NULL before using it.
+
+```c
+ns = kmem_cache_zalloc(user_ns_cachep, GFP_KERNEL);
+if (!ns) {
+    ret = -ENOMEM;
+    goto fail_dec;
+}
+```
+Would be rewritten to:
+```c
+ns = kmem_cache_zalloc(user_ns_cachep, GFP_KERNEL);
+if (!ns) {
+    ret = -ENOMEM;
+    printk(KERN_INFO "%s: Failed kmem_cache_zalloc\n",__func__);
+    goto fail_dec;
+}
+```
+This makes sure 'ns' is not NULL and allows your error logging to clearly display the code location in system logs where kmem_cache_zalloc fails.
+
+ORIGINAL CODE:
+
+```c
+#include <linux/highuid.h>
+#include <linux/cred.h>
+#include <linux/securebits.h>
+#include <linux/security.h>
+#include <linux/keyctl.h>
+#include <linux/key-type.h>
+#include <keys/user-type.h>
+#include <linux/seq_file.h>
+    !kgid_has_mapping(parent_ns, group))
+    goto fail_dec;
+
+ret = security_create_user_ns(new);
+if (ret < 0)
+    goto fail_dec;
+
+ret = -ENOMEM;
+ns = kmem_cache_zalloc(user_ns_cachep, GFP_KERNEL);
+if (!ns)
+    goto fail_dec;
+```

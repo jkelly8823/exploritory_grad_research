@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 8-11
+VULNERABILITY_DESCRIPTION:
+Potential Information Leak and Uncontrolled Data Transfer through Incorrect Usage of skb_put() and memcpy_from_msg() functions.
+EXPLANATION:
+In the sco_send_frame() function, the skb_put(skb, len) function is used to allocate space for the data in the skb (socket buffer) and then the data is copied into the skb using the memcpy_from_msg() function. The issue is that the return value of skb_put() is not checked and the skb_put() function does not check for buffer overflow. Also, the memcpy_from_msg() function does not check for the length being copied. This can lead to an information leak by copying sensitive data past the end of the skb, corrupting memory beyond, or if the length of the msg is greater than the length passed into skb_put().
+
+Additionally, it appears that the data in the msg may be untrusted user data because no checking is done on the length or content of the message.
+
+Furthermore, the return value of memcpy_from_msg() is only checked for non-zero but it is documented as returning -EFAULT, -EINVAL or the number of bytes not processed. Neither -EINVAL nor the count of bytes not processed are checked here.
+
+RECOMMENDATIONS:
+1. Ensure the return value of skb_put(skb, len) is checked and handle any potential buffer overflow error.
+2. Validate and sanitize the len variable to prevent uncontrolled data transfer and potential information leaks. Ensure that len is less than or equal to skb->buf len to prevent buffer overflow.
+3. After skb_put(skb, len), check for any buffer overflow errors and return an error.
+4. Validate and sanitize the input of memcpy_from_msg(skb_put(skb, len), msg, len) function, specifically msg->msg_flags & MSG_DONTWAIT, to prevent potential issues with user provided data.
+
+ORIGINAL CODE:
+
+```c
+return err;
+}
+
+static int sco_send_frame(struct sock *sk, struct msghdr *msg, int len)
+{
+	struct sco_conn *conn = sco_pi(sk)->conn;
+	struct sk_buff *skb;
+	int err;
+
+	BT_DBG("sk %p len %d", sk, len);
+
+	skb = bt_skb_send_alloc(sk, len, msg->msg_flags & MSG_DONTWAIT, &err);
+	if (!skb)
+		return err;
+
+	if (memcpy_from_msg(skb_put(skb, len), msg, len)) {
+		kfree_skb(skb);
+		return -EFAULT;
+	}
+
+	hci_send_sco(conn->hcon, skb);
+
+	return len;
+}
+			    size_t len)
+{
+	struct sock *sk = sock->sk;
+	int err;
+
+	BT_DBG("sock %p, sk %p", sock, sk);
+
+	if (msg->msg_flags & MSG_OOB)
+		return -EOPNOTSUPP;
+
+	lock_sock(sk);
+
+	if (sk->sk_state == BT_CONNECTED)
+		err = sco_send_frame(sk, msg, len);
+	else
+		err = -ENOTCONN;
+
+	release_sock(sk);
+	return err;
+}
+
+static void sco_conn_defer_accept(struct hci_conn *conn, u16 setting)
+```

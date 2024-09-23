@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-16
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Timing-Independent glitch in the output signal Data_out.
+
+EXPLANATION:
+The vulnerability exists because the Data_out signal is updated at different times based on the 'write' signal. When 'write' is high, Data_out is updated with the value of Data_in & 16'hFFFE. However, when 'write' is low, Data_out is updated with its previous value, but with the least significant bit (LSB) set to Write_once_status. This creates a timing-dependent glitch in the Data_out signal, where the LSB is updated at a different time than the rest of the signal.
+
+This type of glitch can cause issues in systems that rely on the timing of the output signal, such as systems that use clock domain crossing (CDC) or systems that use the output signal to control critical functionality.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should ensure that the Data_out signal is updated in a single clock cycle, without any timing-dependent glitches. This can be achieved by updating the Data_out signal with a single assignment, without any conditional statements.
+
+One possible fix is to remove the else if (~write) block and replace it with a single assignment that sets Data_out to the correct value based on the 'write' signal.
+
+For example:
+```
+always @(posedge Clk or negedge ip_resetn)
+  if (~ip_resetn)
+    Data_out <= 16'h0000;
+  else if (write & ~Write_once_status)
+    Data_out <= Data_in & 16'hFFFE;
+  else
+    Data_out <= {Data_out[15:1], Write_once_status};
+```
+This fix ensures that the Data_out signal is updated in a single clock cycle, without any timing-dependent glitches.
+
+ORIGINAL CODE:
+```
+module register_write_once_example
+  ( 
+    input [15:0] Data_in, 
+    input Clk, 
+    input ip_resetn, 
+    input global_resetn,
+    input write,
+    output reg [15:0] Data_out 
+  );
+  
+  reg Write_once_status; 
+  
+  always @(posedge Clk or negedge ip_resetn)
+  
+  if (~ip_resetn)
+  begin
+  
+    Data_out <= 16'h0000;
+    Write_once_status <= 1'b0; 
+  
+  end 
+  else if (write & ~Write_once_status)
+  begin
+  
+    Data_out <= Data_in & 16'hFFFE;
+    Write_once_status <= Data_in[0]; // Input bit 0 sets Write_once_status
+  
+  end
+  else if (~write)
+  begin 
+  
+    Data_out[15:1] <= Data_out[15:1]; 
+    Data_out[0] <= Write_once_status; 
+  
+  end 
+  
+  endmodule
+```

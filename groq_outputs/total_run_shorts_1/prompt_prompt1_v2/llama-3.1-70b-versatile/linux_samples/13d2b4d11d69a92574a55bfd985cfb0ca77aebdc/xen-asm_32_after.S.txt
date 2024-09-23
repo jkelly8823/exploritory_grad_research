@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential Information Leak vulnerability due to a misused and non-authenticated handling of a conditional jump instruction.
+
+EXPLANATION:
+The comparison at line 13 (`cmpw $0x0001, %ss:XEN_vcpu_info_pending(%eax)`) sets the zero flag (ZF) based on the result. However, the conditional jump instruction `jne 1f` at line 14 is based on the parity flag. Since the parity flag and the zero flag can have different states, this comparison may behave incorrectly. This can lead to the code either masking or unmasking the XEN_vcpu_info_mask depending on the contents of the parity flag.
+
+If an attacker can manipulate the value stored in `XEN_vcpu_info_pending`, they may be able to gain unintended access to the xen_hypervisor_callback, potentially revealing sensitive information or executing malicious code. 
+
+RECOMMENDATIONS:
+1. Use an instruction that correctly sets the condition based on the compare result.
+   * Change `jne 1f` to `jnz 1f` to check for non-zero.
+
+2. Ensure that XEN_vcpu_info_pending is validated before its contents are used.
+
+ORIGINAL CODE:
+    */
+#ifdef CONFIG_SMP
+	GET_THREAD_INFO(%eax)
+	movl %ss:TI_cpu(%eax), %eax
+	movl %ss:__per_cpu_offset(,%eax,4), %eax
+	mov %ss:xen_vcpu(%eax), %eax
+#else
+	movl %ss:xen_vcpu, %eax
+#endif
+
+	/* check IF state we're restoring */
+	testb $X86_EFLAGS_IF>>8, 8+1+ESP_OFFSET(%esp)
+	 * resuming the code, so we don't have to be worried about
+	 * being preempted to another CPU.
+	 */
+	setz %ss:XEN_vcpu_info_mask(%eax)
+xen_iret_start_crit:
+
+	/* check for unmasked and pending */
+	cmpw $0x0001, %ss:XEN_vcpu_info_pending(%eax)
+
+	/*
+	 * If there's something pending, mask events again so we can
+	 * jump back into xen_hypervisor_callback. Otherwise do not
+	 * touch XEN_vcpu_info_mask.
+	 */
+	jne 1f
+	movb $1, %ss:XEN_vcpu_info_mask(%eax)
+
+1:	popl %eax
+
+	/*

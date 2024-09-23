@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free vulnerability.
+
+EXPLANATION:
+There is a potential Use-After-Free vulnerability in the given code snippet. The issue arises from the fact that the `idr_find` function returns a pointer to a structure that may be freed while the function is still executing. This could happen if another thread holds the lock and frees the `vm` structure after the `idr_find` call, but before the `vm` pointer is accessed and its contents are assigned to `task_info`. 
+
+The `spin_lock` call ensures that the lookup operation itself is thread-safe. However, after the `spin_lock` is released (in line 6), another thread could potentially free the `vm` structure if they are holding the lock. This means that when `vm->task_info` is accessed, it may be accessing a freed structure, which can lead to undefined behavior.
+
+RECOMMENDATIONS:
+The issue here can be addressed by adding additional synchronization to ensure that the `vm` structure is not freed until we're done with it, or by taking a reference to the `vm` structure while holding the lock. A more suitable solution may be to check if the `vm` pointer still holds a valid `vm` structure after the `spin_unlock`. However, since `idr_find` and `spin_lock` are likely meant to be low-level abstractions, the issue of struct mutation belongs to consumers of the abstraction.
+
+Here's a corrected version that mitigates this vulnerability by taking an extra reference before dropping the lock:
+```c
+/**
+ * amdgpu_set_task_info
+ */
+void amdgpu_set_task_info(struct /*additional types required*/ adev,
+                          unsigned int pasid,
+                          struct amdgpu_task_info *task_info)
+{
+    struct amdgpu_vm *vm;
+    bool found = false;
+
+    spin_lock(&adev->vm_manager.pasid_lock);
+
+    vm = idr_find(&adev->vm_manager.pasid_idr, pasid);
+    if (vm) {
+        found = true; // Keep track of the lookup result.
+    }
+
+    spin_unlock(&adev->vm_manager.pasid_lock);
+
+    if (found) {
+        // Now safely access the struct 'vm', assume some sort of reference is taken here.
+        // Check here that 'vm' is not freed or NULL before assigning 'vm->task_info' to '*task_info'
+        if (vm != NULL) {
+            *task_info = vm->task_info;
+        } else {
+            // either error, or handle 'vm' has gone invalid logically
+        }
+    } else {
+        // Either error, or handle task info as invalid result
+    }
+}
+```
+However, the final implementation highly depends on the actual scenario in which this code is being used. High-level synchronization might be implemented around the access of the data and a shared datastructure abstration would better handle object handles passed out of the service implementation.
+
+ORIGINAL CODE:
+```c
+/**
+ * amdgpu_set_task_info
+ */
+void amdgpu_set_task_info(  //type of 'adev' was implied
+                          unsigned int pasid,
+                          struct amdgpu_task_info *task_info) 
+{
+    struct amdgpu_vm *vm;
+
+    spin_lock(&adev->vm_manager.pasid_lock);
+
+    vm = idr_find(&adev->vm_manager.pasid_idr, pasid);
+    if (vm)
+        *task_info = vm->task_info;
+
+    spin_unlock(&adev->vm_manager.pasid_lock);
+}
+
+/**
+ * amdgpu_vm_set_task_info - Sets VMs task info.
+```

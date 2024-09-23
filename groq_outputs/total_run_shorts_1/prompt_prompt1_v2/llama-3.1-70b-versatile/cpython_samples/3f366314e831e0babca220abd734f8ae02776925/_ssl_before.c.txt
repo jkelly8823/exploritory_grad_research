@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Insecure use of SSL/TLS protocol configuration options.
+EXPLANATION:
+The code sets SSL/TLS protocol configuration options using `SSL_CTX_set_verify` and `SSL_CTX_set_options`. The `SSL_VERIFY_NONE` option configured in `SSL_CTX_set_verify` disables verification of the peer's certificate, which means the authenticity of the peer is not verified. This makes the connection vulnerable to man-in-the-middle (MitM) attacks. Additionally, the `SSL_OP_ALL` option configured in `SSL_CTX_set_options` enables all SSL/TLS protocol opitons, including some that are vulnerable to attacks (e.g., SSLv2, SSLv3).
+
+Furthermore, the code intentionally adds constants for disabling specific protocols, but does not use them to disable any protocols, leaving the connection vulnerable to attacks targeting these protocols.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities, we recommend the following changes:
+
+1. Change `SSL_VERIFY_NONE` to `SSL_VERIFY_PEER` to enable verification of the peer's certificate. This will help prevent man-in-the-middle attacks.
+2. Change `SSL_OP_ALL` to `SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1` to disable vulnerable protocols.
+3. Consider adding more secure protocol options, such as `SSL_OP_NO_TLSv1_0 | SSL_OP_NO_TLSv1_1`, depending on the desired level of security.
+
+ORIGINAL CODE:
+```
+self->ctx = ctx;
+/* Defaults */
+SSL_CTX_set_verify(self->ctx, SSL_VERIFY_NONE, NULL);
+SSL_CTX_set_options(self->ctx, SSL_OP_ALL);
+#define SID_CTX "Python"
+SSL_CTX_set_session_id_context(self->ctx, (const unsigned char *) SID_CTX,
+                                   sizeof(SID_CTX));
+                            PY_SSL_VERSION_TLS1);
+
+/* protocol options */
+PyModule_AddIntConstant(m, "OP_ALL", SSL_OP_ALL);
+PyModule_AddIntConstant(m, "OP_NO_SSLv2", SSL_OP_NO_SSLv2);
+PyModule_AddIntConstant(m, "OP_NO_SSLv3", SSL_OP_NO_SSLv3);
+PyModule_AddIntConstant(m, "OP_NO_TLSv1", SSL_OP_NO_TLSv1);
+```

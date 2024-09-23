@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-7, 10-11
+VULNERABILITY_DESCRIPTION:
+Unvalidated pointer dereferences and data duplicates in consecutive system calls. This can lead to unexpected system behavior and data corruption.
+
+EXPLANATION:
+The code provided contains repeated system calls in a single code block. These calls are likely to change system state and handle low-level memory operations (such as loading thread state and access control descriptors). However, there is no input validation or update tracking to ensure that the operations are carried out as intended.
+
+Upon repeated execution, the lines highlighted above can cause unpredictable modifications to the thread, task state, and access control state. A clear data duplication also exists between the repeated blocks 1-7 and 10-11.
+
+Moreover, an address-of operator offsetof() is applied without an evident validation step, indicating a lack of verification of the returned memory address at line 13.
+
+RECOMMENDATIONS:
+To prevent potential data corruption and unexpected system crashes:
+-  Add input validation checks for repeated function calls (lines 1-7 and 10-11)
+-  Verify that the parameters to set_tss_desc(), load_TR_desc(), and load_mm_ldt() are correctly updated
+-  Validate that the fields are valid before accessing them with offsetof()
+-  Discard or join repetitive function calls for an optimized solution
+
+ORIGINAL CODE:
+
+	load_sp0(t, &current->thread);
+	set_tss_desc(cpu, t);
+	load_TR_desc();
+	load_mm_ldt(&init_mm);
+
+	clear_all_debug_regs();
+	dbg_restore_debug_regs();
+
+	load_sp0(t, thread);
+	set_tss_desc(cpu, t);
+	load_TR_desc();
+	load_mm_ldt(&init_mm);
+
+	t->x86_tss.io_bitmap_base = offsetof(struct tss_struct, io_bitmap);
+
+#ifdef CONFIG_DOUBLEFAULT

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+ Use After Free
+
+EXPLANATION:
+The provided code snippet shows a potential use-after-free vulnerability. After holding the connection with `hci_conn_hold(conn)`, the code subsequently drops the connection with `hci_conn_drop(conn)`, which likely frees the connection resource. However, if any code paths leading to the `unlock` label need to use the connection after it has been dropped, it will result in a use-after-free condition.
+
+RECOMMENDATIONS:
+To fix this issue, ensure that the connection resource is not used after it has been dropped. Consider reordering the operations to avoid any use-after-free conditions. For example, move the code that needs to access the connection before `hci_conn_drop(conn)` is called.
+
+```c
+if (!conn)
+	goto unlock;
+
+hci_conn_hold(conn);
+conn->disc_timeout = HCI_DISCONN_TIMEOUT;
+// Any code that needs to access conn should be moved before conn->drop
+// ...
+
+hci_conn_drop(conn);
+```
+
+If this is not feasible, consider introducing additional checks to ensure that the connection is not accessed after it has been dropped.
+
+ORIGINAL CODE:
+```c
+if (!conn)
+	goto unlock;
+
+hci_conn_hold(conn);
+conn->disc_timeout = HCI_DISCONN_TIMEOUT;
+hci_conn_drop(conn);
+```

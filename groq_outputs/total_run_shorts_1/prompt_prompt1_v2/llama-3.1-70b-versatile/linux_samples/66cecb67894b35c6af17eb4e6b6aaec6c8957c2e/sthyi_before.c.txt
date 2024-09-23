@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 8, 13
+VULNERABILITY_DESCRIPTION: 
+Use After Free, Potential NULL Pointer Dereference, and Potential Double Free.
+
+EXPLANATION:
+The vulnerability arises from the potential use after free, null pointer dereference, and double free of dynamically allocated memory.
+
+On line 5, `diag204_buf` is used without checking whether it has been set. If `diag204_buf` has not been initialized before this point, it will cause a null pointer dereference. Furthermore, if `diag204(diag224_buf)` on line 6 fails, the function will proceed to `out:` label and attempt to free `diag224_buf`. However, if `diag224(diag224_buf)` succeeds and returns 0, `diag224_buf` will not be freed, resulting in a memory leak.
+
+Additionally, on line 13, `vfree(diag204_buf)` is called without checking whether `diag204_buf` has been initialized. If `diag204_buf` has not been initialized before this point or has already been freed, this will cause a double free or null pointer dereference.
+
+RECOMMENDATIONS:
+1. Ensure `diag204_buf` is initialized before using it.
+2. Check whether `diag204_buf` is not null before using it.
+3. Check whether `diag224(diag224_buf)` has failed before proceeding to `out` label to prevent memory leak.
+4. Check whether `diag204_buf` has already been freed before calling `vfree(diag204_buf)`.
+
+ORIGINAL CODE:
+```c
+if (r < 0)
+	goto out;
+
+diag224_buf = kmalloc(PAGE_SIZE, GFP_KERNEL | GFP_DMA);
+if (!diag224_buf || diag224(diag224_buf))
+	goto out;
+
+ti_hdr = diag204_buf;
+sctns->par.infpval1 |= PAR_WGHT_VLD;
+
+out:
+	kfree(diag224_buf);
+	vfree(diag204_buf);
+}
+```

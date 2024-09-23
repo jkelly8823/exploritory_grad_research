@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7, 10
+VULNERABILITY_DESCRIPTION:
+Unlocked Update of Shared Resource, Use After Unlock.
+
+EXPLANATION:
+The code snippet contains a critical section of code that is not properly protected by synchronization primitives. 
+
+After acquiring the write lock `mm->mmap_sem` with `down_write`, the code checks the validity of the `pgd` and `pud`, then unmaps the `pte` with `pte_unmap_unlock`. However, this operation is performed after the `pud_offset` calculation but before unlocking `mm->mmap_sem`, exposing a window of time where other threads or processes could interfere with this critical section.
+
+Moreover, in line 10 `pte_unmap_unlock(pte, ptl);`, there is an unlock operation, however, there's no preceding lock operation on `ptl` within the snippet provided. It appears that `ptl` was locked somewhere prior to the given code, but was unlocked before this snippet ends.
+
+This indicates that `pte_unmap_unlock(pte, ptl);` line is calling an unlock operation on an unmapped spinlock `ptl`. This spinlock was supposed to guard against concurrent access to data. However, calling unlock operation on a spinlock which is not currently locked results in undefined behavior in some cases.
+
+RECOMMENDATIONS:
+1. Move the `pte_unmap_unlock(pte, ptl);` line above the `down_write(&mm->mmap_sem);` line, and make sure `ptl` is locked prior to the given snippet. Alternatively, you should ensure `ptl` is mapped and locked before calling `pte_unmap_unlock(pte, ptl);`.
+
+2. It would also be beneficial to add any missing lock acquisition and/or mapping operations for `ptl` prior to calling `pte_unmap_unlock(pte, ptl);`, within this snippet.
+
+ORIGINAL CODE:
+	spinlock_t *ptl;
+	int i;
+	down_write(&mm->mmap_sem);
+	pgd = pgd_offset(mm, 0xA0000);
+	if (pgd_none_or_clear_bad(pgd))
+		goto out;
+	pud = pud_offset(pgd, 0xA0000);
+	}
+	pte_unmap_unlock(pte, ptl);
+out:
+	up_write(&mm->mmap_sem);
+	flush_tlb();
+}

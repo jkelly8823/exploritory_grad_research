@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 8
+VULNERABILITY_DESCRIPTION:
+Use of a spin lock in combination with potential concurrent access to shared data (`pipe->urb_cnt` and `pipe->urb_list_head`).
+
+EXPLANATION:
+The spin lock `&pipe->ar_usb->cs_lock` is used to protect access to the `pipe->urb_list_head` and `pipe->urb_cnt`. However, this might not be sufficient if these shared data structures can be accessed through other methods, which are not shown in this code snippet. If it is, it can result in inconsistent state, leading to potential crashes or data corruption.
+
+In this snippet, the increment operation on `pipe->urb_cnt` is within the critical section protected by the spin lock, which is correct. However, there is another critical section (albeit incomplete) in this snippet, started at line 8. This section starts with acquiring the spin lock but is cut off in the middle. If the rest of this critical section also accesses `pipe->urb_list_head` or `pipe->urb_cnt`, and these variables can be accessed through other means, this might lead to inconsistencies.
+
+RECOMMENDATIONS:
+Review the rest of the code that accesses these shared variables to ensure it also uses this spin lock. Ensure that all read and write operations that access `pipe->urb_cnt` and `pipe->urb_list_head` are within a critical section protected by the spin lock `&pipe->ar_usb->cs_lock`. Verify if other locks or synchronization primitives are used in other parts of the code that can access these shared variables.
+
+ORIGINAL CODE:
+```c
+struct ath6kl_urb_context *urb_context = NULL;
+unsigned long flags;
+
+spin_lock_irqsave(&pipe->ar_usb->cs_lock, flags);
+if (!list_empty(&pipe->urb_list_head)) {
+    urb_context =
+        list_first_entry(&pipe->urb_list_head,
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&pipe->ar_usb->cs_lock, flags);
+    pipe->urb_cnt++;
+
+    list_add(&urb_context->link, &pipe->urb_list_head);
+```

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+The code uses bitwise AND operator (&) to check if multiple flags are set within a single variable. This can lead to a vulnerability if the order of the flags matters.
+
+EXPLANATION:
+In the given code snippet, the code checks if both GPIOEVENT_REQUEST_RISING_EDGE and GPIOEVENT_REQUEST_FALLING_EDGE are set within le->eflags. However, without knowing the exact bit pattern for these flags, we can't assume that setting one will affect the other, but we can infer that since falling edge and rising edge are separate flags, using a simple bitwise AND operator can potentially mask false positives due to differing operator precedence.
+
+RECOMMENDATIONS:
+Use separate if conditions for both checks to ensure that the code is not mistakenly considering both flags to be set due to operator precedence. For example:
+```c
+if ((le->eflags & GPIOEVENT_REQUEST_RISING_EDGE) &&
+    (le->eflags & GPIOEVENT_REQUEST_FALLING_EDGE)) {
+```
+Alternatively, define separate variables for each flag to ensure there is no confusion about which flag is being set.
+
+ORIGINAL CODE:
+```c
+/* Do not leak kernel stack to userspace */
+memset(&ge, 0, sizeof(ge));
+
+/*
+ * We may be running from a nested threaded interrupt in which case
+ * we didn't get the timestamp from lineevent_irq_handler().
+ */
+if (!le->timestamp)
+        ge.timestamp = ktime_get_real_ns();
+else
+        ge.timestamp = le->timestamp;
+
+if (le->eflags & GPIOEVENT_REQUEST_RISING_EDGE
+    && le->eflags & GPIOEVENT_REQUEST_FALLING_EDGE) {
+        int level = gpiod_get_value_cansleep(le->desc);
+```

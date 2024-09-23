@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 4
+VULNERABILITY_DESCRIPTION: 
+Insecure Certificate Verification Vulnerability.
+
+EXPLANATION:
+The code snippet evaluates the result of a certificate verification process using the OpenSSL library. However, it only checks for two specific error codes (X509_V_OK and X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) and deems the certificate valid if either of these conditions are met. 
+
+X509_V_OK indicates that the certificate chain was successfully verified, and X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN indicates that a self-signed certificate is present in the chain. However, the code snippet does not check for other possible error codes that may indicate security issues with the certificate. 
+
+This can lead to insecure certificate verification, where a certificate with untrusted or revoked status is considered valid, allowing a potential man-in-the-middle attack.
+
+RECOMMENDATIONS:
+To address this vulnerability, you should check all possible error codes returned by the SSL_get_verify_result function. The following list includes a non-exhaustive collection of potential error codes to check:
+
+- X509_V_OK: The certificate was successfully verified.
+- X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE: Couldn't verify leaf signature.
+- X509_V_ERR_CERT_CHAIN_TOO_LONG: Certificate chain too long error.
+- X509_V_ERR_CERT_REVOKED: Certificate revoked error.
+- X509_V_ERR_INVALID_PURPOSE: Certificate invalid for specified use error.
+- X509_V_ERR_INVALID_CA: Certificate invalid for specified use error.
+
+The following code snippet provides a basic example of how to check for these error codes:
+
+```c
+X509* cert;
+int foo;
+
+// Get the peer certificate
+if ((cert = SSL_get_peer_certificate(ssl)) && host) {
+    // Get the verify result
+    foo = SSL_get_verify_result(ssl);
+
+    if (X509_V_OK == foo) {
+        // Certificate looks good, host can be trusted
+    } else if (X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN == foo) {
+        // Certificate is self-signed
+    } else {
+        // Handle other error codes
+        switch (foo) {
+            case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
+                break;
+            case X509_V_ERR_CERT_CHAIN_TOO_LONG:
+                break;
+            case X509_V_ERR_CERT_REVOKED:
+                break;
+            case X509_V_ERR_INVALID_PURPOSE:
+                break;
+            case X509_V_ERR_INVALID_CA:
+                break;
+            // Handle other error codes...
+            default:
+                break;
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+if ((cert = SSL_get_peer_certificate(ssl)) && host)foo=SSL_get_verify_result(ssl);
+if ((X509_V_OK==foo) || X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN==foo))
+        
+// certificate looks good, host can be trusted
+          
+         
+                  
+             
+                
+Note: This evaluation is based solely on the provided code snippet. A thorough review of the entire codebase would be required to identify additional vulnerabilities.

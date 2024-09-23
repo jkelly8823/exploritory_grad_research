@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-18
+VULNERABILITY_DESCRIPTION:
+ Unvalidated Use of Dynamically Allocated Memory.
+
+EXPLANATION:
+In the code snippet, memory is dynamically allocated using `kzalloc` on line 15, but there is no validation of the subsequent usage of this memory. If the memory allocation fails and `match` is assigned a null pointer, the code does not check for this before trying to access the memory on lines 17 and 18 (`match->list` and `match->band`). However, there is a check for memory allocation failure immediately after the call to `kzalloc` that returns an error code if `match` is null. Nevertheless, if `kzalloc` succeeds and the code tries to access `match` later, and `match` is overwritten with null elsewhere in the code, this could result in a null pointer dereference which could cause a segmentation fault. However, in this specific code snippet there is no such overwrite and memory is checked after allocation so the actual vulnerability here is that memory is allocated and used without validation of its contents before being used extensively.
+
+However, another potential vulnerability could be found in lines 3--8 and 11-14 in this snippet related to integer overflow since the content of variable "cmask" and "val" are not validated before applying bitwise operations on them. Also note that 'cmask' and 'val' are used but their declarations are not provided here, and hence, the exact implication of the bitwise operation is unclear.
+
+RECOMMENDATIONS:
+- The snippet implies that the memory is directly validated after it is allocated, further checks would prevent a null pointer dereference elsewhere in the program. 
+- Add error checking code to prevent a segmentation fault if `match` has been overwritten with a null pointer elsewhere in the program.
+- Validate the variable `cmask` and `val` to restrict the occurrence of integer overflow or wraparound. This can be achieved by adding sanity checks for the content of `cmask` and `val` before performing the bitwise operation with it.
+
+ORIGINAL CODE:
+    u8 mask, val;
+    int err;
+
+    if (!nfp_abm_u32_check_knode(alink->abm, knode, proto, extack))
+        goto err_delete;
+
+    tos_off = proto == htons(ETH_P_IP) ? 16 : 20;
+
+        /* Extract the DSCP Class Selector bits */
+        if ((iter->val & cmask) == (val & cmask) &&
+            iter->band != knode->res->classid) {
+            NL_SET_ERR_MSG_MOD(extack, "conflict with already offloaded filter");
+            goto err_delete;
+        }
+    }
+
+    if (!match) {
+        match = kzalloc(sizeof(*match), GFP_KERNEL);
+        if (!match)
+            return -ENOMEM;
+        list_add(&match->list, &alink->dscp_map);
+    }
+    match->handle = knode->handle;
+    match->band = knode->res->classid;
+
+    err_delete:
+    nfp_abm_u32_knode_delete(alink, knode);
+    return -EOPNOTSUPP;
+    }
+
+    static int nfp_abm_setup_tc_block_cb(enum tc_setup_type type,
+                     void *type_data, void *cb_priv)

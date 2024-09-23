@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-20, 25-27
+VULNERABILITY_DESCRIPTION: Potential Integer Overflow Vulnerability in ASCE Limit Calculation and Untrusted Input in mm->context.asce_limit
+EXPLANATION: 
+In the provided code snippet, a potential integer overflow vulnerability is present in the calculation of the ASCE limit. The ASCE limit is calculated as `STACK_TOP_MAX` and `mm->context.asce_bits`, which are assigned to variables without proper validation. This might cause integer overflows if the limit exceeds the maximum value of `mm->context.asce_bits`.
+
+Additionally, there's an even bigger issue: `mm->context.asce_limit` seems to be set by userspace (it's compared to certain values) but is not validated for valid input before being used to set `mm->context.asce_bits`. It's crucial to validate inputs from userspace before using them to prevent potential exploitation by malicious users.
+
+RECOMMENDATIONS:
+1. Validate and sanitize user-controlled input values (e.g., `mm->context.asce_limit`) before using them to set other values (e.g., `mm->context.asce_bits`).
+2. Validate that `STACK_TOP_MAX` does not exceed the maximum value for `mm->context.asce_bits` to avoid potential integer overflows.
+3. Review potential restrictions for `mm->context.asce_limit` to ensure it cannot cause an overflow when used in conjunction with `STACK_TOP_MAX`.
+4. Consider explicitly defining bit lengths for fields in `mm->context.asce_bits` (e.g., `_ASCE_TABLE_LENGTH`, `_ASCE_USER_BITS`, `_ASCE_TYPE_REGION3`).
+
+ORIGINAL CODE:
+```c
+static inline int init_new_context(struct task_struct *tsk,
+				   struct mm_struct *mm)
+{
+	spin_lock_init(&mm->context.list_lock);
+	INIT_LIST_HEAD(&mm->context.pgtable_list);
+	INIT_LIST_HEAD(&mm->context.gmap_list);
+	cpumask_clear(&mm->context.cpu_attach_mask);
+	atomic_set(&mm->context.attach_count, 0);
+	mm->context.flush_mm = 0;
+#ifdef CONFIG_PGSTE
+	mm->context.alloc_pgste = page_table_allocate_pgste;
+	mm->context.has_pgste = 0;
+	mm->context.use_skey = 0;
+#endif
+	if (mm->context.asce_limit == 0) {
+		/* context created by exec, set asce limit to 4TB */
+		mm->context.asce_bits = _ASCE_TABLE_LENGTH |
+			_ASCE_USER_BITS | _ASCE_TYPE_REGION3;
+		mm->context.asce_limit = STACK_TOP_MAX;
+	} else if (mm->context.asce_limit == (1UL << 31)) {
+		mm_inc_nr_pmds(mm);
+	}
+	crst_table_init((unsigned long *) mm->pgd, pgd_entry_type(mm));
+	return 0;
+}
+
+static inline void arch_dup_mmap(struct mm_struct *oldmm,
+				 struct mm_struct *mm)
+{
+}
+
+static inline void arch_exit_mmap(struct mm_struct *mm)
+{
+```

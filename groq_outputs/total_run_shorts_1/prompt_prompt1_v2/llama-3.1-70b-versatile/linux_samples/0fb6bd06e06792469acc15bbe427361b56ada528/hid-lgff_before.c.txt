@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21-24
+VULNERABILITY_DESCRIPTION:
+ Unchecked Use of User-Controlled Values for Array Index.
+
+EXPLANATION:
+The code uses user-controlled values (`dev->id.vendor` and `dev->id.product`) to index into an array (`devices`). If the user-provided values exceed the bounds of the array or are not initialized, it may lead to an out-of-bounds memory access or incorrect results.
+
+However, in this case, there is an assumption that `devices` is a statically defined array and the values are within bounds because of prior checks. The array index seems to be correctly bounded as it goes from 0 to `ARRAY_SIZE(devices) - 1`. But still, there is no check for the `ARRAY_SIZE(devices)` being 0 or less, that would lead to an underflow.
+
+If we make an assumption that the variable `devices` is properly initialized and its size is non-zero, and the idVendor or idProduct, are properly sanitized in higher level code, this vulnerability would be mitigated.
+
+
+RECOMMENDATIONS:
+- Always validate and sanitize user-controlled input before using it as an array index.
+- Check that `devices` array is not empty and properly initialized.
+- Ideally, it should be checked to ensure that `ARRAY_SIZE(devices)` does not result in an underflow.
+
+
+ORIGINAL CODE:
+```c
+int lgff_init(struct hid_device* hid)
+{
+	struct hid_input *hidinput = list_entry(hid->inputs.next, struct hid_input, list);
+	struct list_head *report_list = &hid->report_enum[HID_OUTPUT_REPORT].report_list;
+	struct input_dev *dev = hidinput->input;
+	struct hid_report *report;
+	struct hid_field *field;
+	const signed short *ff_bits = ff_joystick;
+	int error;
+	int i;
+
+	/* Find the report to use */
+	if (list_empty(report_list)) {
+		hid_err(hid, "No output report found\n");
+		return -1;
+	}
+
+	/* Check that the report looks ok */
+	report = list_entry(report_list->next, struct hid_report, list);
+	field = report->field[0];
+	if (!field) {
+		hid_err(hid, "NULL field\n");
+		return -1;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(devices); i++) {
+		if (dev->id.vendor == devices[i].idVendor &&
+		    dev->id.product == devices[i].idProduct) {
+```

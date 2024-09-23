@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+EXPLANATION:
+The vulnerability is present in the line where `MultiByteToWideChar` function is used to convert a multi-byte character string to a wide character string. The function's fifth argument `unicodeUser` is not checked for the length of the input, and its size is not validated. The function's fourth argument is set to `-1`, indicating that it will convert the entire input buffer to a wide character string, regardless of its length. This can lead to an out-of-bounds write in the `unicodeUser` buffer, which can result in a buffer overflow vulnerability. Furthermore, `UNLEN+1` buffer size is fixed for `unicodeUser`, so this creates an opportunity for a large input buffer to overwrite the stack.
+ 
+Additionally, the code does not include error checking for the `MultiByteToWideChar` and `NetUserGetInfo` functions. This can hide issues with input buffers and further facilitate exploitation.
+
+Lastly, there are security implications related to NULL pointer checking with calls to both Windows API functions.
+
+
+RECOMMENDATIONS:
+To fix this vulnerability, include input validation and error checking:
+
+1. Check the length of the `username` input buffer to ensure it does not exceed the `UNLEN` limit before calling `MultiByteToWideChar`.
+2. Use a secure method to convert between character encodings, such as using `MultiByteToWideChar` with the `MB_ERR_INVALID_CHARS` flag to prevent conversion of invalid characters.
+3. Add error checking for the return values of both `MultiByteToWideChar` and `NetUserGetInfo` to detect any failures.
+
+Here's an example of how the code can be improved:
+
+```c
+void getUserInfo(char *username, struct _USER_INFO_2 info) {
+    WCHAR unicodeUser[UNLEN+1];
+    DWORD result = MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS, username, -1, unicodeUser, sizeof(unicodeUser));
+    if (result == 0) {
+        // Handle error
+        return;
+    }
+    if (result > sizeof(unicodeUser) / sizeof(WCHAR)) {
+        // Input too long, truncate it or handle the error
+        unicodeUser[sizeof(unicodeUser) / sizeof(WCHAR) - 1] = 0;
+    }
+    NET_API_STATUS status = NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);
+    if (status != NERR_Success) {
+        // Handle error
+    }
+}
+
+```
+
+ORIGINAL CODE:
+void getUserInfo(char *username, struct _USER_INFO_2 info){WCHAR unicodeUser[UNLEN+1];MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, sizeof(unicodeUser));NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);}

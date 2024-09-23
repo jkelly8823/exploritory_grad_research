@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 12-15
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to integer overflow and potential buffer overflow attacks.
+ 
+EXPLANATION:
+The variable `start` is being incremented by `PMD_SIZE` and `PUD_SIZE` in each iteration of the loop, without proper boundary checks. The same is true for `cpa->pfn` and `cur_pages`. In a scenario where the initial value of `start` or `cpa->pfn` is large, the addition operation could result in an integer overflow. Additionally, if the size of the loop is uncontrolled (i.e., `end - start` is large), this could lead to a buffer overflow. 
+
+It's also concerning that a pointer (`cpa`) is being accessed without checks. If `cpa` is NULL or not properly initialized, this could result in undefined behavior. Furthermore, we should also be ensuring that `cpa->pfn` and `pud` are also null-checked before manipulation.
+
+Lastly, it does not appear as though the code checks if `pmd` is equal to `pmd_bad`. It would be more secure to check for this prior to manipulation of the pointer.
+
+RECOMMENDATIONS:
+1. Check for potential integer overflow before performing addition operations on `start`, `cpa->pfn`, and `cur_pages`.
+2. Ensure that the loop is properly bounded to prevent buffer overflow attacks.
+3. Null-check `cpa` before accessing its contents.
+4. Null-check `cpa->pfn` and `pud` before manipulation of its contents to prevent potential NULL pointer dereferences.
+5. Perform a check to ensure `pmd` does not equal `pmd_bad` before performing operations on the pointer.
+
+ORIGINAL CODE:
+```
+pmd = pmd_offset(pud, start);
+set_pmd(pmd, __pmd(cpa->pfn << PAGE_SHIFT | _PAGE_PSE |
+                  massage_pgprot(pmd_pgprot)));
+start        += PMD_SIZE;
+cpa->pfn      += PMD_SIZE >> PAGE_SHIFT;
+cur_pages += PMD_SIZE >> PAGE_SHIFT;
+/*
+* Map everything starting from the Gb boundary, possibly with 1G pages
+*/
+while (boot_cpu_has(X86_FEATURE_GBPAGES) && end - start >= PUD_SIZE) {
+    set_pud(pud, __pud(cpa->pfn << PAGE_SHIFT | _PAGE_PSE |
+                    massage_pgprot(pud_pgprot)));
+    start        += PUD_SIZE;
+    cpa->pfn      += PUD_SIZE >> PAGE_SHIFT;
+    cur_pages += PUD_SIZE >> PAGE_SHIFT;
+```

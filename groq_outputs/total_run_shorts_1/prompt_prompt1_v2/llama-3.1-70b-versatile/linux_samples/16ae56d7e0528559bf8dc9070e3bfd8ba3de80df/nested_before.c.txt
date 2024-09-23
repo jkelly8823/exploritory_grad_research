@@ -1,0 +1,20 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+ Use After Free Vulnerability
+EXPLANATION:
+A potential use after free vulnerability is identified in the given code snippet. The `svm_vcpu_free_msrpm(svm->nested.msrpm)` function call may deallocate the memory that is being used for the `msrpm` struct, and the following two lines of code (`svm->nested.msrpm = NULL;` and `__free_page(virt_to_page(svm->nested.vmcb02.ptr));`) can be considered an attempt to prevent this type of vulnerability. However, the concern arises when considering what `svm_vcpu_free_msrpm(svm->nested.msrpm)` function does exactly. If the function not only frees the `msrpm` but also resets its own pointer, and then another thread calls this same function again and it's given the then freed `nested.msrpm` that was previously freed (on a different thread) then you get a use after free.
+
+Additionally,  we have this next line, which nulls out `svm->nested.msrpm` BUT there's 3rd line of code: `__free_page(virt_to_page(svm->nested.vmcb02.ptr));`. Consider what happens if `svm_vcpu_free_msrpm(svm->nested.msrpm)` or any similar function calls before `svm_vcpu_free_msrpm(svm->nested.msrpm)` free the memory and `svm_vcpu_free_msrpm(svm->nested.msrpm)` just called its msrmp null function and don't take care of this pointer freeing: there would be use-after-free vulnerability.  That is when vulnerable functions from other code before or in race free first the `svm->nested.vmcb02.ptr`.
+RECOMMENDATIONS:
+To prevent this vulnerability, we must ensure that no other thread can access the `msrpm` and `svm->nested.vmcb02.ptr` after it has been freed. One way to achieve this could be to introduce a lock around these frees. This could be using `spinlock`, `mutex`, or `rw_semaphore`. Another potential recommendation is to double check that  freed structures are indeed unused by any other thread that called function. In any case the main recommendation is to guard the memory against this race condition where these structures get prematurely freed.
+ORIGINAL CODE:
+```c
+	if (!svm->nested.initialized)
+		return;
+
+	svm_vcpu_free_msrpm(svm->nested.msrpm);
+	svm->nested.msrpm = NULL;
+
+	__free_page(virt_to_page(svm->nested.vmcb02.ptr));
+```

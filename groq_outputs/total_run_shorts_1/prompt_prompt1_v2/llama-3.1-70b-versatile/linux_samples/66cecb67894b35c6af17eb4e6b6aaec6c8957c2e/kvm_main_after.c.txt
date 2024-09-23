@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability
+EXPLANATION:
+The code checks if `zalloc_cpumask_var` is successful, and if not, it assigns `-ENOMEM` to `r`. Then it jumps to `out_free_0`, where `free_cpumask_var` is called. However, if `zalloc_cpumask_var` is successful, the same `free_cpumask_var` function is not guaranteed to be called in all paths. If an error occurs after `zalloc_cpumask_var` is successful, but before `free_cpumask_var` is called, `free_cpumask_var` will not be executed due to the jump to `out_fail` or other potential exit paths. This means the memory allocated by `zalloc_cpumask_var` might not be freed, resulting in a memory leak. Additionally, if another function uses `cpus_hardware_enabled` after this code and the memory has been freed, it could result in a use-after-free vulnerability.
+RECOMMENDATIONS:
+Move the call to `free_cpumask_var` to a more central location that is guaranteed to be executed in all error paths. Alternatively, consider using a RAII (Resource Acquisition Is Initialization) approach, where the resource (in this case, the cpumask) is automatically freed when it goes out of scope.
+
+ORIGINAL CODE:
+
+```c
+* kvm_arch_init makes sure there's at most one caller
+* for architectures that support multiple implementations,
+* like intel and amd on x86.
+* kvm_arch_init must be called before kvm_irqfd_init to avoid creating
+* conflicts in case kvm is already setup for another implementation.
+*/
+r = kvm_irqfd_init();
+if (r)
+	goto out_irqfd;
+
+if (!zalloc_cpumask_var(&cpus_hardware_enabled, GFP_KERNEL)) {
+	r = -ENOMEM;
+	goto out_free_0;
+free_cpumask_var(cpus_hardware_enabled);
+out_free_0:
+	kvm_irqfd_exit();
+out_irqfd:
+	kvm_arch_exit();
+out_fail:
+	return r;
+}
+```

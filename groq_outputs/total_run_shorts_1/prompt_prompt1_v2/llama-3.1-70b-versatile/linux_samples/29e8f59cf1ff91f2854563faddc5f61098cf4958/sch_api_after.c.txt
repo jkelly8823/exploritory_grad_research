@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None (However, please review lines that use nlmsg_parse)
+VULNERABILITY_DESCRIPTION:
+Insufficient Error Handling in nlmsg_parse
+
+EXPLANATION:
+The vulnerability is present due to insufficient error handling for nlmsg_parse. While the code does check if the return value of nlmsg_parse is less than 0 and returns an error code, it does not handle all possible error values that nlmsg_parse might return, such as when the parsing fails but does not return a negative value, for example when the received message is malformed, resulting in an unhandled condition. Specifically, nlmsg_parse returns the length of the data parsed or -1 in case of failure. However, in case of some other errors like the parsed skb data exceeding its limit, the function will not return -1 but rather return the total bytes that would have been necessary to completely parse the message.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the return value of nlmsg_parse should be checked to ensure that it matches the expected length of the data to be parsed. Here's an example of how this can be done:
+
+    int expected_len = sizeof(*tcm);
+    int parsed_len = nlmsg_parse(n, expected_len, tca, TCA_MAX, NULL);
+    if (parsed_len < 0 || (size_t)parsed_len >= expected_len) {
+        // error handling
+    }
+
+Additionally, it is a good practice to check if the pointer `tca` is not NULL before passing it to the nlmsg_parse function to avoid potential null pointer dereference.
+
+ORIGINAL CODE:
+(struct was repeated and renamed variables exist)
+struct Qdisc *p = NULL;
+int err;
+
+if ((n->nlmsg_type != RTM_GETQDISC) && !netlink_capable(skb, CAP_NET_ADMIN))
+        return -EPERM;
+
+err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
+if (err < 0)
+        struct Qdisc *q, *p;
+        int err;
+
+if (!netlink_capable(skb, CAP_NET_ADMIN))
+        return -EPERM;
+
+replay:
+        /* Reinit, just in case something touches this. */
+        u32 qid;
+        int err;
+
+if ((n->nlmsg_type != RTM_GETTCLASS) && !netlink_capable(skb, CAP_NET_ADMIN))
+        return -EPERM;
+
+err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
+if (err < 0)

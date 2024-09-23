@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION: 
+The `pfn_modify_allowed` function always returns `true`, and the `arch_has_pfn_modify_check` function always returns `false`. This could lead to unauthorized modifications to page frames, resulting in a potential memory corruption vulnerability.
+
+EXPLANATION:
+The `pfn_modify_allowed` function is supposed to check if a page frame (`pfn`) can be modified. However, this function always returns `true`, indicating that any page frame can be modified, regardless of its actual permissions. This could allow malicious code to modify page frames that should be read-only or not mapped at all.
+
+Additionally, the `arch_has_pfn_modify_check` function always returns `false`, indicating that there is no check for page frame modifications. This could be misinterpreted as a sign that the system does not support page frame modifications, when in fact the implementation allows any modification.
+
+RECOMMENDATIONS:
+The `pfn_modify_allowed` function should be modified to properly check the permissions of the page frame before allowing modification. This could involve checking the `prot` argument for access rights such as `VM_READ` or `VM_WRITE`. 
+
+The `arch_has_pfn_modify_check` function should return `true` if page frame modification checks are supported. This could involve checking the system architecture or implementation details.
+
+ORIGINAL CODE:
+```c
+static inline void init_espfix_bsp(void) { }
+#endif
+
+#ifndef __HAVE_ARCH_PFN_MODIFY_ALLOWED
+static inline bool pfn_modify_allowed(unsigned long pfn, pgprot_t prot)
+{
+	return true;
+}
+
+static inline bool arch_has_pfn_modify_check(void)
+{
+	return false;
+}
+#endif /* !_HAVE_ARCH_PFN_MODIFY_ALLOWED */
+
+#endif /* !__ASSEMBLY__ */
+
+#ifndef io_remap_pfn_range
+#define io_remap_pfn_range remap_pfn_range
+```

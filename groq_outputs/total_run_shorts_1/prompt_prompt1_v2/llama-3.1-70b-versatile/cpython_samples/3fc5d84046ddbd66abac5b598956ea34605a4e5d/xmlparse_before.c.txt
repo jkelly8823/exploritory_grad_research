@@ -1,0 +1,91 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 377-389, 410-413, 667-670, 1123-1131, 1348-1352
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to buffer overflow attacks. The code has multiple uses of `memcpy` with dynamically allocated buffers and lengths based on user input, without bounds checking.
+
+EXPLANATION:
+The code uses `memcpy` to copy user-controlled input data to dynamically allocated buffers without bounds checking, leading to potential buffer overflow attacks. If an attacker can manipulate the input to cause the buffer to overflow, they can potentially execute arbitrary code.
+
+For example, the `appendAttributeValue` function uses `memcpy` to copy the `ptr` and `next` pointers to a buffer, without bounds checking. If an attacker can manipulate the `ptr` and `next` values to be larger than the buffer size, a buffer overflow will occur.
+
+Similarly, the `storeAttributeValue` function uses `poolAppendChar` to append a character to a buffer without bounds checking. If an attacker can manipulate the input to cause the buffer to overflow, a buffer overflow will occur.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, you should:
+
+1. Use bounds checking when performing `memcpy` operations to prevent buffer overflows.
+2. Use safer functions like `strncpy` or `snprintf` instead of `memcpy` when copying user-controlled input data to buffers.
+3. Implement robust error handling and exception handling to prevent unexpected program crashes and data corruption.
+4. Implement secure coding practices, such as input validation and sanitization, to prevent user-controlled input data from reaching sensitive areas of the code.
+
+Here is an example of how to modify the `appendAttributeValue` function to use bounds checking:
+
+```c
+static enum XML_Error
+appendAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+                     const char *ptr, const char *end, STRING_POOL *pool) {
+  if ((ptr > end) || (end - ptr) > pool->capacity)) {
+    return XML_ERROR_NO_MEMORY;
+  }
+
+  DTD *const dtd = parser->m_dtd;
+  for (;;) {
+    const char *next;
+    int tok = XmlAttributeValueTok(enc, ptr, end, &next);
+    switch (tok) {
+    case XML_TOK_NONE:
+      return XML_ERROR_NONE;
+    case XML_TOK_INVALID:
+      // ...
+  }
+}
+```
+
+Similarly, you should modify the `storeAttributeValue` function to use bounds checking:
+
+```c
+static enum XML_Error
+storeAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+                    const char *ptr, const char *end, STRING_POOL *pool) {
+  if ((ptr > end) || (end - ptr) > pool->capacity)) {
+    return XML_ERROR_NO_MEMORY;
+  }
+
+  enum XML_Error result
+      = appendAttributeValue(parser, enc, isCdata, ptr, end, pool);
+  if (result)
+    return result;
+  if (! isCdata && poolLength(pool) && poolLastChar(pool) == 0x20)
+    poolChop(pool);
+}
+```
+
+You should also consider using safer functions like `strncpy` or `snprintf` instead of `memcpy` when copying user-controlled input data to buffers:
+
+```c
+static enum XML_Error
+appendAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+                     const char *ptr, const char *end, STRING_POOL *pool) {
+  DTD *const dtd = parser->m_dtd;
+
+  for (;;) {
+    const char *next;
+    int tok = XmlAttributeValueTok(enc, ptr, end, &next);
+    switch (tok) {
+    case XML_TOK_NONE:
+      return XML_ERROR_NONE;
+    case XML_TOK_INVALID:
+      XML_Char ch = (XML_Char)XmlPredefinedEntityName(
+          enc, ptr + enc->minBytesPerChar, next - enc->minBytesPerChar);
+      if (ch) {
+        char str[2];
+        sprintf(str, "%c", ch);
+        strncpy((char *)poolAppend(pool, str), str, 2);
+        break;
+      }
+      // ...
+  }
+}
+```
+
+Note that these modifications are just examples and may not completely fix all vulnerabilities in the code.

@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-16, 20
+VULNERABILITY_DESCRIPTION:
+Potential Information Disclosure due to Insecure Handling of MSR Registers.
+
+EXPLANATION:
+The given code snippet contains functions responsible for handling MSR registers and virtual CPU operations. However, the handling of MSR registers appears to be incomplete, as there are specific cases where the code simply prints a warning message and continues executing without properly handling the MSR register write. Specifically, the lines 11-16 and 20 contain code that handles MSR register writes, but it seems that these writes are not validated or sanitized properly, which can lead to potential information disclosure or even code execution vulnerabilities.
+
+The code checks if a particular MSR register is valid and then handles it, but it does not validate the data being written to the MSR register. This could potentially allow an attacker to write arbitrary data to MSR registers, which could have security implications.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation and sanitization of MSR register writes should be implemented. This could include:
+
+1.  Validating the MSR register being written to ensure it is a permissible value.
+2.  Validating the data being written to the MSR register to ensure it is within acceptable bounds.
+3.  Returning an error code if any invalid MSR register writes are encountered.
+4.  Considering the use of data typing or other validation mechanisms to ensure MSR register writes are correctly handled.
+
+ORIGINAL CODE:
+
+
+```c
+u64 kvm_read_l1_tsc(struct kvm_vcpu *vcpu, u64 host_tsc)
+{
+	return kvm_x86_ops->read_l1_tsc(vcpu, kvm_scale_tsc(vcpu, host_tsc));
+}
+EXPORT_SYMBOL_GPL(kvm_read_l1_tsc);
+
+static void kvm_vcpu_write_tsc_offset(struct kvm_vcpu *vcpu, u64 offset)
+static inline void adjust_tsc_offset_guest(struct kvm_vcpu *vcpu,
+					   s64 adjustment)
+{
+	kvm_x86_ops->adjust_tsc_offset_guest(vcpu, adjustment);
+}
+
+static inline void adjust_tsc_offset_host(struct kvm_vcpu *vcpu, s64 adjustment)
+{
+	if (vcpu->arch.tsc_scaling_ratio != kvm_default_tsc_scaling_ratio)
+		WARN_ON(adjustment < 0);
+	adjustment = kvm_scale_tsc(vcpu, (u64) adjustment);
+	kvm_x86_ops->adjust_tsc_offset_guest(vcpu, adjustment);
+}
+
+#ifdef CONFIG_X86_64
+
+		/* Drop writes to this legacy MSR -- see rdmsr
+		 * counterpart for further detail.
+		 */
+		vcpu_unimpl(vcpu, "ignored wrmsr: 0x%x data %llx\n", msr, data);
+		break;
+	case MSR_AMD64_OSVW_ID_LENGTH:
+		if (!guest_cpuid_has_osvw(vcpu))
+			return 1;
+		if (kvm_pmu_is_valid_msr(vcpu, msr))
+			return kvm_pmu_set_msr(vcpu, msr_info);
+		if (!ignore_msrs) {
+			vcpu_unimpl(vcpu, "unhandled wrmsr: 0x%x data %llx\n",
+				    msr, data);
+			return 1;
+		} else {
+			vcpu_unimpl(vcpu, "ignored wrmsr: 0x%x data %llx\n",
+				    msr, data);
+			break;
+		}
+	}
+
+void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
+{
+	kvmclock_reset(vcpu);
+
+	free_cpumask_var(vcpu->arch.wbinvd_dirty_mask);
+	kvm_x86_ops->vcpu_free(vcpu);
+}
+
+struct kvm_vcpu *kvm_arch_vcpu_create(struct kvm *kvm,
+						unsigned int id)
+```

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+ Potential Use of Unmapped IRQs and Lack of Error Handling.
+EXPLANATION:
+The given code involves finding an IRQ mapping for a given GPIO and then handling the IRQ. However, the `irq_find_mapping` function can return an error value (which is typically `-EINVAL`) if no mapping is found for the given GPIO. The code snippet does not check for such errors. 
+Additionally, the code assumes that `irq_find_mapping` and `handle_nested_irq` functions will always succeed without any error. However, in real-world scenarios, these functions can fail due to various reasons like resource unavailability or invalid inputs.
+
+RECOMMENDATIONS:
+Add error handling code to check for invalid returns from `irq_find_mapping` and also to ensure that `handle_nested_irq` is called only when a valid mapping is found. A recommended approach would be to check the return value of `irq_find_mapping` and return `IRQ_NONE` or a suitable error value if the mapping is not found. Here's an example:
+
+```c
+for (gpio = 0; gpio < CRYSTALCOVE_GPIO_NUM; gpio++) {
+    if (pending & BIT(gpio)) {
+        virq = irq_find_mapping(cg->chip.irqdomain, gpio);
+        if (virq) {
+            handle_nested_irq(virq);
+        } else {
+            // Handle the error case here
+            // e.g., return IRQ_NONE or log an error message
+            return IRQ_NONE;
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+for (gpio = 0; gpio < CRYSTALCOVE_GPIO_NUM; gpio++) {
+    if (pending & BIT(gpio)) {
+        virq = irq_find_mapping(cg->chip.irqdomain, gpio);
+        handle_nested_irq(virq);
+    }
+}
+
+return IRQ_HANDLED;
+```

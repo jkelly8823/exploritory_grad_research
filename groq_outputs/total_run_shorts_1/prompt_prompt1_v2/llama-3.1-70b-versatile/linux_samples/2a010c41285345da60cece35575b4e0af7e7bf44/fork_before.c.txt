@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-17, 24-25, 35-37
+VULNERABILITY_DESCRIPTION:
+Time-of-Check to Time-of-Use (TOCTOU) vulnerability and Potential Use-After-Free (UAF) vulnerability
+
+EXPLANATION:
+In the given code snippet, there are two potential vulnerabilities present.
+
+1. Time-of-Check to Time-of-Use (TOCTOU) vulnerability:
+   In the code snippet, there is a check for write access denial at the beginning of the function and then later the file is assigned to the `mm->exe_file` pointer. However, there is a possibility that the write access might be granted to the file between the denial check and the file pointer assignment. This might allow a malicious user to execute the file even after the deny_write_access check has passed.
+
+   Furthermore, at lines 16-17, we see `deny_write_access(new_exe_file)` called potentially on an object without checking the return value later, potentially leading to TOCTOU in later code.
+
+2. Potential Use-After-Free (UAF) vulnerability:
+   If the `fput(old_exe_file);` statement is executed before the check for `old_exe_file`, this can lead to a potential UAF if another thread accesses `old_exe_file` before the `fput` statement is executed but after the pointer has been reassigned to the new file.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities:
+
+1. Perform the deny_write_access check immediately before the file usage.
+2. The use of the old_exe_file pointer should be synchronized to ensure that the fput statement is executed before another thread accesses the old_exe_file pointer.
+3. Consider using a lock to prevent other threads from accessing the old_exe_file pointer while the current thread is executing the fput statement.
+
+ORIGINAL CODE:
+
+
+	exe_file = get_mm_exe_file(oldmm);
+	RCU_INIT_POINTER(mm->exe_file, exe_file);
+	/*
+	 * We depend on the oldmm having properly denied write access to the
+	 * exe_file already.
+	 */
+	if (exe_file && deny_write_access(exe_file))
+		pr_warn_once("deny_write_access() failed in %s\n", __func__);
+}
+
+#ifdef CONFIG_MMU
+static __latent_entropy int dup_mmap(struct mm_struct *mm,
+	 */
+	old_exe_file = rcu_dereference_raw(mm->exe_file);
+
+	if (new_exe_file) {
+		/*
+		 * We expect the caller (i.e., sys_execve) to already denied
+		 * write access, so this is unlikely to fail.
+		 */
+		if (unlikely(deny_write_access(new_exe_file)))
+			return -EACCES;
+		get_file(new_exe_file);
+	}
+	rcu_assign_pointer(mm->exe_file, new_exe_file);
+	if (old_exe_file) {
+		allow_write_access(old_exe_file);
+		fput(old_exe_file);
+	}
+	return 0;
+}
+
+/**
+			return ret;
+	}
+
+	ret = deny_write_access(new_exe_file);
+	if (ret)
+		return -EACCES;
+	get_file(new_exe_file);
+
+	/* set the new file */
+	mmap_write_lock(mm);
+	rcu_assign_pointer(mm->exe_file, new_exe_file);
+	mmap_write_unlock(mm);
+
+	if (old_exe_file) {
+		allow_write_access(old_exe_file);
+		fput(old_exe_file);
+	}
+	return 0;
+}
+
+/**

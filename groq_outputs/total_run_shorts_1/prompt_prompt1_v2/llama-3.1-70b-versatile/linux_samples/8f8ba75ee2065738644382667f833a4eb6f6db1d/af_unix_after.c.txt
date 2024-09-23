@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8, 15-18
+VULNERABILITY_DESCRIPTION:
+ Unhandled Unnecessary Object Creation and Shared Resource Usage
+
+EXPLANATION:
+This code appears to handle socket control message (SCM) sending and error checking. However, it creates a new temp scm object `&tmp_scm` and assigns it to `siocb->scm` in two separate places. If the initial check at line 1 is successful and a non-null `siocb->scm` is assigned to `siocb->scm`, a subsequent assignment with another `tmp_scm` could occur in the second block, potentially overwriting the previously assigned value and leading to undefined behavior. Furthermore, both `tmp_scm` objects are used in multiple places, and there is no mechanism to prevent them from being used concurrently.
+
+RECOMMENDATIONS:
+Remove the unnecessary (and potentially vulnerable) assignments to `siocb->scm` when `siocb->scm` is not null. Consider creating a unique object for `tmp_scm` in the second block or use a non-temp SCM object. A more secure practice would be to make sure that each SCM object created is properly released after its use.
+
+ORIGINAL CODE:
+
+	if (NULL == siocb->scm)
+		siocb->scm = &tmp_scm;
+	wait_for_unix_gc();
+	err = scm_send(sock, msg, siocb->scm, false);
+	if (err < 0)
+		return err;
+
+	err = -EOPNOTSUPP;
+	if (NULL == siocb->scm)
+		siocb->scm = &tmp_scm;
+	wait_for_unix_gc();
+	err = scm_send(sock, msg, siocb->scm, false);
+	if (err < 0)
+		return err;
+
+	err = -EOPNOTSUPP;

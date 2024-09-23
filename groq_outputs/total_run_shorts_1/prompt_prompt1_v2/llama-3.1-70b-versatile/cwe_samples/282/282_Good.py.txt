@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7
+VULNERABILITY_DESCRIPTION: 
+A Use of Broken or Risky Crypto function `os.kill()` without proper error handling, and a command injection due to signal value not being validated properly.
+
+EXPLANATION:
+The vulnerability exists in lines 6 and 7 where `os.kill()` is used to send a signal (`signal.SIGKILL`) to terminate the process. However, if the signal value was somehow manipulated, this could lead to unintended behavior or potentially the execution of a malicious signal. Furthermore, this function call does not handle potential errors that may occur. If an exception were thrown from `os.kill()`, the function does not catch it or handle the issue properly.
+
+Additionally, while the function attempts to verify if the user running the process can kill it, there is no validation of the `signal.SIGKILL` value itself which could potentially be swapped out with malicious intent.
+
+RECOMMENDATIONS:
+Handle the Potential Errors and Validate Signal:
+```python
+import signal
+
+def killProcess(processID):
+    user = getCurrentUser()
+        
+    # Check process owner against requesting user
+    if getProcessOwner(processID) == user:
+        try:
+            if signal.SIGKILL in range(1, signal.NSIG): # Or define the set of allowed signal values
+                os.kill(processID, signal.SIGKILL)
+            else:
+                print("Invalid signal provided.")
+        except OSError as error:
+            print("Error when killing process:", error)
+    else:
+        print("You cannot kill a process you don't own")
+```
+
+ORIGINAL CODE:
+```
+def killProcess(processID):
+      user = getCurrentUser()
+           
+      # Check process owner against requesting user
+      if getProcessOwner(processID) == user:
+          os.kill(processID, signal.SIGKILL)
+          return
+      else:
+          print("You cannot kill a process you don't own")
+          return
+```
+
+Note that proper handling of `os.kill` requires adequate logging or notification such that attempts to kill unauthorized processes become trackable, however this requirement does stem from OS hardening best practices, and rather than from current actual code review.

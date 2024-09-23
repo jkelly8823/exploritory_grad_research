@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 10, 11
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free (UAF) and Incorrect Use of Locks due to duplicated and possibly overlapping usage of `lock` with `pte_offset_map_lock()`
+ 
+EXPLANATION:
+The `spinlock_t *ptl` and the use of `pte_offset_map_lock()` with it, indicates that a lock is being obtained. However, there is a possibility that the same lock is being used again before the previous usage has completed (at line 10, in the retry block). Furthermore, at line 11, `pte++` is executed regardless of the `is_target_pte_for_mc()` condition, which could cause a UAF if `is_target_pte_for_mc()` fails, but `pte++` still advances the `pte` iterator.
+
+Additionally, at line 3, `pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);`, a lock is obtained on the `pte`, but there is no unlock operation visible within this snippet. 
+
+Finally, since `spinlock_t *ptl;` appears in the original code and not the rewritten code on lines 9-11 it can lead to confusion about locking safety. Given the possibility of lock duplication, unlocked usage of pte variables without freeing and re-allocating ptl is a safety concern.
+
+RECOMMENDATIONS:
+1. Ensure there is a `pte_offset_map_unlock()` call for every `pte_offset_map_lock()`, ideally after the loop completes. 
+2. Make sure that `spinlock_t *ptl` and the memory it is locking are freed before or after being reinitialized and when no longer necessary.
+3. Reconsider using an existing lock and making sure all functions that access `pte` have proper locking, especially when `pte++` occurs regardless of the result of `is_target_pte_for_mc()`.
+4. Ensure `pte_offset_map_lock()` reuses existing unlocked pte_offset_map_lock operations when checking large chunks of memory with a given start and end in separate code blocks.
+
+ORIGINAL CODE:
+```
+spinlock_t *ptl;
+
+split_huge_page_pmd(walk->mm, pmd);
+
+pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
+for (; addr != end; pte++, addr += PAGE_SIZE)
+	if (is_target_pte_for_mc(vma, addr, *pte, NULL))
+spinlock_t *ptl;
+
+split_huge_page_pmd(walk->mm, pmd);
+retry:
+	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
+	for (; addr != end; addr += PAGE_SIZE) {
+		pte_t ptent = *(pte++);
+```
+Please note that considering the duplicate lock and reusing them again, requires modification of additional code.

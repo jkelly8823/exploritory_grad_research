@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION: 
+The system function is used to execute a command that directly incorporates user-provided input without proper sanitization or validation.
+
+EXPLANATION:
+The `system` function is used to execute a command directly on the operating system level. However, in this case, the `$fname` variable is directly incorporated into the command without proper sanitization or validation. This variable comes from the `GetArgument` function which seems to handle user-provided input (`"filename"`). 
+An attacker could potentially inject malicious commands by providing a specially crafted filename.
+
+The `validate_name` function checks if the filename matches a specific pattern, but this does not guarantee that the command is safe from injection. The validation only checks that the filename contains only word characters, underscores, and dashes, but it does not prevent malicious file names that could lead to security vulnerabilities.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, instead of incorporating the user-provided input into the command, it is recommended to directly call the `/bin/ls` executable and pass the `$fname` as an argument to the executable. This can be achieved by splitting the command and the argument into separate elements and passing them to the `system` function. Here is the corrected code:
+
+```perl
+my $arg = GetArgument("filename");
+do_listing($arg);
+
+sub do_listing {
+    my($fname) = @_;
+    if (! validate_name($fname)) {
+        print "Error: name is not well-formed!\n";
+        return;
+    }
+    # build command
+    my $cmd = "/bin/ls";
+    # Split arguments and pass them separately
+    system($cmd, "-l", $fname);
+}
+
+sub validate_name {
+    my($name) = @_;
+    if ($name =~ /^[\w\-]+$/) {
+        return(1);
+    }
+    else {
+        return(0);
+    }
+}
+```
+
+ORIGINAL CODE:
+```perl
+my $arg = GetArgument("filename");
+do_listing($arg);
+
+sub do_listing {
+    my($fname) = @_;
+    if (! validate_name($fname)) {
+        print "Error: name is not well-formed!\n";
+        return;
+    }
+    # build command
+    my $cmd = "/bin/ls -l $fname";
+    system($cmd);
+}
+
+sub validate_name {
+    my($name) = @_;
+    if ($name =~ /^[\w\-]+$/) {
+        return(1);
+    }
+    else {
+        return(0);
+    }
+}
+```

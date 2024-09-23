@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 17
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to sensitive information disclosure and insecure data storage. The Social Security Number (SSN) of the account owner is stored in plain text, which can be a serious security breach. Additionally, the code does not handle concurrency properly, potentially leading to race conditions and data inconsistency.
+
+EXPLANATION:
+The code does not handle concurrency properly when modifying the balance. The `balance` variable is being read and updated within the `actionPerformed` method of the `ActionListener` instance. However, this method will be executed on a separate thread (the event dispatch thread) when the timer triggers the event. This can lead to data inconsistency and unexpected behavior if multiple threads try to read and update the `balance` variable simultaneously. Moreover, the `accountOwnerSSN` should not be stored in plaintext due to its sensitive nature.
+
+RECOMMENDATIONS:
+- Use a secure storage mechanism, such as encryption, for sensitive data like SSN. 
+- Use synchronization to ensure proper concurrency handling. This could be done using the `synchronized` keyword, locks (specifically, `Lock` or `ReentrantLock`), or an `Atomic` variable.
+- Use a more robust timing mechanism that can handle potential issues with the event dispatch thread.
+
+ORIGINAL CODE:
+```java
+public class BankAccount {
+                        
+    // private member variables of BankAccount class
+    private String accountOwnerName;
+    private String accountOwnerSSN;
+    private int accountNumber;
+    private double balance;
+
+    // constructor for BankAccount class
+    public BankAccount(String accountOwnerName, String accountOwnerSSN, int accountNumber, double initialBalance, int initialRate) {
+        this.accountOwnerName = accountOwnerName;
+        this.accountOwnerSSN = accountOwnerSSN;
+        this.accountNumber = accountNumber;
+        this.balance = initialBalance;
+        this.start(initialRate);
+    }
+
+    // start method will add interest to balance every 30 days
+    public void start(final double rate) {
+        ActionListener adder = new ActionListener() {
+            public void actionPerformed(ActionEvent event) {
+                double interest = BankAccount.this.balance * rate / 100;
+                BankAccount.this.balance += interest;
+            }
+        };
+        Timer t = new Timer(1000 * 3600 * 24 * 30, adder);t.start();
+    }
+}
+```

@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26-29
+VULNERABILITY_DESCRIPTION:
+The code contains an insecure assignment of user-controlled input to a sensitive variable rfi_flush.
+
+EXPLANATION:
+The vulnerable code snippet is located at lines 26-29 within the simpleAttr_rfi_flush attribute, which likely controls the RFI flush functionality through debugfs. Specifically, the issue arises in the rfi_flush_set method, where the input u64 val is directly assigned to a boolean variable enable, with no bounds checking, validation, or sanitization. This can cause an integer overflow and potentially lead to unintended behavior.
+
+However, this assignment alone is not as high of a risk in this specific function as it could be because it is passed a signed long long value from the simple attribute function; there is another potential risk as the variable enable, is a plain boolean. In most cases a bool in C is  actually an int with a domain restricting its use to only '0' and '1'. Assigning out-of-range value directly into a bool is undefined behavior in c.
+
+More serious still, a 64 bit signed integer value is being converted to an int and reduced, this can cause data to be discarded which is lossy.
+
+RECOMMENDATIONS:
+To resolve this vulnerability, we recommend using proper validation, casting and bounds checking. Additionally it is wise to avoid the potential for undefined behavior when writing a value outside of the strict '0', and '1' to a variable of type bool.
+
+It should be assigned a value in a more controlled fashion and ideally ensure input passed falls within a specific 'expectable'  range. Here is an example of a recommended fix:
+
+```c
+static int rfi_flush_set(void *data, u64 val)
+{
+   bool enable;
+   if(val == 0 || val == 1){
+       enable = (val != 0);
+   }else{
+       pr_err("rfi_flush: out of range value");
+       return -EINVAL;
+   }
+   ...
+```
+
+ORIGINAL CODE:
+```c
+static enum l1d_flush_type enabled_flush_types;
+static void *l1d_flush_fallback_area;
+static bool no_rfi_flush;
+bool rfi_flush;
+
+static int __init handle_no_rfi_flush(char *p)
+{
+	pr_info("rfi-flush: disabled on command line.");
+}
+early_param("no_rfi_flush", handle_no_rfi_flush);
+
+/*
+ * The RFI flush is not KPTI, but because users will see doco that says to use
+ * nopti we hijack that option here to also disable the RFI flush.
+ */
+	rfi_flush = enable;
+}
+
+static void __ref init_fallback_flush(void)
+{
+	u64 l1d_size, limit;
+	int cpu;
+
+	enabled_flush_types = types;
+
+	if (!no_rfi_flush && !cpu_mitigations_off())
+		rfi_flush_enable(enable);
+}
+
+#ifdef CONFIG_DEBUG_FS
+static int rfi_flush_set(void *data, u64 val)
+{
+	bool enable;
+
+DEFINE_SIMPLE_ATTRIBUTE(fops_rfi_flush, rfi_flush_get, rfi_flush_set, "%llu\n");
+
+static __init int rfi_flush_debugfs_init(void)
+{
+	debugfs_create_file("rfi_flush", 0600, powerpc_debugfs_root, NULL, &fops_rfi_flush);
+	return 0;
+}
+device_initcall(rfi_flush_debugfs_init);
+#endif
+```

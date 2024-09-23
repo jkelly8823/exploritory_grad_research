@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow - memcpy() without bounds checking
+
+EXPLANATION:
+The code uses `memcpy()` to copy data from one memory location to another. However, the code does not check the bounds of the destination buffer (`dst_u8`) before copying data. The size of the copy operation is determined by `ethlen`, which is a calculated value based on `offset`, `len`, `VLAN_ETH_HLEN`, `vlan_hlen`, and the conditional statement above it. 
+
+However, there is no validation of the source buffer (`vlanh + offset - vlan_hlen`) and the destination buffer (`dst_u8`) to ensure that the copy operation does not overflow the destination buffer.
+
+RECOMMENDATIONS:
+Before performing the `memcpy()` operation, include a check to ensure that the source buffer and destination buffer do not overlap, and that the destination buffer has enough capacity to hold the data being copied. Consider using `memmove()` if overlap is possible.
+
+Additionally, consider using a safer function like `strncpy()` (if working with strings) or using checked `memcpy()` functions that provide additional safety checks (`__strcpy_chk()`, `__memcpy_chk()`, etc.).
+
+Checking the return value of `memcpy()` can help to identify any errors that occur during the copy operation.
+
+ORIGINAL CODE:
+			return false;
+
+		if (offset + len > VLAN_ETH_HLEN + vlan_hlen)
+			ethlen -= offset + len - VLAN_ETH_HLEN - vlan_hlen;
+
+		memcpy(dst_u8, vlanh + offset - vlan_hlen, ethlen);
+
+		len -= ethlen;

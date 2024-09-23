@@ -1,0 +1,86 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-15, 23-24
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow and Untrusted Pointer Dereference Vulnerabilities
+
+EXPLANATION:
+The code provided appears to be patching instructions in memory dynamically, which is a complex operation that requires great care to avoid security vulnerabilities. There are two potential issues here: 
+
+1. The loop that patches instructions in memory does not check if the instruction array `instrs` has enough elements to write to. This could lead to a buffer overflow if the instruction array is not properly populated.
+
+2. The `dest` pointer is calculated based on the value at `start` and `dest = (void *)start + *start;`, which can be manipulated to cause an untrusted pointer dereference.
+
+Furthermore, the `patch_instruction` function is not shown in the given snippet, but it's likely that this function will write the instruction to the destination address. Without proper validation, this could lead to arbitrary code execution.
+
+Additionally, there is an integer overflow possibility in `patch_instruction((struct ppc_inst *)(dest + 3), ppc_inst(instrs[3]));`, in case `dest + 3` exceeds the maximum limit for `struct ppc_inst *`.
+
+RECOMMENDATIONS:
+To prevent these vulnerabilities, the following changes should be made:
+
+- Before writing instructions to memory, the code should validate that the instruction array is properly populated and that there are enough elements in the array to write.
+- Add checks to ensure that `start` and `dest` pointers are within a valid memory range before dereferencing them.
+- Implement boundary checks to prevent integer overflows in pointer calculations.
+- Also consider splitting the instructions array based on flushing types. It seems like only a subset of instructions array is getting used during execution of the function.
+
+
+ORIGINAL CODE:
+
+```c
+do_stf_exit_barrier_fixups(types);
+}
+
+void do_uaccess_flush_fixups(enum l1d_flush_type types)
+{
+	unsigned int instrs[4], *dest;
+	long *start, *end;
+	int i;
+
+	start = PTRRELOC(&__start___uaccess_flush_fixup);
+	end = PTRRELOC(&__stop___uaccess_flush_fixup);
+
+	instrs[0] = 0x60000000; /* nop */
+	instrs[1] = 0x60000000; /* nop */
+	instrs[2] = 0x60000000; /* nop */
+	instrs[3] = 0x4e800020; /* blr */
+
+	i = 0;
+	if (types == L1D_FLUSH_FALLBACK) {
+		instrs[3] = 0x60000000; /* nop */
+		/* fallthrough to fallback flush */
+	}
+
+	if (types & L1D_FLUSH_ORI) {
+		instrs[i++] = 0x63ff0000; /* ori 31,31,0 speculation barrier */
+		instrs[i++] = 0x63de0000; /* ori 30,30,0 L1d flush*/
+	}
+
+	if (types & L1D_FLUSH_MTTRIG)
+		instrs[i++] = 0x7c12dba6; /* mtspr TRIG2,r0 (SPR #882) */
+
+	for (i = 0; start < end; start++, i++) {
+		dest = (void *)start + *start;
+
+		pr_devel("patching dest %lx\n", (unsigned long)dest);
+
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instrs[0]));
+
+		patch_instruction((struct ppc_inst *)(dest + 1), ppc_inst(instrs[1]));
+		patch_instruction((struct ppc_inst *)(dest + 2), ppc_inst(instrs[2]));
+		patch_instruction((struct ppc_inst *)(dest + 3), ppc_inst(instrs[3]));
+	}
+
+	printk(KERN_DEBUG "uaccess-flush: patched %d locations (%s flush)\n", i,
+		(types == L1D_FLUSH_NONE)       ? "no" :
+		(types == L1D_FLUSH_FALLBACK)   ? "fallback displacement" :
+		(types &  L1D_FLUSH_ORI)        ? (types & L1D_FLUSH_MTTRIG)
+							? "ori+mttrig type"
+							: "ori type" :
+		(types &  L1D_FLUSH_MTTRIG)     ? "mttrig type"
+						: "unknown");
+}
+
+void do_entry_flush_fixups(enum l1d_flush_type types)
+{
+	unsigned int instrs[3], *dest;
+	long *start, *end;
+```

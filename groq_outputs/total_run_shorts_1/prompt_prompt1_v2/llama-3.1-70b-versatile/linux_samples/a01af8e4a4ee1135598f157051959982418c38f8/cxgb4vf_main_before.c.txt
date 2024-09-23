@@ -1,0 +1,87 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 33-37, 42-44
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in collect_netdev_uc_list_addrs and collect_netdev_mc_list_addrs functions.
+
+EXPLANATION:
+The collect_netdev_uc_list_addrs and collect_netdev_mc_list_addrs functions copy data from a net_device's unicast and multicast addresses into an array of addrss pointers without performing a null pointer check on the addr parameter. This could lead to a potential buffer overflow if the addr array is not properly initialized or is not large enough to hold the number of addresses returned by the functions.
+
+Furthermore, the functions use the for_each_dev_addr and netdev_for_each_mc_addr macros to iterate over the net_device's addresses, but they do not check if the addr array is large enough to hold all the addresses. If the number of addresses exceeds the size of the addr array, the functions will write beyond the end of the array, causing a buffer overflow.
+
+RECOMMENDATIONS:
+1. Perform a null pointer check on the addr parameter before copying data into it.
+2. Check the size of the addr array and ensure it is large enough to hold all the addresses returned by the functions.
+3. Use a safer way of iterating over the net_device's addresses, such as using a dynamically allocated array or a linked list.
+4. Consider adding a bounds check when writing to the addr array to prevent buffer overflows.
+
+ORIGINAL CODE:
+}
+/*
+ * Collect up to maxaddrs worth of a netdevice's unicast addresses into an
+ * array of addrss pointers and return the number collected.
+ */
+static inline int collect_netdev_uc_list_addrs(const struct net_device *dev,
+					       const u8 **addr,
+					       unsigned int maxaddrs)
+{
+	unsigned int naddr = 0;
+	const struct netdev_hw_addr *ha;
+
+	for_each_dev_addr(dev, ha) {
+		addr[naddr++] = ha->addr;
+		if (naddr >= maxaddrs)
+			break;
+	}
+	return naddr;
+}
+
+/*
+ * Collect up to maxaddrs worth of a netdevice's multicast addresses into an
+ * array of addrss pointers and return the number collected.
+ */
+static inline int collect_netdev_mc_list_addrs(const struct net_device *dev,
+					       const u8 **addr,
+					       unsigned int maxaddrs)
+{
+	unsigned int naddr = 0;
+	const struct netdev_hw_addr *ha;
+
+	netdev_for_each_mc_addr(ha, dev) {
+		addr[naddr++] = ha->addr;
+		if (naddr >= maxaddrs)
+			break;
+	}
+	return naddr;
+}
+
+/*
+	u64 mhash = 0;
+	u64 uhash = 0;
+	bool free = true;
+	u16 filt_idx[7];
+	const u8 *addr[7];
+	int ret, naddr = 0;
+	const struct port_info *pi = netdev_priv(dev);
+
+	/* first do the secondary unicast addresses */
+	naddr = collect_netdev_uc_list_addrs(dev, addr, ARRAY_SIZE(addr));
+	if (naddr > 0) {
+		ret = t4vf_alloc_mac_filt(pi->adapter, pi->viid, free,
+					  naddr, addr, filt_idx, &uhash, sleep);
+		if (ret < 0)
+			return ret;
+
+		free = false;
+	}
+
+	/* next set up the multicast addresses */
+	naddr = collect_netdev_mc_list_addrs(dev, addr, ARRAY_SIZE(addr));
+	if (naddr > 0) {
+		ret = t4vf_alloc_mac_filt(pi->adapter, pi->viid, free,
+					  naddr, addr, filt_idx, &mhash, sleep);
+		if (ret < 0)
+			return ret;
+	}
+
+	return t4vf_set_addr_hash(pi->adapter, pi->viid, uhash != 0,
+				  uhash | mhash, sleep);

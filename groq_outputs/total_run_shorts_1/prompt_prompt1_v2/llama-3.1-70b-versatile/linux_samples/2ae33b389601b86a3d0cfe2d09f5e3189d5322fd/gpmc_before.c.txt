@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+The code does not check for potential NULL pointer dereferences before using the 'pdev' and 'gpmc_dev' pointers. Additionally, it returns a negative value but uses it as an error code without proper handling, which could result in inconsistent error reporting. Furthermore, if 'gpmc_setup_irq()' fails, the function continues execution, potentially with an unusable state that was not reset.
+EXPLANATION:
+The code snippet appears to be part of a Linux driver, possibly using the Device Tree to configure the General Purpose Memory Controller (GPMC). However, the 'pdev' and 'gpmc_dev' pointers are not checked for NULL before being dereferenced or passed to other functions. The error handling is inconsistent and could lead to invalid states or masking of critical errors. 
+RECOMMENDATIONS:
+1. Check the 'pdev' and 'gpmc_dev' pointers for NULL before using them. This will prevent potential NULL pointer dereferences.
+
+2. Verify the error codes returned from the functions 'gpmc_setup_irq()' and 'gpmc_probe_dt()' to handle potential errors correctly.
+
+3. Set the error codes according to the standard conventions to maintain consistency throughout the codebase. For example, make sure that errors that occur before 'gpmc_setup_irq' are properly rolled back.
+
+4. Rollback any settings made before 'gpmc_setup_irq' failed to avoid inconsistent states.
+
+ORIGINAL CODE:
+
+    /* TODO: remove, see function definition */
+	gpmc_convert_ps_to_ns(gpmc_t);
+
+	/* Now the GPMC is initialised, unreserve the chip-selects */
+	gpmc_cs_map = 0;
+
+	return 0;
+}
+
+#ifdef CONFIG_OF
+	if (IS_ERR_VALUE(gpmc_setup_irq()))
+		dev_warn(gpmc_dev, "gpmc_setup_irq failed\n");
+
+	rc = gpmc_probe_dt(pdev);
+	if (rc < 0) {
+		clk_disable_unprepare(gpmc_l3_clk);
+		clk_put(gpmc_l3_clk);

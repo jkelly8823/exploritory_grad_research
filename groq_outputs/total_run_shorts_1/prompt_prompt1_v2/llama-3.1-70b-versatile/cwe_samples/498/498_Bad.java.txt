@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+The `clone()` method implemented in the `Teacher` class does not properly handle cloning of its own state. It relies on `super.clone()` which performs a shallow copy, but the `Teacher` class has mutable fields (`name` and `clas`) that can be modified independently in the cloned instance, potentially causing unintended behavior.
+
+EXPLANATION:
+The `Teacher` class implements `Cloneable` and provides a `clone()` method. However, the `clone()` method simply calls `super.clone()` which performs a shallow copy, copying the references of the original object's fields, rather than creating new, independent objects. This can lead to issues if the cloned instance is modified independently of the original instance. In this case, the `name` and `clas` fields are strings which are mutable in their own context (e.g., they can be used in further algorithms or manipulations outside of the `Teacher` class, leading to unintended consequences), and if the cloned instance is modified independently, the changes may affect both the original and cloned instances.
+
+RECOMMENDATIONS:
+To properly clone the `Teacher` instance, you should create new, independent objects for its mutable fields. Here's the corrected `clone()` method:
+
+```java
+public Object clone() {
+    try {
+        Teacher clone = (Teacher) super.clone();
+        clone.name = new String(this.name); // Create a new string object
+        clone.clas = new String(this.clas); // Create a new string object
+        return clone;
+    } catch (java.lang.CloneNotSupportedException e) {
+        throw new RuntimeException(e.toString());
+    }
+}
+```
+
+Alternatively, you could also use a deep cloning library such as Apache Commons or Java's built-in `SerializationUtils`, but the most straightforward solution is as above. Since Java strings are objects and have internal state that usually does not change, shallow copying the string references in this context can be seen as deep enough since their internal state won't change in other parts of the application. Therefore, keeping things simple with shallow copying seems acceptable in this case:
+
+```java
+public Object clone() {
+    try {
+        return super.clone();
+    } catch (java.lang.CloneNotSupportedException e) {
+        throw new RuntimeException(e.toString());
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```java
+public class CloneClient {
+    public CloneClient() //throwsjava.lang.CloneNotSupportedException {
+        Teacher t1 = new Teacher("guddu","22,nagar road");//...// Do some stuff to remove the teacher.
+        Teacher t2 = (Teacher)t1.clone();
+        System.out.println(t2.name);
+    }
+    public static void main(String args[]) {
+        new CloneClient();
+    }
+}
+
+class Teacher implements Cloneable {
+    public Object clone() {
+        try {
+            return super.clone();
+        }catch (java.lang.CloneNotSupportedException e) {
+            throw new RuntimeException(e.toString());
+        }
+    }
+    public String name;
+    public String clas;
+    public Teacher(String name,String clas) {
+        this.name = name;
+        this.clas = clas;
+    }
+}
+```

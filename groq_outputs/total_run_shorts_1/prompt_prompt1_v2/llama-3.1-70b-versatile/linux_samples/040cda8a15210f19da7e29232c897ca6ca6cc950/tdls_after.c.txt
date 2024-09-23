@@ -1,0 +1,137 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 90-92, 98-100
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The `memcpy` function calls in the provided code snippet have the potential to overflow the destination buffer. Specifically, the lines using `memcpy` to copy data into `sta_ptr->tdls_cap.rsn_ie` and `sta_ptr->tdls_cap.vhtoper` do not check if the source buffer size is within the bounds of the destination buffer. Although there are checks for `pos` to ensure it doesn't go past the end of the buffer, these checks might be ineffective in preventing a buffer overflow because they don't account for the source buffer's size. 
+
+However, there are checks earlier in the code that do appear to account for the destination buffer's size, preventing a buffer overflow.
+
+But given the large buffer sizes being referenced (IEEE_MAX_IE_SIZE and sizes of structs), potential for integer overflow exists. 
+
+RECOMMENDATIONS:
+Use bounds-checked functions to prevent buffer overflows. `memcpy` is often not the right function for safety. Functions with bounding limits can be a safer choice (like `memcpy_s` or `__builtin___memcpy_chk` for GCC).
+
+In case of using C++ consider applying methods which allow bounds checking to prevent buffer overflow errors.
+
+ORIGINAL CODE:
+```c
+		switch (*pos) {
+		case WLAN_EID_SUPP_RATES:
+			if (pos[1] > 32)
+				return;
+			sta_ptr->tdls_cap.rates_len = pos[1];
+			for (i = 0; i < pos[1]; i++)
+				sta_ptr->tdls_cap.rates[i] = pos[i + 2];
+			break;
+
+		case WLAN_EID_EXT_SUPP_RATES:
+			if (pos[1] > 32)
+				return;
+			basic = sta_ptr->tdls_cap.rates_len;
+			if (pos[1] > 32 - basic)
+				return;
+			for (i = 0; i < pos[1]; i++)
+				sta_ptr->tdls_cap.rates[basic + i] = pos[i + 2];
+			sta_ptr->tdls_cap.rates_len += pos[1];
+			break;
+		case WLAN_EID_HT_CAPABILITY:
+			if (pos > end - sizeof(struct ieee80211_ht_cap) - 2)
+				return;
+			if (pos[1] != sizeof(struct ieee80211_ht_cap))
+				return;
+			/* copy the ie's value into ht_capb*/
+			memcpy((u8 *)&sta_ptr->tdls_cap.ht_capb, pos + 2,
+			       sizeof(struct ieee80211_ht_cap));
+			sta_ptr->is_11n_enabled = 1;
+			break;
+		case WLAN_EID_HT_OPERATION:
+			if (pos > end -
+			    sizeof(struct ieee80211_ht_operation) - 2)
+				return;
+			if (pos[1] != sizeof(struct ieee80211_ht_operation))
+				return;
+			/* copy the ie's value into ht_oper*/
+			memcpy(&sta_ptr->tdls_cap.ht_oper, pos + 2,
+			       sizeof(struct ieee80211_ht_operation));
+			break;
+		case WLAN_EID_BSS_COEX_2040:
+			if (pos > end - 3)
+				return;
+			if (pos[1] != 1)
+				return;
+			sta_ptr->tdls_cap.coex_2040 = pos[2];
+			break;
+		case WLAN_EID_EXT_CAPABILITY:
+			if (pos > end - sizeof(struct ieee_types_header))
+				return;
+			if (pos[1] < sizeof(struct ieee_types_header))
+				return;
+			if (pos[1] > 8)
+				return;
+			memcpy((u8 *)&sta_ptr->tdls_cap.extcap, pos,
+			       sizeof(struct ieee_types_header) +
+			       min_t(u8, pos[1], 8));
+			break;
+		case WLAN_EID_RSN:
+			if (pos > end - sizeof(struct ieee_types_header))
+				return;
+			if (pos[1] < sizeof(struct ieee_types_header))
+				return;
+			if (pos[1] > IEEE_MAX_IE_SIZE -
+			    sizeof(struct ieee_types_header))
+				return;
+			memcpy((u8 *)&sta_ptr->tdls_cap.rsn_ie, pos,
+			       sizeof(struct ieee_types_header) +
+			       min_t(u8, pos[1], IEEE_MAX_IE_SIZE -
+				     sizeof(struct ieee_types_header)));
+			break;
+		case WLAN_EID_QOS_CAPA:
+			if (pos > end - 3)
+				return;
+			if (pos[1] != 1)
+				return;
+			sta_ptr->tdls_cap.qos_info = pos[2];
+			break;
+		case WLAN_EID_VHT_OPERATION:
+			if (priv->adapter->is_hw_11ac_capable) {
+				if (pos > end -
+				    sizeof(struct ieee80211_vht_operation) - 2)
+					return;
+				if (pos[1] !=
+				    sizeof(struct ieee80211_vht_operation))
+					return;
+				/* copy the ie's value into vhtoper*/
+				memcpy(&sta_ptr->tdls_cap.vhtoper, pos + 2,
+				       sizeof(struct ieee80211_vht_operation));
+			}
+			break;
+		case WLAN_EID_VHT_CAPABILITY:
+			if (priv->adapter->is_hw_11ac_capable) {
+				if (pos > end -
+				    sizeof(struct ieee80211_vht_cap) - 2)
+					return;
+				if (pos[1] != sizeof(struct ieee80211_vht_cap))
+					return;
+				/* copy the ie's value into vhtcap*/
+			_memcpy((u8 *)&sta_ptr->tdls_cap.vhtcap, pos + 2,
+				       sizeof(struct ieee80211_vht_cap));
+				sta_ptr->is_11ac_enabled = 1;
+			}
+			break;
+		case WLAN_EID_AID:
+			if (priv->adapter->is_hw_11ac_capable) {
+				if (pos > end - 4)
+					return;
+				if (pos[1] != 2)
+					return;
+				sta_ptr->tdls_cap.aid =
+					get_unaligned_le16((pos + 2));
+			}
+			break;
+		default:
+			break;
+		}
+	}
+```

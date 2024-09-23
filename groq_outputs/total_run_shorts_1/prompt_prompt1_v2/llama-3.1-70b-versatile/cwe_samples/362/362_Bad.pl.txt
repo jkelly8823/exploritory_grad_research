@@ -1,0 +1,20 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) is not present here, but a potential issue of race condition vulnerability has been detected. This occurs because between the point where the balance is checked to ensure the transfer amount doesn't result in a negative value, and the point where the new balance is sent to the database, the user's actual balance might be changed by another request, resulting in inconsistent data.
+
+EXPLANATION:
+After analyzing the provided code snippet, the check for if the new balance is less than 0 occurs before this new balance is written to the database. While there is no immediate danger, a possibility remains that from the time the new balance is calculated and the time the new balance is written to the database, an external action changes the real world value that should be in the database.
+
+This could cause an incorrect value to be written to the database if some action changed $balance's real-world equivilent in the short period between the lines that check if ($balance - $transfer_amount) is less than 0 and SendNewBalanceToDatabase($newbalance).
+
+RECOMMENDATIONS:
+Firstly, using atomic transactions can mitigate race conditions by ensuring that the state of the database is consistent throughout the execution of a logical operation. Check if the database supports this feature.
+
+Secondly, where transactions are not available, ensuring a lock on database resources that are in use during this function to prevent external changes until the data is updated might be necessary.
+
+Thirdly, consider using optimistic concurrency by reading from the database immediately prior to writing back to it to ensure no external activity has recently updated it - or locking the resource if there is a change.
+
+ORIGINAL CODE:
+                  $transfer_amount = GetTransferAmount();$balance = GetBalanceFromDatabase();
+                     if ($transfer_amount < 0) {FatalError("Bad Transfer Amount");}$newbalance = $balance - $transfer_amount;if (($balance - $transfer_amount) < 0) {FatalError("Insufficient Funds");}SendNewBalanceToDatabase($newbalance);NotifyUser("Transfer of $transfer_amount succeeded.");NotifyUser("New balance: $newbalance");

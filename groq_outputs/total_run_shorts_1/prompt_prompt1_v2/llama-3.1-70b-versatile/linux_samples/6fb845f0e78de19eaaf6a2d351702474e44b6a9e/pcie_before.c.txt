@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a memory corruption vulnerability due to an unchecked return value and potential incorrect assumptions about the output of the pci_generic_config_read32 function.
+
+EXPLANATION:
+The pci_generic_config_read32 function returns an integer value in the ret variable, which indicates the success or failure of the function. However, this return value is not checked for potential error codes except for PCIBIOS_SUCCESSFUL. This could lead to incorrect assumptions about the value stored in the val pointer.
+
+Additionally, the mask and shift variables are not used to sanitize the output of the pci_generic_config_read32 function. This could potentially lead to a buffer overflow or memory corruption issue if the value returned by pci_generic_config_read32 is not correctly formatted.
+
+Furthermore, the condition in the if statement assumes that the first byte of a 4 byte read operation starts at an address that is divisible by 4 (due to the (where % 4) * 8 calculation). However, if this is not the case, the shift calculation could lead to incorrect data alignment.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+- Check the return value of the pci_generic_config_read32 function against all possible error codes, not just PCIBIOS_SUCCESSFUL.
+- Add proper error handling code to handle cases where the pci_generic_config_read32 function returns an error.
+- Use the mask and shift variables to sanitize the output of the pci_generic_config_read32 function and prevent buffer overflow or memory corruption issues.
+- Remove any assumptions about the memory layout and access the memory safely using pointers.
+
+ORIGINAL CODE:
+	} else /* remote PCI bus */
+		base = cnspci->cfg1_regs + ((busno & 0xf) << 20);
+
+	return base + (where & 0xffc) + (devfn << 12);
+}
+
+static int cns3xxx_pci_read_config(struct pci_bus *bus, unsigned int devfn,
+				   int where, int size, u32 *val)
+	u32 mask = (0x1ull << (size * 8)) - 1;
+	int shift = (where % 4) * 8;
+
+	ret = pci_generic_config_read32(bus, devfn, where, size, val);
+
+	if (ret == PCIBIOS_SUCCESSFUL && !bus->number && !devfn &&
+	    (where & 0xffc) == PCI_CLASS_REVISION)
+		/*

@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 6
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) is not the primary concern here, but there's an issue with the use of raw memory writes without validation or proper synchronization. Additionally, there is no error checking after the writes.
+
+EXPLANATION:
+The code uses raw memory writes (`__raw_writel`) to write to hardware registers. These writes are not validated, and the code does not check for errors after the write operations. This could potentially cause issues if the writes fail or are not properly synchronized. 
+
+Since we're looking at a driver initialization routine, it is likely that this is intended for use with a specific hardware device. However, not validating or checking the return codes of the writes can lead to problems with device operation.
+
+Moreover, it appears that this initialization routine does not have any validation of the hardware registers before attempting the writes. This could also be problematic if the registers are not in the expected state or if there are certain specific settings or alignments required for the registers.
+
+RECOMMENDATIONS:
+1. Use platform-agnostic functions instead of raw memory writes where possible to reduce the likelihood of data corruption and improve portability.
+2. Add validation and synchronization mechanisms before attempting writes to hardware registers to prevent write failures or data corruption.
+3. Use return codes from the `__raw_writel` function to detect and handle any failures that may occur.
+4. Validate the state of the hardware registers before and after the writes.
+
+ORIGINAL CODE:
+void __init r8a7779_init_irq_dt(void)
+{
+	gic_arch_extn.irq_set_wake = r8a7779_set_wake;
+
+	irqchip_init();
+
+	/* route all interrupts to ARM */
+	__raw_writel(0xffffffff, INT2NTSR0);
+	__raw_writel(0x3fffffff, INT2NTSR1);

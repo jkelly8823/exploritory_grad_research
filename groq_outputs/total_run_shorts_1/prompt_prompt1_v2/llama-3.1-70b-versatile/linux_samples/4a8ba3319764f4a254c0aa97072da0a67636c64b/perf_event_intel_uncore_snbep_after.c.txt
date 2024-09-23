@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-14
+VULNERABILITY_DESCRIPTION:
+Insecure Use of Hardcoded PCI Device IDs
+EXPLANATION:
+The code contains hardcoded PCI device IDs directly in the `hswep_uncore_ha` struct and `hswep_uncore_pci_driver` struct. Hardcoding such values poses a potential vulnerability as they might be changed or incorrect, leading to errors in hardware detection and configuration.
+
+However, this is the most notable issue. Upon closer inspection, there appears to be an issue with PCI configuration register access.
+
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+Improper PCI Configuration Register Access
+EXPLANATION:
+The code accesses the PCI configuration register using the `pci_read_config_dword` function. However, there is no error handling for this function. If the PCI device is not accessible or the configuration space cannot be read, the function may return an error code which is not checked in the provided code.
+
+Also, another potential vulnerability exists. On line 9, the code considers the condition `uncore_extra_pci_dev[0][HSWEP_PCI_PCU_3]`. There is no bounds checking to make sure that the value of `HSWEP_PCI_PCU_3` is valid and will not cause an out-of-bounds array access.
+
+RECOMMENDATIONS:
+1. Implement bounds checking for array indices to prevent out-of-bounds access. 
+2. Error handling code for `pci_read_config_dword` should be added to handle potential errors during PCI configuration space access.
+
+RECOMMENDATIONS TO PCI ID HARD CODING:
+1. Consider moving PCI device IDs to configuration files or databases to make it easier to manage these values.
+2. Write automated tests for your code to verify that it works with different sets of PCI IDs.
+
+ORIGINAL CODE:
+```c
+enum {
+	SNBEP_PCI_QPI_PORT0_FILTER,
+	SNBEP_PCI_QPI_PORT1_FILTER,
+	HSWEP_PCI_PCU_3,
+};
+
+static int snbep_qpi_hw_config(struct intel_uncore_box *box, struct perf_event *event)
+{
+{
+	if (hswep_uncore_cbox.num_boxes > boot_cpu_data.x86_max_cores)
+		hswep_uncore_cbox.num_boxes = boot_cpu_data.x86_max_cores;
+
+	/* Detect 6-8 core systems with only two SBOXes */
+	if (uncore_extra_pci_dev[0][HSWEP_PCI_PCU_3]) {
+		u32 capid4;
+
+		pci_read_config_dword(uncore_extra_pci_dev[0][HSWEP_PCI_PCU_3],
+				      0x94, &capid4);
+		if (((capid4 >> 6) & 0x3) == 0)
+			hswep_uncore_sbox.num_boxes = 2;
+	}
+
+	uncore_msr_uncores = hswep_msr_uncores;
+}
+
+static struct intel_uncore_type hswep_uncore_ha = {
+		.driver_data = UNCORE_PCI_DEV_DATA(UNCORE_EXTRA_PCI_DEV,
+						   SNBEP_PCI_QPI_PORT1_FILTER),
+	},
+	{ /* PCU.3 (for Capability registers) */
+		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x2fc0),
+		.driver_data = UNCORE_PCI_DEV_DATA(UNCORE_EXTRA_PCI_DEV,
+						   HSWEP_PCI_PCU_3),
+	},
+	{ /* end: all zeroes */ }
+};
+
+static struct pci_driver hswep_uncore_pci_driver = {
+```

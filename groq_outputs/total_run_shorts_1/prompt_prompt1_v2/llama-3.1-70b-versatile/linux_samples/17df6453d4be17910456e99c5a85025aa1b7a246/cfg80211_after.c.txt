@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-19
+VULNERABILITY_DESCRIPTION: Potential use-after-free vulnerability due to the dereferencing of `bss_info_le` before checking if it's NULL.
+
+EXPLANATION:
+The code snippet dereferences `bss_info_le` in the line `bi_length = le32_to_cpu(bss_info_le->length);` before checking if `bss_info_le` is NULL. However, the pointer `bss_info_le` is assigned the value of NULL earlier in the code. Although the assignment of `bss_info_le` is not present in this particular code snippet, based on the variable name, it seems like it should hold the value of `escan_result_le->bss_info_le`. 
+
+However, the assignment is missing, hence, `bss_info_le` remains NULL, and the dereference operation will result in a segmentation fault.
+
+RECOMMENDATIONS:
+Assign the value of `escan_result_le->bss_info_le` to `bss_info_le` before dereferencing it. It is also a good practice to check if `escan_result_le->bss_info_le` is not NULL before dereferencing it to prevent potential segmentation faults.
+
+```c
+bss_info_le = (struct brcmf_bss_info_le *)((u8 *)escan_result_le + WL_ESCAN_RESULTS_FIXED_SIZE);
+if (bss_info_le) {
+    bi_length = le32_to_cpu(bss_info_le->length);
+    // rest of the code
+}
+```
+ORIGINAL CODE:
+
+```c
+struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+s32 status;
+struct brcmf_escan_result_le *escan_result_le;
+u32 escan_buflen;
+struct brcmf_bss_info_le *bss_info_le;
+struct brcmf_bss_info_le *bss = NULL;
+u32 bi_length;
+struct brcmf_scan_results *list;
+
+if (status == BRCMF_E_STATUS_PARTIAL) {
+    brcmf_dbg(SCAN, "ESCAN Partial result\n");
+    if (e->datalen < sizeof(*escan_result_le)) {
+        brcmf_err("invalid event data length\n");
+        goto exit;
+    }
+    escan_result_le = (struct brcmf_escan_result_le *) data;
+    if (!escan_result_le) {
+        brcmf_err("Invalid escan result (NULL pointer)\n");
+        goto exit;
+    }
+    escan_buflen = le32_to_cpu(escan_result_le->buflen);
+    if (escan_buflen > BRCMF_ESCAN_BUF_SIZE ||
+        escan_buflen > e->datalen ||
+        escan_buflen < sizeof(*escan_result_le)) {
+        brcmf_err("Invalid escan buffer length: %d\n",
+              escan_buflen);
+        goto exit;
+    }
+    if (le16_to_cpu(escan_result_le->bss_count) != 1) {
+        brcmf_err("Invalid bss_count %d: ignoring\n",
+              escan_result_le->bss_count);
+        goto exit;
+    }
+
+    bi_length = le32_to_cpu(bss_info_le->length);
+    if (bi_length != escan_buflen - WL_ESCAN_RESULTS_FIXED_SIZE) {
+        brcmf_err("Ignoring invalid bss_info length: %d\n",
+              bi_length);
+        goto exit;
+    }
+}

@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized Variable in a Critical Operation
+
+EXPLANATION:
+The variable 'group' appears to be used without prior initialization in a critical operation where it's passed as an argument to `ext4_block_bitmap_csum_set()`. This could lead to an unexpected behavior if the uninitialized value is used to compute critical data or manipulate memory. Additionally, the code lock the same group twice without unlocking it between these locks. 
+
+However, 'group' could be declared and initialized in a part of the code not visible in the given snippet. Nonetheless, without seeing this variable being initialized, this variable remains a potential vulnerability.
+
+RECOMMENDATIONS:
+It's essential to ensure that 'group' is properly initialized before using it in the `ext4_block_bitmap_csum_set()` function and other similar operations. If 'group' is supposed to be initialized elsewhere, make sure that code path is properly synchronized with this execution path.
+
+To avoid potential deadlocks and unnecessary resource usage, ensure to properly unlock 'sb' after using it, especially before locking it again.
+
+Make sure to initialize the variable 'group' properly before using it:
+```c
+int group = ...;  // replace with proper initialization
+```
+Ensure the locks are properly used to avoid deadlocks:
+```c
+ext4_lock_group(sb, group);
+// ...
+ext4_unlock_group(sb);
+```
+ORIGINAL CODE:
+```c
+}
+
+ext4_lock_group(sb, block_group);
+if (desc->bg_flags & cpu_to_le16(EXT4_BG_INODE_UNINIT)) {
+    memset(bh->b_data, 0, (EXT4_INODES_PER_GROUP(sb) + 7) / 8);
+    ext4_mark_bitmap_end(EXT4_INODES_PER_GROUP(sb),
+                         sb->s_blocksize * 8, bh->b_data);
+    set_bitmap_uptodate(bh);
+
+    /* recheck and clear flag under lock if we still need to */
+    ext4_lock_group(sb, group);
+    if (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)) {
+        gdp->bg_flags &= cpu_to_le16(~EXT4_BG_BLOCK_UNINIT);
+        ext4_free_group_clusters_set(sb, gdp,
+            ext4_free_clusters_after_init(sb, group, gdp));
+        ext4_block_bitmap_csum_set(sb, group, gdp,
+```

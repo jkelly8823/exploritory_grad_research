@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 13-14
+VULNERABILITY_DESCRIPTION:
+Potential Uncontrolled Resource Allocation vulnerabilities due to the assignment of user-controlled data `TxDescriptors` and `RxDescriptors` to local variables `tx_ring->count` and `rx_ring->count` without proper bounds checking or validation.
+
+EXPLANATION:
+The code assigns the values of `TxDescriptors` and `RxDescriptors` directly to the `count` fields of `tx_ring` and `rx_ring` structures. However, it does not check if these values exceed the maximum allowed limits or fall below the minimum limits, making the code vulnerable to potential resource allocation issues.
+
+The `pch_gbe_validate_option` function is called later, but its effect on the already assigned values of `tx_ring->count` and `rx_ring->count` is unclear.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate the values of `TxDescriptors` and `RxDescriptors` against the minimum and maximum allowed limits before assigning them to `tx_ring->count` and `rx_ring->count`. You may want to consider using functions or macros like `clamp` or `range_check` to ensure the values are within a safe range.
+
+Additionally, consider changing the order of operations so that `pch_gbe_validate_option` is called before assigning the values to `tx_ring->count` and `rx_ring->count`, to ensure that only valid and validated values are used.
+
+ORIGINAL CODE:
+```
+            .err  = "using default of "
+                __MODULE_STRING(PCH_GBE_DEFAULT_TXD),
+            .def  = PCH_GBE_DEFAULT_TXD,
+            .arg  = { .r = { .min = PCH_GBE_MIN_TXD } },
+            .arg  = { .r = { .max = PCH_GBE_MAX_TXD } }
+        };
+        struct pch_gbe_tx_ring *tx_ring = adapter->tx_ring;
+        tx_ring->count = TxDescriptors;
+        pch_gbe_validate_option(&tx_ring->count, &opt, adapter);
+            .err  = "using default of "
+                __MODULE_STRING(PCH_GBE_DEFAULT_RXD),
+            .def  = PCH_GBE_DEFAULT_RXD,
+            .arg  = { .r = { .min = PCH_GBE_MIN_RXD } },
+            .arg  = { .r = { .max = PCH_GBE_MAX_RXD } }
+        };
+        struct pch_gbe_rx_ring *rx_ring = adapter->rx_ring;
+        rx_ring->count = RxDescriptors;
+        pch_gbe_validate_option(&rx_ring->count, &opt, adapter);
+```

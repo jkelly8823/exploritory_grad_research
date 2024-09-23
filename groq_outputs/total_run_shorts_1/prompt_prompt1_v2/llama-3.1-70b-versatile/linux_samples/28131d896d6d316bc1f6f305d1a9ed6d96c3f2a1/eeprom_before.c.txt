@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Resource-Related Issue (Memory Leak or Resource NOT Released Due to Error Handling).
+
+EXPLANATION:
+In the code snippet, there is a potential resource leak issue when `retlen` is less than `len`, causing an error. In this case, the `offset` value calculated is not released and is still in use, however this is likely not the intent of this 'offset' value being freed. The `eep` is likely pointing to some memory allocation and in case of an error, it does not appear that it is being directly freed.
+
+However, looking at the given code snippet it is observed that `put_mtd_device(mtd)` and other places might free 'mtd'. This function might cause an indirect freeing mechanism if the object passed frees any underlying buffer. Hence, the actual memory leak should be considered in relation with how 'eep' and 'mtd' interact; therefore a review of these variable's behavior in the bigger scope should be considered.
+
+RECOMMENDATIONS:
+To fix this potential resource leak issue:
+- Ensure to properly free or release any allocated memory for `eep` in case of error to prevent memory leaks, if `eep` is pointing to some dynamic resource instead of being a small stack allocated variable.
+- Alternatively, also ensure to properly free or release any allocated memory for `mtd`.
+- Modify the given code snippet as follows:
+
+```c
+	offset = be32_to_cpup(list);
+	ret = mtd_read(mtd, offset, len, &retlen, eep);
+	put_mtd_device(mtd);
+	if (ret)
+		goto out_put_node;
+
+	if (retlen < len) {
+		ret = -EINVAL;
+		// ensure properly free or release 'eep' and 'mtd' resources if this is relevant
+		goto out_put_node;
+	}
+}
+
+// a more secure practice after mtd_read has failed is:
+if (ret)
+{
+	free(eep);	// free eep here, assuming eep might have some dynamic memory allocated;
+				// however if 'eep' is some automatic variable generated on some stack then 
+				// there's likely no need of freeing it
+out_put_node: // rename the label as appropriate to understand the functionality
+	// the other free functions and other code are accessible from this label
+	goto FREE_resources;// ensure to free all dynamic variables or buffers
+```
+
+ORIGINAL CODE:
+	offset = be32_to_cpup(list);
+	ret = mtd_read(mtd, offset, len, &retlen, eep);
+	put_mtd_device(mtd);
+	if (ret)
+		goto out_put_node;
+
+	if (retlen < len) {
+		ret = -EINVAL;
+		goto out_put_node;

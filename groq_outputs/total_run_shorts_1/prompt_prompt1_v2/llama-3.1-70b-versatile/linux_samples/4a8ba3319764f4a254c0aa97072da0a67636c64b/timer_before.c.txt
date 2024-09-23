@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-18
+VULNERABILITY_DESCRIPTION:
+Potential Divide by Zero Error and Unhandled Case Statement.
+
+EXPLANATION:
+In the given code snippet, there's a switch statement that handles different clock rates and assigns values to the 'num' and 'den' variables accordingly. However, the 'den' variable is used as a divisor in the calculation of 'arch_timer_freq'. If the 'den' variable is zero, a division by zero error will occur.
+
+Looking at the case statement, it's clear that there's a missing handling for the '38400000' case, which means 'num' and 'den' won't be assigned any values. Since 'den' isn't specifically initialized before the switch statement, its value will be undefined and potentially zero, leading to a potential division by zero error.
+
+Additionally, given the numerous possible values 'rate' can have, it's impractical to cover all cases with a switch statement. A more robust approach is needed to handle the potential values of 'rate' and ensure that 'den' is never zero.
+
+RECOMMENDATIONS:
+1.  Always initialize 'num' and 'den' with default values before the switch statement to prevent undefined behavior.
+2.  Handle the '38400000' case and assign valid values to 'num' and 'den'.
+3.  Add a check before the division operation to ensure 'den' is never zero and handle the case when it is.
+4.  Consider using a more robust approach, like a lookup table or a mathematical calculation, to handle the different 'rate' values.
+
+ORIGINAL CODE:
+
+```c
+#include "soc.h"
+#include "common.h"
+#include "powerdomain.h"
+#include "omap-secure.h"
+
+#define REALTIME_COUNTER_BASE				0x48243200
+	void __iomem *base;
+	static struct clk *sys_clk;
+	unsigned long rate;
+	unsigned int reg, num = 0, den = 1;
+
+	base = ioremap(REALTIME_COUNTER_BASE, SZ_32);
+	if (!base) {
+		pr_err("%s: ioremap failed\n", __func__);
+	}
+
+	rate = clk_get_rate(sys_clk);
+	/* Numerator/denumerator values refer TRM Realtime Counter section */
+	switch (rate) {
+	case 1200000:
+		num = 64;
+		den = 125;
+		break;
+	case 1300000:
+		num = 768;
+		den = 1625;
+		break;
+	case 19200000:
+		num = 192;
+		den = 625;
+		break;
+	case 2600000:
+		num = 384;
+		den = 1625;
+		break;
+	case 2700000:
+		num = 256;
+		den = 1125;
+		break;
+	case 38400000:
+		num = 512;
+		den = 625;
+		break;
+	}
+
+	/* Program numerator and denumerator registers */
+	reg = readl_relaxed(base + INCREMENTER_NUMERATOR_OFFSET) &
+			NUMERATOR_DENUMERATOR_MASK;
+	reg |= num;
+	reg |= den;
+	writel_relaxed(reg, base + INCREMENTER_DENUMERATOR_RELOAD_OFFSET);
+
+	if (den != 0) {
+		arch_timer_freq = (rate / den) * num;
+		set_cntfreq();
+	} else {
+		// handle division by zero error
+	}
+
+	iounmap(base);
+}
+```

@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+
+EXPLANATION:
+The vulnerability in this code is the use of unfiltered and unsanitized user input ($username, $password) in the SQL query. This can lead to an attacker being able to inject malicious SQL code by crafting a username or password that manipulates the query.
+
+When constructing the SQL query, the code directly concatenates the username and password variables. This creates a possibility for an attacker to inject arbitrary SQL by providing malicious input.
+
+Additionally, the use of `mysql_` functions is deprecated since PHP 5.5 and removed in PHP 7.0. This further exacerbates the vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend using prepared statements or parameterized queries. Prepared statements ensure that user input is treated as a parameter rather than part of the SQL code.
+
+Here's an example of how the code could be modified using PDO:
+
+```php
+function authenticate($username,$password){
+    include("http://external.example.com/dbInfo.php");
+    
+    try {
+        $pdo = new PDO('mysql:host='.$dbhost.';dbname='.$dbname, $dbuser, $dbpass);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        $stmt = $pdo->prepare('Select * from users where username=:username And password=:password');
+        $stmt->bindParam(':username', $username);
+        $stmt->bindParam(':password', $password);
+        $stmt->execute();
+        
+        $result = $stmt->fetch();
+        
+        if($result){
+            return true;
+        }else{
+            return false;
+        }
+    } catch(PDOException $e) {
+        return false;
+    }
+}
+```
+
+ORIGINAL CODE:
+```
+//assume the password is already encrypted, avoiding CWE-312
+function authenticate($username,$password){
+    include("http://external.example.com/dbInfo.php");
+    
+    mysql_connect($dbhost, $dbuser, $dbpass) or die ('Error connecting to mysql');mysql_select_db($dbname);$query = 'Select * from users where username='.$username.' And password='.$password;$result = mysql_query($query);
+    if(mysql_numrows($result) == 1){mysql_close();return true;}else{mysql_close();return false;}
+}
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 135-148, 154-165
+VULNERABILITY_DESCRIPTION:
+Improper array index validation and out-of-bounds read vulnerability in `iwl_mvm_parse_wowlan_status_common` function.
+
+EXPLANATION:
+The `iwl_mvm_parse_wowlan_status_common` function is used to parse WoWLAN status data. However, when copying data to `status->gtk.key` and `status->gtk.key + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY`, the code assumes that the `status->gtk.key` array has a fixed size and does not perform proper bounds checking. If the length of `v6->gtk.decrypt_key` or `v6->gtk.tkip_mic_key` exceeds the size of `status->gtk.key`, an out-of-bounds read will occur. Similarly, in the `iwl_mvm_parse_wowlan_status_common_v7`, `iwl_mvm_parse_wowlan_status_common_v9` functions, the code does not perform proper bounds checking for `v7->gtk[0].key` and `v9->gtk[0].key` when copying data to `status->gtk.key`.
+
+RECOMMENDATIONS:
+Add proper bounds checking for array indices when copying data to `status->gtk.key` and `status->gtk.key + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY` to prevent out-of-bounds reads. Consider adding checks for null pointers and invalid lengths of `v6->gtk.decrypt_key`, `v6->gtk.tkip_mic_key`, `v7->gtk[0].key`, and `v9->gtk[0].key`.
+
+ORIGINAL CODE:
+Please note that the original code is too large to be included here, but the vulnerable parts are included below:
+
+```c
+BUILD_BUG_ON(sizeof(v6->gtk.decrypt_key) >
+	     sizeof(status->gtk.key));
+
+memcpy(status->gtk.key, v6->gtk.decrypt_key,
+       sizeof(v6->gtk.decrypt_key));
+memcpy(status->gtk.key + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+       v6->gtk.tkip_mic_key,
+       sizeof(v6->gtk.tkip_mic_key));
+
+// ...
+
+BUILD_BUG_ON(sizeof(v7->gtk[0].key) < sizeof(data->key));
+
+memcpy(status->gtk.key, v7->gtk[0].key, sizeof(v7->gtk[0].key));
+
+// ...
+
+BUILD_BUG_ON(sizeof(v9->gtk[0].key) < sizeof(data->key));
+
+memcpy(status->gtk.key, v9->gtk[0].key, sizeof(v9->gtk[0].key));
+```

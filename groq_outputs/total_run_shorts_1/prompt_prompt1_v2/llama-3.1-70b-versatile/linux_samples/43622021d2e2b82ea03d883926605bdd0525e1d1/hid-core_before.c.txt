@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6, 13-15
+VULNERABILITY_DESCRIPTION:
+The code contains a potential null pointer dereference and resource leaks. The code accesses report_enum->report_id_hash[id] without checking if report_enum is NULL, which could lead to a segmentation fault if report_enum is NULL. Additionally, the code allocates memory for report but does not check if the allocation is successful, which could lead to a memory leak.
+
+EXPLANATION:
+In lines 4-6, the code checks if report_enum->report_id_hash[id] is NULL before returning it. However, it does not check if report_enum is NULL before accessing its report_id_hash field. This could lead to a null pointer dereference if report_enum is NULL.
+
+In line 13, the code allocates memory for report using kzalloc. However, it does not check if the allocation is successful before returning and potentially using the allocated memory. If the allocation fails, report will be NULL, and this NULL value will be passed to the return statement, potentially causing a null pointer dereference. However, the code will subsequently encounter a segmentation fault.
+
+Furthermore, in the nested for loop, the code calls hid_free_report to free each report that matches the report_id_hash condition. However, it does not check if the report is NULL before calling hid_free_report, which could lead to a segmentation fault if report is NULL.
+
+RECOMMENDATIONS:
+To fix the vulnerabilities:
+
+1. Before accessing report_enum->report_id_hash[id], add a check to ensure that report_enum is not NULL.
+```c
+if (report_enum && report_enum->report_id_hash[id])
+	return report_enum->report_id_hash[id];
+```
+
+2. After allocating memory for report using kzalloc, add a check to ensure that the allocation is successful before returning or using the allocated memory.
+```c
+report = kzalloc(sizeof(struct hid_report), GFP_KERNEL);
+if (!report) {
+	hid_err(parser->device, "Memory allocation failed\n");
+	return NULL;
+}
+```
+
+3. Before calling hid_free_report, add a check to ensure that report is not NULL.
+```c
+for (j = 0; j < 256; j++) {
+	struct hid_report *report = report_enum->report_id_hash[j];
+	if (report)
+		hid_free_report(report);
+}
+```
+
+ORIGINAL CODE:
+```c
+struct hid_report_enum *report_enum = device->report_enum + type;
+struct hid_report *report;
+
+if (report_enum->report_id_hash[id])
+	return report_enum->report_id_hash[id];
+
+report = kzalloc(sizeof(struct hid_report), GFP_KERNEL);
+
+case HID_GLOBAL_ITEM_TAG_REPORT_ID:
+	parser->global.report_id = item_udata(item);
+	if (parser->global.report_id == 0) {
+		hid_err(parser->device, "report_id 0 is invalid\n");
+		return -1;
+	}
+	return 0;
+
+for (i = 0; i < HID_REPORT_TYPES; i++) {
+	struct hid_report_enum *report_enum = device->report_enum + i;
+
+	for (j = 0; j < 256; j++) {
+		struct hid_report *report = report_enum->report_id_hash[j];
+		if (report)
+			hid_free_report(report);
+	}
+```

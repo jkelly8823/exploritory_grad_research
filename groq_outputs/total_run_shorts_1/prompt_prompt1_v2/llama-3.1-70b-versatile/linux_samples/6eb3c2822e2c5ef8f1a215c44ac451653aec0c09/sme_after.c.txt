@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-17
+VULNERABILITY_DESCRIPTION:
+Potential Information Disclosure or Unprivileged Use of Wireless Connection Keys. 
+
+The provided code contains a potentially vulnerable section where wireless connection keys are being handled. It is possible for the wdev->current_bss pointer to be set to NULL and then reassigned before being used, potentially causing unauthorized access to sensitive connection keys.
+
+EXPLANATION:
+The code contains consecutive checks that can allow the use of unauthenticated wireless keys for connection. Since this region doesn't validate keys that are used, it's essential to ensure they are correctly validated before being used. A plausible risk inherent in these lines is that if the connection keys used aren't validated securely, any individual with the key might have uncomplicated access to unapproved content on a secure internet.
+
+RECOMMENDATIONS:
+- Add better validation for wdev->current_bss pointer before using it in cfg80211_unhold_bss and cfg80211_put_bss calls.
+- Ensure the update and refresh of wireless keys should only be possible when current_bss in this code segment exists and isn't empty.
+- To further mitigate risks, add proper exception handling for warnings, e.g., 'WARN_ON_ONCE(!wiphy_to_dev(wdev->wiphy)->ops->connect)' should be expanded with proper operation handling or errors recovery plan.
+
+ORIGINAL CODE:
+
+}
+#endif
+
+if (!bss && (status == WLAN_STATUS_SUCCESS)) {
+	WARN_ON_ONCE(!wiphy_to_dev(wdev->wiphy)->ops->connect);
+	bss = cfg80211_get_bss(wdev->wiphy, NULL, bssid,
+				       wdev->ssid, wdev->ssid_len,
+				       WLAN_CAPABILITY_ESS,
+				       WLAN_CAPABILITY_ESS);
+	if (bss)
+		cfg80211_hold_bss(bss_from_pub(bss));
+}
+
+if (wdev->current_bss) {
+	cfg80211_unhold_bss(wdev->current_bss);
+	cfg80211_put_bss(wdev->wiphy, &wdev->current_bss->pub);
+	wdev->current_bss = NULL;
+	return;
+}
+
+if (WARN_ON(!bss))
+	return;
+
+wdev->current_bss = bss_from_pub(bss);
+
+cfg80211_upload_connect_keys(wdev);

@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 23-25
+VULNERABILITY_DESCRIPTION:
+The code contains a potential concurrency issue with the blk_mq_tag_wakeup_all function when called without proper synchronization.
+
+EXPLANATION:
+The blk_mq_tag_wakeup_all function is responsible for waking up threads waiting on tag events. However, this function appears to be called multiple times in the provided code snippet without proper synchronization. 
+
+The issue arises from the function's apparent reliance on the shared 'tags' variable and its internal state. Without additional locking or synchronization, it's possible for the internal state of 'tags' to be modified concurrently, leading to data corruption, inconsistent behavior, or crashes.
+
+Additionally, the atomic decrement operation on 'tags->active_queues' on line 11 and the update of 'tags->bitmap_tags' on line 19 does indicate an attempt at synchronization; however, it does not appear sufficient to prevent all races in this code.
+
+RECOMMENDATIONS:
+To resolve this issue, consider the following steps:
+
+1. Ensure that the 'tags' variable is properly synchronized using locks, semaphores, or other synchronization primitives to prevent concurrent modifications to its internal state.
+
+2. Carefully review the call flow and ensure that all paths that access the 'tags' variable are properly synchronized.
+
+3. Consider using a higher-level synchronization primitive that can ensure the entire wake-up operation is atomic.
+
+4. Add additional logging or error checking to detect potential concurrency issues.
+
+ORIGINAL CODE:
+
+}
+/*
+ * Wakeup all potentially sleeping on normal (non-reserved) tags
+ */
+static void blk_mq_tag_wakeup_all(struct blk_mq_tags *tags)
+{
+	struct blk_mq_bitmap_tags *bt;
+	int i, wake_index;
+
+
+		wake_index = bt_index_inc(wake_index);
+	}
+}
+
+/*
+ * If a previously busy queue goes inactive, potential waiters could now
+
+	atomic_dec(&tags->active_queues);
+
+	blk_mq_tag_wakeup_all(tags);
+}
+
+/*
+ * For shared tag users, we track the number of currently active users
+	 * static and should never need resizing.
+	 */
+	bt_update_count(&tags->bitmap_tags, tdepth);
+	blk_mq_tag_wakeup_all(tags);
+	return 0;
+}

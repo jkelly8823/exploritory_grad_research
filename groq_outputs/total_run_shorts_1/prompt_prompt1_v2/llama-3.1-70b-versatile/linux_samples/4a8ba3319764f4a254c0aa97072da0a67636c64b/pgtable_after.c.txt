@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+A potential information disclosure vulnerability through access to kernel pages.
+
+EXPLANATION:
+In the given function `__gmap_segment_gaddr`, there's a potential vulnerability when accessing `page->index`. If `page` points to an invalid or malicious page structure (e.g., due to an incorrect `virt_to_page` call), accessing `index` could potentially disclose sensitive kernel information.
+
+Moreover, the calculation of `page` relies on bitwise operations and casts, which might also contribute to potential memory corruption issues if not handled properly.
+
+The vulnerability arises from line 6 because `page->index` is accessed without proper checks on the validity and accessibility of the `page` pointer.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability:
+1.  Always perform null checks on `page` pointers before accessing its members. For example, you could add `if (page == NULL) { ... }` to handle such cases.
+2.  Consider adding error checking after the `virt_to_page` call to ensure the returned page is valid and correctly mapped.
+3.  Use kernel-specific APIs or functions to access page structures instead of direct accesses.
+4.  Revise the code to prevent uncontrolled integer casts and bitwise operations that might contribute to page pointers becoming invalid.
+
+ORIGINAL CODE:
+```c
+static unsigned long __gmap_segment_gaddr(unsigned long *entry)
+{
+    struct page *page;
+    unsigned long offset, mask;
+
+    offset = (unsigned long) entry / sizeof(unsigned long);
+    offset = (offset & (PTRS_PER_PMD - 1)) * PMD_SIZE;
+    mask = ~(PTRS_PER_PMD * sizeof(pmd_t) - 1);
+    page = virt_to_page((void *)((unsigned long) entry & mask));
+    return page->index + offset;
+}
+```

@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference and Use after free
+EXPLANATION:
+In the `mt76x0e_register_device` function, it appears that `mdev` is being freed before its value is checked, and both its pointer and referenced members are used afterwards without any null check. This may cause a null pointer dereference if `mt76_free_device(mdev)` sets `mdev` to `NULL`. It also seems like `mdev` is being freed while still in use because its referenced member is checked afterward.
+
+However, without knowing the definition and semantics of `mt76_free_device(mdev)`, we cannot be entirely sure of this behavior.
+
+Also, a function `mt76x0e_register_device` is calling itself recursively without any base case that would prevent infinite recursion. This function call is a potential infinite loop.
+
+And, variable `ret` seems to be undefined, which can cause undefined behavior if not defined anywhere.
+
+RECOMMENDATIONS:
+1. Check the return value of `mt76_free_device(mdev)` instead of directly returning in case of an error.
+2. Ensure that `mt76_free_device(mdev)` does not set `mdev` to `NULL`.
+3. Replace `mt76x0e_register_device(dev)` with its actual implementation, as the recursive call does not seem correct in the context of the provided snippet.
+4. Ensure that `ret` is defined before being used in the `if (ret)` condition.
+5. Consider adding a null pointer check after `mt76_free_device(mdev)` to prevent potential null pointer dereference.
+
+ORIGINAL CODE:
+    .reconfig_complete = mt76x02_reconfig_complete,
+};
+
+static int mt76x0e_register_device(struct mt76x02_dev *dev)
+{
+    int err;
+
+    mt76x0_chip_onoff(dev, true, false);
+    if (err < 0)
+        return err;
+
+    err = mt76x02_dma_init(dev);
+    if (err < 0)
+        return err;
+
+    err = mt76x0_init_hardware(dev);
+    if (err < 0)
+        return err;
+    mt76_clear(dev, 0x110, BIT(9));
+    mt76_set(dev, MT_MAX_LEN_CFG, BIT(13));
+
+    err = mt76x0_register_device(dev);
+    if (err < 0)
+        return err;
+
+    if (ret)
+        return ret;
+
+    mdev = mt76_alloc_device(&pdev->dev, sizeof(*dev), &mt76x0e_ops,
+                &drv_ops);
+    if (!mdev)
+        return -ENOMEM;
+    mt76_free_device(mdev);
+}
+
+static const struct pci_device_id mt76x0e_device_table[] = {
+    { PCI_DEVICE(PCI_VENDOR_ID_MEDIATEK, 0x7610) },
+    { PCI_DEVICE(PCI_VENDOR_ID_MEDIATEK, 0x7630) },
+    { PCI_DEVICE(PCI_VENDOR_ID_MEDIATEK, 0x7650) },
+    .id_table    = mt76x0e_device_table,
+    .probe        = mt76x0e_probe,
+    .remove        = mt76x0e_remove,
+};
+
+module_pci_driver(mt76x0e_driver);

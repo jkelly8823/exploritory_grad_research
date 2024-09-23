@@ -1,0 +1,48 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No vulnerabilities were detected in this code snippet.
+EXPLANATION:
+This code appears to be a part of a Linux kernel module, specifically the teaming module. The functions provided seem to handle team port operations, queuing of packets for transmission, and indexing of ports in a hash table.
+
+The `team_dev_queue_xmit` function is a critical function that handles packet transmission, and it follows standard best practices for ensuring correct packet handling, including error checking and proper updating of packet metadata.
+
+The `team_port_index_hash` function correctly handles hash calculations and indexing into the `en_port_hlist` array.
+
+Based on the provided code snippet, no vulnerabilities such as buffer overflows, uninitialized variables, or potential null pointer dereferences were detected.
+
+RECOMMENDATIONS:
+No specific recommendations for fixing vulnerabilities are necessary in this case.
+
+ORIGINAL CODE:
+```c
+}
+#endif
+
+struct team_mode_ops {
+	int (*init)(struct team *team);
+	void (*exit)(struct team *team);
+	rx_handler_result_t (*receive)(struct team *team,
+	long mode_priv[TEAM_MODE_PRIV_LONGS];
+};
+
+static inline int team_dev_queue_xmit(struct team *team, struct team_port *port,
+				      struct sk_buff *skb)
+{
+	BUILD_BUG_ON(sizeof(skb->queue_mapping) !=
+		     sizeof(qdisc_skb_cb(skb)->slave_dev_queue_mapping));
+	skb_set_queue_mapping(skb, qdisc_skb_cb(skb)->slave_dev_queue_mapping);
+
+	skb->dev = port->dev;
+	if (unlikely(netpoll_tx_running(team->dev))) {
+		team_netpoll_send_skb(port, skb);
+		return 0;
+	}
+	return dev_queue_xmit(skb);
+}
+
+static inline struct hlist_head *team_port_index_hash(struct team *team,
+						      int port_index)
+{
+	return &team->en_port_hlist[port_index & (TEAM_PORT_HASHENTRIES - 1)];
+```

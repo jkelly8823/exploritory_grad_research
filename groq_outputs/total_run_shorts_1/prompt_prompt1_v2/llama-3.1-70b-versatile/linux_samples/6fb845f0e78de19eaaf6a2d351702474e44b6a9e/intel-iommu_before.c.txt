@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 15
+VULNERABILITY_DESCRIPTION: 
+Use of kernel exposed variables and potential double free issue.
+
+EXPLANATION:
+The code snippet provided uses global variables such as `intel_iommu_superpage`, `intel_iommu_sm`, and `intel_iommu_tboot_noforce` to store state that can potentially be modified from multiple parts of the code. While this is not a vulnerability per se, it could lend itself to issues if this code is part of a multithreaded or interrupt-driven system. 
+
+Furthermore, in the second part of the snippet, we see the iteration over a list and freeing of its elements (`entry`) inside the loop. The issue here is that if this free operation fails, or if the freed element is still referenced elsewhere in the code, we will be dealing with a use-after-free issue. However, the real concern is that the `list_for_each_entry_safe` macro does not prevent another thread or interrupt from modifying the list after the entry has been freed.
+
+Additionally, there is another potential concern with double free here - that if the list iterator 'entry' and 'next' point to the same entry, then after 'entry' is freed, 'next' is still pointing at that freed memory.  While the `list_for_each_entry_safe` macro does appear designed to avoid that use, this does depend on `entry` actually being freed if it's going to be removed from the list, and does not prevent the underlying `list` from being modified. 
+
+RECOMMENDATIONS:
+1. Expose the variables as API accessible functions where relevant, thus encapsulating access to globals.
+2. Consider separating list iteration from freeing to avoid freeing items in a list that another thread or interrupt may be iterating over. 
+3. Use additional synchronization mechanisms where possible to ensure list modification can only be done atomically.
+
+ORIGINAL CODE:
+```c
+static int dmar_forcedac;
+static int intel_iommu_strict;
+static int intel_iommu_superpage = 1;
+static int intel_iommu_sm = 1;
+static int iommu_identity_mapping;
+
+#define IDENTMAP_ALL		1
+#define IDENTMAP_GFX		2
+		} else if (!strncmp(str, "sp_off", 6)) {
+			pr_info("Disable supported super page\n");
+			intel_iommu_superpage = 0;
+		} else if (!strncmp(str, "sm_off", 6)) {
+			pr_info("Intel-IOMMU: disable scalable mode support\n");
+			intel_iommu_sm = 0;
+		} else if (!strncmp(str, "tboot_noforce", 13)) {
+			printk(KERN_INFO
+				"Intel-IOMMU: not forcing on after tboot. This could expose security risk for tboot\n");
+			intel_iommu_tboot_noforce = 1;
+	struct iommu_resv_region *entry, *next;
+
+	list_for_each_entry_safe(entry, next, head, list) {
+		if (entry->type == IOMMU_RESV_RESERVED)
+			kfree(entry);
+	}
+}
+```

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-19
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow due to incorrect casting.
+
+EXPLANATION:
+The function get_tod_clock_ext() stores 16 bytes into the clk array using the stcke instruction. However, the function get_tod_clock() attempts to read an 8-byte unsigned long long value from the second byte of the clk array. This is incorrect because the bytes in the clk array are not necessarily organized in a way that allows for a direct 8-byte read, and it can also cause a buffer overflow if the two bytes before the intended read location contain non-zero values, as it will increment the read value by using those bytes as a 'prefix'.
+
+Moreover, the code has an off-by-one error and may also encounter endianness issues because it tries to directly cast a byte array into an unsigned long long. 
+
+RECOMMENDATIONS:
+- Change the get_tod_clock_ext() function to return a struct of type addrtype containing the complete STORE_CLOCK_EXT_SIZE bytes.
+- Modify the get_tod_clock() function to extract the required information from the struct, ensuring that there is no incorrect casting.
+- Ensure that any byte array is properly zero-padded or 'prefix' values are sanitized to prevent buffer overflow risks.
+
+ORIGINAL CODE:
+```c
+set_clock_comparator(S390_lowcore.clock_comparator);
+}
+
+#define CLOCK_TICK_RATE		1193180 /* Underlying HZ */
+#define STORE_CLOCK_EXT_SIZE	16	/* stcke writes 16 bytes */
+
+typedef unsigned long long cycles_t;
+
+static inline void get_tod_clock_ext(char *clk)
+{
+	typedef struct { char _[STORE_CLOCK_EXT_SIZE]; } addrtype;
+
+	asm volatile("stcke %0" : "=Q" (*(addrtype *) clk) : : "cc");
+}
+
+static inline unsigned long long get_tod_clock(void)
+{
+	unsigned char clk[STORE_CLOCK_EXT_SIZE];
+
+	get_tod_clock_ext(clk);
+	return *((unsigned long long *)&clk[1]);
+}
+```
+
+It's also worth noting that potential issues regarding undefined behavior due to aliasing and violating the strict-aliasing rule have to be examined with more knowledge of surrounding source code as of right now due to limitations of this isolated code examination and should be worked on.

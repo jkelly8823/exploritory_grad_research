@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Double Free Vulnerability, Use After Free Vulnerability
+EXPLANATION:
+In the given code snippet, memory is allocated using `kzalloc` and assigned to `edev`. However, the code does not check if the allocation was successful. `kzalloc` can return a null pointer if the allocation failed. But even more critical is that `edev` is assigned a new value after it is assigned from another source, `dev->ec_ptr`. This previous `dev->ec_ptr` is never checked to see if the memory has been freed.
+If `dev->ec_ptr` points to the same location that the new memory is being written to (from the `kzalloc`), and this memory was previously allocated, then this previous location can be the result of a double free situation. Additionally, if the memory pointed to by `dev->ec_ptr` has already been freed, this can result in a use after free situation.
+
+The control flow where `dev->ec_ptr` points to `NULL` before it is "reassigned" to a new allocation can help to mitigate such bad behavior. But if it points to non `NULL` this behavior will likely happen.
+RECOMMENDATIONS:
+To prevent Double Free Vulnerability and Use After Free Vulnerability, it is necessary to:
+- Always check if the memory allocation was successful
+- Free the old memory if `edev` is not null before it can be reassigned to point at new allocation
+Here is an example:
+
+```c
+err = 0;
+switch (cmd) {
+case SIOCSIFADDR:
+	edev = dev->ec_ptr;
+	if (edev != NULL) {
+		/* Free old allocation */
+		kfree(edev);
+		edev = dev->ec_ptr = NULL; // assign back to NULL
+	}
+	/* No more magic. Allocate only when really needed. */
+	edev = dev->ec_ptr = kzalloc(sizeof(struct ec_device), GFP_KERNEL);
+	if (edev == NULL) {
+		/* Handle memory allocation failure */
+	}
+```
+ORIGINAL CODE:
+```c
+err = 0;
+switch (cmd) {
+case SIOCSIFADDR:
+	edev = dev->ec_ptr;
+	if (edev == NULL) {
+		/* Magic up a new one. */
+		edev = kzalloc(sizeof(struct ec_device), GFP_KERNEL);
+```

@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES:withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT
+VULNERABILITY_DESCRIPTION:
+Insufficient validation of input data in the withdraw function.
+
+EXPLANATION:
+The code snippet does not properly validate the withdrawAmount value in the withdraw function. A negative or NaN (Not a Number) input can cause unexpected behavior in the program, such as reducing the account balance by an incorrect amount or producing an exception. The check only verifies if the withdrawAmount is less than the MAXIMUM_WITHDRAWAL_LIMIT but does not account for invalid or negative values.
+
+Additionally, a race condition may occur if multiple threads access the accountBalance simultaneously, which could result in inconsistent data.
+
+RECOMMENDATIONS:
+First, verify that the withdrawAmount is a positive number before processing the withdrawal request. Second, consider adding thread-safe functionality to prevent inconsistent data in multi-threaded environments.
+
+An example of how to validate input data could be as follows:
+
+```java
+public void withdraw(double withdrawAmount) {
+  
+  if (withdrawAmount <= 0) {
+      System.err.println("Invalid withdrawal amount");
+  } else if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+      double newBalance = accountBalance - withdrawAmount;
+      accountBalance = newBalance;
+  } else {
+      System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");
+  }
+}
+```
+
+Additionally, using a atomic double for accountBalance or a locked block would help to prevent race condition problems:
+
+```java
+private java.util.concurrent.atomic.AtomicDouble accountBalance;
+
+...
+
+public void withdraw(double withdrawAmount) {
+  synchronized (this) {
+    if (withdrawAmount <= 0) {
+        System.err.println("Invalid withdrawal amount");
+    } else if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+        double newBalance = accountBalance.get() - withdrawAmount;
+        accountBalance.set(newBalance);
+    } else {
+        System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");
+    }
+  }
+}
+```
+
+ORIGINAL CODE:
+                  public class BankAccount {
+                        
+                           public final int MAXIMUM_WITHDRAWAL_LIMIT = 350;
+                           
+                           // variable for bank account balance
+                           private double accountBalance;
+                           
+                           // constructor for BankAccount
+                           public BankAccount() {accountBalance = 0;}
+                           
+                           // method to deposit amount into BankAccount
+                           public void deposit(double depositAmount) {...}
+                           
+                           // method to withdraw amount from BankAccount
+                           public void withdraw(double withdrawAmount) {
+                              
+                                 if (withdrawAmount < MAXIMUM_WITHDRAWAL_LIMIT) {
+                                    
+                                       double newBalance = accountBalance - withdrawAmount;accountBalance = newBalance;
+                                 }else {System.err.println("Withdrawal amount exceeds the maximum limit allowed, please try again...");...}
+                           }
+                           
+                           // other methods for accessing the BankAccount object
+                           ...
+                     }
+               
+               

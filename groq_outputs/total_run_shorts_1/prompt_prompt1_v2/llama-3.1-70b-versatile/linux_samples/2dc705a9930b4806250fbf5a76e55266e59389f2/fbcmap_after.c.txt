@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15, 22-23, 24-25
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory access vulnerability, and potential double-free vulnerability due to missing error handling.
+EXPLANATION:
+The vulnerabilities exist in both functions `fb_copy_cmap` and `fb_cmap_to_user`. 
+In the first function, `fb_copy_cmap`, the code is vulnerable to out-of-bounds memory access when copying data from `from->red` to `to->red` using `memcpy`. This can happen if the `fromoff` or `tooff` offsets exceed the size of `from->red` or `to->red` respectively, potentially leading to arbitrary code execution. 
+Additionally, the function is missing a terminating return statement which can cause undefined behavior if not fixed.
+
+In the second function, `fb_cmap_to_user`, the code is vulnerable to a double-free vulnerability due to missing error handling. If the `copy_to_user` function fails (returns non-zero), the function will also return an error, but this might have already partially copied into the destination buffer. If this buffer is freed in the error handling code path (not shown), it could lead to a double-free vulnerability.
+ 
+RECOMMENDATIONS:
+In the `fb_copy_cmap` function, add a bounds check to prevent out-of-bounds memory access. Also, add a terminating return statement.
+
+In the `fb_cmap_to_user` function, handle the error return of `copy_to_user` properly. Check the return value and handle partial copies accordingly.
+
+Additionally, consider using a safer, bounds-checked version of `memcpy`, such as `memmove`.
+
+ORIGINAL CODE:
+```c
+int fb_copy_cmap(const struct fb_cmap *from, struct fb_cmap *to)
+{
+	unsigned int tooff = 0, fromoff = 0;
+	size_t size;
+
+	if (to->start > from->start)
+		fromoff = to->start - from->start;
+	else
+		tooff = from->start - to->start;
+	if (fromoff >= from->len || tooff >= to->len)
+		return -EINVAL;
+
+	size = min_t(size_t, to->len - tooff, from->len - fromoff);
+	if (size == 0)
+		return -EINVAL;
+	size *= sizeof(u16);
+
+	memcpy(to->red+tooff, from->red+fromoff, size);
+
+int fb_cmap_to_user(const struct fb_cmap *from, struct fb_cmap_user *to)
+{
+	unsigned int tooff = 0, fromoff = 0;
+	size_t size;
+
+	if (to->start > from->start)
+		fromoff = to->start - from->start;
+	else
+		tooff = from->start - to->start;
+	if (fromoff >= from->len || tooff >= to->len)
+		return -EINVAL;
+
+	size = min_t(size_t, to->len - tooff, from->len - fromoff);
+	if (size == 0)
+		return -EINVAL;
+	size *= sizeof(u16);
+
+	if (copy_to_user(to->red+tooff, from->red+fromoff, size))
+```

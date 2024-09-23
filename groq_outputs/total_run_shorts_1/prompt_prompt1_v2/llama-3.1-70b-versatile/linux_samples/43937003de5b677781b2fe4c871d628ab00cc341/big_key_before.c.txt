@@ -1,0 +1,108 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-21, 23-24
+VULNERABILITY_DESCRIPTION:
+Error Handling and Resource Leak Vulnerability
+EXPLANATION:
+The provided code snippet appears to be a part of a Linux kernel module that initializes cryptographic routines. However, the code contains a resource leak and error handling vulnerability.
+
+Specifically, in the `big_key_crypto_init` function, when an error occurs during the initialization of the block cipher (`big_key_skcipher`), the function returns an error code without freeing the already allocated RNG (`big_key_rng`). This results in a resource leak, as the allocated RNG is not properly released.
+
+Additionally, the error handling for the `crypto_rng_reset` function is inadequate. If the `crypto_rng_reset` function fails, the function returns an error code without checking the return value of the `crypto_rng_seedsize` function. This could lead to unexpected behavior if the `crypto_rng_seedsize` function returns an error.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should free the allocated RNG (`big_key_rng`) in the error path after initializing the block cipher (`big_key_skcipher`).
+
+Additionally, you should check the return value of the `crypto_rng_seedsize` function and handle any potential errors.
+
+Here is an updated version of the `big_key_crypto_init` function with improved error handling and resource management:
+
+```c
+/* Initialize big_key crypto and RNG algorithms */
+static int __init big_key_crypto_init(void)
+{
+	int ret = -EINVAL;
+
+	/* init RNG */
+	big_key_rng = crypto_alloc_rng(big_key_rng_name, 0, 0);
+	if (IS_ERR(big_key_rng)) {
+		big_key_rng = NULL;
+		return -EFAULT;
+	}
+
+	/* seed RNG */
+	ret = crypto_rng_reset(big_key_rng, NULL, crypto_rng_seedsize(big_key_rng));
+	if (ret) {
+		crypto_free_rng(big_key_rng);
+		big_key_rng = NULL;
+		return ret;
+	}
+
+	/* init block cipher */
+	big_key_skcipher = crypto_alloc_skcipher(big_key_alg_name,
+						 0, CRYPTO_ALG_ASYNC);
+	if (IS_ERR(big_key_skcipher)) {
+		crypto_free_rng(big_key_rng);
+		big_key_rng = NULL;
+		big_key_skcipher = NULL;
+		return -EFAULT;
+	}
+
+	return 0;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+ * 2 of the Licence, or (at your option) any later version.
+ */
+
+#include <linux/init.h>
+#include <linux/seq_file.h>
+#include <linux/file.h>
+#include <linux/shmem_fs.h>
+ */
+static int __init big_key_init(void)
+{
+	return register_key_type(&key_type_big_key);
+}
+
+/*
+ * Initialize big_key crypto and RNG algorithms
+ */
+static int __init big_key_crypto_init(void)
+{
+	int ret = -EINVAL;
+
+	/* init RNG */
+	big_key_rng = crypto_alloc_rng(big_key_rng_name, 0, 0);
+	if (IS_ERR(big_key_rng)) {
+		big_key_rng = NULL;
+		return -EFAULT;
+	}
+
+	/* seed RNG */
+	ret = crypto_rng_reset(big_key_rng, NULL, crypto_rng_seedsize(big_key_rng));
+	if (ret)
+		goto error;
+
+	/* init block cipher */
+	big_key_skcipher = crypto_alloc_skcipher(big_key_alg_name,
+						 0, CRYPTO_ALG_ASYNC);
+	if (IS_ERR(big_key_skcipher)) {
+		big_key_skcipher = NULL;
+		ret = -EFAULT;
+		goto error;
+	}
+
+	return 0;
+
+error:
+	crypto_free_rng(big_key_rng);
+	big_key_rng = NULL;
+	return ret;
+}
+
+device_initcall(big_key_init);
+late_initcall(big_key_crypto_init);
+```

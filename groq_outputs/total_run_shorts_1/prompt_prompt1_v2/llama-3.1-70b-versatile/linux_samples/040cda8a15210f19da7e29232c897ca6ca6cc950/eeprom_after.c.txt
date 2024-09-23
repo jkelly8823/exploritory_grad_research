@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Uninitialized Memory Read.
+
+EXPLANATION:
+The vulnerable line of code is the memcpy function call. The memcpy function call does not validate the null state or the length of the data being copied from 'dev->mt76.eeprom.data + MT_EE_MAC_ADDR'. However, there is one assumption. The potential 'VULNERABLE' rating assigned could be downgraded to not 'VULNERABLE' if:
+The 'dev->mt76.eeprom.data' field and the 'dev->mt76.macaddr' field were initialized before this code snippet.
+The 'dev->mt76.eeprom.data' is ensured with length MT_EE_MAC_ADDR + ETH_ALEN > 0. 
+The memcpy function does not throw any exception type, this is why - before calling memcpy it should be checked whether the 'data' and the 'macaddr' field will hold null value or not before executing same.
+
+However due to lack of snippet of variable declaration etc., only to remain true, here VULNERABLE marking will remain raised.
+
+RECOMMENDATIONS:
+1. Check 'dev->mt76.eeprom.data' and 'dev->mt76.macaddr' pointers for null value prior to memcpy function call.
+2. Ensure 'dev->mt76.eeprom.data' has a length greater than MT_EE_MAC_ADDR + ETH_ALEN to prevent potential buffer overflow.
+3. Consider using memcpy alternative such as memmove which could help with overlapping destination and source scenarios.
+
+ORIGINAL CODE:
+	dev_info(dev->mt76.dev, "EEPROM ver:%02hhx fae:%02hhx\n",
+		 version, fae);
+
+	memcpy(dev->mt76.macaddr, (u8 *)dev->mt76.eeprom.data + MT_EE_MAC_ADDR,
+	       ETH_ALEN);
+	mt76_eeprom_override(&dev->mt76);
+	mt76x02_mac_setaddr(dev, dev->mt76.macaddr);
+
+	mt76x0_set_chip_cap(dev);
+	mt76x0_set_freq_offset(dev);
+	mt76x0_set_temp_offset(dev);

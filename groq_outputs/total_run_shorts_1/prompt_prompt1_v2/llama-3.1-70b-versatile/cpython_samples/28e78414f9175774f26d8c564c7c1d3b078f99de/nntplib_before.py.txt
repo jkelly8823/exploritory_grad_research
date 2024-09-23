@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The class NNTPError does not properly handle its 'args' or '**kwargs' parameters, potentially causing it to be used as a vector for injection attacks when the exception message is displayed to the user.
+
+EXPLANATION:
+In this code snippet, the NNTPError exception class does not properly handle the '*args' passed to its constructor. The __init__ method does take these arguments, but does not actually use or sanitize them before calling the 'file.readline' method. If untrusted data is used in creation of NNTPError objects, an attacker might be able to manipulate the string representation of the exception to inject malicious payloads, potentially leading to further vulnerabilities or attacks. While the exception creation itself appears not to be an attack vector here, sending an untrusted exception message could potentially be.
+
+RECOMMENDATIONS:
+When creating the exception message, make sure to properly escape or sanitize the input data, i.e., use an f-string or string.format to construct the exception message, while properly escaping or sanitizing the 'args' and 'kwargs'. Here's an example of how to properly handle this:
+
+```python
+class NNTPError(Exception):
+    """Base class for all nntplib exceptions"""
+    def __init__(self, *args):
+        if args:
+            self._args = args
+            # use repr() for safe string representation
+            super().__init__(repr(args))
+        else:
+            super().__init__()
+
+    def __str__(self):
+        # ensure proper escaping here
+        return repr(self._args) if hasattr(self, '_args') else ''
+```
+The included implementation does still take in *args, and calls 'super().__init__' with these args properly escaped as a string.
+
+ORIGINAL CODE:
+```python
+"decode_header",
+           ]
+
+# Exceptions raised when an error or invalid response is received
+class NNTPError(Exception):
+    """Base class for all nntplib exceptions"""
+    def __init__(self, *args):
+        """Internal: return one line from the server, stripping _CRLF.
+        Raise EOFError if the connection is closed.
+        Returns a bytes object."""
+        line = self.file.readline()
+        if self.debugging > 1:
+            print('*get*', repr(line))
+        if not line: raise EOFError
+        if strip_crlf:
+```

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Null pointer dereference vulnerability.
+
+EXPLANATION:
+The vulnerability is caused by the line `usermsr = tsk->thread.regs->msr;`. Although the code checks if `tsk->thread.regs` is null before accessing its member `msr`, there is no check if `tsk->thread.regs` itself becomes null between the null check (`if (!tsk->thread.regs)`) and the access (`->msr`). This can occur in a multi-threaded environment if one thread frees the memory pointed to by `tsk->thread.regs` between the null check and the access. However, given the small timeframe between these two operations and the fact that this specific vulnerable line only consists of one line after a check on it's pointer, the chances of such occurrence can be considered reasonably slim.
+
+RECOMMENDATIONS:
+Add a null pointer check for `tsk->thread.regs` immediately before accessing its member `msr` to mitigate the vulnerability. This would increase confidence in avoiding a null pointer dereference, albeit very unlikely.
+
+Alternatively, the dereference operation can be done using a temporary variable to ensure that the check and access are atomic.
+
+```c
+if (tsk->thread.regs) {
+    struct regs *regs = tsk->thread.regs;
+    usermsr = regs->msr;
+}
+```
+
+ORIGINAL CODE:
+```c
+if (!tsk->thread.regs)
+	return;
+
+usermsr = tsk->thread.regs->msr;
+
+if ((usermsr & msr_all_available) == 0)
+	return;
+
+msr_check_and_set(msr_all_available);
+check_if_tm_restore_required(tsk);
+
+WARN_ON((usermsr & MSR_VSX) && !((usermsr & MSR_FP) && (usermsr & MSR_VEC)));
+
+#ifdef CONFIG_PPC_FPU
+```

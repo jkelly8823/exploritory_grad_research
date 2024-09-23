@@ -1,0 +1,92 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+There are a few lines of code that could potentially be vulnerable to different types of attacks, these include the use of certain unsanitized variables to index arrays, as well as user-supplied data being written directly to memory locations.
+
+VULNERABILITY_DESCRIPTION: 
+This vulnerability is potentially vulnerable to array indexing attacks or memory corruption attacks.
+
+EXPLANATION: 
+This vulnerability occurs because unsanitized variables are being used to index arrays and control memory accesses. This unsanitized input is passed in directly from user-controllable sources or "exit reason" variables such as 'exit_reason.basic' that could potentially be attacked by an attacker. It is not safe to allow unsanitized variables to control memory accesses or array indexing.
+
+For instance, the 'array indexing', will cause issues if the index or array size changes, because this code does not do any 'out-of-bounds' checking, so we're protected currently because the 'number of handled exit reasons' cannot change.
+
+The line:
+ [EXIT_REASON_BUS_LOCK]                = handle_bus_lock_vmexit,
+This would be at risk if an attacker were able to spoof any specific exit reason they wanted.
+
+Another line has a different type of issue:
+ set_bit(0, vmx_vpid_bitmap); 
+This code sets a bit in a bitmap. However, this does not protect against all forms of hardware-level attacks, and there is potentially an additional issue at play here because there's not an adequate hardware-level protection being used to protect against this particular class of data-only attacks.
+
+This code should ensure proper usage and input validation of user-supplied variables that directly index into arrays.
+
+RECOMMENDATIONS:
+More secure versions of these lines might resemble the following examples:
+
+Instead of using unsanitized variables directly:
+    /* check bounds before indexing */
+    uint32_t index = exit_reason.basic;
+    if(index >= 0 && index < kvm_vmx_max_exit_handlers) {
+        vcpu->exit_handler = kvm_vmx_exit_handlers[index];
+    } 
+
+The unsanitized data should not be passed directly into potentially memory-violating function calls like this. It could allow for arbitrary memory access attacks.
+
+A hardware-level error that can be addressed is one at the call:
+ set_bit(0, vmx_vpid_bitmap); 
+Not all different types of hardware-level protection mechanisms are being used.
+
+Additionally, adding appropriate error checking or potentially adding error handling for values that exceed the maximum value could also further mitigate this issue.
+
+There is also one potential hardware-level protection lacking issue here; These protections could potentially mitigate some types of attacks.
+
+ORIGINAL CODE:
+            SECONDARY_EXEC_PT_USE_GPA |
+            SECONDARY_EXEC_PT_CONCEAL_VMX |
+            SECONDARY_EXEC_ENABLE_VMFUNC |
+            SECONDARY_EXEC_BUS_LOCK_DETECTION;
+    if (cpu_has_sgx())
+        opt2 |= SECONDARY_EXEC_ENCLS_EXITING;
+    if (adjust_vmx_controls(min2, opt2,
+            MSR_IA32_VMX_PROCBASED_CTLS2,
+    if (!vcpu->kvm->arch.bus_lock_detection_enabled)
+        exec_control &= ~SECONDARY_EXEC_BUS_LOCK_DETECTION;
+
+    return exec_control;
+}
+
+static inline int vmx_get_pid_table_order(struct kvm *kvm)
+        vmx->ple_window_dirty = true;
+    }
+
+    vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
+    vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
+    vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
+
+    return 1;
+}
+
+/*
+ * The exit handlers return 1 if the exit was handled fully and guest execution
+ * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
+ * to be done to userspace and return 0.
+    [EXIT_REASON_PREEMPTION_TIMER]          = handle_preemption_timer,
+    [EXIT_REASON_ENCLS]              = handle_encls,
+    [EXIT_REASON_BUS_LOCK]                = handle_bus_lock_vmexit,
+};
+
+static const int kvm_vmx_max_exit_handlers =
+        ARRAY_SIZE(kvm_vmx_exit_handlers);
+         exit_reason.basic != EXIT_REASON_EPT_VIOLATION &&
+         exit_reason.basic != EXIT_REASON_PML_FULL &&
+         exit_reason.basic != EXIT_REASON_APIC_ACCESS &&
+         exit_reason.basic != EXIT_REASON_TASK_SWITCH)) {
+        int ndata = 3;
+
+        vcpu->run->exit_reason = KVM_EXIT_INTERNAL_ERROR;
+        vcpu->run->internal.suberror = KVM_INTERNAL_ERROR_DELIVERY_EV;
+kvm_caps.max_tsc_scaling_ratio = KVM_VMX_TSC_MULTIPLIER_MAX;
+kvm_caps.tsc_scaling_ratio_frac_bits = 48;
+kvm_caps.has_bus_lock_exit = cpu_has_vmx_bus_lock_detection();
+
+set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */

@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION: 
+The code has a potential null pointer dereference vulnerability in the `i915_gem_pwrite_ioctl` function.
+
+EXPLANATION: 
+The vulnerability is present because the `obj` pointer is checked for null after it's used to access its `base` member in the line `obj = to_intel_bo(drm_gem_object_lookup(dev, file, args->handle))`. Although a null check is present in the following lines (`if (&obj->base == NULL)`), this check is incorrect as it checks if the address of `obj->base` is null, not if `obj` itself is null.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, the null check should be done immediately after the `drm_gem_object_lookup` call, like this:
+```c
+obj = to_intel_bo(drm_gem_object_lookup(dev, file, args->handle));
+if (obj == NULL) {
+    ret = -ENOENT;
+    drm_gem_object_unreference(&obj->base);
+unlock:
+    mutex_unlock(&dev->struct_mutex);
+    return ret;
+}
+```
+Additionally, the incorrect null check should be removed.
+
+ORIGINAL CODE:
+```c
+i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
+		      struct drm_file *file)
+{
+	struct drm_i915_gem_pwrite *args = data;
+	struct drm_i915_gem_object *obj;
+	int ret;
+
+			return -EFAULT;
+	}
+
+	ret = i915_mutex_lock_interruptible(dev);
+	if (ret)
+		return ret;
+
+	obj = to_intel_bo(drm_gem_object_lookup(dev, file, args->handle));
+	if (&obj->base == NULL) {
+		ret = -ENOENT;
+	drm_gem_object_unreference(&obj->base);
+unlock:
+	mutex_unlock(&dev->struct_mutex);
+	return ret;
+}
+```

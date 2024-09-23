@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 41, 43-46
+VULNERABILITY_DESCRIPTION:
+The kernel thread creation function uses a potential function pointer, which might be overwritten or tampered with. The function 'threadfn' is used without any validation, allowing a potential code execution vulnerability.
+
+EXPLANATION:
+The function pointer 'threadfn' is obtained from a struct 'create' which is allocated using kmalloc. This allocation can potentially fail, leaving 'create' as a dangling pointer. Although the allocation status is checked, there is no validation of the contents of the 'create' structure. Specifically, the 'threadfn' function pointer is not validated before its usage.
+
+If an attacker can control or tamper with the contents of the 'create' structure, they can set 'threadfn' to a malicious function pointer. When 'threadfn' is invoked with 'data' as its argument, this could potentially lead to code execution under the attacker's control.
+
+Moreover, there are a few potential issues:
+
+* At line 41, if the kernel is built with CONFIG_DEBUG_LIST enabled, and the spinlock is held when list_add_tail is called, it can lead to undefined behavior.
+
+* At lines 43-46, within the `kthread_create` function, there's a potential race condition issue:
+
+  When 'wake_up_process' is invoked for 'kthreadd_task', it may occur before or after the addition of the 'create' structure to the list. This could lead to 'kthreadd' potentially accessing or executing an invalid 'create' structure.
+
+RECOMMENDATIONS:
+1. Validate the 'threadfn' function pointer before its usage. This could be done by checking its address against a set of allowed function addresses or by using a Function Pointer Authentication mechanism if available.
+
+2. Ensure the contents of the 'create' structure are initialized and validated before their usage.
+
+3. Reorder the operations to ensure the spinlock 'kthread_create_lock' is held while adding the 'create' structure to the list and then invoking 'wake_up_process'.
+
+4. Ensure the kernel thread creation function has proper error handling.
+
+5. Instead of directly assigning a value to 'threadfn', consider using a setter function that will perform validation and other checks before setting the 'threadfn' pointer.
+
+ORIGINAL CODE:
+ 
+The original code presented was split into two main parts. However, due to some context missing I was forced to infer the connections between the first part and the second (which was `kthread_create_on_node`)

@@ -1,0 +1,90 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-13, 26-28
+VULNERABILITY_DESCRIPTION:
+Memory leak due to incomplete cleanup of resources, and potential use-after-free error.
+
+EXPLANATION:
+The code allocates memory for `device` using `kzalloc`, and then attempts to reserve a minor number using `ida_alloc_max`. However, if `ida_alloc_max` fails and returns a negative value, the code only frees the `minor` variable, but not the `device` memory that was allocated earlier. This can lead to a memory leak.
+
+Furthermore, the code checks for the allocation failure of `device` and returns an error code if it fails, but it does not free the `minor` number that was allocated earlier. This can lead to a resource leak.
+
+Additionally, the code has an incomplete cleanup path at the `out` label. The code only jumps to this label when `minor` is less than 0, but it does not free the `device` memory that was allocated earlier.
+
+RECOMMENDATIONS:
+To fix the memory leak, the code should free the `device` memory when `ida_alloc_max` fails. The code should also free the `minor` number when it is no longer needed.
+
+Here is the corrected code:
+
+```c
+struct inode *inode = NULL;
+struct dentry *root = sb->s_root;
+struct binderfs_info *info = sb->s_fs_info;
+#if defined(CONFIG_IPC_NS)
+bool use_reserve = (info->ipc_ns == &init_ipc_ns);
+#else
+bool use_reserve = true;
+#endif
+
+device = kzalloc(sizeof(*device), GFP_KERNEL);
+if (!device)
+	return -ENOMEM;
+
+	/* Reserve a new minor number for the new device. */
+mutex_lock(&binderfs_minors_mutex);
+minor = ida_alloc_max(&binderfs_minors,
+		      use_reserve ? BINDERFS_MAX_MINOR :
+					    BINDERFS_MAX_MINOR_CAPPED,
+		      GFP_KERNEL);
+mutex_unlock(&binderfs_minors_mutex);
+if (minor < 0) {
+	kfree(device);
+	return minor;
+}
+```
+
+Additionally, the code should free the `device` memory at the `out` label:
+
+```c
+.fs_flags	= FS_USERNS_MOUNT,
+};
+kfree(device); // Add this line to free the device memory
+return ret;
+```
+
+ORIGINAL CODE:
+```c
+struct inode *inode = NULL;
+struct dentry *root = sb->s_root;
+struct binderfs_info *info = sb->s_fs_info;
+#if defined(CONFIG_IPC_NS)
+bool use_reserve = (info->ipc_ns == &init_ipc_ns);
+#else
+bool use_reserve = true;
+#endif
+
+device = kzalloc(sizeof(*device), GFP_KERNEL);
+if (!device)
+	return -ENOMEM;
+
+	/* Reserve a new minor number for the new device. */
+mutex_lock(&binderfs_minors_mutex);
+minor = ida_alloc_max(&binderfs_minors,
+		      use_reserve ? BINDERFS_MAX_MINOR :
+					    BINDERFS_MAX_MINOR_CAPPED,
+		      GFP_KERNEL);
+mutex_unlock(&binderfs_minors_mutex);
+if (minor < 0) {
+	ret = minor;
+	goto out;
+	.fs_flags	= FS_USERNS_MOUNT,
+};
+
+int __init init_binderfs(void)
+{
+	int ret;
+
+	/* Allocate new major number for binderfs. */
+
+	return ret;
+}
+```

@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 6
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a buffer overflow vulnerability and a potential null pointer dereference.
+
+EXPLANATION:
+The buffer overflow occurs because the fgets() function does not null-check the input before assigning it to the buf array. If the fgets() function encounters an error, it will return NULL, and then the program will attempt to pass this NULL value to the checkChecksum() function. This could potentially cause a null pointer dereference. Additionally, even if fgets() succeeds, it does not guarantee that the null-terminated string it stores in buf will fit entirely within the array. fgets() will only read up to BUF_SZ - 1 characters to leave space for the null terminator, but it does not prevent a longer string from being read in the future. However, in this case, fgets is not overflowing because it is given the exact size of the buffer.
+
+However, there is still an issue here. The program does not check if the fgets() function successfully read anything before passing its return value to checkChecksum() and decodeBlock(). If fgets() fails to read the file and returns NULL, it can cause a null pointer dereference.
+
+Additionally, while we do not have the source for checkChecksum() or decodeBlock(), its worth noting that these functions are still being passed potential null pointers.
+
+RECOMMENDATIONS:
+Check the return values of fgets() to handle the potential failure, and explicitly verify if the fgets() function read anything. This can be done by checking if the buf array starts with a null byte, and if the fgets() function returned NULL. We should also add error handling code to handle the case where fgets() reads a null byte into the buffer.
+
+```c
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];
+    FILE* f = fopen(fName, "r");
+    if (!f) {
+        printf("cannot open %s\n", fName);
+        return DECODE_FAIL;
+    } else {
+        while (fgets(buf, BUF_SZ, f)) {
+            if (buf == NULL) {
+                printf("fgets failed to read the file.\n");
+                fclose(f);
+                return DECODE_FAIL;
+            } else if (buf[0] == '\0') {
+                break;
+            }
+            if (!checkChecksum(buf)) {
+                fclose(f);
+                return DECODE_FAIL;
+            } else {
+                decodeBlock(buf);
+            }
+        }
+        fclose(f);
+        return DECODE_SUCCESS;
+    }
+}
+```
+
+ORIGINAL CODE:
+
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];
+    FILE* f = fopen(fName, "r");
+    if (!f) {
+            printf("cannot open %s\n", fName);
+            return DECODE_FAIL;
+    } else {
+         while (fgets(buf, BUF_SZ, f)) {
+              if (!checkChecksum(buf)) {
+                return DECODE_FAIL;
+             } else {
+              decodeBlock(buf);
+            }
+         }
+         fclose(f);
+         return DECODE_SUCCESS;
+    }
+}

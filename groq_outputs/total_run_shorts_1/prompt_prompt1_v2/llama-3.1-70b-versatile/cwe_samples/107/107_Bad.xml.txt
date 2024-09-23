@@ -1,0 +1,51 @@
+VULNERABLE: Yes
+VULNERABLE_LINES: 8,9,12
+VULNERABILITY_DESCRIPTION:
+The code contains regular expression patterns that are not using a secure approach to validate input data, making it vulnerable to Regular Expression Denial of Service (ReDoS).
+
+EXPLANATION:
+The code uses regular expressions to validate user input for the "state", "zipcode", and "phone" fields. While it is a good practice to validate user input, the approach used here can lead to performance issues and even crashes if the input data is crafted in a way that causes the regular expression engine to enter a catastrophic backtracking scenario.
+
+The problem lies in the regular expression patterns used for the "state" and "phone" fields, which are not adequately anchored or optimized. If an attacker provides a specially crafted input, the regular expression engine may take an extremely long time to process the input or crash the application.
+
+The "zipcode" field uses a simple `\d{5}` pattern, which is not vulnerable to ReDoS, but the phone number pattern `^([0-9]{3})(-)([0-9]{4}|[0-9]{4})$` is, as it contains an inefficient quantifier.
+
+RECOMMENDATIONS:
+
+1.  Use secure, anchored regular expressions to avoid catastrophic backtracking. For example, for the "state" field, use `^[a-zA-Z]{2}$` instead of `[a-zA-Z]{2}`.
+2.  Use a possessive quantifier or an atomic group to prevent backtracking. For example, for the "phone" field, use `^(?:[0-9]{3}(?:-)[0-9]{4}$)` to prevent backtracking.
+3.  Consider using a dedicated library or a more secure approach to validate user input data.
+
+ORIGINAL CODE:
+
+```
+<form-validation>
+  <formset>
+    <form name="RegistrationForm">
+      <field property="name" depends="required"><arg position="0" key="prompt.name"/></field>
+      <field property="address" depends="required"><arg position="0" key="prompt.address"/></field>
+      <field property="city" depends="required"><arg position="0" key="prompt.city"/></field>
+      <field property="state" depends="required,mask"><arg position="0" key="prompt.state"/>
+        <var>
+          <var-name>mask</var-name>
+          <var-value>[a-zA-Z]{2}</var-value>
+        </var>
+      </field>
+      <field property="zipcode" depends="required,mask"><arg position="0" key="prompt.zipcode"/>
+        <var>
+          <var-name>mask</var-name>
+          <var-value>\d{5}</var-value>
+        </var>
+      </field>
+      <field property="phone" depends="required,mask"><arg position="0" key="prompt.phone"/>
+        <var>
+          <var-name>mask</var-name>
+          <var-value>^([0-9]{3})(-)([0-9]{4}|[0-9]{4})$</var-value>
+        </var>
+      </field>
+      <field property="email" depends="required,email"><arg position="0" key="prompt.email"/>
+      </field>
+  </form>
+</formset>
+</form-validation>
+```

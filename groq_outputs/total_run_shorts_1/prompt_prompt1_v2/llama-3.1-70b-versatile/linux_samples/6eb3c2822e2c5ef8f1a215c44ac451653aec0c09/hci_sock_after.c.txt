@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-23
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to use-after-free and potential buffer overflow issues. 
+ EXPLANATION:
+The `skb_pull(skb, 1)` call decrements the skb's data size by 1, potentially leading to a use-after-free situation if the skb is accessed after it's been freed. 
+Moreover, the code does not properly validate the skb size before accessing its contents, potentially leading to buffer overflow issues when accessing `skb->data` in the `get_unaligned_le16(skb->data)` call. 
+
+Additionally, there are no checks on the packet length after pulling 1 byte from the skb. 
+While the `skb_pull(skb, 1)` call only affects the skb's data size, not its length, it should still be taken into account when accessing the packet.
+
+Lastly, it's worth noting that, because `skb_pull(skb, 1)` removed 1 byte, 
+a check of `skb->len >= 2` must happen before trying to read `skb->data` as a `u16` or accessing its first 2 bytes.
+
+RECOMMENDATIONS:
+1. Validate the packet length before accessing its contents to avoid potential buffer overflow issues.
+2. Add length checks before accessing `skb->data` to prevent use-after-free and out of bounds reads.
+
+```c
+if (skb->len < 2) {
+    err = -EINVAL;
+    goto drop;
+}
+``` 
+
+2. Add a check after `skb_pull(skb, 1)` to validate the skb's length before accessing its contents.
+ORIGINAL CODE:
+```c
+bt_cb(skb)->pkt_type = *((unsigned char *) skb->data);
+skb_pull(skb, 1);
+
+if (hci_pi(sk)->channel == HCI_CHANNEL_USER) {
+    /* No permission check is needed for user channel
+     * since that gets enforced when binding the socket.
+     *
+     * However check that the packet type is valid.
+     */
+    if (bt_cb(skb)->pkt_type != HCI_COMMAND_PKT &&
+        bt_cb(skb)->pkt_type != HCI_ACLDATA_PKT &&
+        bt_cb(skb)->pkt_type != HCI_SCODATA_PKT) {
+        err = -EINVAL;
+        goto drop;
+    }
+
+    skb_queue_tail(&hdev->raw_q, skb);
+    queue_work(hdev->workqueue, &hdev->tx_work);
+} else if (bt_cb(skb)->pkt_type == HCI_COMMAND_PKT) {
+    u16 opcode = get_unaligned_le16(skb->data);
+    u16 ogf = hci_opcode_ogf(opcode);
+    u16 ocf = hci_opcode_ocf(opcode);
+
+    goto drop;
+}
+
+skb_queue_tail(&hdev->raw_q, skb);
+queue_work(hdev->workqueue, &hdev->tx_work);
+```

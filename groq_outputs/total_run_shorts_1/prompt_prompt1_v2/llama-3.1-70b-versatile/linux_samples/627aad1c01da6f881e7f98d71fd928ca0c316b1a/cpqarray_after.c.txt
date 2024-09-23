@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential information disclosure or kernel memory leak vulnerability due to insufficient bounds checking when using the `copy_to_user` function.
+
+EXPLANATION:
+The `copy_to_user` function is used to copy data from kernel space to user space. However, the code does not check the remaining size of the user space buffer that `arg` points to. If the user space buffer is smaller than the size of `pciinfo_struct`, `copy_to_user` will silently overwrite kernel memory beyond the bounds of the user space buffer. This can lead to a kernel memory leak or information disclosure. Additionally, if the user space buffer is not a multiple of the size of `pciinfo_struct`, the remaining space in the buffer will be left uninitialized, which can also lead to information disclosure.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check the size of the user space buffer before calling `copy_to_user`. The correct size of the buffer should be checked to ensure that it can accommodate the data being copied. Additionally, the code should return an error if the buffer is too small. Here's an example of how this can be done:
+
+```c
+size_t bytes_to_copy = sizeof(pciinfo);
+if (bytes_to_copy > buffer_size) {
+    return -EFAULT; // or other error codes
+}
+if (copy_to_user((void __user *) arg, &pciinfo, bytes_to_copy)) {
+    return -EFAULT; // or other error codes
+}
+```
+
+ORIGINAL CODE:
+```c
+ida_pci_info_struct pciinfo;
+
+if (!arg) return -EINVAL;
+memset(&pciinfo, 0, sizeof(pciinfo));
+pciinfo.bus = host->pci_dev->bus->number;
+pciinfo.dev_fn = host->pci_dev->devfn;
+pciinfo.board_id = host->board_id;
+if(copy_to_user((void __user *) arg, &pciinfo,
+```

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+The given code snippet contains a buffer overflow vulnerability in the inline assembly block.
+
+EXPLANATION:
+The inline assembly block uses the `diag` instruction and then performs an `ipm` (interrupt pending mask) and `srl` (shift right long) on the result. However, it is not guaranteed that the `rc` variable is initialized or valid before being used in the inline assembly block. Additionally, there is no boundary checking on the register value being used in the `diag` instruction, potentially leading to an out-of-bounds access.
+
+Moreover, the `asm volatile` directive is used without specifying input or output constraints for the registers. This can lead to undefined behavior, especially when the inline assembly code modifies registers that are used by the surrounding code.
+
+RECOMMENDATIONS:
+To fix this vulnerability:
+
+1.  Validate the input values before passing them to the inline assembly block.
+2.  Use input and output constraints in the `asm volatile` directive to specify the registers used by the inline assembly code.
+3.  Initialize the `rc` variable before using it in the inline assembly block.
+4.  Check the return value of the `diag_stat_inc` function to ensure that the operation is successful before executing the inline assembly block.
+
+ORIGINAL CODE:
+```c
+static inline int dia250(void *iob, int cmd)
+{
+    register unsigned long reg2 asm ("2") = (unsigned long) iob;
+    typedef union {
+        struct dasd_diag_init_io init_io;
+    int rc;
+
+    rc = 3;
+    diag_stat_inc(DIAG_STAT_X250);
+    asm volatile(
+        "    diag    2,%2,0x250\n"
+        "0:    ipm    %0\n"
+        "    srl    %0,28\n"
+    );
+    return rc;
+}
+
+/* Initialize block I/O to DIAG device using the specified blocksize and
+ * block offset. On success, return zero and set end_block to contain the
+ * number of blocks on the device minus the specified offset. Return non-zero
+ * otherwise. */
+```

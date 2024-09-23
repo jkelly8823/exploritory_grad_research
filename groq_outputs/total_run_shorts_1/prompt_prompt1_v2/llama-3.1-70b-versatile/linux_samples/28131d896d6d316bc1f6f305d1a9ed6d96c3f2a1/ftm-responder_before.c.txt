@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-15, 19-22 (Note: Although we cannot be certain, line numbers are assumed based on typical formatting)
+VULNERABILITY_DESCRIPTION:
+Inconsistent or incorrect error handling due to missing error handling for a critical function call and lack of bounds checking for an unsigned integer.
+
+
+EXPLANATION:
+This code snippet appears to be part of a wireless network driver. It checks for the width of the channel definition and assigns the correct bandwidth and control channel position. However, there are potential issues with error handling. 
+
+Inside the switch statement, there is no error handling when iwl_mvm_get_ctrl_pos function is called for a case width NL80211_CHAN_WIDTH_20_NOHT. It should be checked for potential failures or Null pointer dereferences. Additionally, in the conditional statement outside the switch statement, there are function calls iwl_mvm_ftm_responder_set_bw_v2 and iwl_mvm_ftm_responder_set_bw_v1, but their return values 'err' are not checked for errors. 
+
+It is also worth noting that cmd_ver variable is not validated or sanitized in this code. If this is an unsigned integer, then it should ideally have a bounds check to avoid potential issues like integer wraparound. 
+
+
+RECOMMENDATIONS:
+- Assign and validate the return value of iwl_mvm_get_ctrl_pos to prevent null pointer dereferences. 
+- Validate and check for errors the return values of iwl_mvm_ftm_responder_set_bw_v2 and iwl_mvm_ftm_responder_set_bw_v1. Ideally, they should return specific error codes rather than relying on a generic 'err' value.
+- Implement bounds checking for the 'cmd_ver' variable to ensure it falls within valid limits and is properly sanitized.
+
+ORIGINAL CODE:
+```c
+}
+static int iwl_mvm_ftm_responder_set_bw_v2(struct cfg80211_chan_def *chandef,
+					   u8 *format_bw,
+					   u8 *ctrl_ch_position)
+{
+	switch (chandef->width) {
+	case NL80211_CHAN_WIDTH_20_NOHT:
+		*format_bw = IWL_LOCATION_FRAME_FORMAT_LEGACY;
+		*format_bw |= IWL_LOCATION_BW_80MHZ << LOCATION_BW_POS;
+		*ctrl_ch_position = iwl_mvm_get_ctrl_pos(chandef);
+		break;
+	default:
+		return -ENOTSUPP;
+	}
+
+	if (cmd_ver >= 7)
+		err = iwl_mvm_ftm_responder_set_bw_v2(chandef, &cmd.format_bw,
+						      &cmd.ctrl_ch_position);
+	else
+		err = iwl_mvm_ftm_responder_set_bw_v1(chandef, &cmd.format_bw,
+						      &cmd.ctrl_ch_position);
+```

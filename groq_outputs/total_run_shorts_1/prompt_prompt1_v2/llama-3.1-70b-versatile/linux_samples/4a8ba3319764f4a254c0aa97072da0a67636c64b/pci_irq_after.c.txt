@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Insufficient Validation of Function Input (Incorrect Configuration)
+
+EXPLANATION:
+The function `acpi_unregister_gsi` is called regardless of whether `acpi_unregister_gsi` was successful when `gsi` was registered. The code does not validate whether `gsi` was actually registered with ACPI before attempting to unregister it. This can cause unexpected behavior if `gsi` was never registered. Additionally, the `acpi_unregister_gsi` function does not appear to handle concurrent access to `gsi`, which may lead to race conditions.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, add checks before calling `acpi_unregister_gsi` to ensure it will succeed. 
+For example, storing the return value from `acpi_register_gsi` when `gsi` is registered and checking it here to ensure `acpi_unregister_gsi` is only called if `gsi` was successfully registered.
+
+```c
+if (gsi_registered && gsi >= 0) {
+    acpi_unregister_gsi(gsi);
+    gsiregistered = 0;
+    dev->irq_managed = 0;
+}
+```
+Additionally, consider adding synchronization mechanisms to protect against concurrent access to `gsi` and ensure the correct behavior in multi-threaded environments.
+
+ORIGINAL CODE:
+	
+	dev_dbg(&dev->dev, "PCI INT %c disabled\n", pin_name(pin));
+	if (gsi >= 0) {
+		acpi_unregister_gsi(gsi);
+		dev->irq_managed = 0;
+	}

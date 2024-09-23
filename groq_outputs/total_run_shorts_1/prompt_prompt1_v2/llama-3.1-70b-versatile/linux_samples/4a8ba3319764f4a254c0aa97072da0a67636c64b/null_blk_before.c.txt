@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+ Unchecked NULL pointer dereference in blk_mq_init_queue
+
+EXPLANATION:
+The vulnerability exists in the line `nullb->q = blk_mq_init_queue(&nullb->tag_set);` because there is no check for a NULL pointer before calling `blk_mq_init_queue`, and then making a function call on a returned pointer `nullb->q`. If `blk_mq_init_queue` returns NULL, the check `if (!nullb->q)` will properly handle this. But the missing check for `nullb` itself before ` blk_mq_init_queue(&nullb->tag_set);` presents a potential vulnerability. 
+
+In many cases, the variable `nullb` may already have been checked elsewhere in the codebase (above the snippet provided), but, within the provided snippet, `nullb` does not have a clear non-NULL state assigned or checked. Because of the missing check for `nullb`, we flag this code for vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add a NULL check for `nullb` before using it. This could be done by adding the following line above the `blk_mq_init_queue` call:
+
+```c
+if (nullb == NULL) {
+    rv = -EINVAL;  // set return value to invalid argument
+    goto out_cleanup_tags;
+}
+```
+
+Or if the expectation is that `nullb` can be NULL, the code handling the logic around `block-mq` queue needs adjustment to accommodate the possibility that `nullb` itself may be NULL.
+
+The updated snippet with the NULL check added for `nullb` is shown below:
+
+```c
+if (nullb == NULL) {
+    rv = -EINVAL;  // set return value to invalid argument
+    goto out_cleanup_tags;
+}
+nullb->q = blk_mq_init_queue(&nullb->tag_set);
+if (!nullb->q) {
+    rv = -ENOMEM;
+    goto out_cleanup_tags;
+}
+```
+
+ORIGINAL CODE:
+```c
+            goto out_cleanup_queues;
+
+    nullb->q = blk_mq_init_queue(&nullb->tag_set);
+    if (!nullb->q) {
+        rv = -ENOMEM;
+        goto out_cleanup_tags;
+    }
+} else if (queue_mode == NULL_Q_BIO) {
+```

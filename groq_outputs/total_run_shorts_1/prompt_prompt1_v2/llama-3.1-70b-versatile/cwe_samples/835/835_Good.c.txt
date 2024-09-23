@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines within the do-while loop (connection attempt), but specifically the connect call and the following conditional (if (connected > -1)) and the do-while loop condition (connected < 0 && count < MAX_ATTEMPTS).
+VULNERABILITY_DESCRIPTION:
+Potential Resource Exhaustion due to infinite or prolonged loop execution and Lack of Input Validation on socket connection return values.
+
+EXPLANATION:
+The do-while loop attempts to establish a connection to a server up to a maximum number of times (MAX_ATTEMPTS). However, if this maximum is reached or exceeded due to an abnormal situation, the loop will terminate but no handling will be performed to manage the failure condition. Furthermore, although this is partially mitigated by the `MAX_ATTEMPTS` value, if the socket connection attempts return an error other than `-1` (e.g., `ENOTSOCK`, `EFAULT`, `EINVAL`), the loop will also terminate, potentially resulting in resource exhaustion or other actions not intended by the developer. Additionally, while checking for the return value of the `connect` function is present, the type of connection error itself is not validated, further exacerbating the vulnerability of resource exhaustion.
+
+RECOMMENDATIONS:
+To address the identified vulnerabilities, we recommend that the loop termination condition include checking not only the return value for `connected` but also other potential connection errors, as they relate to socket connection failure. The following are recommended mitigations:
+*   Implement handling for different connection error types within the loop to properly manage and free the resources used, reducing the potential for resource exhaustion.
+*   Add additional validation and response to non-standard error values from socket calls, such as printing-out the error description (e.g., via `perror` or `printf` calls using `strerror`) and terminating the loop under these abnormal conditions.
+
+ORIGINAL CODE:
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...
+       // initialize number of attempts counter
+       int count = 0;do {
+          
+           // establish connection to server
+           connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+           
+           // increment counter
+           count++;
+           
+           // if connected then read and process messages from server
+           if (connected > -1) {
+               // read and process messages
+               ...
+           }
+       
+       // keep trying to establish connection to the server
+   
+       // up to a maximum number of attempts
+       } while (connected < 0 && count < MAX_ATTEMPTS);
+       
+       // close socket and return success or failure
+       ...
+ }
+```
+
+Note: The developer will need to research values for `connect` errors to ensure proper validation and handling of all possible failures in the loop to avoid resource exhaustion and other resource concerns.

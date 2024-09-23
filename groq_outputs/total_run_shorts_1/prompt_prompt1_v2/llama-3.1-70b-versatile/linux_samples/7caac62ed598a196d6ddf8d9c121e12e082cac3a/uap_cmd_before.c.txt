@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 8
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability and Potential Denial of Service (DoS) Attack
+
+EXPLANATION:
+The provided code snippet reveals a potential vulnerability in the way data is copied into the `bss_cfg->rates` buffer. Specifically, in the lines `memcpy(bss_cfg->rates, rate_ie + 1, rate_ie->len);` and `memcpy(bss_cfg->rates + rate_len, rate_ie + 1, rate_ie->len);`, there is no validation of the `rate_ie->len` value before copying it into the `bss_cfg->rates` buffer.
+
+This may lead to a buffer overflow if `rate_ie->len` exceeds the allocated size of `bss_cfg->rates`. Additionally, since `rate_ie` is a pointer to a memory location, and `rate_ie + 1` is being copied, it could lead to an attempt to copy an arbitrary memory location, resulting in a potential denial of service (DoS) attack.
+
+Furthermore, in the line `memcpy(&bss_cfg->wmm_info, wmm_ie + sizeof(struct ieee_types_header), *(wmm_ie + 1))`, there is no validation of the `*(wmm_ie + 1)` value, which represents the length of data to be copied into `bss_cfg->wmm_info`. This may lead to another potential buffer overflow.
+
+RECOMMENDATIONS:
+1. Validate the `rate_ie->len` value before copying it into the `bss_cfg->rates` buffer to prevent buffer overflows. The validation should ensure that the `rate_ie->len` value is less than or equal to the allocated size of `bss_cfg->rates`.
+2. Similarly, validate the `*(wmm_ie + 1)` value before copying it into `bss_cfg->wmm_info`.
+3. Consider using safer functions like `strncpy` or `memcpy_s` to prevent buffer overflows.
+4. Implement error handling for the `memcpy` operations to handle cases where the buffer overflow occurs.
+
+ORIGINAL CODE:
+
+
+	rate_ie = (void *)cfg80211_find_ie(WLAN_EID_SUPP_RATES, var_pos, len);
+	if (rate_ie) {
+		memcpy(bss_cfg->rates, rate_ie + 1, rate_ie->len);
+		rate_len = rate_ie->len;
+	}
+
+	rate_ie = (void *)cfg80211_find_ie(WLAN_EID_EXT_SUPP_RATES,
+					   params->beacon.tail,
+					   params->beacon.tail_len);
+	if (rate_ie)
+		memcpy(bss_cfg->rates + rate_len, rate_ie + 1, rate_ie->len);
+
+	return;
+}
+
+					    params->beacon.tail_len);
+	if (vendor_ie) {
+		wmm_ie = vendor_ie;
+		memcpy(&bss_cfg->wmm_info, wmm_ie +
+		       sizeof(struct ieee_types_header), *(wmm_ie + 1));
+		priv->wmm_enabled = 1;
+	} else

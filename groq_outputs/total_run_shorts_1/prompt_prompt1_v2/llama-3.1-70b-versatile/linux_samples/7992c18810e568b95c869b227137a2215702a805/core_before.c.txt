@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Truncation or truncation of data may occur when `data` of length `len` is being processed, potentially leading to information loss or corrupted data.
+
+EXPLANATION:
+The vulnerability exists in the line `len = HID_MAX_BUFFER_SIZE;`. This line truncates the data length to `HID_MAX_BUFFER_SIZE` if the input length is greater than this value. This may lead to the loss of important information in cases where the actual length is greater than the allowed buffer size.
+
+RECOMMENDATIONS:
+1. Validate the input data to ensure its length is within the allowed buffer size before processing it. If the input length exceeds the buffer size, either increase the buffer size to accommodate larger inputs or handle the error gracefully, such as by returning an error code or logging a message.
+
+   For example, you could add error handling for the truncated data case:
+
+   ```c
+if (len > HID_MAX_BUFFER_SIZE) {
+    len = HID_MAX_BUFFER_SIZE;
+    // Either log an error message or handle it gracefully
+    printk(KERN_ERR "hidp_process_report: Data truncated\n");
+}
+```
+
+2. Consider allocating a dynamically-sized buffer that can accommodate various input lengths. This might require using functions like `kmalloc` to allocate memory, followed by proper memory management to avoid potential memory leaks.
+
+   For example:
+
+   ```c
+if (len > HID_MAX_BUFFER_SIZE) {
+    u8 *buf = kmalloc(len, GFP_KERNEL);
+    if (!buf) {
+        // Handle out-of-memory error
+    } else {
+        // Copy data into the newly allocated buffer
+        memcpy(buf, data, len);
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+del_timer(&session->timer);
+}
+
+static void hidp_process_report(struct hidp_session *session,
+                int type, const u8 *data, int len, int intr)
+{
+    if (len > HID_MAX_BUFFER_SIZE)
+        len = HID_MAX_BUFFER_SIZE;
+```

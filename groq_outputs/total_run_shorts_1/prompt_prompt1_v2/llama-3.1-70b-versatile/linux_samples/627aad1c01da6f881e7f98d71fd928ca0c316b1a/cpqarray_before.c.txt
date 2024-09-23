@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential Information Disclosure Vulnerability due to Unsanitize User Mode Pointer
+
+EXPLANATION:
+The `copy_to_user` function is used to copy data from the kernel to a user-mode buffer. However, the pointer provided as the first argument to `copy_to_user` is not being sanitized or validated to ensure it is a valid, non-null, user-mode pointer. This could potentially lead to an information disclosure vulnerability if the provided pointer points to kernel memory.
+
+Additionally, there is an implicit assumption that the pointer `arg` is a valid user-mode pointer. However, the code doesn't perform any checks to validate this assumption. This could lead to unexpected behavior, including crashes or information disclosure.
+
+RECOMMENDATIONS:
+1. Before copying data to the user-mode buffer, validate the `arg` pointer to ensure it is a valid user-mode address using `access_ok` and `VERIFY_READ`. 
+2. Consider using `put_user` functions for simple operations to reduce complexity and risks.
+
+Here's an example of the recommended validation:
+```c
+if (!access_ok(VERIFY_WRITE, arg, sizeof(ida_pci_info_struct))) {
+    return -EFAULT;
+}
+...
+```
+
+ORIGINAL CODE:
+```c
+ida_pci_info_struct pciinfo;
+
+if (!arg) return -EINVAL;
+pciinfo.bus = host->pci_dev->bus->number;
+pciinfo.dev_fn = host->pci_dev->devfn;
+pciinfo.board_id = host->board_id;
+if (copy_to_user((void __user *) arg, &pciinfo, 
+```

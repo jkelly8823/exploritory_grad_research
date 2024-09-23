@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11, 15-16, 22-25
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference and unchecked error return.
+EXPLANATION:
+In `st_sensors_set_odr` and `st_sensors_set_fullscale`, if the function `st_sensors_match_odr` or `st_sernels_match_fs` returns an error (less than 0), the code immediately checks the return value, but does not handle the potential case where `sdata` or `sdata->sensor` could be null. This could result in a null pointer dereference.
+
+In `st_sensors_set_enable`, the function does not check if `sdata` or `sdata->sensor` is null before accessing their members. The function `iio_priv` returns a struct pointer, which could be null if `indio_dev` is null. Additionally, the function does not handle the case where `st_sensors_match_odr` is not fully executed.
+
+RECOMMENDATIONS:
+To fix the vulnerability, add checks for null pointer in the function calls, especially when accessing members of `sdata` and `sdata->sensor`. It is also recommended to add a check to see if `indio_dev` is null before calling `iio_priv`. 
+
+The corrected code should resemble the following:
+```c
+int st_sensors_set_odr(struct iio_dev *indio_dev, unsigned int odr)
+{
+	int err;
+	struct st_sensor_odr_avl odr_out;
+	struct st_sensor_data *sdata = iio_priv(indio_dev);
+
+	if (!indio_dev || !sdata || !sdata->sensor) {
+		return -EINVAL; 
+	}
+
+	err = st_sensors_match_odr(sdata->sensor, odr, &odr_out);
+	if (err < 0)
+        // handle error
+
+// same pattern for the other functions
+```
+
+ORIGINAL CODE:
+```c
+int st_sensors_set_odr(struct iio_dev *indio_dev, unsigned int odr)
+{
+	int err;
+	struct st_sensor_odr_avl odr_out;
+	struct st_sensor_data *sdata = iio_priv(indio_dev);
+
+	err = st_sensors_match_odr(sdata->sensor, odr, &odr_out);
+	if (err < 0)
+
+static int st_sensors_set_fullscale(struct iio_dev *indio_dev, unsigned int fs)
+{
+	int err, i;
+	struct st_sensor_data *sdata = iio_priv(indio_dev);
+
+	err = st_sensors_match_fs(sdata->sensor, fs, &i);
+	if (err < 0)
+
+int st_sensors_set_enable(struct iio_dev *indio_dev, bool enable)
+{
+	bool found;
+	u8 tmp_value;
+	int err = -EINVAL;
+	struct st_sensor_odr_avl odr_out;
+	struct st_sensor_data *sdata = iio_priv(indio_dev);
+
+	if (enable) {
+		found = false;
+		tmp_value = sdata->sensor->pw.value_on;
+		if ((sdata->sensor->odr.addr == sdata->sensor->pw.addr) &&
+			(sdata->sensor->odr.mask == sdata->sensor->pw.mask)) {
+			err = st_sensors_match_odr(sdata->sensor,
+```

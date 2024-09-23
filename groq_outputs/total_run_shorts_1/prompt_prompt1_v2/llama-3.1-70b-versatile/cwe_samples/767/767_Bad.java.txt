@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4,5
+VULNERABILITY_DESCRIPTION:
+Improper Inheritance of State and/or Non-Volatile Field Assignement to Volatile Field. Setting a 'final' or non-volatile variable (`UID`) from a non-atomic operation (`mapUserNametoUID(userName)`) and assigning a NON-VOLATILE field (`UID`) with VOLATILE information (`ID`).
+ 
+EXPLANATION:
+Upon analysis, I have found potential vulnerability regarding concurrency in multithreaded environments within the provided `Client` class. 
+
+The provided `setPID(int ID)` function updates the `UID` using a value equal to `ID`. In multithreaded environments, such operations can introduce concurrency bugs because of its non-atomic nature.
+
+Although it is not fully stated in the given code, we can consider that setPID is supposed to be Thread-Safe for our interpretation. However, UID does not follow the same behavior, and can make it hard or nearly impossible to implement immutable behavior using an immutable final, since it has been assigned.
+
+Additionally, on the `mapUserNametoUID(userName)`, this function could cause problems in storing external info. We should address keeping that state 'Immutable', without  potentially resulting in volatile objects being used non-volatile for operations.
+ 
+
+RECOMMENDATIONS:
+Introduce a more Atomic operation to safeguard such operations to reduce that danger. For instance use `AtomicInteger` class to wrap the corresponding fields: 
+
+Use `final AtomicInteger UID = new AtomicInteger();` instead of `private int UID;`
+
+Then replace:
+```java
+UID = ID;
+ 
+```
+ With:
+```
+UID.set(ID);
+
+```
+
+Using synchronized/locking the field can safeguard calling `setPID`. Using either atomic class in java can also be beneficial. Below example uses Atomic Class:
+
+ 
+```java
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class Client {
+    private final AtomicInteger UID = new AtomicInteger();
+    public int PID; 
+    private String userName; 
+
+    public Client(String userName){
+        PID = getDefaultProfileID(); 
+        UID.set(mapUserNametoUID( userName )); 
+        this.userName = userName;
+    }
+
+    public void setPID(int ID) {
+        synchronized (UID) {
+            UID.set(ID);
+        }
+    }
+}
+```
+However this again would depend on what exactly u expected. The primary problem here would be in deciding what one means by `UID.set(ID)` to be safe across multiple executions still depends on one thing i.e usage of setPID method.
+
+Still better approach could be - 
+
+Make UID's external fields 'Immutable' / non external and hide their associated accessor method as much as possible. On doing these changes you ensure in a multi threaded environment synchronization can be achieved. To achieve non-volatile information update immutable fields follow the best practice by updating all the other immutable fields from the changed immutable field.
+
+However sometimes with these issues due to very vast possible scenarios without complete context the resultant answer may slightly vary per usage requirement.
+
+Also always remember 'Immutability' always helps but needs to be used in correct possible circumstances.
+
+ORIGINAL CODE:
+```java
+public class Client {
+    private int UID;
+    public int PID;
+    private String userName;
+
+    public Client(String userName){
+        PID = getDefaultProfileID();
+        UID = mapUserNametoUID( userName );
+        this.userName = userName;
+    }
+    public void setPID(int ID) {UID = ID;}
+}
+```

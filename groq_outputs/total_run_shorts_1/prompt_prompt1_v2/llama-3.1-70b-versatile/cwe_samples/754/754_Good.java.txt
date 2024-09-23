@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+VULNERABILITY_DESCRIPTION: 
+The provided code snippet contains a vulnerability related to potential null pointer dereference.
+
+EXPLANATION:
+The `setInputFile` method is supposed to create a `File` object from a string containing the name of the file. However, the code snippet provided does not actually set the `readFile` variable. This means that when the `readFromFile` method is called, the `readFile` variable is still `null`, leading to a `NullPointerException` being thrown. Although the method does check for `null` and prints an error message, it still throws the `NullPointerException` which can be caught and potentially handled maliciously.
+
+Additionally, the code does not handle the scenario where the `setInputFile` method is called after `readFromFile` method. In such cases, the `readFile` would still be `null` when it is used.
+
+A more severe vulnerability would arise if a malicious actor had control over the file name being passed into `setInputFile` and could manipulate it to point to a sensitive file.
+
+RECOMMENDATIONS:
+1. In the `setInputFile` method, create the `File` object and assign it to the `readFile` variable.
+
+```java
+public void setInputFile(String inputFile) {
+    readFile = new File(inputFile);
+}
+```
+
+2. In the `readFromFile` method, do not catch and rethrow the `NullPointerException`. Instead, return or exit the method immediately after printing the error message to prevent potential misuse of the catch block.
+
+```java
+public void readFromFile() {
+    try {
+        if (readFile == null) { 
+            System.err.println("Input file has not been set, call setInputFile method before calling openInputFile");
+            return; 
+        }
+        reader = new FileReader(readFile);
+    } catch (FileNotFoundException ex) {...}
+}
+```
+
+3. Always validate and sanitize any input passed into the `setInputFile` method to prevent a potential directory traversal vulnerability.
+
+```java
+public void setInputFile(String inputFile) {
+    try {
+        // Validate and sanitize input
+        File file = new File(inputFile);
+        if (!file.getName().equals(inputFile)) {
+            System.err.println("Invalid input file path, potential directory traversal attempt");
+            return;
+        }
+        readFile = file;
+    } catch (Exception e) {
+        System.err.println("Failed to parse input file path");
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+private File readFile = null;
+public void setInputFile(String inputFile) {
+    // create readFile File object from string containing name of file
+}
+public void readFromFile() {
+    try {
+        if (readFile == null) {System.err.println("Input file has not been set, call setInputFile method before calling openInputFile");throw NullPointerException;}
+        reader = new FileReader(readFile);
+        // read input file
+    } catch (FileNotFoundException ex) {...}catch (NullPointerException ex) {...}
+}
+```

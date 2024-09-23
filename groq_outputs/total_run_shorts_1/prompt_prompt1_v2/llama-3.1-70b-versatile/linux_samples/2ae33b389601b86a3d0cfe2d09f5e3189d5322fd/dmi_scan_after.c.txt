@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability due to unchecked input and inconsistent DMI version handling.
+
+EXPLANATION:
+The function `smbios_present` uses `memcpy_fromio` to copy 32 bytes from memory location `p` to the local buffer `buf`. However, the function does not check if the input pointer `p` is valid or points to a location that is at least 32 bytes in size. This can lead to a potential buffer overflow vulnerability.
+
+Additionally, the function handles the DMI version in an inconsistent manner. It first calculates `dmi_ver` using the contents of `buf`, but then immediately sets it to a fixed value `0x0206`. This raises concerns about the actual purpose of this calculation and whether it is sufficient to handle different DMI versions.
+
+Furthermore, the use of `break` without a loop is likely a coding error and can lead to unexpected program behavior.
+
+RECOMMENDATIONS:
+1. Add input validation to ensure that the pointer `p` is valid and points to a location that is at least 32 bytes in size.
+2. Remove the inconsistent DMI version handling and use a more robust method to handle different versions.
+3. Replace `break` with a more suitable control flow statement (e.g., `return`) or add a loop to make the code snippet syntactically correct.
+4. Consider using safer functions like `memcpy_fromio_s` or `memcpy` with additional error checking to handle potential buffer overflows.
+
+ORIGINAL CODE:
+```c
+static int __init smbios_present(const char __iomem *p)
+{
+	u8 buf[32];
+
+	memcpy_fromio(buf, p, 32);
+	if ((buf[5] < 32) && dmi_checksum(buf, buf[5])) {
+		dmi_ver = (buf[6] << 8) + buf[7];
+			dmi_ver = 0x0206;
+			break;
+		}
+		return memcmp(p + 16, "_DMI_", 5) || dmi_present(p + 16);
+	}
+	return 1;
+}
+
+void __init dmi_scan_machine(void)
+{
+```

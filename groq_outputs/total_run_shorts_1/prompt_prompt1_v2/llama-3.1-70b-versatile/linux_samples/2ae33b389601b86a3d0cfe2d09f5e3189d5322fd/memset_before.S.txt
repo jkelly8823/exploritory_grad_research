@@ -1,0 +1,140 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 20-37 (if ! CALGN(1)+0), 38-49, 68-74
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential information disclosure or corruption due to the usage of unvalidated and untrusted user-input indices in memory access operations within the `memset` function.
+
+EXPLANATION:
+The potential vulnerability is caused by the usage of user-input values in memory access operations without proper validation and sanitization. Specifically, the values `r0` (destination address), `r1` (value to be filled), and `r2` (length) are used directly in various `str` and `stm` instructions without any explicit checks for their validity.
+
+Additionally, the code uses bit operations (shifts and logical OR) on user-input values without proper sanitization, which can lead to overflows and corruption of memory locations not intended to be modified.
+
+Furthermore, the conditional statements (`if ! CALGN(1)+0` and `#endif`) introduce uncertainty and complexity in the code path, which can make it harder to reason about the code's behavior.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to:
+
+1. Validate and sanitize the user-input values (`r0`, `r1`, and `r2`) to ensure they are within expected bounds and are not used to bypass memory access checks.
+
+2. Use explicit bounds checks on memory access operations, such as checking for null or out-of-bounds values, to prevent accidental memory corruption.
+
+3. Use constant sizes or bounds-checked variables for `str` and `stm` instructions to prevent overflows and accidental memory access.
+
+4. Simplify the code by reducing the number of conditional branches and introducing clear and concise conditions for memory access operations.
+
+5. Use defensive programming techniques, such as input validation, error handling, and exceptions, to mitigate potential vulnerabilities.
+
+ORIGINAL CODE:
+(missing error handling and input validation; it is crucial to implement these to ensure the security and reliability of the memset function)
+
+
+    .text
+    .align	5
+    .word	0
+
+1:	subs	r2, r2, #4		@ 1 do we have enough
+    blt	5f			@ 1 bytes to align with?
+    cmp	r3, #2			@ 1
+    strltb	r1, [r0], #1		@ 1
+    strleb	r1, [r0], #1		@ 1
+    strb	r1, [r0], #1		@ 1
+    add	r2, r2, r3		@ 1 (r2 = r2 - (4 - r3))
+/*
+ * The pointer is now aligned and the length is adjusted.  Try doing the
+ * memset again.
+ */
+
+ENTRY(memset)
+    ands	r3, r0, #3		@ 1 unaligned?
+    bne	1b			@ 1
+/*
+ * we know that the pointer in r0 is aligned to a word boundary.
+ */
+    orr	r1, r1, r1, lsl #8
+    orr	r1, r1, r1, lsl #16
+    mov	r3, r1
+    cmp	r2, #16
+    blt	4f
+#if ! CALGN(1)+0
+
+/*
+ * We need an extra register for this loop - save the return address and
+ * use the LR
+ */
+    str	lr, [sp, #-4]!
+    mov	ip, r1
+    mov	lr, r1
+
+2:	subs	r2, r2, #64
+    stmgeia	r0!, {r1, r3, ip, lr}	@ 64 bytes at a time.
+    stmgeia	r0!, {r1, r3, ip, lr}
+    stmgeia	r0!, {r1, r3, ip, lr}
+    stmgeia	r0!, {r1, r3, ip, lr}
+    bgt	2b
+    ldmeqfd	sp!, {pc}		@ Now <64 bytes to go.
+/*
+ * No need to correct the count; we're only testing bits from now on
+ */
+    tst	r2, #32
+    stmneia	r0!, {r1, r3, ip, lr}
+    stmneia	r0!, {r1, r3, ip, lr}
+    tst	r2, #16
+    stmneia	r0!, {r1, r3, ip, lr}
+    ldr	lr, [sp], #4
+
+#else
+
+/*
+ * whole cache lines at once.
+ */
+
+    stmfd	sp!, {r4-r7, lr}
+    mov	r4, r1
+    mov	r5, r1
+    mov	r6, r1
+    mov	r7, r1
+    mov	ip, r1
+    mov	lr, r1
+
+    cmp	r2, #96
+    tstgt	r0, #31
+    ble	3f
+
+    and	ip, r0, #31
+    rsb	ip, ip, #32
+    sub	r2, r2, ip
+    movs	ip, ip, lsl #(32 - 4)
+    stmcsia	r0!, {r4, r5, r6, r7}
+    stmmiia	r0!, {r4, r5}
+    tst	ip, #(1 << 30)
+    mov	ip, r1
+    strne	r1, [r0], #4
+
+3:	subs	r2, r2, #64
+    stmgeia	r0!, {r1, r3-r7, ip, lr}
+    stmgeia	r0!, {r1, r3-r7, ip, lr}
+    bgt	3b
+    ldmeqfd	sp!, {r4-r7, pc}
+
+    tst	r2, #32
+    stmneia	r0!, {r1, r3-r7, ip, lr}
+    tst	r2, #16
+    stmneia	r0!, {r4-r7}
+    ldmfd	sp!, {r4-r7, lr}
+
+#endif
+
+4:	tst	r2, #8
+    stmneia	r0!, {r1, r3}
+    tst	r2, #4
+    strne	r1, [r0], #4
+/*
+ * When we get here, we've got less than 4 bytes to zero.  We
+ * may have an unaligned pointer as well.
+ */
+5:	tst	r2, #2
+    strneb	r1, [r0], #1
+    strneb	r1, [r0], #1
+    tst	r2, #1
+    strneb	r1, [r0], #1
+    mov	pc, lr
+ENDPROC(memset)

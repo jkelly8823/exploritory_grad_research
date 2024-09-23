@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION: 
+Path Traversal and Null Pointer Dereference vulnerabilities due to a lack of bounds checking and null checking on user-controlled input (the 'string' pointer).
+
+EXPLANATION: 
+The `print` function lacks input validation and bounds checking. It assumes that the input string will always be null-terminated, which is not guaranteed. The function does not check if the input string is null before dereferencing it, which could lead to a null pointer dereference. Additionally, the loop iterates over each byte in the string without checking for null characters or non-printable characters, which could allow an attacker to inject malicious data. 
+
+Moreover, there's a potential buffer overflow when passing a string to `putc` with `counter` variable which is assigned the value of `*word++`. `putc` function will interpret the passed value as a single character, if the value of `counter` exceeds the ASCII value of the character to be printed, which will result in printing an undefined character.  
+
+RECOMMENDATIONS:
+To fix this vulnerability, the function should check for null pointers before dereferencing them. The input string should also be checked for null-termination and its bounds should be validated before copying or processing it. Additionally, checks should be added to ensure the string contains only printable ASCII characters before passing it to `putc`. 
+
+Here's an example of how the `print` function could be modified to add these checks:
+
+```c
+static void print (char * string) {
+    if (string == NULL || *string == '\0') {
+        return;
+    }
+
+    for (int i = 0; string[i] != '\0'; i++) {
+        if (string[i] >= 32 && string[i] <= 126) {
+            putc(string[i], stdout);
+            fflush(stdout);
+            sleep(1);
+        }
+    }
+}
+```
+ORIGINAL CODE:
+```c
+static void print (char * string) {
+    char * word;int counter;for (word = string; counter = *word++; ) {
+        putc(counter, stdout);fflush(stdout);
+        /* Make timing window a little larger... */
+        sleep(1);
+    }
+}
+int main(void) {
+    pid_t pid;
+    pid = fork();if (pid == -1) {exit(-2);}else if (pid == 0) {print("child\n");}else {print("PARENT\n");}exit(0);
+}
+```

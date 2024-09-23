@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 8-9
+VULNERABILITY_DESCRIPTION:
+Integer truncation or overflow vulnerability due to inadequate checks on 'volume_info->wsize' and 'volume_info->rsize' when assigning to 'wsize' and 'rsize'.
+
+EXPLANATION:
+In this code snippet, 'volume_info->wsize' and 'volume_info->rsize' are assigned to 'wsize' and 'rsize' respectively. However, there is a potential integer truncation or overflow vulnerability because the code does not check the range of these values properly. 
+
+The code checks if 'wsize' and 'rsize' are less than certain maximum values ('server->max_write', 'server->max_read', and 'SMB2_MAX_BUFFER_SIZE'), but it does not check the minimum value. If 'volume_info->wsize' or 'volume_info->rsize' are very large or very small, they can be truncated or overflows when assigned to 'wsize' and 'rsize' respectively.
+
+Moreover, the code uses 'min_t' with 'unsigned int' type. However, if 'volume_info->wsize' or 'volume_info->rsize' are signed integers with negative value, they will be interpreted as large unsigned integers when passed to 'min_t', which can cause incorrect comparison.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add checks for both minimum and maximum values before assigning 'volume_info->wsize' to 'wsize' and 'volume_info->rsize' to 'rsize'. Also, make sure that all variables involved have consistent signedness or convert them to the same type before comparing.
+
+ORIGINAL CODE:
+
+	/* start with specified wsize, or default */
+	wsize = volume_info->wsize ? volume_info->wsize : CIFS_DEFAULT_IOSIZE;
+	wsize = min_t(unsigned int, wsize, server->max_write);
+	/* set it to the maximum buffer size value we can send with 1 credit */
+	wsize = min_t(unsigned int, wsize, SMB2_MAX_BUFFER_SIZE);
+
+	return wsize;
+}
+
+	/* start with specified rsize, or default */
+	rsize = volume_info->rsize ? volume_info->rsize : CIFS_DEFAULT_IOSIZE;
+	rsize = min_t(unsigned int, rsize, server->max_read);
+	/* set it to the maximum buffer size value we can send with 1 credit */
+	rsize = min_t(unsigned int, rsize, SMB2_MAX_BUFFER_SIZE);
+
+	return rsize;
+}

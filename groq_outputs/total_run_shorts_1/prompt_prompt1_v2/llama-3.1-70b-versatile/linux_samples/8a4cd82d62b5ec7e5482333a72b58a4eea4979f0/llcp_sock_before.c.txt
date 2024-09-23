@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Resource leak in error handling code path.
+
+EXPLANATION:
+In the provided code snippet, it appears that when the condition `llcp_sock->ssap == LLCP_SAP_MAX` is met, the code immediately jumps to the `put_dev` label. However, the `sock_llcp_release` label and the `nfc_llcp_put_ssap` function call are skipped when this error occurs. This may lead to a resource leak, as the SSAP resource may not be properly released. This is because the `nfc_llcp_put_ssap` function call, which is used to release the SSAP resource, is skipped when an error occurs.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `sock_llcp_release` label should be updated to be called before jumping to the `put_dev` label when an error occurs. This ensures that the SSAP resource is properly released in all cases. The corrected code would look like this:
+
+```c
+llcp_sock->local = nfc_llcp_local_get(local);
+llcp_sock->ssap = nfc_llcp_get_local_ssap(local);
+if (llcp_sock->ssap == LLCP_SAP_MAX) {
+    ret = -ENOMEM;
+    sock_llcp_release:
+    nfc_llcp_put_ssap(local, llcp_sock->ssap);
+    goto put_dev;
+}
+
+sock_llcp_release:
+nfc_llcp_put_ssap(local, llcp_sock->ssap);
+
+put_dev:
+nfc_put_device(dev);
+```
+
+Alternatively, the code could be refactored to avoid using labels and gotos altogether. A more structured approach would involve using a consistent error handling mechanism that does not rely on labels.
+
+ORIGINAL CODE:
+```c
+llcp_sock->local = nfc_llcp_local_get(local);
+llcp_sock->ssap = nfc_llcp_get_local_ssap(local);
+if (llcp_sock->ssap == LLCP_SAP_MAX) {
+    ret = -ENOMEM;
+    goto put_dev;
+}
+
+sock_llcp_release:
+nfc_llcp_put_ssap(local, llcp_sock->ssap);
+
+put_dev:
+nfc_put_device(dev);
+```

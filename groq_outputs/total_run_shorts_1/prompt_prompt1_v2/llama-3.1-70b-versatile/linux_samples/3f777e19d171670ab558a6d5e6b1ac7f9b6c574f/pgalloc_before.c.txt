@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 3
+VULNERABILITY_DESCRIPTION:
+Use of User-Provided Input to Influence Control Flow and Potential TOC/TOU Issue
+
+EXPLANATION:
+The code snippet appears to be part of a kernel-level function, given the presence of `current->active_mm` and `set_user_asce()`. On line 2, the function `current->active_mm` is compared to `mm`, and if they are equal, `set_user_asce(mm)` is called. This seems to update an active memory mapping with user-provided input (contained in `mm`). Since the origin and definition of `mm` are unclear, we have to assume that `mm` may be manually controlled or influenced in any way by an attacker. Additionally, the code updates a shared state based on user input without appropriate validation. The additional context that might make this vulnerability clear is whether `set_user_asce()` can be independently triggered multiple times with slight variations, thereby opening up an opportunity for an attacker to trigger TOC/TOU issues.
+
+Another issue that stands out is the potentially unprotected modifications to shared resource on line 3 (`mm`) via `set_user_asce(mm)`, with a partially delayed flush of the shared resource state via `__tlb_flush_local()` when it's too late for other parts of the system to react properly in `crst_table_upgrade`. This asynchronous treatment of shared resource state could trigger other potential vulnerabilities as the time-of-check (`set_user_asce()`) is before the time-of-use (`__tlb_flush_local()`).
+
+RECOMMENDATIONS:
+- Validate input and origin of `mm` to prevent tampering or intentional influencing of control flow. 
+- Evaluate all operations which can alter the shared state. Ensure proper thread synchronization for shared resource modifications.
+- Verify whether the use of `set_user_asce()` is safe to be invoked on user-provided memory struct (`mm`) by a sufficiently trusted agent.
+
+ORIGINAL CODE:
+{
+    struct mm_struct *mm = arg;
+
+    if (current->active_mm == mm)
+        set_user_asce(mm);
+    __tlb_flush_local();
+}
+
+int crst_table_upgrade(struct mm_struct *mm, unsigned long end)

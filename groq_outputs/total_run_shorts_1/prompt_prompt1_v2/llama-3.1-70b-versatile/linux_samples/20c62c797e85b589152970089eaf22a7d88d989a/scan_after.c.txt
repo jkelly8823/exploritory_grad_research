@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Resource leak due to not checking the status of the command after it was sent.
+EXPLANATION:
+Although the function checks the return value of `iwl_mvm_send_cmd_status` and returns early if an error occurs, the status of the command is not checked after it was sent. This could potentially lead to a resource leak if the command fails but the status is not checked.
+
+Additionally, the variable `CAN_ABORT_STATUS` is used directly without any checks, which may lead to unexpected behavior if the status of the command is not as expected.
+
+RECOMMENDATIONS:
+Check the status of the command after it was sent, and handle any potential error cases. Here's an example:
+
+  ```c
+struct iwl_host_cmd cmd = {
+  .id = SCAN_OFFLOAD_ABORT_CMD,
+};
+u32 status = CAN_ABORT_STATUS;
+
+ret = iwl_mvm_send_cmd_status(mvm, &cmd, &status);
+if (ret) {
+  return ret;
+}
+
+// Check the status of the command
+if (status != CAN_ABORT_STATUS) {
+  // Handle the case where the status is not as expected
+  return -EIO;
+}
+```
+
+ORIGINAL CODE:
+  ```c
+struct iwl_host_cmd cmd = {
+  .id = SCAN_OFFLOAD_ABORT_CMD,
+};
+u32 status = CAN_ABORT_STATUS;
+
+ret = iwl_mvm_send_cmd_status(mvm, &cmd, &status);
+if (ret)
+  return ret;
+  ```

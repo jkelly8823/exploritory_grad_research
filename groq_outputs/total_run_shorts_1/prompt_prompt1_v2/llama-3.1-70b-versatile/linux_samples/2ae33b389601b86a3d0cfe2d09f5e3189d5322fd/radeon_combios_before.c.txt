@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Unvalidated function pointer usage
+
+EXPLANATION:
+The issue with this code snippet is that it calls a function (`radeon_legacy_get_primary_dac_info_from_table`) without any validation of the `'found'` variable's impact on this function call. However, my primary concern is the lack of any validation of `rdev` before passing it to this function.
+
+Another concern is how the `found` flag impacts the return value of `p_dac`. In this context, `found` seems to determine whether or not to call `radeon_legacy_get_primary_dac_info_from_table` function.
+
+However, the main concern here seems to be that `found` is either 0 or 1. But this is inferred from limited context and there may be concerns or repercussions regarding usage of this global variable that only updates to 1 in edge or corner cases as is visible in the function's snippet and may potentially default to 0.
+
+Nonetheless, because variable `found` likely controls execution flow but will likely influence behavior to allow usage of an unvalidated struct `p_dac` as return from this code (another if check - presumably earlier - having initialized this variable `found`, checked the DAC's value and found some issue prompting fallback logic to utilize this alternative table method) based on an arbitrary condition that utilizes multiple edge-cases to elicit the current function usage flows depending on what factors of the `found` check here might influence this control structure during a function's initialization as possibly determined within the DAC settings retrieval parameters the prior value check provides and can introduce an entry point that this bug introduces into the legacy systems environment - a likely resource leak. While an unvalidated function usage at least based on initial "found" value check is not under immediate use.
+
+
+RECOMMENDATIONS:
+I recommend that this function be refactored to validate the values of `rdev`, `p_dac`, and `found`. Also, add null or bounds checks for these variables to ensure that they are valid before being passed to any function or used in a return statement.
+
+Additionally, there should be a clear understanding of under what conditions `found` will be set to 0 and under what conditions it will be set to 1 to avoid any potential logical errors in the usage of the function pointer.
+
+
+ORIGINAL CODE:
+			found = 1;
+	}
+
+	if (!found) /* fallback to defaults */
+		radeon_legacy_get_primary_dac_info_from_table(rdev, p_dac);
+
+	return p_dac;

@@ -1,0 +1,89 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6, 32-33
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a potential Deadlock vulnerability and a resource leak vulnerability.
+
+EXPLANATION:
+The deadlock vulnerability is present in the lines 4-6. The code locks the mutex `&pn->all_ppp_mutex` but does not unlock it in case of an error. This can lead to a deadlock if another part of the code is trying to acquire the same mutex. 
+Another vulnerability is present in lines 32-33. The function `unit_put` does not release the lock on the mutex before putting the unit number back to the pool. This can cause a resource leak if another part of the code is trying to acquire the same mutex.
+
+Additionally, there seems to be a problem with synchronization. The variable `ppp->file.dead` is used in a way that suggests it is used for synchronization. However, there is no locking mechanism in place to prevent concurrent access.
+
+RECOMMENDATIONS:
+To fix the deadlock vulnerability, the mutex should be unlocked before the function returns. This can be achieved by using a try-catch block or by adding an `unlock` statement in the error path.
+To fix the resource leak vulnerability, the `unit_put` function should unlock the mutex before putting the unit number back to the pool. Alternatively, the lock can be released after the `unit_put` function has finished.
+To address the synchronization issue, consider using a lock to protect concurrent access to the `ppp->file.dead` variable.
+
+ORIGINAL CODE:
+
+```c
+	 */
+	dev_net_set(dev, net);
+
+	mutex_lock(&pn->all_ppp_mutex);
+
+	if (unit < 0) {
+		unit = unit_get(&pn->units_idr, ppp);
+		if (unit < 0) {
+			ret = unit;
+			goto out2;
+		}
+	} else {
+		ret = -EEXIST;
+		if (unit_find(&pn->units_idr, unit))
+			goto out2; /* unit already exists */
+		/*
+		 * if caller need a specified unit number
+		ppp->closing = 1;
+		ppp_unlock(ppp);
+		unregister_netdev(ppp->dev);
+		unit_put(&pn->units_idr, ppp->file.index);
+	} else
+		ppp_unlock(ppp);
+
+	ppp->file.dead = 1;
+	ppp->owner = NULL;
+	wake_up_interruptible(&ppp->file.rwait);
+
+ * by holding all_ppp_mutex
+ */
+
+static int __unit_alloc(struct idr *p, void *ptr, int n)
+{
+	int unit, err;
+
+again:
+	}
+
+	err = idr_get_new_above(p, ptr, n, &unit);
+	if (err < 0) {
+		if (err == -EAGAIN)
+			goto again;
+		return err;
+	}
+
+	return unit;
+}
+
+/* associate pointer with specified number */
+static int unit_set(struct idr *p, void *ptr, int n)
+{
+	int unit;
+
+	unit = __unit_alloc(p, ptr, n);
+	if (unit < 0)
+		return unit;
+	else if (unit != n) {
+		idr_remove(p, unit);
+		return -EINVAL;
+	}
+
+/* get new free unit number and associate pointer with it */
+static int unit_get(struct idr *p, void *ptr)
+{
+	return __unit_alloc(p, ptr, 0);
+}
+
+/* put unit number back to a pool */
+static void unit_put(struct idr *p, int n)
+```

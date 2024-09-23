@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-31, 37-41
+VULNERABILITY_DESCRIPTION:
+The provided code contains a potential vulnerability in the form of unhandled resource injection and possible logic error. 
+
+The vulnerability in the rockchip_cpuclk_post_rate_change function appears to stem from potential logic inconsistencies or resource contention in the order that divider are set when a rate change occurs. 
+
+This is due to the rockchip_cpuclk_set_dividers function being called on both rate decreases and rate increases.
+In many rate-setting scenarios, only one or the other is needed.
+
+The issue with resource injection is largely due to a potential lack of access checks on cpuclk->reg_data. Were this data structure populated from an untrusted source, this could provide a vector by which that source could inject malicious data into this function.
+
+Further security concerns lie in the if statement checks that lead up to these calls, seemingly controlling how these dividers are set.
+
+These changes are simply based on rate comparisons; if an attacker controls those rates directly or indirectly (depending on any other attack surface available to it) they may be capable of creating an easier attack vector or creating a rate-setting logic error unknowingly introduced by the application's developers.
+
+EXPLANATION:
+An examination of the code snippet shows this functionality being performed in a potentially parallel context - signified by spin_lock_irqsave and corresponding irmrestore; suggesting that cpuclk->lock is used for synchronization between different logical flows of execution that are interruptible.
+
+However the calls for rockerchip_cpuclk_set_dividers happen within the synchronization's protection.
+
+While access to the rockchip_cpuclk_set_dividers function will be serialized in terms of the lock which is holding it; any time that this unprotected input from other parallel asynchronous contexts reaches this function, without access to further context, it allows for hypothetical potential vulnerabilities to propagate the data through to rockerchip_cpuclk_set_dividers.
+
+RECOMMENDATIONS:
+Without access to any additional context, further evaluation of this, may lie with code beyond this single snippet presented to me.
+A possible fix could involve reviewing both how those data structures (cpuclk->reg_data, ndata->new_rate) are populated as well as their origin.
+Access control checks may also be warranted at every level for both before calls to functions as well as in argument provided that data.

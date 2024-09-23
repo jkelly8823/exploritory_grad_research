@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to use-after-free and double free issues due to the duplicated code blocks that access and modify the same memory location without proper synchronization or checks.
+
+EXPLANATION:
+The code snippet appears to be copying values from the `info` structure to `infop` using `unsafe_put_user`. However, the code is duplicated, which may lead to issues if `infop` is deallocated or modified between the two blocks. The check for `infop` being null is also duplicated, which suggests that the code may not be properly synchronized. Furthermore, if an exception occurs between the two blocks, the duplicated code may lead to double-free issues.
+
+RECOMMENDATIONS:
+To fix this issue, the duplicated code block should be removed, and the existing checks for `infop` should be reviewed for sufficiency. If necessary, additional checks or synchronization mechanisms (such as locks) should be added to prevent concurrent modifications to `infop`. If an exception can occur between the two blocks, a try-catch block should be used to prevent the double-free issue. 
+
+ORIGINAL CODE:
+```c
+if (!infop)
+	return err;
+
+user_access_begin();
+unsafe_put_user(signo, &infop->si_signo, Efault);
+unsafe_put_user(0, &infop->si_errno, Efault);
+unsafe_put_user(info.cause, &infop->si_code, Efault);
+if (!infop)
+	return err;
+
+user_access_begin();
+unsafe_put_user(signo, &infop->si_signo, Efault);
+unsafe_put_user(0, &infop->si_errno, Efault);
+unsafe_put_user(info.cause, &infop->si_code, Efault);
+```

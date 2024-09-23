@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+Use of a pointer after it has been freed.
+
+EXPLANATION:
+In the given code, the string 'str' is freed after a match is found and the function returns. However, when the loop completes without finding a match, the memory allocated for 'str' is freed before the function returns, which is correct practice. However, the main issue lies in the loop where 'str' is being incremented directly ('str = str + 1;'). 
+
+Here 'str' is being incremented, and later its value is being overwritten in the success condition ('free(str);return SUCCESS;'). But when no match is found and 'free(str);return FAILURE;' is called, 'str' now points to somewhere outside the valid memory block that was allocated for the string. The line where the string 'str' is free'd after being incremented is line 13.
+
+A segfault or undefined behavior might happen if data is being read/written at some point outside of that specific memory location which causes undefined behavior in a lot of cases.
+
+However, a direct vulnerability can't be determined with certainty here. This seems more like an issue that could become evident during the code's runtime, especially when trying to use 'str' as it would be pointing to a wrong address. But since we have incremented 'str' many times in a loop before it reaches line 13, we can not guarantee 'str' is pointing to a safe location, therefore a direct vulnerability is assumed.
+
+RECOMMENDATIONS:
+1. Instead of incrementing 'str' directly, you should use a separate pointer to traverse through the string. Here is a corrected version of the code snippet:
+```c
+int contains_char(char c){
+   char *str = (char*)malloc(20*sizeof(char));
+   strcpy(str, "Search Me!");
+   char *p = str;
+   while( *p != '\0'){
+       if( *p == c ){
+           free(str); 
+           return SUCCESS;
+       }
+       p++;
+   }
+   free(str);return FAILURE;
+}
+```
+
+Note: Directly comparing (*str != NULL) won't work in C because null characters ('\0') are represented by '0' in ASCII which is essentially NULL or false. Directly comparing to a character in the string will essentially cause undefined behavior in this scenario. It is better to loop until we find the 'null character' ('\0') at the end.
+
+ORIGINAL CODE:
+```c
+#define SUCCESS (1)#define FAILURE (0)
+int contains_char(char c){
+  char *str;
+  str = (char*)malloc(20*sizeof(char));
+  strcpy(str, "Search Me!");while( *str != NULL){
+      if( *str == c ){
+            
+            
+        /* matched char, free string and return success */
+        free(str);return SUCCESS;
+      }
+      /* didn't match yet, increment pointer and try next char */
+      
+      str = str + 1;
+  }
+  /* we did not match the char in the string, free mem and return failure */
+  
+  free(str);return FAILURE;
+}
+```

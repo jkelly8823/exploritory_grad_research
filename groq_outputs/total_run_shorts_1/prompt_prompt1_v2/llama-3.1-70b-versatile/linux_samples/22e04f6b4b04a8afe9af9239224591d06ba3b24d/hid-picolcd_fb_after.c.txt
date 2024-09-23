@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability and potential NULL pointer dereference.
+
+EXPLANATION:
+The function `picolcd_exit_framebuffer` first checks if `info` is NULL before using it. However, after retrieving `fbdata` from `info->par`, it does not check if `fbdata` is NULL before using it to access `fbdata->lock` and `fbdata->picolcd`. This could result in a NULL pointer dereference if `fbdata` is NULL.
+
+Furthermore, the function `spin_lock_irqsave` could potentially cause a use-after-free vulnerability if another thread has concurrently freed the memory pointed to by `fbdata` and reassigned the pointer to point to another valid object. This is because the lock is held on the `fbdata->lock` object, but the function does not ensure that the `fbdata` object itself remains valid.
+
+RECOMMENDATIONS:
+1. Add a NULL check for `fbdata` before using it to access `fbdata->lock` and `fbdata->picolcd`.
+2. Consider using a more robust synchronization mechanism, such as a reference count or a lock that protects the entire `fbdata` object, to prevent use-after-free vulnerabilities.
+
+ORIGINAL CODE:
+```c
+void picolcd_exit_framebuffer(struct picolcd_data *data)
+{
+	struct fb_info *info = data->fb_info;
+	struct picolcd_fb_data *fbdata;
+	unsigned long flags;
+
+	if (!info)
+		return;
+
+	device_remove_file(&data->hdev->dev, &dev_attr_fb_update_rate);
+	fbdata = info->par;
+
+	/* disconnect framebuffer from HID dev */
+	spin_lock_irqsave(&fbdata->lock, flags);
+	fbdata->picolcd = NULL;
+}
+```

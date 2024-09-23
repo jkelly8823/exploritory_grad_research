@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+Buffer Overrun and Information Leak Vulnerability via insufficient capability checks in netlink message handling.
+
+EXPLANATION:
+This code snippet handles a netlink request, and it seems to be verifying if the user has the proper capabilities to execute a specific command. However, there are a couple of issues: first, it's assuming that `nlmsg_total_size()` doesn't return a negative number. 
+
+Though this isn't likely to be a problem because `nlmsg_total_size()` is well-defined and validates the values, these checks aren't robust. 
+
+Furthermore, this function doesn't check the capability until it needs to act upon the request. If an attacker provides an invalid request that passes capability checks, they can see which specific command they aren't capable of running, which they wouldn't have been able to discover otherwise. This could, in the worst case, aid in privilege escalation, though other pre-conditions are assumed.
+
+Additionally, consider a user that isn't allowed to have netlink capabilities. If the kernel does otherwise it's a permissions escalation and ultimately allows arbitrary command invocations, representing an arguably less useful but still dangerous form of information leak/attacks on user privilege systems.
+
+The issue begins at the TIPC-genl header declarations and becomes immediately problematic within our if-case statement comparison. The function comparison creates ambiguous code execution as evidenced so that the code within the if-case statement has potential privilege leaks, potentially impacting all downstream effects and operations.
+
+RECOMMENDATIONS:
+When handling capability checks and sensitive operations:
+
+* Add the necessary checks to prevent incorrect/unrequired variable usage.
+* Evaluate user capability permissions before taking on further actions and before sending any sensitive command operations through variables.
+* Handle and create specific exception events or a function to re-run after failed checks.
+* In conjunction with capability assignments and netlink validation, ensure that capabilities exist with their original state to ensure they persist safely, a fundamental premise and goal of privilege separation and data integrity.
+* Since information leak may occur if arbitrary command checking happens, reassess if verification happens in those exact spots within our conditional if-case.
+
+ORIGINAL CODE:
+```c
+int hdr_space = nlmsg_total_size(GENL_HDRLEN + TIPC_GENL_HDRLEN);
+u16 cmd;
+
+if ((req_userhdr->cmd & 0xC000) && (!netlink_capable(skb, CAP_NET_ADMIN)))
+    cmd = TIPC_CMD_NOT_NET_ADMIN;
+else
+    cmd = req_userhdr->cmd;
+```

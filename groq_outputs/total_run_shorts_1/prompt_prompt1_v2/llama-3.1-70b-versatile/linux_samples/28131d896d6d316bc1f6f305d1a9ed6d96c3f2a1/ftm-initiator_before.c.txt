@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 6-9
+VULNERABILITY_DESCRIPTION:
+ Potential Null Pointer Dereference and Integer Overflow vulnerabilities.
+
+EXPLANATION:
+Multiple potential vulnerabilities have been identified:
+
+1.  Potential Integer Overflow: In lines 6-9, `peer->chandef.width` is being used to set the format_bw variable using bitwise operations. However, the potential overflow risk comes from the fact that `peer->chandef.width` is not validated prior to being used in the switch statement. Without understanding the complete code, the specific values or conditions which would cause an overflow are still unclear.
+
+2.  Potential Null Pointer Dereference: In the code snippet, there is a potential null pointer dereference at line 6 (and multiple lines within the functions iwl_mvm_ftm_resp_size_validation and the one that accepts 'notif_ver'). The parameters such as 'peer,' 'mvm,' 'fw_ap,' 'new_api,' 'notif_ver,' and 'i' are being dereferenced without checks to ensure that they are not null.
+
+3.  Missing error handling: At lines 3-4, there appears to be a different, not commonly recognized or identified issue. Looking into these  lines the code *channel = ieee80211_frequency_to_channel(freq); and, *format_bw = IWL_LOCATION_FRAME_FORMAT_VHT; reveal they are getting information from possibly, uninitialized variables.
+
+RECOMMENDATIONS:
+
+1.  The function with switch case should be provided with proper case validation before entering into these lines of code. In case there's the probability of overflow, the program should be well-prepared to handle that and must provide boundary values accordingly.
+
+2.  Null checks should be implemented before using the variables 'peer,' 'mvm,' 'fw_ap,' 'notif_ver,' and 'i' to prevent potential null pointer dereference.
+
+3.  A proper return statement or handling in case any function result yields unexpected data to prevent null pointer reference in functions may also help fix these bugs effectively.
+
+ORIGINAL CODE:
+```c
+u8 *ctrl_ch_position)
+{
+    u32 freq = peer->chandef.chan->center_freq;
+    *channel = ieee80211_frequency_to_channel(freq);
+
+    switch (peer->chandef.width) {
+        *format_bw = IWL_LOCATION_FRAME_FORMAT_VHT;
+        *format_bw |= IWL_LOCATION_BW_80MHZ << LOCATION_BW_POS;
+        break;
+    default:
+        IWL_ERR(mvm, "Unsupported BW in FTM request (%d)\n",
+            peer->chandef.width);
+        return -EINVAL;
+    static bool iwl_mvm_ftm_resp_size_validation(u8 ver, unsigned int pkt_len)
+    {
+        switch (ver) {
+        case 8:
+            return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v8);
+        case 7:
+            return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v7);
+            int peer_idx;
+
+            if (new_api) {
+                if (notif_ver == 8) {
+                    fw_ap = &fw_resp_v8->ap[i];
+                    iwl_mvm_ftm_pasn_update_pn(mvm, fw_ap);
+                } else if (notif_ver == 7) {
+                    fw_ap = (void *)&fw_resp_v7->ap[i];
+```

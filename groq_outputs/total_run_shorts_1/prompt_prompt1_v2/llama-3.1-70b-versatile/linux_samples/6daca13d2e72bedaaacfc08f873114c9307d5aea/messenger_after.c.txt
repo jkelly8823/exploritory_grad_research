@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+The code does not validate the length of `con->auth->authorizer_reply_buf` before passing it to `con->ops->add_authorizer_challenge()`. This can lead to a buffer overflow vulnerability if `authorizer_len` is larger than the buffer size.
+
+EXPLANATION:
+When calling `con->ops->add_authorizer_challenge()`, the code passes `authorizer_len` to specify the length of data to be added to the buffer. However, it does not verify if the buffer `authorizer_reply_buf` has sufficient space to accommodate this amount of data. This can result in a buffer overflow, potentially allowing an attacker to execute malicious code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add a length check before calling `con->ops->add_authorizer_challenge()`:
+```c
+if (le32_to_cpu(con->in_reply.authorizer_len) > con->auth->authReplyBufLen) {
+    // Handle error: authorizer_len exceeds buffer length
+    con->error_msg = "authorizer_len exceeds buffer length";
+    return -EINVAL;
+}
+```
+Additionally, it is recommended to consider using a safer function to handle buffer addition, such as one that will not overflow the buffer even if the provided length exceeds its capacity.
+
+ORIGINAL CODE:
+```c
+if (con->auth) {
+	/*
+	 * Any connection that defines ->get_authorizer()
+	 * should also define ->add_authorizer_challenge() and
+	 * ->verify_authorizer_reply().
+	 *
+	 * See get_connect_authorizer().
+	 */
+	if (con->in_reply.tag == CEPH_MSGR_TAG_CHALLENGE_AUTHORIZER) {
+		ret = con->ops->add_authorizer_challenge(
+			    con, con->auth->authorizer_reply_buf,
+			    le32_to_cpu(con->in_reply.authorizer_len));
+		if (ret < 0)
+			return ret;
+
+		con_out_kvec_reset(con);
+		__prepare_write_connect(con);
+		prepare_read_connect(con);
+		return 0;
+	}
+
+	ret = con->ops->verify_authorizer_reply(con);
+	if (ret < 0) {
+		con->error_msg = "bad authorize reply";
+		return ret;
+```
+Note: This analysis assumes that `con->auth->authorizer_reply_buf` is a buffer with a defined length `con->auth->authReplyBufLen`. However, this information is not present in the provided code snippet.

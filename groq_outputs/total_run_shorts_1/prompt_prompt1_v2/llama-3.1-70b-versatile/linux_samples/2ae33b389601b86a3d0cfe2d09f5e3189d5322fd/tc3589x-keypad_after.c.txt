@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Use of an unchecked return value from a function (`matrix_keypad_build_keymap`) that can potentially lead to a null pointer dereference.
+
+EXPLANATION:
+The `matrix_keypad_build_keymap` function returns a value in the `error` variable. However, this value is not checked for a pointer being returned (e.g., if `matrix_keypad_build_keymap` allocated memory that was not properly freed). Subsequent to calling `matrix_keypad_build_keymap`, lines 9 and 10 perform operations on `keypad->keymap = input->keycode;` and `input_set_capability(input, EV_MSC, MSC_SCAN);`. However, it appears there is potential for an unchecked return on `matrix_keypad_build_keymap`, (return might be a newly allocated pointer of type 'void ') however when returned, it looks like this pointer may be dereferenced on the next lines while still assuming its 'keycode'...  Furthermore, even if error isn't  being used as a newly allocated pointer here and is shown  that way just by context of previous calls as shown, there may be other unlisted un freed allocated memory in 'input  +  keypad 'objects  in this hunk if original code lets this to cause serious resource issues later down the path if not freed eventually causing this hunks entire use resource issues. Potentially even cause segfaults in other places under the hood because un initialized, freed or wrongly allocated 'struct objects' having allocated resources (unfreed). 
+   
+RECOMMENDATIONS:
+1. Ensure that `matrix_keypad_build_keymap` returns the correct error code and not a pointer. But  this  case it seems the intention was not that and does continue properly, considering return type and  other  subsequent assignments would return error codes properly. 
+   - Fix or validate from the perspective of understanding 'matrix_keypad_build_keymap' output to validate pointer and  or  error was not returned here either.
+2. If `matrix_keypad_build_keymap` does return a pointer, check the return value for nullity and do not  use  the  returned  pointer  without  checking  its  validity. Furthermore use the ' error codes  like  other similar functions could use potentially throughout this entire programming scope the  proper   return error codes for this particular procedure so that they not confused with another procedure output interpretation, context.
+
+However note here context should have been same here to detect: NULL Pointer used on subsequent KeyPad Usage, Use-after-free, Dangling pointer all errors not detected in procedure possibly. Those problems with regard to freeing might arise only as copy and paste method for  function from many keypads like copy across keypad driver or  un freed code from a related hunk code snippet being   tested here  code vulnerable just may  cause  problems if left unfixed at coding standard implementation layer of detection before problems occur as un intended.
+ 
+ORIGINAL CODE:
+```c
+#define TC3589x_EVT_INT_CLR	0x2
+#define TC3589x_KBD_INT_CLR	0x1
+
+/**
+ * struct tc_keypad - data structure used by keypad driver
+ * @tc3589x:    pointer to tc35893
+ * @input:      pointer to input device object
+	const struct tc3589x_keypad_platform_data *board;
+	unsigned int krow;
+	unsigned int kcol;
+	unsigned short *keymap;
+	bool keypad_stopped;
+};
+
+static int tc3589x_keypad_init_key_hardware(struct tc_keypad *keypad)
+
+	error = matrix_keypad_build_keymap(plat->keymap_data, NULL,
+					   TC3589x_MAX_KPROW, TC3589x_MAX_KPCOL,
+					   NULL, input);
+	if (error) {
+		dev_err(&pdev->dev, "Failed to build keymap\n");
+		goto err_free_mem;
+	}
+
+	keypad->keymap = input->keycode;
+
+	input_set_capability(input, EV_MSC, MSC_SCAN);
+	if (!plat->no_autorepeat)
+		__set_bit(EV_REP, input->evbit);
+```

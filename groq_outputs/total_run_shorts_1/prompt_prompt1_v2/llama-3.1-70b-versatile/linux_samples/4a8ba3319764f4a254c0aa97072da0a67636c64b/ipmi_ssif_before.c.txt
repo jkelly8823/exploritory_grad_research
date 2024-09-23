@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Time-based vulnerabilities due to `do_gettimeofday`.
+
+EXPLANATION:
+The function `do_gettimeofday` can be affected by the system's time settings, which can be changed by an attacker in certain circumstances. This can potentially lead to timing attacks or unexpected behavior in certain cases.
+
+However, the main concern here is likely not about `do_gettimeofday` directly, but its potential use in certain scenarios where precision time measurement is necessary. For safety-critical systems requiring precise timekeeping (like real-time operating systems), using `do_gettimeofday` can lead to desynchronization in critical applications. Modern Linux provides `ktime_get_*` and `clock_gettime` for getting high-precision (monotonic) timestamps that are less vulnerable to attacks and less susceptible to changes in system time.
+
+Another concern is that the function does not return an error value. Instead, it returns `void`. Therefore, problems during time retrieval cannot be propagated.
+
+RECOMMENDATIONS:
+For precise timestamping in kernel code, use the `ktime_get_*` series of functions from `<linux/ktime.h>` or `clock_gettime` where possible.
+
+```c
+#include <linux/ktime.h>
+
+// ...
+
+	ktime_t kt;
+	struct timespec64 ts;
+
+	kt = ktime_get();
+	ts = ktime_to_timespec64(kt);
+
+	pr_info("**Enqueue %02x %02x: %lld.%09ld\n",
+	       msg->data[0], msg->data[1], ts.tv_sec, ts.tv_nsec / 1000);
+```
+
+Alternatively, use `getnstimeofday64(&ts)` for equivalent functionality.
+
+ORIGINAL CODE:
+```c
+#include <linux/dmi.h>
+#include <linux/kthread.h>
+#include <linux/acpi.h>
+
+#define PFX "ipmi_ssif: "
+#define DEVICE_NAME "ipmi_ssif"
+
+
+	do_gettimeofday(&t);
+	pr_info("**Enqueue %02x %02x: %ld.%6.6ld\n",
+	       msg->data[0], msg->data[1], t.tv_sec, t.tv_usec);
+	}
+}
+
+static int get_smi_info(void *send_info, struct ipmi_smi_info *data)
+```

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an improper implementation of certificate verification in an SSL/TLS context.
+
+EXPLANATION:
+The code sets the SSL verification option to `SSL_VERIFY_NONE` using `SSL_CTX_set_verify(self->ctx, SSL_VERIFY_NONE, NULL)`. This option disables the verification of the server certificate, making the connection vulnerable to man-in-the-middle attacks.
+
+In addition, the version is set to TLS1, but the protocol option allows all versions, including older and vulnerable SSLv2 and SSLv3. Although the options to disable these are added to the module, they are not used in this code snippet.
+
+RECOMMENDATIONS:
+It is recommended to change the verification option to a more secure option like `SSL_VERIFY_PEER`. This will verify the server's certificate. It's also a good practice to verify the server's certificate by implementing a callback function as the third argument.
+
+```c
+SSL_CTX_set_verify(self->ctx, SSL_VERIFY_PEER, NULL);
+```
+
+Additionally, the code should set the options to disable older and vulnerable protocols:
+
+```c
+SSL_CTX_set_options(self->ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1);
+```
+
+ORIGINAL CODE:
+```c
+self->ctx = ctx;
+/* Defaults */
+SSL_CTX_set_verify(self->ctx, SSL_VERIFY_NONE, NULL);
+SSL_CTX_set_options(self->ctx, SSL_OP_ALL);
+
+#define SID_CTX "Python"
+SSL_CTX_set_session_id_context(self->ctx, (const unsigned char *) SID_CTX,
+                               sizeof(SID_CTX));
+PY_SSL_VERSION_TLS1);
+
+/* protocol options */
+PyModule_AddIntConstant(m, "OP_ALL", SSL_OP_ALL);
+PyModule_AddIntConstant(m, "OP_NO_SSLv2", SSL_OP_NO_SSLv2);
+PyModule_AddIntConstant(m, "OP_NO_SSLv3", SSL_OP_NO_SSLv3);
+PyModule_AddIntConstant(m, "OP_NO_TLSv1", SSL_OP_NO_TLSv1);
+PyModule_AddIntConstant(m, "OP_CIPHER_SERVER_PREFERENCE",
+```

@@ -1,0 +1,20 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 57-67
+VULNERABILITY_DESCRIPTION:
+A direct out-of-bounds read from the packet descriptor (desc) can occur due to improper input validation in iwl_rx_packet_payload_len(pkt).
+EXPLANATION:
+In lines 57-67, there is a validation check for the packet length using iwl_rx_packet_payload_len(pkt). However, if this check passes, subsequent code accesses DESC fields (e.g., phy_info[1], phy_info[0]) without validating their sizes relative to the DESC buffer length. This missing check can lead to a direct out-of-bounds read if iwl_rx_packet_payload_len(pkt) returns a value that is less than the combined size of DESC fields accessed in subsequent code.
+RECOMMENDATIONS:
+1. Introduce an additional validation check for DESC fields, ensuring the accessed indices and sizes do not exceed DESC length. This could be implemented using memaccess.h checks like kzfree or memset_memset_zeroendian.
+    2. Reconsider and optimize off by one errors associated with kzmemcopy where overflow situations in kzcopy are not handled properly.
+    3. Verify buffer descriptor sizes with DESC buffer length on every read operation to protect against size underestimation.
+ORIGINAL CODE:
+
+If (unlikely(iwl_rx_packet_payload_len(pkt) < sizeof(*desc)))
+    return;
+  desc = (struct iwl_rx_mpdu_desc *)skb;
+  kmemleak_free(desc);
+
+  if (unlikely(iwl_rx_packet_payload_len(pkt) < sizeof(*desc)))
+    return;
+```

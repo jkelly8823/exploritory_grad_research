@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17, 22-25
+VULNERABILITY_DESCRIPTION:
+The URL parsing function clear_cache() appears to be vulnerable to a URL Encoding Injection vulnerability. The `url.replace()` and `scheme.replace()` methods are used to remove some unsafe URL bytes, but this removal can be exploited in certain cases, leading to arbitrary characters being added to the URL.
+
+EXPLANATION:
+The function `lstrip()` is used to remove leading whitespace from the `url`, and `strip()` is used to remove leading and trailing whitespace from the `scheme`. However, this does not prevent all possible URL encoding injection attacks, as there may be malicious characters inside the URL string itself.
+
+The `replace()` method is used to remove some unsafe URL bytes from the `url` and `scheme`. However, this is not a reliable solution for several reasons. Firstly, this only checks for three specific bytes and does not account for other possible malicious inputs. Additionally, it's possible that other functions or methods used in conjunction with these variables could still lead to potential code injection or arbitrary URL redirects.
+
+RECOMMENDATIONS:
+- Always validate and sanitize any user input URLs before processing.
+- Consider using a more robust URL parsing library that handles URL encoding injection attacks.
+- Avoid using `replace()` or `strip()` for removing malicious characters, as this could leave your code vulnerable to multiple possibilities for code injection.
+- For example, use a more robust library such as `urllib.parse` from Python, which already handles some URL encoding injection possibilities.
+
+ORIGINAL CODE:
+scenarios for parsing, and for backward compatibility purposes, some
+parsing quirks from older RFCs are retained. The testcases in
+test_urlparse.py provides a good indicator of parsing behavior.
+
+The WHATWG URL Parser spec should also be considered.  We are not compliant with
+it either due to existing user code API behavior expectations (Hyrum's Law).
+It serves as a useful guide when making changes.
+"""
+from collections import namedtuple
+import functools
+                '0123456789'
+                '+-.')
+
+# Leading and trailing C0 control and space to be stripped per WHATWG spec.
+# == "".join([chr(i) for i in range(0, 0x20 + 1)])
+_WHATWG_C0_CONTROL_OR_SPACE = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f '
+
+# Unsafe bytes to be removed per WHATWG spec
+_UNSAFE_URL_BYTES_TO_REMOVE = ['\t', '\r', '\n']
+
+def clear_cache():
+    """
+
+    url, scheme, _coerce_result = _coerce_args(url, scheme)
+    # Only lstrip url as some applications rely on preserving trailing space.
+    # (https://url.spec.whatwg.org/#concept-basic-url-parser would strip both)
+    url = url.lstrip(_WHATWG_C0_CONTROL_OR_SPACE)
+    scheme = scheme.strip(_WHATWG_C0_CONTROL_OR_SPACE)
+
+    for b in _UNSAFE_URL_BYTES_TO_REMOVE:
+        url = url.replace(b, "")
+        scheme = scheme.replace(b, "")

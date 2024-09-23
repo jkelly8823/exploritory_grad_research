@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a memory disclosure vulnerability due to the lack of proper bounds checking before copying data to user space.
+
+EXPLANATION:
+The code uses the `copy_to_user` function to copy data from the `sec` variable to user space. However, the bounds checking performed by the `min_t` function is insufficient to prevent memory disclosure. The `sec` variable is copied to user space without any validation to ensure that its contents are not sensitive. Additionally, the `len` variable is not checked to ensure that it is within valid bounds, allowing an attacker to potentially read outside the intended buffer.
+
+RECOMMENDATIONS:
+To fix this vulnerability, additional bounds checking and validation should be performed on the `sec` variable and the `len` variable. Specifically:
+- Validate the `len` variable to ensure that it is within valid bounds and does not exceed the size of the `sec` buffer.
+- Validate the contents of the `sec` buffer to ensure that they do not contain sensitive information.
+- Consider using more secure functions for copying data to user space, such as `put_user` or `_put_user`.
+- It is also recommended to sanitize the data before passing it to user space.
+
+ORIGINAL CODE:
+```
+	BT_DBG("sock %p, sk %p", sock, sk);
+
+	sa->rc_family  = AF_BLUETOOTH;
+	sa->rc_channel = rfcomm_pi(sk)->channel;
+	if (peer)
+		bacpy(&sa->rc_bdaddr, &bt_sk(sk)->dst);
+		}
+
+		sec.level = rfcomm_pi(sk)->sec_level;
+
+		len = min_t(unsigned int, len, sizeof(sec));
+		if (copy_to_user(optval, (char *) &sec, len))
+			err = -EFAULT;
+```

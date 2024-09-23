@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION: TOCTOU (Time of Check to Time of Use) Vulnerability
+EXPLANATION:
+This code is potentially vulnerable to a TOCTOU (Time of Check to Time of Use) vulnerability, which is a type of race condition. Specifically, this vulnerability occurs when the value of PT_ESTATUS is read on line 11 (ldw	r4, PT_ESTATUS(sp)) and a check is performed on line 12 (andi	r10, r4, ESTATUS_EPIE). However, the decision to call schedule on line 18 is based on this previous check. If PT_ESTATUS is modified between the time of check and the time of use (i.e., the time schedule is called), this could potentially lead to an unexpected behavior.
+
+Another potential issue arises between lines 15 and 17 where the status register is manipulated, interrupts are enabled, and a function call is made. If the function call to schedule takes too long or is interrupted, it may be possible for an attacker to exploit this timing discrepancy by interfering with the execution flow between these instructions.
+
+Additionally, the final handling logic in lines 19 and onwards can potentially be used as a jump point by an attacker if the earlier conditions are crafted correctly in order to maintain previous interrupt enable flags. 
+
+RECOMMENDATIONS:
+Performing a reload of PT_ESTATUS immediately before the schedule function call would reduce the vulnerability to this bug. Consideration should be made for potential exception handling when scheduling and deciding if preemption should occur.
+
+The modification of the status register around the function call should be bracketed such that if schedule() unexpectedly does not return, or returns in an unacceptable state, proper handling and error detection/logging is considered in order to prevent cascading failures. 
+
+Maintaining consistent interrupt enablement across jump boundaries and ensuring that such uses do not allow the introduction of 'jump injection'-like vulnerabilities should be considered through defensive use in order to prevent reordering, as is generally a best practice for maintainability/reliability and performance
+
+ORIGINAL CODE:
+
+	GET_THREAD_INFO	r1
+	ldw	r4, TI_PREEMPT_COUNT(r1)
+	bne	r4, r0, restore_all
+
+need_resched:
+	ldw	r4, TI_FLAGS(r1)		/* ? Need resched set */
+	BTBZ	r10, r4, TIF_NEED_RESCHED, restore_all
+	ldw	r4, PT_ESTATUS(sp)	/* ? Interrupts off */
+	andi	r10, r4, ESTATUS_EPIE
+	beq	r10, r0, restore_all
+	movia	r4, PREEMPT_ACTIVE
+	stw	r4, TI_PREEMPT_COUNT(r1)
+	rdctl	r10, status		/* enable intrs again */
+	ori	r10, r10 ,STATUS_PIE
+	wrctl	status, r10
+	PUSH	r1
+	call	schedule
+	POP	r1
+	mov	r4, r0
+	stw	r4, TI_PREEMPT_COUNT(r1)
+	rdctl	r10, status		/* disable intrs */
+	andi	r10, r10, %lo(~STATUS_PIE)
+	wrctl	status, r10
+	br	need_resched
+#else
+	br	restore_all
+#endif

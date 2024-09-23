@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-12
+VULNERABILITY_DESCRIPTION:
+Infinite recursion vulnerability in the function `drop_one_stripe` due to recursive call without proper termination condition.
+
+EXPLANATION:
+The function `drop_one_stripe` calls itself recursively if the `mutex_trylock` operation is successful. However, there is no proper termination condition to prevent infinite recursion. The recursive call is based on the value of `ret` which is not guaranteed to change after each recursive call. This can lead to a stack overflow error if the recursive calls do not terminate.
+
+RECOMMENDATIONS:
+1.  Ensure that there is a proper termination condition to prevent infinite recursion.
+2.  Use a loop instead of recursion if possible, to avoid stack overflow errors.
+3.  Check the return value of the recursive call to prevent further recursion if the base case is met.
+
+An example of a fixed version could be:
+
+```c
+static int drop_one_stripe(struct r5conf *conf)
+{
+    struct stripe_head *sh;
+    int hash = (conf->max_nr_stripes - 1) % NR_STRIPE_HASH_LOCKS;
+    int ret = 0;
+
+    spin_lock_irq(conf->hash_locks + hash);
+    sh = get_free_stripe(conf, hash);
+    spin_unlock_irq(conf->hash_locks + hash);
+
+    if (mutex_trylock(&conf->cache_size_mutex)) {
+        for (int i = 0; i < sc->nr_to_scan; i++) {
+            // Instead of recursive call, use a loop or another approach to achieve the desired functionality.
+            ret = perform_operation(conf); // Replace with actual operation
+            if (ret == SHRINK_STOP) {
+                break;
+            }
+        }
+        mutex_unlock(&conf->cache_size_mutex);
+    }
+    return ret;
+}
+```
+
+ORIGINAL CODE:
+```c
+static int drop_one_stripe(struct r5conf *conf)
+{
+    struct stripe_head *sh;
+    int hash = (conf->max_nr_stripes - 1) % NR_STRIPE_HASH_LOCKS;
+
+    spin_lock_irq(conf->hash_locks + hash);
+    sh = get_free_stripe(conf, hash);
+    spin_unlock_irq(conf->hash_locks + hash);
+
+    if (mutex_trylock(&conf->cache_size_mutex)) {
+        ret= 0;
+        while (ret < sc->nr_to_scan) {
+            if (drop_one_stripe(conf) == 0) {
+                ret = SHRINK_STOP;
+                break;
+            }
+```

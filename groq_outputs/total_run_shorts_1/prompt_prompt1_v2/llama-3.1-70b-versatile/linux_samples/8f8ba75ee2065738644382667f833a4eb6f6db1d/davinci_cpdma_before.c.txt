@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7
+VULNERABILITY_DESCRIPTION: 
+Potential Deadlock Vulnerability
+
+EXPLANATION:
+This code snippet demonstrates the use of a spin lock, which can lead to potential deadlock vulnerabilities. A deadlock can occur when multiple locks are held and a thread is blocked on a resource that is also held by another thread, creating a cycle of waiting. 
+
+In this code, we see the spin lock is acquired on line 6, and inside this lock, `cpdma_chan_stop` is called on line 7. This could lead to a deadlock if `cpdma_chan_stop` also tries to acquire a lock that is held by another thread that is waiting for the `ctlr->lock` to be released.
+
+Additionally, checking the `chan->state` flag before acquiring the lock is not enough to prevent deadlocks, because this flag may change between the reading and writing operations. A more robust synchronization approach should be employed.
+
+RECOMMENDATIONS:
+To prevent deadlocks, a hierarchy of locks should be implemented, and the order of locks should be consistent across all code paths. Additionally, any necessary checks and modifications to flags like `chan->state` should be atomic and exception-safe. Consider using read-write locks, or consider transforming this spin lock into a mutex to enable recursive lock capabilities.
+
+To improve code safety in a general sense, a check should be performed to ensure that a lock is not being acquired recursively. There is a Linux kernel flag that can help prevent such occurrences.
+
+ORIGINAL CODE:
+```c
+int cpdma_chan_destroy(struct cpdma_chan *chan)
+{
+	struct cpdma_ctlr *ctlr = chan->ctlr;
+	unsigned long flags;
+
+	if (!chan)
+		return -EINVAL;
+
+	spin_lock_irqsave(&ctlr->lock, flags);
+	if (chan->state != CPDMA_STATE_IDLE)
+		cpdma_chan_stop(chan);
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 9, 14
+VULNERABILITY_DESCRIPTION:
+The double-free vulnerability and potential memory leak are present in this code.
+EXPLANATION:
+In C, calling `free()` on memory that has already been freed is known as a use-after-free or double-free vulnerability. This can result in the program crashing, exposing sensitive data, or executing arbitrary code. We observe this vulnerability on lines 8 and 9, where `interp_elf_ex` and `interp_elf_phdata` are freed, despite their memory already being released on subsequent lines. It's unclear why there is duplication in releasing this memory. This indicates that the memory management in this function may have issues.
+
+Furthermore, there is another occurrence on line 14, where `elf_phdata` could potentially be a double-free. We have an earlier line saying `interp_elf_phdata` being freed, which is possibly equivalent.
+
+RECOMMENDATIONS:
+To fix the double-free vulnerability and prevent memory leaks, the duplicated `free()` calls should be removed. If the same variable has aliases in the code, use an approach such as initializing it to NULL immediately after being freed to avoid unintended freeing of something else's variables. Since there's a `goto` involved, you should audit the logic flow there.
+
+Here's a recommended change:
+Add lines that set variables to `NULL` immediately after they have been freed, so others know they are not valid and avoid unnecessary second calls:
+```c
+...
+	kfree(interp_elf_ex); interp_elf_ex = NULL;
+	kfree(interp_elf_phdata); interp_elf_phdata = NULL;
+...
+```
+
+ORIGINAL CODE:
+```
+		}
+		reloc_func_desc = interp_load_addr;
+
+		allow_write_access(interpreter);
+		fput(interpreter);
+
+		kfree(interp_elf_ex);
+		kfree(interp_elf_phdata);
+	kfree(interp_elf_ex);
+	kfree(interp_elf_phdata);
+out_free_file:
+	allow_write_access(interpreter);
+	if (interpreter)
+		fput(interpreter);
+out_free_ph:
+	kfree(elf_phdata);
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+ Use of Uncontrolled Resource Index in 'tcf_action'.
+
+EXPLANATION:
+The variable 'm->tcf_action' is assigned to 'retval' without any validation or sanitization. This lack of control might lead to a situation where 'tcf_action' contains an unexpected value, potentially leading to undefined behavior or, in a worst-case scenario, arbitrary code execution. 
+
+In particular, 'TC_ACT_SHOT' is what returns the packet to the stack when a filter is not desired, to allow the packet to go to the default route. Using an uncontrolled resource could force this to always or never trigger, which might indicate other code segments utilizing this function to either work unexpectedly or fully not work altogether.
+
+RECOMMENDATIONS:
+Consider adding validation or sanitization for 'm->tcf_action' to ensure that it contains a valid and expected value. It would be wise to define an enumeration of allowed 'tcf_action' values and validate 'm->tcf_action' against that.
+
+One possible implementation could be:
+
+```c
+if (retval = m->tcf_action) {
+    if (retval < validLowerBound || retval > validUpperBound) {
+        // handle invalid value, log error, and/or set default action
+        retval = TC_ACT_SHOT; // for example
+    }
+}
+```
+ORIGINAL CODE:
+```c
+out:
+	if (err) {
+		m->tcf_qstats.overlimits++;
+		/* should we be asking for packet to be dropped?
+		 * may make sense for redirect case only
+		 */
+		retval = TC_ACT_SHOT;
+	} else {
+		retval = m->tcf_action;
+	}
+	spin_unlock(&m->tcf_lock);
+
+	return retval;
+}
+```

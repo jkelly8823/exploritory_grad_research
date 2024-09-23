@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19-20
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential buffer overflow due to misuse of pointers and missing bounds checking on the data and glen variables.
+
+EXPLANATION:
+The vulnerability lies in the line where it attempts to access memory with the expression `data + glen`. The `glen` variable is assigned a value from the function `tipc_get_gap_ack_blks()`, which could potentially exceed the allocated size of the `data` buffer. Without any bounds checking or validation of the `glen` value, an attacker could exploit this vulnerability by crafting a malicious message that causes `glen` to exceed the buffer's capacity, resulting in a buffer overflow. Furthermore, the `tipc_mon_rcv()` function is called with `data + glen` and `dlen - glen` as arguments, which could also lead to unexpected behavior if `glen` is greater than `dlen`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+1. Validate the `glen` value before using it to access memory. Ensure it does not exceed the allocated size of the `data` buffer.
+2. Perform bounds checking on the `tipc_get_gap_ack_blks()` function's return value.
+3. Use signed variables or consider using explicit casting to prevent integer overflows.
+
+Here is the updated code:
+
+```c
+void *data;
+u16 data_len = msg_data_sz(hdr);
+
+if (data_len > U16_MAX)
+    goto exit;
+
+/* ... */
+
+glen = tipc_get_gap_ack_blks(&ga, l, hdr, true);
+if(glen > data_len) {
+    // Handle error: glen exceeds data_len
+    break;
+}
+
+if (glen >= 0 && glen <= data_len) {
+    tipc_mon_rcv(l->net, data + glen, data_len - glen, l->addr,
+                 &l->mon_state, l->bearer_id);
+}
+```
+
+ORIGINAL CODE:
+
+```c
+struct tipc_msg *hdr = buf_msg(skb);
+struct tipc_gap_ack_blks *ga = NULL;
+bool reply = msg_probe(hdr), retransmitted = false;
+u32 dlen = msg_data_sz(hdr), glen = 0;
+u16 peers_snd_nxt =  msg_next_sent(hdr);
+u16 peers_tol = msg_link_tolerance(hdr);
+u16 peers_prio = msg_linkprio(hdr);
+u16 gap = msg_seq_gap(hdr);
+void *data;
+
+trace_tipc_proto_rcv(skb, false, l->name);
+
+if (dlen > U16_MAX)
+    goto exit;
+
+if (tipc_link_is_blocked(l) || !xmitq)
+    goto exit;
+
+if (tipc_own_addr(l->net) > msg_prevnode(hdr))
+
+    /* Receive Gap ACK blocks from peer if any */
+    glen = tipc_get_gap_ack_blks(&ga, l, hdr, true);
+    if(glen > dlen)
+        break;
+    tipc_mon_rcv(l->net, data + glen, dlen - glen, l->addr,
+                &l->mon_state, l->bearer_id);
+
+    /* Send NACK if peer has sent pkts we haven't received yet */
+```

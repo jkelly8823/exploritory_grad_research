@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Potential Null Pointer Dereference or Arbitrary Write Vulnerability
+EXPLANATION:
+The `kvm_write_guest_offset_cached` function is called with a pointer to `vcpu->arch.st.steal.preempted` as its source argument. However, this pointer may point to an overlapping or adjacent region in memory to the target address `&vcpu->arch.st.stime`. This can potentially cause an unauthorized write to memory or a null pointer dereference.
+Additionally, the purpose of the `kvm_write_guest_offset_cached` function is unclear without additional context. However, if it performs a write operation to guest memory, using a cached offset, it may be vulnerable to incorrect assumptions about memory layout or aliasing issues. This could result in uncontrolled access to memory.
+RECOMMENDATIONS:
+To mitigate this potential vulnerability, consider adding null checks and bounds checking to ensure that `vcpu->arch.st.steal.preempted` points to a valid memory location within the guest's memory space. 
+Review the purpose and operation of `kvm_write_guest_offset_cached` and ensure it operates correctly under all conditions.
+Use non-aliasing write operations or properly synchronize cache state before performing memory writes.
+
+ORIGINAL CODE:
+if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+	return;
+
+if (vcpu->arch.st.steal.preempted)
+	return;
+
+vcpu->arch.st.steal.preempted = KVM_VCPU_PREEMPTED;
+
+kvm_write_guest_offset_cached(vcpu->kvm, &vcpu->arch.st.stime,
+			&vcpu->arch.st.steal.preempted,

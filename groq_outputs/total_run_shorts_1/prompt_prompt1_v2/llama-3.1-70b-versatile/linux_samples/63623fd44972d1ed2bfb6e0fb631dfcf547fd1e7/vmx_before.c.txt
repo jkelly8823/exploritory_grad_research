@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 48
+VULNERABILITY_DESCRIPTION:
+TOCTOU (Time of Check to Time of Use) vulnerability in the `vmx_deliver_posted_interrupt` function.
+
+EXPLANATION:
+The `vmx_deliver_posted_interrupt` function checks if a previous notification has sent the IPI (Inter-Processor Interrupt) using `pi_test_and_set_on(&vmx->pi_desc)`. However, between the check and the potential kick of the vCPU using `kvm_vcpu_kick(vcpu)`, there is no lock or synchronization mechanism to protect against other threads or contexts from modifying the `vmx->pi_desc` structure. This introduces a TOCTOU vulnerability where the state of the system may change between the time the check is made and the time the action is taken.
+
+RECOMMENDATIONS:
+- Introduce a lock or synchronization mechanism to protect access to `vmx->pi_desc` to prevent concurrent modifications.
+- Alternatively, use a more atomic way to test and set the `pi_desc` flags to avoid the need for locking.
+- Consider implementing a retry mechanism to handle the case where the IPI has been sent by another thread or context after the check.
+
+ORIGINAL CODE:
+(start of code snippet not included, vulnerable code snipped)
+```c
+static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
+{
+    struct vcpu_vmx *vmx = to_vmx(vcpu);
+    int r;
+
+    r = vmx_deliver_nested_posted_interrupt(vcpu, vector);
+    if (!r)
+        return;
+
+    if (pi_test_and_set_pir(vector, &vmx->pi_desc))
+        return;
+
+    /* If a previous notification has sent the IPI, nothing to do.  */
+    if (pi_test_and_set_on(&vmx->pi_desc))
+        return;
+
+    if (!kvm_vcpu_trigger_posted_interrupt(vcpu, false))
+        kvm_vcpu_kick(vcpu);
+}
+```

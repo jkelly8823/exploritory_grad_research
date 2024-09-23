@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10, 13-14
+VULNERABILITY_DESCRIPTION:
+Insecure Resource Deletion/Freeing and Potential Use-After-Free Vulnerability
+
+EXPLANATION:
+The given code snippet appears to be a part of an interrupt handling mechanism, specifically designed for AMD graphics processing units. Upon examining the provided code, it seems that there are two potential issues:
+
+1.  Insecure Resource Deletion/Freeing: The `kfree(kfd)` function is called without properly checking if `kfd` is in use elsewhere in the system or other function. This could cause issues with resource management.
+2.  Potential Use-After-Free Vulnerability: Following the call to `kfree(kfd)`, the code still accesses `kfd` within the scope of the `if (kfd->init_complete)` condition, including calls to `device_queue_manager_uninit(kfd->dqm)`, `amd_iommu_free_device(kfd->pdev)`, and `kfd_topology_remove_device(kfd)`. This implies that even after the memory associated with `kfd` has been freed, the code still uses it.
+
+RECOMMENDATIONS:
+To fix the issues, implement the following measures:
+
+1.  Secure Resource Deletion/Freeing: Before calling `kfree(kfd)`, ensure that `kfd` is not being used anywhere else in the system. Furthermore, perform proper teardown and deallocation of resources associated with `kfd`.
+2.  Eliminate Use-After-Free: Move all code that uses `kfd` after the `kfree(kfd)` call into a separate block that executes before the `kfree(kfd)` call. For instance:
+
+    ```
+    if (kfd->init_complete) {
+        device_queue_manager_uninit(kfd->dqm);
+        amd_iommu_free_device(kfd->pdev);
+        kfd_topology_remove_device(kfd);
+    }
+    kfree(kfd); // Move kfree after checks
+    ```
+
+ORIGINAL CODE:
+```c
+	goto kfd_topology_add_device_error;
+	}
+
+	if (!device_iommu_pasid_init(kfd)) {
+		dev_err(kfd_device,
+			"Error initializing iommuv2 for device (%x:%x)\n",
+			kfd->pdev->vendor, kfd->pdev->device);
+device_queue_manager_error:
+	amd_iommu_free_device(kfd->pdev);
+device_iommu_pasid_error:
+	kfd_topology_remove_device(kfd);
+kfd_topology_add_device_error:
+	kfd2kgd->fini_sa_manager(kfd->kgd);
+	dev_err(kfd_device,
+	if (kfd->init_complete) {
+		device_queue_manager_uninit(kfd->dqm);
+		amd_iommu_free_device(kfd->pdev);
+		kfd_topology_remove_device(kfd);
+	}
+
+	kfree(kfd);
+/* This is called directly from KGD at ISR. */
+void kgd2kfd_interrupt(struct kfd_dev *kfd, const void *ih_ring_entry)
+{
+	/* Process interrupts / schedule work as necessary */
+}
+```

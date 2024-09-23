@@ -1,0 +1,101 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9, 13-14, 18-19, 23-24, 28-29
+VULNERABILITY_DESCRIPTION:
+This code snippet contains potential buffer overflow vulnerabilities in the `emu_store_ril` macro. The macro is designed to store data into a user-space memory location, but it does not perform any bounds checking on the destination address.
+
+EXPLANATION:
+The `emu_store_ril` macro is called multiple times in the provided code snippet to store data into user-space memory locations. However, the macro only checks if the destination address is aligned properly and if the facility is available. It does not check if the destination address is within the bounds of a valid buffer, which could lead to a buffer overflow vulnerability.
+
+In particular, the calls to `emu_store_ril` in lines 8-9, 13-14, and 18-19 do not perform any bounds checking on the `uptr` parameter, which is a user-space memory address. If an attacker can control the value of `uptr`, they may be able to cause a buffer overflow by writing data outside the bounds of a valid buffer.
+
+Additionally, the calls to `emu_store_ril` in lines 23-24 and 28-29 also do not perform any bounds checking on the `uptr` parameter. However, in these cases, the `uptr` parameter is cast to a specific type (`u16 __user *` and `u64 __user *`, respectively), which may limit the potential for a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking to the `emu_store_ril` macro to ensure that the destination address is within the bounds of a valid buffer. This can be done by passing the maximum allowed buffer size as an additional parameter to the macro and checking the destination address against this size.
+
+Here is an example of how you can modify the `emu_store_ril` macro to add bounds checking:
+```c
+#define emu_store_ril(ptr, input, max_size) \
+({ \
+    unsigned int mask = sizeof(*(ptr)) - 1; \
+    int __rc = 0; \
+ \
+    if (!test_facility(34)) \
+        __rc = EMU_ILLEGAL_OP; \
+    else if ((u64 __force)ptr & mask) \
+        __rc = EMU_SPECIFICATION; \
+    else if ((u64 __force)ptr >= (u64)max_size) \
+        __rc = EMU_ADDRESSING; \
+    else if (put_user(*(input), ptr)) \
+        __rc = EMU_ADDRESSING; \
+    __rc; \
+})
+```
+You will also need to modify the calls to `emu_store_ril` to pass the maximum allowed buffer size as an additional parameter.
+
+ORIGINAL CODE:
+```c
+return false;
+}
+
+int arch_uprobe_post_xol(struct arch_uprobe *auprobe, struct pt_regs *regs)
+{
+    int fixup = probe_get_fixup_type(auprobe->insn);
+    struct uprobe_task *utask = current->utask;
+        if (regs->psw.addr - utask->xol_vaddr == ilen)
+            regs->psw.addr = utask->vaddr + ilen;
+    }
+    /* If per tracing was active generate trap */
+    if (regs->psw.mask & PSW_MASK_PER)
+        do_per_trap(regs);
+    return 0;
+}
+
+int arch_uprobe_exception_notify(struct notifier_block *self, unsigned long val,
+    clear_thread_flag(TIF_UPROBE_SINGLESTEP);
+    regs->int_code = auprobe->saved_int_code;
+    regs->psw.addr = current->utask->vaddr;
+}
+
+unsigned long arch_uretprobe_hijack_return_addr(unsigned long trampoline,
+                        struct pt_regs *regs)
+        __rc;                     \
+})
+
+#define emu_store_ril(ptr, input)         \
+({                          \
+    unsigned int mask = sizeof(*(ptr)) - 1;  \
+    int __rc = 0;                  \
+                          \
+    if (!test_facility(34))          \
+        __rc = EMU_ILLEGAL_OP;     \
+    else if ((u64 __force)ptr & mask)  \
+        __rc = EMU_SPECIFICATION; \
+    else if (put_user(*(input), ptr))  \
+        __rc = EMU_ADDRESSING;     \
+    __rc;                     \
+})
+
+#define emu_cmp_ril(regs, ptr, cmp)     \
+    s16 s16[4];
+};
+
+/*
+ * pc relative instructions are emulated, since parameters may not be
+ * accessible from the xol area due to range limitations.
+ */
+        rc = emu_load_ril((u32 __user *)uptr, &rx->u64);
+        break;
+    case 0x07: /* sthrl */
+        rc = emu_store_ril((u16 __user *)uptr, &rx->u16[3]);
+        break;
+    case 0x0b: /* stgrl */
+        rc = emu_store_ril((u64 __user *)uptr, &rx->u64);
+        break;
+    case 0x0f: /* strl */
+        rc = emu_store_ril((u32 __user *)uptr, &rx->u32[1]);
+        break;
+    }
+    break;
+case 0xc6:
+```

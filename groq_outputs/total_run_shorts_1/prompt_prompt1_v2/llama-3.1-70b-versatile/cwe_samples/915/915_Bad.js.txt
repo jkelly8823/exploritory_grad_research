@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Prototype Pollution.
+EXPLANATION:
+The code set values within an object using a path and attribute name. However, it does not validate the path, which could be an attack vector for prototype pollution. This is because the attack path is used directly in the 'objectToModify[attr] = {}' and 'objectToModify[attributeToSet] = value;' statements. This means if an attacker was able to manipulate 'path' and set it to something like '__proto__.evilFunction', they would be able to inject arbitrary properties into the prototype chain.
+RECOMMENDATIONS:
+To mitigate the Prototype Pollution vulnerability, we recommend the following steps:
+1. Check if 'objectToModify' is the original object before accessing its property, as shown in the code. To fix this, add additional checks to ensure 'attr' and 'attributeToSet' are not '__proto__' or 'constructor' to prevent prototype pollution.
+2. Validate the path to ensure that it does not contain malicious values.
+
+Here is an example of how the modified function could look:
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    for (const attr of pathArray) {
+        if (typeof object[attr] !== 'object') {
+            object[attr] = {};
+        }
+        object = object[attr];
+        if (attr === '__proto__' || attr === 'constructor') {
+            throw new Error('Prototype pollution detected');
+        }
+    }
+    if (attributeToSet === '__proto__' || attributeToSet === 'constructor') {
+        throw new Error('Prototype pollution detected');
+    }
+    object[attributeToSet] = value;
+    return object;
+}
+```
+ORIGINAL CODE:
+```
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+    if (typeof objectToModify[attr] !== 'object') {
+    objectToModify[attr] = {};
+    }
+    objectToModify = objectToModify[attr];
+    }
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```

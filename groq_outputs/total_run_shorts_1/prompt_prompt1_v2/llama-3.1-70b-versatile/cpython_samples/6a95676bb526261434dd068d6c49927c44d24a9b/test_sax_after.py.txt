@@ -1,0 +1,79 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No vulnerabilities were identified in the provided code snippet.
+
+EXPLANATION:
+The code snippet appears to be part of a unit test suite for an XML parser. It tests various scenarios related to XML parsing, including reparse deferral and locator support. The code does not contain any obvious vulnerabilities such as command injection, SQL injection, or cross-site scripting (XSS).
+
+The code uses built-in Python libraries and modules, which are generally considered secure. The code also does not contain any obvious security flaws such as insecure deserialization, insecure file access, or sensitive data exposure.
+
+RECOMMENDATIONS:
+Based on the analysis, no recommendations are provided.
+
+ORIGINAL CODE:
+from io import BytesIO, StringIO
+import codecs
+import os.path
+import pyexpat
+import shutil
+import sys
+from urllib.error import URLError
+import urllib.request
+
+        self.assertEqual(result.getvalue(), start + b"<doc>text</doc>")
+
+    def test_flush_reparse_deferral_enabled(self):
+        if pyexpat.version_info < (2, 6, 0):
+            self.skipTest(f'Expat {pyexpat.version_info} does not support reparse deferral')
+
+        result = BytesIO()
+        xmlgen = XMLGenerator(result)
+        parser = create_parser()
+        parser.setContentHandler(xmlgen)
+
+        for chunk in ("<doc", ">"):
+            parser.feed(chunk)
+
+        self.assertEqual(result.getvalue(), start)  # i.e. no elements started
+        self.assertTrue(parser._parser.GetReparseDeferralEnabled())
+
+        parser.flush()
+
+        self.assertTrue(parser._parser.GetReparseDeferralEnabled())
+        self.assertEqual(result.getvalue(), start + b"<doc>")
+
+        parser.feed("</doc>")
+        parser.close()
+
+        self.assertEqual(result.getvalue(), start + b"<doc></doc>")
+
+    def test_flush_reparse_deferral_disabled(self):
+        result = BytesIO()
+        xmlgen = XMLGenerator(result)
+        parser = create_parser()
+        parser.setContentHandler(xmlgen)
+
+        for chunk in ("<doc", ">"):
+            parser.feed(chunk)
+
+        if pyexpat.version_info >= (2, 6, 0):
+            parser._parser.SetReparseDeferralEnabled(False)
+
+        self.assertEqual(result.getvalue(), start)  # i.e. no elements started
+        self.assertFalse(parser._parser.GetReparseDeferralEnabled())
+
+        parser.flush()
+
+        self.assertFalse(parser._parser.GetReparseDeferralEnabled())
+        self.assertEqual(result.getvalue(), start + b"<doc>")
+
+        parser.feed("</doc>")
+        parser.close()
+
+        self.assertEqual(result.getvalue(), start + b"<doc></doc>")
+
+    # ===== Locator support
+
+    def test_expat_locator_noinfo(self):
+        result = BytesIO()

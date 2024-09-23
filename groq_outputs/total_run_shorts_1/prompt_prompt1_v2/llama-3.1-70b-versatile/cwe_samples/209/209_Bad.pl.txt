@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION:
+Improper Neutralization of Input During Web Content Whitelisting (CWE-80, CWE-434)
+
+EXPLANATION:
+The vulnerability is in the way the `$file` path is constructed by concatenating the user-controlled `$uname` variable with a fixed directory path. Although the code checks if `$uname` matches a certain regular expression pattern (`/^\w+$/`) to prevent potential abuse, it does not prevent a type of Path Traversal vulnerability where the file path resolution will interpret a sequence of directory traversal sequences as an attempt to re-define the parent directory. Furthermore, this check can still be bypassed if the attacker's payload isn't a part of the final string when resolving `$file`.
+
+An attacker might manipulate `$uname` to circumvent the check and potentially access sensitive files. They could, for example, inject directory traversal sequences, such as `..`, and then escape the current directory.
+
+Additionally, in this specific code snippet, the user input is not sanitized before being used in a file path. Sanitization is missing that could prevent an attacker from injecting malicious paths.
+
+RECOMMENDATIONS:
+1. **Validate and sanitize untrusted input more thoroughly**: While the code checks the input pattern with `!/^\w+$//`, extra validation against directory traversal sequences such as `../` or `..\` can be performed.
+
+2. **Prevent directory traversal**: Before resolving the `$file` path, the variable should be checked for any directory traversal attempts.
+
+3. **Avoid Concatenation of Untrusted Input for File Paths**: Construction of file paths should ideally use more robust methods, such as the use of a temporary file path that can prevent injection type errors.
+
+4. **Checking for file existence should be performed after input validation and sanitization**: The code checks if the file exists after having a user input that might be tampered with. This exposes the exact presence of a specific file or its parent path.
+
+ORIGINAL CODE:
+ 
+ $ConfigDir = "/home/myprog/config";
+$uname = GetUserInput("username");
+ 
+ # avoid CWE-22, CWE-78, others.
+ExitError("Bad hacker!") if ($uname !~ /^\w+$/);
+$file = "$ConfigDir/$uname.txt";
+if (! (-e $file)) {
+    ExitError("Error: $file does not exist");
+}

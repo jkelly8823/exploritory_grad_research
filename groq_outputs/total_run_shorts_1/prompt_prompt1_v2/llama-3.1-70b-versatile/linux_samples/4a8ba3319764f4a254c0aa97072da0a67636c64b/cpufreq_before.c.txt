@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Inconsistent Comparison of Signed and Unsigned Integers
+
+EXPLANATION:
+The comparison `policy->cpuinfo.transition_latency > policy->governor->max_transition_latency` may be vulnerable to inconsistent comparison of signed and unsigned integers. Without knowing the types of these variables, we cannot be certain of the vulnerability. However, if `cpuinfo.transition_latency` is an unsigned integer (like a `jiffies` value) and `governor->max_transition_latency` is a signed integer, this comparison could lead to incorrect results or cause a crash when attempting to access memory locations.
+
+Assuming both `cpuinfo.transition_latency` and `governor->max_transition_latency` have the same integer type and one is not bounded by the other (negative values of `cpuinfo.transition_latency`), we cannot assert with high confidence that this comparison is safe without more context.
+
+However, there is one case to consider. The code comparison appears safe but immediately checks the condition for a null-ish "policy->governor->max_transition_latency", we don't expect null-ish, or empty values.
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, ensure that both variables being compared are of the same integer type (ideally unsigned) or that the variable `governor->max_transition_latency` is checked before using it in the comparison. This will prevent differences in sign from affecting the result of the comparison. 
+
+Additionally, to prevent other types of errors, such as potential bounds checking errors, it would be safer to ensure that `governor->max_transition_latency` is checked before the comparison for potential invalid or out of bounds values.
+
+```c
+/* Don't start any governor operations if we are entering suspend */
+if (cpufreq_suspended)
+    return 0;
+
+if (policy->governor->max_transition_latency > 0 &&
+    policy->cpuinfo.transition_latency > policy->governor->max_transition_latency) {
+```
+
+ORIGINAL CODE:
+```c
+/* Don't start any governor operations if we are entering suspend */
+if (cpufreq_suspended)
+    return 0;
+
+if (policy->governor->max_transition_latency &&
+    policy->cpuinfo.transition_latency >
+    policy->governor->max_transition_latency) {
+```

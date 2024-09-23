@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15, 17
+VULNERABILITY_DESCRIPTION:
+The code contains a potential denial-of-service vulnerability due to a busy-wait loop and a potential data race condition.
+
+EXPLANATION:
+The `wait_for_unix_gc()` function calls `unix_gc()` when the number of inflight sockets exceeds a certain threshold. However, the `wait_event(unix_gc_wait, gc_in_progress == false)` statement may enter a busy-wait loop if `gc_in_progress` remains `true`. This can cause the calling thread to consume excessive CPU resources, potentially leading to a denial-of-service attack.
+
+Furthermore, the `unix_tot_inflight` variable is accessed and modified without proper synchronization, potentially leading to a data race condition between multiple threads. This can result in incorrect values being read or written to `unix_tot_inflight`, further exacerbating the vulnerability.
+
+Additionally, the `gc_in_progress` variable is a shared flag that indicates whether the garbage collection is in progress. This variable is accessed and modified without proper synchronization, which can lead to a data race condition.
+
+RECOMMENDATIONS:
+To fix the vulnerability, I recommend the following:
+
+1. Replace the busy-wait loop with a more efficient synchronization mechanism, such as a condition variable or a semaphore.
+2. Use proper synchronization primitives, such as locks or atomic operations, to protect access to the `unix_tot_inflight` and `gc_in_progress` variables.
+3. Ensure that the `unix_gc()` function properly updates the `gc_in_progress` flag and notifies the waiting threads when the garbage collection is complete.
+
+ORIGINAL CODE:
+```c
+unsigned int unix_tot_inflight;
+
+/**
+ * struct sock *unix_get_socket(struct file *filp)
+ * {
+ *  struct sock *u_sock = NULL;
+ *  struct inode *inode = filp->f_path.dentry->d_inode;
+ *
+ * }
+ */
+
+static bool gc_in_progress = false;
+#define UNIX_INFLIGHT_TRIGGER_GC 16000
+
+void wait_for_unix_gc(void)
+{
+    /*
+     * If number of inflight sockets is insane,
+     * force a garbage collect right now.
+     */
+    if (unix_tot_inflight > UNIX_INFLIGHT_TRIGGER_GC && !gc_in_progress)
+        unix_gc();
+    wait_event(unix_gc_wait, gc_in_progress == false);
+}
+
+/* The external entry point: unix_gc() */
+```

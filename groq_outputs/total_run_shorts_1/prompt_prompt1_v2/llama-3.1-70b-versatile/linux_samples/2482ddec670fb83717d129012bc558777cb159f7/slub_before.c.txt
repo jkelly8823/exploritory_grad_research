@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+Use After Free Vulnerability
+
+EXPLANATION:
+The potential vulnerability exists in the 'get_freepointer_safe' function. It uses probe_kernel_read to read from the memory location (object + s->offset), but there's no check to ensure that the memory location has not been freed before the read operation. Furthermore, even if the check is present elsewhere in the codebase (not shown in the snippet), the order of operations suggests a possible use-after-free vulnerability.
+
+In line 14, it reads from the memory location using probe_kernel_read, and then in line 15, it returns the read value. However, there is no guarantee that the memory location was not freed after the read operation. This is possible if another thread or process intervenes and frees the memory before the read operation completes.
+
+RECOMMENDATIONS:
+The recommended solution would be to delay the free operation until after the probe_kernel_read is complete. There are two ways to resolve this, the first would be to secure the memory using 'kmalloc' based functions like alloc_page() instead of direct memory access.
+
+If direct memory access is still necessary, the solution would then be to introduce locking mechanisms to ensure that the read and write operations on the memory location are atomic.
+
+The locking mechanisms could include spinlocks or mutexes to prevent other threads from accessing the memory location until the operation is complete.
+
+ORIGINAL CODE:
+
+```c
+#include <linux/stacktrace.h>
+#include <linux/prefetch.h>
+#include <linux/memcontrol.h>
+
+#include <trace/events/kmem.h>
+
+#include "internal.h"
+ * 			Core slab cache functions
+ *******************************************************************/
+
+static inline void *get_freepointer(struct kmem_cache *s, void *object)
+{
+	return *(void **)(object + s->offset);
+}
+
+static void prefetch_freepointer(const struct kmem_cache *s, void *object)
+{
+	prefetch(object + s->offset);
+}
+
+static inline void *get_freepointer_safe(struct kmem_cache *s, void *object)
+{
+	void *p;
+
+	if (!debug_pagealloc_enabled())
+		return get_freepointer(s, object);
+
+	probe_kernel_read(&p, (void **)(object + s->offset), sizeof(p));
+	return p;
+}
+
+static inline void set_freepointer(struct kmem_cache *s, void *object, void *fp)
+{
+	*(void **)(object + s->offset) = fp;
+}
+
+/* Loop over all objects in a slab */
+#define for_each_object(__p, __s, __addr, __objects) \
+{
+	s->flags = kmem_cache_flags(s->size, flags, s->name, s->ctor);
+	s->reserved = 0;
+
+	if (need_reserve_slab_rcu && (s->flags & SLAB_TYPESAFE_BY_RCU))
+		s->reserved = sizeof(struct rcu_head);
+```

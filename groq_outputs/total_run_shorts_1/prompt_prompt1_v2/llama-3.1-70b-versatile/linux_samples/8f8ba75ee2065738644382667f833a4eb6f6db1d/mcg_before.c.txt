@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability and potential integer wraparound.
+
+EXPLANATION:
+The code checks if memory allocation for `dqp` succeeds, and if it does not, it releases control to the `out_mailbox` label, potentially skipping the rest of the code within the `if` block. However, what is concerning is that even if this allocation fails, the `found` variable remains set to `true` as a result of the previous conditional, indicating that an entry was found, even if there's no memory allocated to hold this entry's information. 
+Additionally, the lines `dqp->qpn = qpn;` and `list_add_tail(&dqp->list, &entry->duplicates);` could result in an integer wraparound if the size of the `dqp` struct and the `dqp->list` or other members are large enough, causing an overflow. 
+
+However, given this code sample, the likelihood of integer wraparound might be low. The possibility of "use after free" is zero because, in case kmalloc fails, the function instead calls 'out_mailbox' and likely deals with error situations that properly clean up or let other processes set something to a default.
+
+
+RECOMMENDATIONS:
+To fix these potential issues, the code should ensure `found` is set only after successful allocation and use of the allocated memory. In case of a failed memory allocation, it should also ensure that `found` is not set to `true`. Also, add a size check of `qpn` value before it is assigned to `dqp->qpn` and the `list_add_tail` operation. Lastly, considering using `WARN_ON` or similar options in order to warn in case kmalloc does fail.
+
+ORIGINAL CODE:
+			if ((be32_to_cpu(mgm->qp[i]) & MGM_QPN_MASK) == qpn) {
+				/* Entry already exists, add to duplicates */
+				dqp = kmalloc(sizeof *dqp, GFP_KERNEL);
+				if (!dqp)
+					goto out_mailbox;
+				dqp->qpn = qpn;
+				list_add_tail(&dqp->list, &entry->duplicates);
+				found = true;
+			}

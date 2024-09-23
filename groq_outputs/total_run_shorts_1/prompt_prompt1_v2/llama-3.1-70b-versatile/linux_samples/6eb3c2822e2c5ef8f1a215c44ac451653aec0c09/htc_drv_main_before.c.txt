@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9, 17-18
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized Pointer and Unchecked Return Value in memcpy
+EXPLANATION:
+The `memcpy` function copies the contents of one memory location to another. However, it doesn't check if the source or destination pointers are NULL or if the region of memory is accessible. 
+
+In this code, `common` and `iter_data` are used to access `common->bssidmask` and `iter_data.mask`. However, it is not clear if the memory for these have been properly allocated.
+
+Moreover, in the line above the memcpy call, a variable `iter_data` is initialized on the stack and then passed as `data` to `ath9k_vif_iter_data *iter_data`. This can lead to issues where the address of iter_data on the stack may become invalid once the function `ath9k_vif_iter_data *iter_data` returns.
+
+Lastly, at lines 17-18 another call to `ath9k_htc_set_bssid_mask(priv, vif);` with same variable can lead to the scenario where same resource is being accessed again. Depending on implementation details this can lead to resource leak or Denial of Service.
+
+RECOMMENDATIONS:
+Firstly, ensure that `common->bssidmask` and `iter_data.mask` memory is allocated properly and accessible. Check that they are not NULL before calling the memcpy function.
+
+Secondly, Check that iter_data is not being used in any context where the lifetime of its stack allocated variables may end before they are used. This can be done by moving the variable declaration to a different place with a larger lifetime.
+
+Lastly, ensure that calling `ath9k_htc_set_bssid_mask(priv, vif);` multiple times does not cause any issues.
+
+ORIGINAL CODE:
+
+```c
+struct ath9k_vif_iter_data *iter_data = data;
+	int i;
+
+	for (i = 0; i < ETH_ALEN; i++)
+		iter_data->mask[i] &= ~(iter_data->hw_macaddr[i] ^ mac[i]);
+
+
+static void ath9k_htc_set_bssid_mask(struct ath9k_htc_priv *priv,
+				     struct ieee80211_vif *vif)
+{
+	struct ath_common *common = ath9k_hw_common(priv->ah);
+	struct ath9k_vif_iter_data iter_data;
+
+	/*
+	 * Use the hardware MAC address as reference, the hardware uses it
+	 * together with the BSSID mask when matching addresses.
+	 */
+	iter_data.hw_macaddr = common->macaddr;
+	memset(&iter_data.mask, 0xff, ETH_ALEN);
+
+	if (vif)
+		ath9k_htc_bssid_iter(&iter_data, vif->addr, vif);
+		ath9k_htc_bssid_iter, &iter_data);
+
+	memcpy(common->bssidmask, iter_data.mask, ETH_ALEN);
+	ath_hw_setbssidmask(common);
+}
+
+static void ath9k_htc_set_opmode(struct ath9k_htc_priv *priv)
+		goto out;
+	}
+
+	ath9k_htc_set_bssid_mask(priv, vif);
+
+	priv->vif_slot |= (1 << avp->index);
+(priv->nvifs++)
+
+
+	ath9k_htc_set_opmode(priv);
+
+	ath9k_htc_set_bssid_mask(priv, vif);
+
+	/*
+	 * Stop ANI only if there are no associated station interfaces.
+	 */```

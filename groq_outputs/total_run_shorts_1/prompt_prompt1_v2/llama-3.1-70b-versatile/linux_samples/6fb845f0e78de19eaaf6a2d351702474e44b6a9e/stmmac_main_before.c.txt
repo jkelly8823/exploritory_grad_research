@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-15
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a use-after-free vulnerability, where the `entry` variable points to an index in the `tx_skbuff` array, but it does not check if the slot at `first_entry` index is actually occupied before attempting to access it.
+
+EXPLANATION:
+The code attempts to dereference `tx_q->tx_skbuff[first_entry]` in the `WARN_ON` statement at line 14. However, it only checks if the slot is occupied just before this line, but not after the potential freeing of the slot in the `stmmac_tx_avail` function called earlier in the code. This means that between the check and the use of `tx_q->tx_skbuff[first_entry]`, another thread could potentially free the slot at `first_entry` index, resulting in a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a check to ensure that the slot at `first_entry` index is indeed occupied before attempting to access it. This can be done by adding a check similar to `WARN_ON(!tx_q->tx_skbuff[first_entry])` before the `WARN_ON(tx_q->tx_skbuff[first_entry])` statement. Additionally, consider using locking mechanisms to prevent concurrent access to the `tx_skbuff` array.
+
+ORIGINAL CODE:
+
+
+	tx_q = &priv->tx_queue[queue];
+
+	/* Manage oversized TCP frames for GMAC4 device */
+	if (skb_is_gso(skb) && priv->tso) {
+		if (skb_shinfo(skb)->gso_type & (SKB_GSO_TCPV4 | SKB_GSO_TCPV6))
+			return stmmac_tso_xmit(skb, dev);
+	}
+
+	if (unlikely(stmmac_tx_avail(priv, queue) < nfrags + 1)) {
+		if (!netif_tx_queue_stopped(netdev_get_tx_queue(dev, queue))) {
+		return NETDEV_TX_BUSY;
+	}
+
+	if (priv->tx_path_in_lpi_mode)
+		stmmac_disable_eee_mode(priv);
+
+	entry = tx_q->cur_tx;
+	first_entry = entry;
+	WARN_ON(tx_q->tx_skbuff[first_entry]);

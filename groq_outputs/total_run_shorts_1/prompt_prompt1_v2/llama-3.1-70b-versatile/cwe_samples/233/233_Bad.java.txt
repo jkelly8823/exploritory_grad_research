@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential denial-of-service (DoS) attack via Intent manipulation and potential URL exposure in the "openURL" intent.
+
+EXPLANATION:
+The broadcast receiver `MyReceiver` registers an IntentFilter for "com.example.URLHandler.openURL" which means that any other application can send this intent to this receiver if the receiver is exported. If the intent's action matches the filter, then the `onReceive` function in the `UrlHandlerReceiver` class is called. Inside `onReceive`, the `getStringExtra("URLToOpen")` function is called, which may throw a `NullPointerException` if the "URLToOpen" key is not present in the intent. 
+
+More importantly, regardless of the intent's validity, the intent can potentially transport any URL that was passed with key "URLToOpen". This creates potential vulnerability for intent spoofing attacks.
+
+RECOMMENDATIONS:
+To minimize the attack surface:
+1. Export receivers judiciously. Instead of setting them in the manifest, you can create them in code and opt-out of manifest declarations where this is not necessary.
+2. Perform intent-validation inside `onReceive` - verify that the intent and URL passed with the intent were intended by the source application and sender's permissions, namely, ensure the received URL passes any validation, to handle malicious intent attempts.
+3. Instead of extracting URL via intent extra's, redirect access to the URL and verify with backend validation to avoid an overly permissive URL handling approach.
+
+
+
+ORIGINAL CODE:
+```java
+IntentFilter filter = new IntentFilter("com.example.URLHandler.openURL");
+MyReceiver receiver = new MyReceiver();
+registerReceiver(receiver, filter);
+...
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if ("com.example.URLHandler.openURL".equals(intent.getAction())) {
+            String URL = intent.getStringExtra("URLToOpen");
+            int length = URL.length();
+
+            ...
+        }
+    }
+}
+```

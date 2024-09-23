@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Information Disclosure through Inconsistent Error Handling.
+
+EXPLANATION:
+The vulnerability lies in the inconsistent error handling within the switch statement. For the `ARM_SMCCC_ARCH_FEATURES_FUNC_ID` case, no value is assigned to `val` or no action is taken. However, the `PSCI_RET_NOT_SUPPORTED` value is assigned to `val` at the beginning of the code snippet and only updated for the `ARM_SMCCC_VERSION_FUNC_ID` case. This means that when `ARM_SMCCC_ARCH_FEATURES_FUNC_ID` is encountered, the function will return `PSCI_RET_NOT_SUPPORTED` even if it doesn't apply to this specific function ID. This can potentially disclose information to an attacker about which features are not supported by the system.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should handle the `ARM_SMCCC_ARCH_FEATURES_FUNC_ID` case consistently. This could involve assigning a valid value to `val` or returning an error code specifically indicating that this feature is not supported. For example:
+```c
+case ARM_SMCCC_ARCH_FEATURES_FUNC_ID:
+	val = ARM_SMCCC_ARCH_FEATURES_NOT_SUPPORTED;
+	break;
+```
+Alternatively, the function could return a more generic error value indicating that this function ID is not supported, but only after properly handling any necessary logic or cleanup.
+
+ORIGINAL CODE:
+```c
+{
+	u32 func_id = smccc_get_function(vcpu);
+	u32 val = PSCI_RET_NOT_SUPPORTED;
+
+	switch (func_id) {
+	case ARM_SMCCC_VERSION_FUNC_ID:
+		val = ARM_SMCCC_VERSION_1_1;
+		break;
+	case ARM_SMCCC_ARCH_FEATURES_FUNC_ID:
+		/* Nothing supported yet */
+		break;
+	default:
+		return kvm_psci_call(vcpu);
+	}
+```

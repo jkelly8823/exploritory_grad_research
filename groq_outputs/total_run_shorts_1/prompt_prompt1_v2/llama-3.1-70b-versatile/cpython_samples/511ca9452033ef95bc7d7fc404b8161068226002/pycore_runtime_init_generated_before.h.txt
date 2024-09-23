@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 9-10, 13-14
+VULNERABILITY_DESCRIPTION: Integer Overflow Vulnerability, Potential Denial of Service (DOS) through Direct Object Reference.
+EXPLANATION:
+This code appears to be part of a Python implementation that deals with internal C structures. However, upon closer inspection, the lines in question seem to be comparing integers (`Py_REFCNT`) to a constant `_PyObject_IMMORTAL_REFCNT`. Potentially these comparisons are vulnerable to integer overflow depending on the type definitions of `Py_REFCNT` and `_PyObject_IMMORTAL_REFCNT`. Additionally, on the same lines the code also triggers a direct object reference when using `_PyObject_Dump`. While such calls may seem harmless when logging debug info, including too much internal "implementation detail" can inadvertently cause direct object exposure. 
+Further, these lines can also be used for potential Denial of Services (DOS) as when using `Py_FatalError` triggers execution stopping.
+
+RECOMMENDATIONS:
+To remove this vulnerability, a different approach should be taken. An integer overflow check should be put in place. Ensure that Py_REFCNT and _PyObject_IMMORTAL_REFCNT have explicit comparisons that account for underflow scenarios when they reach their minimum respective thresholds. 
+When using "_object_Dump" function for logging internal items also validate the level of detail written, hiding unnecessary implementation details could help limit exposure.
+
+Lastly be aware that the use of functions like "Py_FatalError" are generally best left to system programmers or used for low level resource errors, and using an alternative exception for users should instead be raised.
+
+ORIGINAL CODE:
+                INIT_ID(mapping), \
+                INIT_ID(match), \
+                INIT_ID(max_length), \
+                INIT_ID(maxevents), \
+                INIT_ID(maxmem), \
+                INIT_ID(maxsplit), \
+                INIT_ID(maxvalue), \
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(max_length);
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(maxevents);
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(maxmem);
+    PyUnicode_InternInPlace(&string);
+        _PyObject_Dump((PyObject *)&_Py_ID(max_length));
+        Py_FatalError("immortal object has less refcnt than expected _PyObject_IMMORTAL_REFCNT");
+    };
+    if (Py_REFCNT((PyObject *)&_Py_ID(maxevents)) < _PyObject_IMMORTAL_REFCNT) {
+        _PyObject_Dump((PyObject *)&_Py_ID(maxevents));
+        Py_FatalError("immortal object has less refcnt than expected _PyObject_IMMORTAL_REFCNT");
+    };

@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19
+VULNERABILITY_DESCRIPTION:
+Resource leak due to incorrect error handling.
+
+EXPLANATION:
+In the given code, if `_PyArena_AddPyObject(p->arena, c)` returns less than 0, it indicates an error. However, the function returns immediately without freeing or releasing any resources associated with `c`. This can lead to a resource leak, as `c` is not properly cleaned up in the event of an error.
+
+Additionally, the `Py_DECREF(value)` call earlier in the function assumes that `value` is a valid reference. However, if an error occurs while fetching the exception information, `value` might be `NULL`, leading to a potential crash.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly handle errors when `_PyArena_AddPyObject(p->arena, c)` fails. It should also ensure that all resources associated with `c` are properly released.
+
+```c
+if (_PyArena_AddPyObject(p->arena, c) < 0) {
+    // Release c if it is not NULL
+    Py_XDECREF(c);
+    // Handle the error properly, for example by setting the error indicator
+    p->error_indicator = 1;
+    return NULL;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+#include <Python.h>
+#include "pycore_ast.h"           // _PyAST_Validate(),
+#include "pycore_pystate.h"       // _PyThreadState_GET()
+#include <errcode.h>
+
+#include "tokenizer.h"
+#include "pegen.h"
+
+    if (c == NULL) {
+        p->error_indicator = 1;
+        PyThreadState *tstate = _PyThreadState_GET();
+        // The only way a ValueError should happen in _this_ code is via
+        // PyLong_FromString hitting a length limit.
+        if (tstate->curexc_type == PyExc_ValueError &&
+            tstate->curexc_value != NULL) {
+            PyObject *type, *value, *tb;
+            // This acts as PyErr_Clear() as we're replacing curexc.
+            PyErr_Fetch(&type, &value, &tb);
+            Py_XDECREF(tb);
+            Py_DECREF(type);
+            /* Intentionally omitting columns to avoid a wall of 1000s of '^'s
+             * on the error message. Nobody is going to overlook their huge
+             * numeric literal once given the line. */
+            RAISE_ERROR_KNOWN_LOCATION(
+                p, PyExc_SyntaxError,
+                t->lineno, -1 /* col_offset */,
+                t->end_lineno, -1 /* end_col_offset */,
+                "%S - Consider hexadecimal for huge integer literals "
+                "to avoid decimal conversion limits.",
+                value);
+            Py_DECREF(value);
+        }
+        return NULL;
+    }
+
+    if (_PyArena_AddPyObject(p->arena, c) < 0) {
+```

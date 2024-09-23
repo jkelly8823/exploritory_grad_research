@@ -1,0 +1,108 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 37-38, 57-58
+VULNERABILITY_DESCRIPTION:
+The code does not handle error conditions properly when dealing with skb management. In particular, it does not correctly handle the error case when `skb_dequeue` fails to return a valid skb. Additionally, memory corruption can occur due to missing checks for skb_put failures.
+
+EXPLANATION:
+In the unix_scm_to_skb function, the `skb_put(skb, len)` and `skb_put(skb, size)` calls can fail if the skb does not have enough room to accommodate the added data. However, in the error case, the code only checks for the return value of `memcpy_fromiovec` without checking the result of `skb_put`. This can lead to the skb being left in an inconsistent state.
+
+Moreover, in the skb_dequeue call, if the queue is empty, a NULL skb is returned, but the code does not check for this condition and instead assumes the skb is always valid. This can lead to a NULL pointer dereference and memory corruption.
+
+RECOMMENDATIONS:
+Add checks for skb_put failures and properly handle the error case. For example:
+
+```c
+if (unlikely(!skb_put(skb, len))) {
+    // Handle skb_put failure
+    return skb_put_failure;
+}
+err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
+```
+
+Additionally, ensure to check the result of skb_dequeue for a NULL skb before using it. For example:
+
+```c
+skb = skb_dequeue(&sk->sk_receive_queue);
+if (skb == NULL) {
+    // Handle NULL skb case
+    goto unlock;
+}
+```
+
+ORIGINAL CODE:
+```c
+sock_wfree(skb);
+}
+
+static int unix_attach_fds(struct scm_cookie *scm, struct sk_buff *skb)
+{
+	int i;
+
+	/*
+	 * Need to duplicate file references for the sake of garbage
+	 * collection.  Otherwise a socket in the fps might become a
+	if (!UNIXCB(skb).fp)
+		return -ENOMEM;
+
+	for (i = scm->fp->count-1; i >= 0; i--)
+		unix_inflight(scm->fp->fp[i]);
+	return 0;
+}
+
+static int unix_scm_to_skb(struct scm_cookie *scm, struct sk_buff *skb, bool send_fds)
+{
+	struct sk_buff *skb;
+	long timeo;
+	struct scm_cookie tmp_scm;
+
+	if (NULL == siocb->scm)
+		siocb->scm = &tmp_scm;
+	wait_for_unix_gc();
+		goto out;
+
+	err = unix_scm_to_skb(siocb->scm, skb, true);
+	if (err)
+		goto out_free;
+	unix_get_secdata(siocb->scm, skb);
+
+	skb_reset_transport_header(skb);
+	err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
+	if (sock_flag(other, SOCK_RCVTSTAMP))
+		__net_timestamp(skb);
+	skb_queue_tail(&other->sk_receive_queue, skb);
+	unix_state_unlock(other);
+	other->sk_data_ready(other, len);
+	sock_put(other);
+	scm_destroy(siocb->scm);
+	int sent = 0;
+	struct scm_cookie tmp_scm;
+	bool fds_sent = false;
+
+	if (NULL == siocb->scm)
+		siocb->scm = &tmp_scm;
+	wait_for_unix_gc();
+
+		/* Only send the fds in the first buffer */
+		err = unix_scm_to_skb(siocb->scm, skb, !fds_sent);
+		if (err) {
+			kfree_skb(skb);
+			goto out_err;
+		}
+		fds_sent = true;
+
+		err = memcpy_fromiovec(skb_put(skb, size), msg->msg_iov, size);
+		if (err) {
+			goto pipe_err_free;
+
+	 skb_queue_tail(&other->sk_receive_queue, skb);
+		unix_state_unlock(other);
+		other->sk_data_ready(other, size);
+		sent += size;
+	}
+		unix_state_lock(sk);
+		skb = skb_dequeue(&sk->sk_receive_queue);
+		if (skb == NULL) {
+			if (copied >= target)
+				goto unlock;
+
+			/*```

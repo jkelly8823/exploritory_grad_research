@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability in File Upload
+
+EXPLANATION:
+The code is vulnerable to a Path Traversal vulnerability, which can allow an attacker to upload files outside the intended upload directory. The issue is caused by the use of the 'filename' variable, which is determined by the 'pLine' variable that is read from the HTTP request. An attacker can manipulate the filename to include directory traversal characters (e.g., "/.."), allowing them to write files to any location on the server.
+
+The use of 'bw.write(line); bw.newLine(); bw.flush();' when writing the file directly to the upload directory based on the 'filename' also allows an attacker to potentially overwrite sensitive files on the server.
+
+Additionally, the code does not perform any security checks on the file name or contents before writing it to the disk. This can also lead to a Denial of Service (DoS) attack by allowing an attacker to request the upload of extremely large files.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following recommendations are provided:
+
+1. Validate the file name and check for directory traversal attempts. Implement a whitelist approach, where only files with specific extensions are allowed to be uploaded.
+
+2. Use a unique and randomly generated file name instead of relying on the file name provided by the user. This can prevent overwriting of existing files.
+
+3. Store the uploaded files in a directory that is not accessible from the outside of the application. This can prevent an attacker from accessing the uploaded files even if they can write them to a specific location on the server.
+
+4. Perform security checks on the file contents before writing it to the disk. This can prevent attackers from uploading malicious files to the server.
+
+Here's an example of how the file name can be sanitized:
+
+```java
+String filename = pLine.substring(pLine.lastIndexOf("\\"));
+filename = filename.substring(filename.lastIndexOf("\\") + 1); // remove directory path
+filename = filename.replace("/", "_"); // prevent directory traversal
+filename = filename.replace("..", "_"); // prevent directory traversal
+```
+
+ORIGINAL CODE:
+
+```java
+public class FileUploadServlet extends HttpServlet {
+     
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("text/html"); 
+        PrintWriter out = response.getWriter(); 
+        String contentType = request.getContentType();
+        // the starting position of the boundary header
+        int ind = contentType.indexOf("boundary=");
+        String boundary = contentType.substring(ind+9);
+        String pLine = new String(); 
+        String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+        // verify that content type is multipart form data
+        if (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+            // extract the filename from the Http header
+            BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream())); 
+            ... 
+            pLine = br.readLine(); 
+            String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\"")); 
+            // output the file to the local upload directory
+            try {
+                BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true)); 
+                for (String line; (line=br.readLine())!=null; ) { 
+                    if (line.indexOf(boundary) == -1) { 
+                        bw.write(line); 
+                        bw.newLine(); 
+                        bw.flush(); 
+                    } 
+                } //end of for loop
+                bw.close();
+            } catch (IOException ex) {...} 
+            // output successful upload response HTML page
+        } // output unsuccessful upload response HTML page
+        else {...} 
+    }
+    ...
+}
+```

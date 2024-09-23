@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-20
+VULNERABILITY_DESCRIPTION:
+The code has potential memory leaks due to incomplete kfree calls in error handling.
+
+EXPLANATION:
+The code uses kmalloc to allocate memory for the struct hash_mm_context and struct subpage_prot_table. However, in the error handling path, the programmer only calls kfree on the struct hash_mm_context object when memory allocation for struct subpage_prot_table fails. If both allocations are successful and an error occurs later, the memory allocated for struct subpage_prot_table is not freed. 
+
+Additionally, even though it is not shown in the given snippet, potential null pointer dereferences might occur when manipulating mm->context.hash_context->spt, mm->context.hash_context if their allocations fail.
+
+RECOMMENDATIONS:
+When mm->context.hash_context allocation fails, it's recommended to add an error path in case index is a valid value and handle index after failing allocations:
+   Consider catching every potential allocation failure case, and adding the kfree() that needs to handle all failed allocations. Always pair allocations and deallocations to avoid further potential problems.
+
+However, you can avoid this complexity issue by letting a higher-level exception handling function or mechanism deal with such failures. To ensure further readability, make sure you understand exception handling principles before applying a way of dealing with potential exceptions. 
+
+Lastly, put emphasis on clean code by preferring to not use a more error-prone nested function calls. Please consider a more simplified representation of your potential errors.
+
+ORIGINAL CODE:
+```c
+void slb_setup_new_exec(void);
+
+static int hash__init_new_context(struct mm_struct *mm)
+{
+	int index;
+
+	index = hash__alloc_context_id();
+	if (index < 0)
+		return index;
+
+	mm->context.hash_context = kmalloc(sizeof(struct hash_mm_context),
+					   GFP_KERNEL);
+	if (!mm->context.hash_context) {
+		ida_free(&mmu_context_ida, index);
+		return -ENOMEM;
+	}
+
+	/*
+	 * The old code would re-promote on fork, we don't do that when using
+	 * slices as it could cause problem promoting slices that have been
+			mm->context.hash_context->spt = kmalloc(sizeof(struct subpage_prot_table),
+								GFP_KERNEL);
+			if (!mm->context.hash_context->spt) {
+				ida_free(&mmu_context_ida, index);
+				kfree(mm->context.hash_context);
+				return -ENOMEM;
+			}
+		}
+#endif
+
+	}
+
+	pkey_mm_init(mm);
+	return index;
+```

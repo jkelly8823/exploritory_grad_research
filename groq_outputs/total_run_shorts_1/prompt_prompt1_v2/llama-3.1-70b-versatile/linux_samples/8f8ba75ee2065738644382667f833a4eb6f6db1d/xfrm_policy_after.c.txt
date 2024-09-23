@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+ Null pointer dereference and potential use-after-free vulnerability.
+
+EXPLANATION:
+The code snippet presented contains a potential vulnerability. The `xdst` pointer is checked for nullity after it has been dereferenced in the `memset` function call and potentially used to call `xfrm_bundle_fc_ops` and `afinfo->init_dst`. However, if `xdst` is null, a segmentation fault will occur. Additionally, the `xfrm_policy_put_afinfo(afinfo)` function call at the end of the snippet may be accessing memory that has already been freed if `xfrm_policy_put_afinfo` is responsible for deallocation, leading to a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, null checks should be added before dereferencing `xdst` and `afinfo`. It is also recommended to check if `xfrm_policy_put_afinfo` is responsible for deallocation and adjust the order of operations accordingly. The following code demonstrates these recommendations:
+
+```c
+if (xdst) {
+    memset(dst + 1, 0, sizeof(*xdst) - sizeof(*dst));
+    xdst->flo.ops = &xfrm_bundle_fc_ops;
+    if (afinfo->init_dst)
+        afinfo->init_dst(net, xdst);
+} else
+    xdst = ERR_PTR(-ENOBUFS);
+
+if (afinfo)
+    xfrm_policy_put_afinfo(afinfo);
+```
+
+ORIGINAL CODE:
+```c
+		memset(dst + 1, 0, sizeof(*xdst) - sizeof(*dst));
+		xdst->flo.ops = &xfrm_bundle_fc_ops;
+		if (afinfo->init_dst)
+			afinfo->init_dst(net, xdst);
+	} else
+		xdst = ERR_PTR(-ENOBUFS);
+
+	xfrm_policy_put_afinfo(afinfo);
+```

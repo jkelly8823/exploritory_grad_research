@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 15-20, 29, 33-35
+VULNERABILITY_DESCRIPTION:
+There are potential synchronization issues and resource leaks in the provided code snippet.
+
+EXPLANATION:
+The vulnerability lies in the sctp_do_bind function. After successfully binding the local address and acquiring the auto_asconf_list lock, the function calls local_bh_enable and continues execution. This may lead to a situation where the sctp_auto_asconf_init function is called again, potentially from another context, before the previous execution has completed. This could cause resource leaks and data corruption, especially considering the updates to sk_sockets_allocated and sock_prot_inuse counters. Another potential issue is the lack of a corresponding decrement operation for sk_sockets_allocated and sock_prot_inuse counters when the binding operation fails.
+
+Additionally, in the last snippet of code, the requeueing of messages from the old socket's receive queue to the new socket's receive queue lacks proper synchronization guarantees regarding the receive queues. It is not clear if these requeued messages could interfere with the messages in the new socket's receive queue or whether this operation could deadlock.
+
+Furthermore, there is an apparent missing check for memory allocation failure when using GFP_ATOMIC, potentially leading to resource leaks.
+
+RECOMMENDATIONS:
+To address the synchronization issues, proper spin or mutex locks should be acquired before updating sk_sockets_allocated and sock_prot_inuse counters.
+
+Moreover, a corresponding decrement operation should be performed for these counters when the binding operation fails.
+
+The requeueing of messages from the old socket's receive queue to the new socket's receive queue should be properly synchronized with the new socket's receive queue operations.
+
+Additionally, checks for memory allocation failures should be added when using GFP_ATOMIC.
+
+However, due to the incomplete nature of the provided code snippet and the potentially incorrect assumptions about the code's functionality, more in-depth analysis of the full code and the requirements it must fulfill may be required for the precise solutions to be implemented.
+
+ORIGINAL CODE:
+```c
+	return af;
+}
+
+static void sctp_auto_asconf_init(struct sctp_sock *sp)
+{
+	struct net *net = sock_net(&sp->inet.sk);
+
+	if (net->sctp.default_auto_asconf) {
+		spin_lock(&net->sctp.addr_wq_lock);
+		list_add_tail(&sp->auto_asconf_list, &net->sctp.auto_asconf_splist);
+		spin_unlock(&net->sctp.addr_wq_lock);
+		sp->do_auto_asconf = 1;
+	}
+}
+
+/* Bind a local address either to an endpoint or to an association.  */
+static int sctp_do_bind(struct sock *sk, union sctp_addr *addr, int len)
+{
+	struct net *net = sock_net(sk);
+		return -EADDRINUSE;
+
+	/* Refresh ephemeral port.  */
+	if (!bp->port) {
+		bp->port = inet_sk(sk)->inet_num;
+		sctp_auto_asconf_init(sp);
+	}
+
+	/* Add the address to the bind address list.
+	 * Use GFP_ATOMIC since BHs will be disabled.
+	 */
+	sk_sockets_allocated_inc(sk);
+	sock_prot_inuse_add(net, sk->sk_prot, 1);
+
+	local_bh_enable();
+
+	return 0;
+}
+			return err;
+	}
+
+	sctp_auto_asconf_init(newsp);
+
+	/* Move any messages in the old socket's receive queue that are for the
+	 * peeled off association to the new socket's receive queue.
+	 */
+	sctp_skb_for_each(skb, &oldsk->sk_receive_queue, tmp) {
+```

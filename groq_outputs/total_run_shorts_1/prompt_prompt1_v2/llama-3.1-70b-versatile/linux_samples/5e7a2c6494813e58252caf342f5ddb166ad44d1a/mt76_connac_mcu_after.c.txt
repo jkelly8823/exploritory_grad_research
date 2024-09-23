@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 8
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow and/or Invalid Memory Access vulnerability in sta->supp_rates[band] and sta->ht_cap.ampdu_density assignments.
+
+EXPLANATION:
+The provided code snippet appears to be part of a networking driver and handles STA (Station) information. It assigns values to `ra_info` and `phy->rcpi` from `sta` structure members, such as `sta->supp_rates[band]`, `sta->ht_cap.ampdu_density`, and `sta->ht_cap.ampdu_factor`.
+
+However, the code does not validate or check the validity of `band` index before accessing `sta->supp_rates[band]`, which can lead to an invalid memory access or a buffer overflow.
+
+Additionally, there is no validation of the `sta->ht_cap.ampdu_density` and `sta->ht_cap.ampdu_factor` values. If `sta->ht_cap.ampdu_density` or `sta->ht_cap.ampdu_factor` can take on an invalid value (for example, exceeding the field width specified in `IEEE80211_HT_AMPDU_PARM_DENSITY` or `IEEE80211_HT_AMPDU_PARM_FACTOR`), this can result in unintended behavior.
+
+RECOMMENDATIONS:
+To mitigate the potential vulnerability:
+
+1. Validate the `band` value before accessing `sta->supp_rates[band]`. Ensure `band` is within the valid index range for `sta->supp_rates`.
+2. Validate `sta->ht_cap.ampdu_density` and `sta->ht_cap.ampdu_factor` values before using them in `FIELD_PREP` macro calls. Ensure that they do not exceed the field width limits specified in `IEEE80211_HT_AMPDU_PARM_DENSITY` and `IEEE80211_HT_AMPDU_PARM_FACTOR`.
+
+ORIGINAL CODE:
+```c
+phy->phy_type = mt76_connac_get_phy_mode_v2(mphy, vif, band, sta);
+phy->basic_rate = cpu_to_le16((u16)vif->bss_conf.basic_rates);
+phy->rcpi = rcpi;
+phy->ampdu = FIELD_PREP(IEEE80211_HT_AMPDU_PARM_FACTOR,
+            sta->ht_cap.ampdu_factor) |
+         FIELD_PREP(IEEE80211_HT_AMPDU_PARM_DENSITY,
+            sta->ht_cap.ampdu_density);
+
+tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_RA, sizeof(*ra_info));
+ra_info = (struct sta_rec_ra_info *)tlv;
+ra_info->legacy = cpu_to_le16((u16)sta->supp_rates[band]);
+```

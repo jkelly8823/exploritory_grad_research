@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-22, 7-8, 15-16
+VULNERABILITY_DESCRIPTION:
+Potential Lock Inconsistency Vulnerability, Double Unlock Vulnerability, and Unreleased Lock on Error.
+
+EXPLANATION:
+This code snippet appears to manage page table locking and unlocking within a memory management context. The vulnerability arises due to inconsistent locking and unlocking operations. 
+
+Specifically, there are two instances where the `spin_unlock` function is called without a corresponding lock acquisition within the loop iterations (lines 16-22 and 7-8). This can lead to an unlocked state while still iterating within the loop.
+
+Furthermore, there are instances where `spin_unlock` is called but an unreleased lock may occur if an error condition triggers, as is seen with the assignment of `err = 0;` (not actually triggering an error condition but suggests potential for future issues) and no corresponding unlock operation.
+
+Additionally, note that the locking/unlocking within this function appears inconsistent due to intermingling operations outside and within nested for loops. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, the locking and unlocking operations should be moved outside the loop, and error conditions should be handled to release locks when errors occur. Specifically:
+
+- Limit `spin_unlock` operations to minimize exposure outside of locks.
+- Reorder the locking and unlocking to prevent unlock before acquiring subsequent locks.
+- Handle potential error conditions in such a way that ensures all acquired locks are released.
+- Conduct a design review to ensure this page table locking management meets the requirements of multithreaded code, or revising to replace with safer/less error-prone locking paradigms such as mutex locks.
+
+ORIGINAL CODE:
+```
+} else {
+	spin_unlock(&walk->mm->page_table_lock);
+}
+/*
+ * The mmap_sem held all the way back in m_start() is what
+ * keeps khugepaged out of here and from collapsing things
+ * in here.
+struct page *page;
+
+split_huge_page_pmd(walk->mm, pmd);
+
+pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
+for (; addr != end; pte++, addr += PAGE_SIZE) {
+	ptent = *pte;
+	int err = 0;
+
+	split_huge_page_pmd(walk->mm, pmd);
+
+	/* find the first VMA at or above 'addr' */
+	vma = find_vma(walk->mm, addr);
+	for (; addr != end; addr += PAGE_SIZE) {
+		spin_unlock(&walk->mm->page_table_lock);
+	}
+
+	orig_pte = pte = pte_offset_map_lock(walk->mm, pmd, addr, &ptl);
+	do {
+		struct page *page = can_gather_numa_stats(*pte, md->vma, addr);
+		if (!page)
+```

@@ -13,6 +13,9 @@ client1 = Groq(
 client2 = Groq(
     api_key = os.getenv('groq_key2')
 )
+client3 = Groq(
+    api_key = os.getenv('groq_key3')
+)
 
 def write_resp(pth,resp):
     try:
@@ -26,6 +29,8 @@ def call_groq(msg_content, model_name):
     client1_failed = False
     use_client2 = False
     client2_failed = False
+    use_client3 = False
+    client3_failed = False
 
     for i in msg_content:
         output_file_path = f'groq_outputs/{os.getenv("test_dir")}/prompt_{i[3]}/{model_name}/{i[0]}/{i[1]}.txt'
@@ -45,6 +50,10 @@ def call_groq(msg_content, model_name):
                     client2_failed = True
                     chat_completion = client2.chat.completions.create(messages=msg, model=model_name)
                     client2_failed = False  # Reset on success
+                elif use_client3:
+                    client3_failed = True
+                    chat_completion = client3.chat.completions.create(messages=msg, model=model_name)
+                    client3_failed = False  # Reset on success
 
                 os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
                 write_resp(output_file_path, chat_completion.choices[0].message.content)
@@ -52,22 +61,29 @@ def call_groq(msg_content, model_name):
 
             except Exception as e:
                 error_message = str(e).lower()
-                if 'rate limit' in error_message or '429' in error_message:
+                if ('rate limit' in error_message or '429' in error_message) or ('service unavailable' in error_message or '503' in error_message):
                     print("Rate limit exceeded:", e)
-                    if client1_failed and client2_failed:
-                        print("Both clients hit rate limit. Returning False.")
+                    if (client1_failed) and (client2_failed) and (client3_failed):
+                        print("All clients hit rate limit or server failure. Returning False.")
                         print(f"Failed file: {output_file_path}")
                         return False
                     if use_client1:
-                        print("Client 1 rate limit hit. Switching to Client 2.")
-                        use_client1 = False  # Mark client 1 as failed
+                        print("Client 1 rate limit hit or server failure. Switching to Client 2.")
+                        use_client1 = False
                         use_client2 = True
+                        use_client3 = False
                     elif use_client2:
-                        print("Client 2 rate limit hit. Switching back to Client 1.")
-                        use_client1 = True  # Mark client 1 as failed
+                        print("Client 2 rate limit hit or server failure. Switching to Client 3.")
+                        use_client1 = False
                         use_client2 = False
-                    else:  # Both clients have hit the rate limit
-                        print("Unhandled and unknown rate limit error.")
+                        use_client3 = True
+                    elif use_client3:
+                        print("Client 3 rate limit hit or server failure. Switching back to Client 1.")
+                        use_client1 = True
+                        use_client2 = False
+                        use_client3 = False
+                    else:
+                        print("Unhandled and unknown rate limit or server failure error:", e)
                         return False
                 else:
                     print("An error occurred:", e)

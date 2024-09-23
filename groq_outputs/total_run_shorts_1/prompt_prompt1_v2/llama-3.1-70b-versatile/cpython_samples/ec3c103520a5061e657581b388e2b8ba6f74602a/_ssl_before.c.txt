@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Multiple lines
+VULNERABILITY_DESCRIPTION:
+Possible buffer overflow vulnerability in function BIO_gets and memory leak vulnerability in function PyTuple_New.
+EXPLANATION:
+BIO_gets() function reads input from the BIO and places the result into the provided buffer. However, there is a possibility of buffer overflow if the length of the data read exceeds the specified buffer size. Additionally, PyTuple_New allocates a new tuple, and PyTuple_SET_ITEM sets it, but it does not handle potential memory errors.
+
+Another concern is the unchecked memory allocation in the PyTuple_New function call, where the code does not check if PyTuple_New is successful and proceed with PyTuple_SET_ITEM even if it fails.
+
+Furthermore, goto fail statement is used but the 'fail' label itself and its associated error handling code is not presented in the provided snippet. This might be leading to other potential vulnerabilities.
+
+RECOMMENDATIONS:
+BIO_gets function should be checked for successful operation and the buffer size should be of sufficient length to prevent the buffer overflow vulnerability. Also, the len should be of a size that fits in the buffer-1 to accommodate for null-termination.
+
+Instead of hardcoding the buffer size in BIO_gets function, consider the total possible length for the GENERAL_NAME_print output from OpenSSL's documentation and give consideration for extra buffer size. Don't read the character that reaches the maximum buffer capacity, provide 1 space for a null.
+
+Always validate memory allocation by PyTuple_New. This can be done by checking if t is not a NULL pointer. Then this prevents any code progressions that will fail memory allocation for PyTuple_SET ITEM.
+
+Here in provided code 'i' is not used. Remove unused variables in real code.
+
+The cleaning part of error handling is not provided with the current sample but managing such should deallocate allocated space and will also enable stopping another "leak" arising with freeing if memory operations.
+
+Additionally to go label operation need a fail label for respective jump operation.
+
+
+
+ORIGINAL CODE:
+
+    int i, j;
+    PyObject *peer_alt_names = Py_None;
+    PyObject *v, *t;
+    X509_EXTENSION *ext = NULL;
+    GENERAL_NAMES *names = NULL;
+    GENERAL_NAME *name;
+    const X509V3_EXT_METHOD *method;
+                           ext->value->length));
+
+        for(j = 0; j < sk_GENERAL_NAME_num(names); j++) {
+
+            /* get a rendering of each name in the set of names */
+
+            name = sk_GENERAL_NAME_value(names, j);
+            if (name->type == GEN_DIRNAME) {
+
+                /* we special-case DirName as a tuple of
+                   tuples of attributes */
+
+                t = PyTuple_New(2);
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 1, v);
+
+            } else {
+
+                /* for everything else, we use the OpenSSL print form */
+
+                (void) BIO_reset(biobuf);
+                GENERAL_NAME_print(biobuf, name);
+                len = BIO_gets(biobuf, buf, sizeof(buf)-1);
+                if (len < 0) {
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 1, v);
+            }
+
+            /* and add that rendering to the list */

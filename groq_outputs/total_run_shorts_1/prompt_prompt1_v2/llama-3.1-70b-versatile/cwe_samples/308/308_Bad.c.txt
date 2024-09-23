@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+The given code is vulnerable to a timing side-channel attack due to the use of the `equal()` function to compare two hash values.
+
+EXPLANATION:
+The `equal()` function will likely iterate over the bytes of the two hash values, comparing them byte by byte. As soon as it finds a mismatch, it will short-circuit and return false. However, the time it takes to compare two hash values will vary depending on how many bytes the two values have in common at the start. This can be used by an attacker to infer information about the stored hash value, including the possibility of determining the exact value through brute force or other methods.
+
+Additionally, the use of SHA-1 as the hash function is also problematic, as it is considered insecure for a variety of purposes, including password storage.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a constant-time comparison function should be used to compare the two hash values. This function should always iterate over all bytes of the two values, without short-circuiting, even if it finds a mismatch.
+
+It's also recommended to use a more secure password hashing algorithm, such as Argon2, PBKDF2, or Bcrypt. These algorithms are designed to be slow and computationally expensive, which makes them more resistant to brute-force attacks.
+
+Here's an example of a more secure way to compare two hash values:
+
+```c
+#include <string.h>
+
+int constant_time_equal(unsigned char *a, unsigned char *b, size_t len) {
+    unsigned char result = 0;
+    for (size_t i = 0; i < len; i++) {
+        result |= a[i] ^ b[i];
+    }
+    return result == 0;
+}
+
+unsigned char *check_passwd(char *plaintext) {
+    ctext = secure_password_hash("argon2", plaintext, strlen(plaintext));
+    if (constant_time_equal(ctext, secret_password(), strlen(ctext))) {
+        login_user();
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+unsigned char *check_passwd(char *plaintext) {
+    ctext = simple_digest("sha1",plaintext,strlen(plaintext), ... );
+    //Login if hash matches stored hash
+    if (equal(ctext, secret_password())) {
+        login_user();
+    }
+}
+```

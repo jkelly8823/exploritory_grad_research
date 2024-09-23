@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Use of a potential NULL pointer, due to missing error checking after a parser creation operation.
+
+EXPLANATION:
+In this code snippet, the `XML_ParserCreate` function is used to create a new XML parser. However, the code does not immediately check the return value of this function to verify that the parser was successfully created. Instead, it first sets a hash salt on the parser, sets the `intern` attribute, increments the reference count on `self->intern`, and registers `self` with the Python garbage collector. Only after these operations does it check if `self->itself` (i.e., the parser) is NULL. 
+
+If the creation of the parser had failed and returned NULL, the code would still attempt to use the NULL pointer when setting the hash salt, which could result in undefined behavior or a segmentation fault.
+
+RECOMMENDATIONS:
+It is recommended to check the return value of `XML_ParserCreate` immediately after the function call and handle any potential errors before proceeding. If the parser creation was successful, then you should proceed with the rest of the code as is.
+
+```python
+else {
+    self->itself = XML_ParserCreate(encoding);
+    if (self->itself == NULL) {
+        // handle the error here
+        // return or throw an exception
+    }
+    XML_SetHashSalt(self->itself,
+                    (unsigned long)_Py_HashSecret.prefix);
+    self->intern = intern;
+    Py_XINCREF(self->intern);
+    PyObject_GC_Track(self);
+}
+```
+
+ORIGINAL CODE:
+
+```python
+else {
+    self->itself = XML_ParserCreate(encoding);
+}
+XML_SetHashSalt(self->itself,
+                (unsigned long)_Py_HashSecret.prefix);
+self->intern = intern;
+Py_XINCREF(self->intern);
+PyObject_GC_Track(self);
+if (self->itself == NULL) {
+```

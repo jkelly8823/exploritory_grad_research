@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+Resource leak in error case, and potential incorrect error code returned.
+
+EXPLANATION:
+The given code snippet is vulnerable to resource leaks. The `hidp_connection_add` function is called before checking the result of the operation. However, when an error occurs (i.e., `!err` is false), the code immediately assigns a return value to the `err` variable (`sockfd_put(csock);`). 
+
+If an error occurs before the `copy_to_user` function, the code successfully opens a new connection but does not properly handle the error. This can result in a resource leak as the connection opened by `hidp_connection_add` is not properly closed in the error case.
+
+Additionally, when the `copy_to_user` function fails, the code assigns `err` to `-EFAULT`. However, if an error occurred before `copy_to_user`, the value of `err` at that point is not correctly propagated.
+
+RECOMMENDATIONS:
+The best way to fix this vulnerability is by moving the error handling to after the `hidp_connection_add` function call, and before the `copy_to_user` function call, while ensuring to properly clean up resources.
+
+To better handle this case, allocate the connection_add operation before  returning in case of initial socketfd_put error. And ensure connection_add result check and properly call sockfd_put after the copy_to_user if connection_add fails.
+
+The corrected code could look something like this:
+
+```c
+sockfd_put(csock);
+return err;
+```
+should move into a different error checking section or before assigning it the error value.
+
+```c
+err = hidp_connection_add(&ca, csock, isock);
+if (err) {
+    sockfd_put(csock); // Move here to fix resource leak
+    return err; // Propagate correct error value
+}
+
+err = copy_to_user(argp, &ca, sizeof(ca));
+if (err)
+    return err; // Propagate correct error value
+
+// Only if both the hidp_connection_add and copy_to_user succeeded
+// sockfd_put after return might need to be managed on caller of this function.
+
+ORIGINAL CODE:
+sockfd_put(csock);
+return err;
+}
+
+err = hidp_connection_add(&ca, csock, isock);
+if (!err && copy_to_user(argp, &ca, sizeof(ca)))
+	err = -EFAULT;

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 12
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability and missing bounds checking.
+
+EXPLANATION:
+The given code snippet contains two potential vulnerabilities. 
+
+1. The loop counter `i` in the `for` loop (Line 7) is dependent on the input `nr_entries`, which is derived from a calculation involving undefined variables `__prom_init_toc_end` and `__prom_init_toc_start` (Line 12). Without knowledge of the actual values or constraints on these variables, it is unclear whether this will lead to a buffer overflow; however, the fact that bounds checking on `nr_entries` is not performed prior to the `for` loop iteration makes this code vulnerable.
+
+2. Assuming that the loop iterates over the `toc_entry` pointer and modifies values, the statement `*toc_entry = *toc_entry + offset;` has the potential for undefined behavior if the resulting value would exceed the range that the `unsigned long` type can store.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, the following modifications are recommended:
+- Ensure that `nr_entries` is not larger than the array size.
+- Validate the incoming `nr_entries` and check for any constraints that may cause a buffer overflow.
+- Include robust error handling mechanisms to handle potential exceptions.
+- Evaluate the addition operation to ensure that the result would not exceed the range of `unsigned long`.
+- Perform verification on the resulting address value after adding the offset, especially when indirect memory access is involved.
+
+
+ORIGINAL CODE:
+{
+}
+#else
+static void __reloc_toc(unsigned long offset, unsigned long nr_entries)
+{
+	unsigned long i;
+	unsigned long *toc_entry;
+
+	/* Get the start of the TOC by using r2 directly. */
+	asm volatile("addi %0,2,-0x8000" : "=b" (toc_entry));
+
+	for (i = 0; i < nr_entries; i++) {
+		*toc_entry = *toc_entry + offset;
+		toc_entry++;
+	unsigned long nr_entries =
+		(__prom_init_toc_end - __prom_init_toc_start) / sizeof(long);
+
+	__reloc_toc(offset, nr_entries);
+
+	mb();
+}
+
+
+	mb();
+
+	__reloc_toc(-offset, nr_entries);
+}
+#endif
+#endif

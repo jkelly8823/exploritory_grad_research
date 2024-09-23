@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Memory leak caused by not freeing memory allocated by kzalloc in the error path.
+EXPLANATION:
+The kzalloc function allocates memory, but if an error occurs in the function, this memory is not properly freed. While the function does handle the case where kzalloc fails by checking if the return value is NULL, and then returns -ENOMEM, it does not account for the memory that was previously allocated for drv_data, which can cause a memory leak in the event of an error. 
+
+RECOMMENDATIONS:
+Free the drv_data pointer in the error path before returning from the function to prevent memory leaks. However, we are not shown the structure used for drv_data, and without knowing this information, we cannot know for certain how to properly free this memory.
+
+ORIGINAL CODE:
+```c
+drv_data = hid_get_drvdata(hdev);
+BUG_ON(!(drv_data->quirks & BUZZ_CONTROLLER));
+
+buzz = kzalloc(sizeof(*buzz), GFP_KERNEL);
+if (!buzz) {
+    hid_err(hdev, "Insufficient memory, cannot allocate driver data\n");
+    return -ENOMEM;
+}
+```

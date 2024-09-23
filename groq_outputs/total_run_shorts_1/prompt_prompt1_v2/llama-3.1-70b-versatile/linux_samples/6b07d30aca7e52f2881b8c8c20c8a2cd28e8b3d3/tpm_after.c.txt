@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Buffer Underflow with Potential Data Type Conversion Vulnerability
+
+EXPLANATION:
+The vulnerability is due to the fact that the buffer size validation only checks if `bufsiz` exceeds `TPM_BUFSIZE`, but it does not validate the offset `buf + 6` before accessing it. Additionally, the `be32_to_cpu` function is used to convert a 32-bit big-endian value to the native CPU format. However, if the input buffer `buf` is not guaranteed to have at least 8 bytes of data, this can lead to a buffer underflow, which may also trigger a data type conversion vulnerability. This can occur if `bufsiz` is less than 8 and is subsequently set to `TPM_BUFSIZE`, but `buf` still points to a smaller buffer.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, ensure that `buf` has at least 8 bytes of data before attempting to access it. This can be achieved by adding a check before accessing `buf + 6`:
+
+```c
+if (bufsiz < 8) {
+    return -EINVAL; // or error code of your choice
+}
+```
+
+Additionally, to prevent potential data type conversion vulnerabilities, consider using techniques that validate the input data more thoroughly.
+
+ORIGINAL CODE:
+```c
+u32 count, ordinal;
+unsigned long stop;
+
+if (bufsiz > TPM_BUFSIZE)
+    bufsiz = TPM_BUFSIZE;
+
+count = be32_to_cpu(*((__be32 *) (buf + 2)));
+ordinal = be32_to_cpu(*((__be32 *) (buf + 6)));
+if (count == 0)
+    return -ENODATA;
+```

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+Unconstrained use of strcpy function with a static-size destination buffer.
+
+EXPLANATION:
+The `strcpy` function is used to copy a string from the constant `QTN_PCI_PEARL_FW_NAME` to the `bus->fwname` buffer. However, there is no check to ensure that the destination buffer is large enough to hold the entire string. If `bus->fwname` is too small, this can lead to a buffer overflow, potentially causing a denial of service or arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can use a safer alternative to `strcpy`, such as `strncpy` or `snprintf`, which allow you to specify the maximum number of characters to copy. You should also check the size of the destination buffer beforehand to prevent potential overflows.
+
+Here's an example of how to use `strncpy` safely:
+
+```c
+size_t len = strlen(QTN_PCI_PEARL_FW_NAME);
+if (len >= sizeof(bus->fwname)) {
+    /* handle the error: destination buffer too small */
+}
+strncpy(bus->fwname, QTN_PCI_PEARL_FW_NAME, sizeof(bus->fwname) - 1);
+bus->fwname[sizeof(bus->fwname) - 1] = '\0';
+```
+
+ORIGINAL CODE:
+```c
+struct qtnf_pcie_bus_priv *priv = (void *)get_bus_priv(bus);
+dma_addr_t txbd_paddr, skb_paddr;
+struct qtnf_tx_bd *txbd;
+int len, i;
+u32 info;
+int ret = 0;
+
+if (!qtnf_tx_queue_ready(priv)) {
+    if (skb->dev)
+        netif_stop_queue(skb->dev);
+
+    return NETDEV_TX_BUSY;
+}
+
+i = priv->tx_bd_w_index;
+    dev_kfree_skb_any(skb);
+}
+
+qtnf_pcie_data_tx_reclaim(priv);
+priv->tx_done_count++;
+
+return NETDEV_TX_OK;
+}
+
+strcpy(bus->fwname, QTN_PCI_PEARL_FW_NAME);
+init_completion(&bus->request_firmware_complete);
+mutex_init(&bus->bus_lock);
+spin_lock_init(&pcie_priv->irq_lock);
+spin_lock_init(&pcie_priv->tx_reclaim_lock);
+
+/* init stats */
+```

@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 37-38, 63-64
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Directory Traversal vulnerability via a write operation to a debugfs file.
+EXPLANATION:
+The code uses `write_debugfs_file` function to write to a debugfs file at a path that appears to be a hardcoded string. However, if the path were to be derived from user input, this could be vulnerable to a Directory Traversal attack, where an attacker could manipulate the path to access and potentially modify sensitive files outside of the intended directory. 
+
+In this specific code snippet, the path is hardcoded and not derived from user input, so the vulnerability is not actually exploitable. However, it is still worth noting as a potential vulnerability if this code were to be modified in the future.
+
+Furthermore, there are no validation checks performed on the file write operation, which makes it possible for an attacker to attempt writing to sensitive files if they were to find an alternate path to the same functionality.
+
+Additionally, the usage of `perror` function after a failed write operation allows for information disclosure about the system's environment. An attacker could potentially infer information about the system's configuration and environment by analyzing the error messages.
+
+RECOMMENDATIONS:
+- Avoid hardcoded paths in production code.
+- Perform input validation and sanitization on any user-provided file paths.
+- Perform validation checks on file operations to ensure that the operation is successful and the file path is valid.
+- Use more secure functions instead of `perror` for error handling to prevent potential information disclosure.
+- Consider using a secure data storage mechanism instead of a world-readable debugfs file.
+- Limit access to sensitive files using proper permissions and access controls.
+
+ORIGINAL CODE:
+```c
+#include <stdint.h>
+#include <malloc.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "utils.h"
+#include "flush_utils.h"
+
+int rfi_flush_test(void)
+{
+	char *p;
+	__u64 l1d_misses_total = 0;
+	unsigned long iterations = 100000, zero_size = 24 * 1024;
+	unsigned long l1d_misses_expected;
+	int rfi_flush_orig, rfi_flush;
+	int have_entry_flush, entry_flush_orig;
+
+	SKIP_IF(geteuid() != 0);
+
+	// The PMU event we use only works on Power7 or later
+	SKIP_IF(!have_hwcap(PPC_FEATURE_ARCH_2_06));
+
+	if (read_debugfs_file("powerpc/rfi_flush", &rfi_flush_orig) < 0) {
+		perror("Unable to read powerpc/rfi_flush debugfs file");
+		SKIP_IF(1);
+	}
+
+	if (read_debugfs_file("powerpc/entry_flush", &entry_flush_orig) < 0) {
+		have_entry_flush = 0;
+	} else {
+		have_entry_flush = 1;
+
+		if (entry_flush_orig != 0) {
+			if (write_debugfs_file("powerpc/entry_flush", 0) < 0) {
+				perror("error writing to powerpc/entry_flush debugfs file");
+				return 1;
+			}
+		}
+	}
+
+	rfi_flush = rfi_flush_orig;
+
+	fd = perf_event_open_counter(PERF_TYPE_RAW, /* L1d miss */ 0x400f0, -1);
+	FAIL_IF(fd < 0);
+
+// Rest of the code
+```

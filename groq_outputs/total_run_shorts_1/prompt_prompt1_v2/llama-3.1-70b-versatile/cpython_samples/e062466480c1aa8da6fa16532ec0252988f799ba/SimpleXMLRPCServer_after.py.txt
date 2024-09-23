@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 5
+VULNERABILITY_DESCRIPTION: 
+Resource Exhaustion Due to Potential Infinite Loop
+
+EXPLANATION:
+The vulnerability arises from a potential infinite loop in the while loop condition `while size_remaining:`. The loop will continue to execute as long as `size_remaining` is truthy, but there's no guarantee that `size_remaining` will ever reach zero.
+
+Inside the loop, the code reads data from `self.rfile.read(chunk_size)`. However, if `self.rfile.read(chunk_size)` returns an empty string (e.g., due to the end of the file being reached), the loop will continue indefinitely, because the `size_remaining` value is not properly updated.
+
+Furthermore, the condition `if not chunk: break` checks if the read data is empty and breaks the loop. However, if the read data is not empty but still does not contain the expected data (e.g., due to padding or other issues), it will still append the data to the `L` list, but `size_remaining` is decreased by `len(L[-1])`, which may not necessarily match the actual remaining data, potentially leading to an infinite loop.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add checks to ensure that `size_remaining` is properly updated and that the loop will eventually terminate. Here are the recommended fixes:
+
+- Check if the remaining size is decreasing:
+  ```python
+if size_remaining <= 0:
+    break
+```
+- Handle cases where `self.rfile.read(chunk_size)` returns less data than `chunk_size`:
+  ```python
+num_bytes_read = len(chunk)
+size_remaining -= num_bytes_read
+if num_bytes_read < chunk_size:
+    # Handle unexpected read size, possibly by logging or raising an exception
+```
+- Limit the number of iterations to prevent an infinite loop:
+  ```python
+max_loop_iterations = 1000
+iteration = 0
+while size_remaining and iteration < max_loop_iterations:
+    ...
+    iteration += 1
+```
+
+ORIGINAL CODE:
+            
+            L = []
+            while size_remaining:
+                chunk_size = min(size_remaining, max_chunk_size)
+                chunk = self.rfile.read(chunk_size)
+                if not chunk:
+                    break
+                L.append(chunk)
+                size_remaining -= len(L[-1])
+            data = ''.join(L)
+
+            data = self.decode_request_content(data)

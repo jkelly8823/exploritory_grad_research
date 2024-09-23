@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 25-27, 31
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free vulnerability in the irqfd_inject function and the kvm_arch_set_irq_inatomic function.
+
+EXPLANATION:
+The irqfd_inject function removes the irqfd object from the list and then schedules the shutdown work for it. However, the work is not guaranteed to be executed immediately. In the meantime, the irqfd object may be freed and reused. If the kvm_arch_set_irq_inatomic function is called after this, it may access the irqfd object after it has been freed, resulting in a Use-After-Free vulnerability.
+
+Additionally, in the kvm_arch_set_irq_inatomic function, it calls list_del_init and then schedule_work on the irqfd object. However, list_del_init only removes the object from the list but does not wait for any work scheduled on it to complete. As a result, if the list_del_init function is called while the irqfd->shutdown work is still running, it may free the irqfd object before the work finishes executing.
+
+The same issue occurs when flush_work is called on the irqfd->shutdown work multiple times. If the work is scheduled and completed between the calls to flush_work, the second call may access the already-freed irqfd object.
+
+RECOMMENDATIONS:
+To fix the issue, you should ensure that any scheduled work is fully completed before the object is freed. You can achieve this by calling cancel_work_sync(&irqfd->shutdown) before removing the object from the list and freeing it. Alternatively, use a better synchronization mechanism that guarantees that no work will be scheduled on the irqfd object after it is removed from the list.
+
+ORIGINAL CODE:
+
+
+#ifdef CONFIG_HAVE_KVM_IRQFD
+
+
+static void
+irqfd_inject(struct work_struct *work)
+{
+
+	list_del_init(&irqfd->list);
+
+	schedule_work(&irqfd->shutdown);
+}
+
+int __attribute__((weak)) kvm_arch_set_irq_inatomic(
+				struct kvm_kernel_irq_routing_entry *irq,
+	 * so that we guarantee there will not be any more interrupts on this
+	 * gsi once this deassign function returns.
+	 */
+	flush_work(&irqfd->shutdown);
+
+	return 0;
+}
+
+	 * Block until we know all outstanding shutdown jobs have completed
+	 * since we do not take a kvm* reference.
+	 */
+	flush_work(&irqfd->shutdown);
+
+}
+
+/*
+.spin_unlock_irq(&kvm->irqfds.lock);
+}
+
+void kvm_irqfd_exit(void)
+{
+}
+#endif

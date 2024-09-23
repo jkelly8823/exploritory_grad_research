@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10, 11-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to null pointer dereference and buffer overflow.
+
+EXPLANATION:
+The code attempts to find a colon and a dollar sign in the `revision` string using `strchr`. However, it does not check if the return values of `strchr` are null before dereferencing the returned pointers. This can cause a null pointer dereference if the colon or dollar sign is not found.
+
+Additionally, when copying the string from `p + 1` or the string " ???" into the `rev` buffer using `strcpy`, the code does not check if the buffer is large enough to hold the string. This can cause a buffer overflow.
+
+It is also worth noting that `strchr` is used to find the colon and dollar sign in the string, but there is no null check for the `revision` string itself.
+
+The line `*p = 0` is particularly concerning, as it attempts to null-terminate the string by dereferencing the pointer returned by `strchr`. If `strchr` returns null, this will result in a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, we should add null checks for the return values of `strchr` and the `revision` string. We should also ensure that the buffer is large enough to hold the string before copying it.
+
+```c
+static int __init icn_init(void)
+{
+	char *p;
+	char rev[10];
+
+	// ... (rest of the code remains the same)
+
+	if (revision) {
+		if ((p = strchr(revision, ':'))) {
+			size_t len = strlen(p + 1);
+			if (len < sizeof(rev) - 1) {
+				strcpy(rev, p + 1);
+				if ((p = strchr(rev, '$'))) {
+					*p = 0;
+				}
+			} else {
+				// handle the case where the buffer is too small
+			}
+		} else {
+			strncpy(rev, " ???", sizeof(rev));
+		}
+	} else {
+		strncpy(rev, " ???", sizeof(rev));
+	}
+
+	// ... (rest of the code remains the same)
+}
+```
+
+ORIGINAL CODE:
+```c
+static int __init icn_init(void)
+{
+	char *p;
+	char rev[10];
+
+	memset(&dev, 0, sizeof(icn_dev));
+	dev.memaddr = (membase & 0x0ffc000);
+	dev.channel = -1;
+	spin_lock_init(&dev.devlock);
+
+	if ((p = strchr(revision, ':'))) {
+		strcpy(rev, p + 1);
+		p = strchr(rev, '$');
+		*p = 0;
+	} else
+		strcpy(rev, " ??? ");
+	printk(KERN_NOTICE "ICN-ISDN-driver Rev%smem=0x%08lx\n", rev,
+	       dev.memaddr);
+}
+```

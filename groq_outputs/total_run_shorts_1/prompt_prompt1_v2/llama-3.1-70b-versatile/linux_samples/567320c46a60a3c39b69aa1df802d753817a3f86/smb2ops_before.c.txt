@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+Format String Injection
+
+EXPLANATION:
+The code uses the `cifs_server_dbg` function with a string format specifier (`"%d Err: 0x%x Flags: 0x%x Mid: %llu Pid: %d\n"`). However, this string format specifier is not validated against the input data. Additionally, user-controlled input data (`shdr->Command`, `shdr->Status`, `shdr->Flags`, `shdr->MessageId`, `shdr->Id.SyncId.ProcessId`) is directly inserted into the log message using this format specifier. If any of these inputs were to contain format specifier characters (e.g., `%d`, `%s`), they could be interpreted by `cifs_server_dbg` and cause unintended behavior.
+
+RECOMMENDATIONS:
+1. Use a logging function that supports parameterized logging instead of format string-based logging.
+2. Validate all user-controlled input data to prevent format string injection attacks.
+3. Use logging functions that handle logging different data types more safely (e.g. logging individual variables instead of a generated string).
+
+ORIGINAL CODE:
+```c
+cifs_server_dbg(VFS, "Cmd: %d Err: 0x%x Flags: 0x%x Mid: %llu Pid: %d\n",
+                 shdr->Command, shdr->Status, shdr->Flags, shdr->MessageId,
+                 shdr->Id.SyncId.ProcessId);
+cifs_server_dbg(VFS, "smb buf %p len %u\n", buf,
+                server->ops->calc_smb_size(buf));
+```
+Note that I'm assuming `cifs_server_dbg` is a logging function that uses the provided string as a format specifier, similar to `printf`. If `cifs_server_dbg` uses a different logging mechanism, the vulnerability may not be present. However, the use of format specifier characters in the provided string strongly suggests that the vulnerability may be present.

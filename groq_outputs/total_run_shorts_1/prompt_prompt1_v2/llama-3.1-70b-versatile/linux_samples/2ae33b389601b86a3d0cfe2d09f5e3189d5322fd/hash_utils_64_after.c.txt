@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 21
+VULNERABILITY_DESCRIPTION:
+The code lacks proper bounds checking and error handling when dealing with memory accesses.
+
+EXPLANATION:
+In the code snippet provided, there are several instances where memory is accessed without proper checks. For example, on line 9, the code accesses `get_paca()->stab_real` without checking if `get_paca()` returns a valid pointer. Similarly, on line 21, the code accesses `mm->pgd` without checking if `mm` is a valid pointer. Although a check for `mm->pgd` being `NULL` is performed on line 22, the program will have already crashed if `mm` is `NULL`.
+
+Furthermore, the code also lacks proper bounds checking when dealing with memory accesses. For example, the `hash` function is called with `vpn` as an argument, but there is no check to ensure that `vpn` is within a valid range.
+
+Finally, the code does not handle errors properly. For example, the `hpte_insert` function returns an error code, but the code only checks if the error code is negative. However, a non-negative error code does not necessarily mean that the function was successful.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the following recommendations are provided:
+* Check the return value of `get_paca()` before accessing its members.
+* Check if `mm` is a valid pointer before accessing its members.
+* Add bounds checking to ensure that `vpn` is within a valid range before calling the `hash` function.
+* Handle errors properly by checking all possible error codes returned by functions, not just negative ones.
+* Add additional checks to ensure that memory accesses are valid and within bounds.
+
+ORIGINAL CODE:
+```c
+unsigned long vpn  = hpt_vpn(vaddr, vsid, ssize);
+unsigned long tprot = prot;
+
+/*
+ * If we hit a bad address return error.
+ */
+if (!vsid)
+	return -1;
+	/* Make kernel text executable */
+if (overlaps_kernel_text(vaddr, vaddr + step))
+	tprot &= ~HPTE_R_N;
+
+/* Initialize stab / SLB management */
+if (mmu_has_feature(MMU_FTR_SLB))
+	slb_initialize();
+else
+	stab_initialize(get_paca()->stab_real);
+}
+
+#ifdef CONFIG_SMP
+void __cpuinit early_init_mmu_secondary(void)
+	DBG_LOW("hash_page(ea=%016lx, access=%lx, trap=%lx\n",
+		ea, access, trap);
+
+	/* Get region & vsid */
+ 	switch (REGION_ID(ea)) {
+	case USER_REGION_ID:
+		user_region = 1;
+	}
+	DBG_LOW(" mm=%p, mm->pgdir=%p, vsid=%016lx\n", mm, mm->pgd, vsid);
+
+	/* Bad address. */
+	if (!vsid) {
+		DBG_LOW("Bad address!\n");
+		return 1;
+	}
+	/* Get pgdir */
+	pgdir = mm->pgd;
+	if (pgdir == NULL)
+		return 1;
+	/* Get VSID */
+	ssize = user_segment_size(ea);
+	vsid = get_vsid(mm->context.id, ea, ssize);
+	if (!vsid)
+		return;
+
+	/* Hash doesn't like irqs */
+	local_irq_save(flags);
+
+	hash = hpt_hash(vpn, PAGE_SHIFT, mmu_kernel_ssize);
+	hpteg = ((hash & htab_hash_mask) * HPTES_PER_GROUP);
+
+	/* Don't create HPTE entries for bad address */
+	if (!vsid)
+		return;
+	ret = ppc_md.hpte_insert(hpteg, vpn, __pa(vaddr),
+				 mode, HPTE_V_BOLTED,
+				 mmu_linear_psize, mmu_kernel_ssize);
+	BUG_ON (ret < 0);
+```

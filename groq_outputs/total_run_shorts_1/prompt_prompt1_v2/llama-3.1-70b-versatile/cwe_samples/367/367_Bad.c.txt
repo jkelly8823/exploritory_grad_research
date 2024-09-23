@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to a Time-of-Check to Time-of-Use (TOCTOU) vulnerability. This occurs when the time of check of a condition is different from the time of use of the result of that check.
+
+EXPLANATION:
+In this code snippet, the lstat function is used to retrieve information about the file at the specified path. However, after this information is retrieved, it is not checked again before being used in the if statement. This means that an attacker could potentially modify the file's last modification time between the time of the check and the time of use, altering the behavior of the program. This can lead to unexpected behavior or even exploitation of the program.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should retrieve the file attributes and then use those attributes immediately, minimizing the window of opportunity for an attacker to modify the file. If the file's attributes cannot be accessed atomically, a loop can be used to continuously check the file's attributes until they do not change, ensuring that they are up to date. Here is an example of how to implement the loop:
+
+```c
+struct stat *sb;
+int updated = 0;
+
+while (!updated) {
+    lstat("...", sb);
+    struct stat sb2;
+    lstat("...", &sb2);
+    
+    if (sb->st_mtimespec == sb2.st_mtimespec) {
+        // The file's attributes have not changed. Use them.
+        printf("stated file\n");
+        if (sb->st_mtimespec == ...) {
+            printf("Now updating things\n");
+            updateThings();
+        }
+        updated = 1;
+    } else {
+        printf("File attributes have changed. Retrying...\n");
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+struct stat *sb;...lstat("...",sb); // it has not been updated since the last time it was read
+printf("stated file\n");
+if (sb->st_mtimespec==...) {
+    printf("Now updating things\n");
+    updateThings();
+}
+```

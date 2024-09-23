@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential memory leak. If the `pci_alloc_consistent` function fails and returns `NULL`, the code will attempt to free the interrupt (as indicated by the label `err_free_irq_5`), but it is not clear if this will properly handle the failure of `pci_alloc_consistent` to allocate memory for the `iqcfg` structure.
+
+EXPLANATION:
+The code checks if the memory allocation for `iqcfg` was successful, and if not, it proceeds to the `err_free_irq_5` label. However, it is unclear if this label is properly set up to handle the cleanup in case of an allocation failure. If the allocation failure causes an interrupt to be set up incorrectly or an incomplete cleanup, it may result in a resource leak or misconfigured interrupt handlers.
+
+RECOMMENDATIONS:
+To fix the potential memory leak, you should review the `err_free_irq_5` label and ensure that it properly cleans up after a failed `pci_alloc_consistent` call. This should include properly handling any partial allocations, interrupt setup, or other affected resources.
+
+Additionally, you may want to consider logging or alerting on an allocation failure to make debugging easier.
+
+ORIGINAL CODE:
+	}
+	/* Global interrupt queue */
+	writel((u32)(((IRQ_RING_SIZE >> 5) - 1) << 20), ioaddr + IQLENR1);
+
+	rc = -ENOMEM;
+
+	priv->iqcfg = (__le32 *) pci_alloc_consistent(pdev,
+		IRQ_RING_SIZE*sizeof(__le32), &priv->iqcfg_dma);
+	if (!priv->iqcfg)
+		goto err_free_irq_5;
+	writel(priv->iqcfg_dma, ioaddr + IQCFG);
+
+	/*
+	 * SCC 0-3 private rx/tx irq structures
+	 * IQRX/TXi needs to be set soon. Learned it the hard way...
+	 */

@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-11 (multiple lines are related to the vulnerability, the exact line numbers given might not cover all relevant code. Further lines if any, will need additional context or more code from github commits to evaluate)
+VULNERABILITY_DESCRIPTION:
+Potential integer overflow and/or out-of-bounds indexing due to uncontrolled bit shifting (MS(s0_s, AR_ISR_S0_QCU_TXOK), MS(s0_s, AR_ISR_S0_QCU_TXDESC), MS(s1_s, AR_ISR_S1_QCU_TXERR), MS(s1_s, AR_ISR_S1_QCU_TXEOL)) with potentially unvalidated data.
+
+EXPLANATION:
+The provided code snippet performs various bit-level operations with unvalidated data. In lines related to the MS() function calls, we see multiple bit shifts being performed. These bit shifts, MS(s0_s, AR_ISR_S0_QCU_TXOK), MS(s0_s, AR_ISR_S0_QCU_TXDESC), MS(s1_s, AR_ISR_S1_QCU_TXERR), MS(s1_s, AR_ISR_S1_QCU_TXEOL), and others related, appear to be assigning the results directly to the 'ah->intr_txqs' variable. However, without context about the variable 's0_s' or 's1_s', the MS() function, or the AR_ISR_* values, it's possible that these variables may be unbounded. This could lead to a scenario where an uncontrolled bit shift is performed on these values, resulting in either out-of-bounds indexing or integer overflow. Furthermore, depending on how these variables and the MS() function are defined elsewhere in the project, these values may not be validated for handling such bit operations. Hence, vulnerability may exist, but additional context is necessary to provide further explanation.
+
+RECOMMENDATIONS:
+To mitigate the potential vulnerability here, consider implementing one or more of the following recommendations:
+
+- Ensure bounds checking on the 's0_s' and 's1_s' variables before passing them to the MS() function. This may require validating these variables against a range of values that is suitable for the system in question.
+
+- Implement error checking on the results of the MS() function calls and on the 'ah->intr_txqs' assignments. This would ensure that no valid data is lost due to uncontrolled bit shifts, and help catch any potential issues related to integer overflow.
+
+- If the MS() function itself does not have any error checking, consider reworking the function to handle invalid data or implement checks on the function's return value.
+
+- Perform additional auditing and review to understand how data validation is handled throughout the codebase to ensure similar issues are addressed as well.
+
+ORIGINAL CODE:
+(Provide your response here).
+				mask2 |= ATH9K_INT_CST;
+			if (isr2 & AR_ISR_S2_TSFOOR)
+				mask2 |= ATH9K_INT_TSFOOR;
+		}
+
+		isr = REG_READ(ah, AR_ISR_RAC);
+		if (isr == 0xffffffff) {
+			*masked = 0;
+			return false;
+		}
+
+			*masked |= ATH9K_INT_TX;
+
+			s0_s = REG_READ(ah, AR_ISR_S0_S);
+			ah->intr_txqs |= MS(s0_s, AR_ISR_S0_QCU_TXOK);
+			ah->intr_txqs |= MS(s0_s, AR_ISR_S0_QCU_TXDESC);
+
+			s1_s = REG_READ(ah, AR_ISR_S1_S);
+			ah->intr_txqs |= MS(s1_s, AR_ISR_S1_QCU_TXERR);
+			ah->intr_txqs |= MS(s1_s, AR_ISR_S1_QCU_TXEOL);
+		}
+
+		*masked |= mask2;
+	}
+
+	if (AR_SREV_9100(ah))
+		return true;
+
+	if (isr & AR_ISR_GENTMR) {
+		u32 s5_s;
+
+		s5_s = REG_READ(ah, AR_ISR_S5_S);
+		ah->intr_gen_timer_trigger =
+				MS(s5_s, AR_ISR_S5_GENTIMER_TRIG);
+
+		ah->intr_gen_timer_thresh =
+		if ((s5_s & AR_ISR_S5_TIM_TIMER) &&
+		    !(pCap->hw_caps & ATH9K_HW_CAP_AUTOSLEEP))
+			*masked |= ATH9K_INT_TIM_TIMER;
+	}
+
+	if (sync_cause) {
+		ath9k_debug_sync_cause(common, sync_cause);
+		fatal_int =
+			(sync_cause &

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Unvalidated Memory Mapping
+
+EXPLANATION:
+This code snippet is vulnerable because it directly maps a large block of memory (0x00100000 bytes) without validating whether the requested base address (0xfe700000) is valid or not. This base address is hardcoded and does not appear to be dynamically generated or sanitized. In addition, the `BUG_ON` function will only check if the mapping fails, but it does not provide any protection against mapping invalid or sensitive areas of memory. Furthermore, there is no bounds checking performed when writing to memory locations `base + INT2NTSR0` and `base + INT2NTSR1`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should include validation for the base address before mapping the memory. Additionally, the `ioremap_nocache` function should be checked for errors and, in case of failure, proper error handling should be implemented.
+
+The following is a potential solution:
+
+```c
+void __init r8a7778_init_irq_dt(void)
+{
+	void __iomem *base;
+
+	base = ioremap_nocache(0xfe700000, 0x00100000);
+
+	/* Validate the memory mapping */
+	if (!base) {
+		/* Error handling */
+		// Handle error and do not continue
+		return;
+	}
+
+	irqchip_init();
+
+	/* Validate the offsets before writing to memory */
+	if (INT2NTSR0 >= 0x00100000 || INT2NTSR1 >= 0x00100000) {
+		/* Error handling */
+		// Handle error and do not continue
+		return;
+	}
+
+	__raw_writel(0x73ffffff, base + INT2NTSR0);
+	__raw_writel(0xffffffff, base + INT2NTSR1);
+}
+```
+
+ORIGINAL CODE:
+
+```c
+void __init r8a7778_init_irq_dt(void)
+{
+	void __iomem *base = ioremap_nocache(0xfe700000, 0x00100000);
+
+	BUG_ON(!base);
+
+	irqchip_init();
+
+	/* route all interrupts to ARM */
+	__raw_writel(0x73ffffff, base + INT2NTSR0);
+	__raw_writel(0xffffffff, base + INT2NTSR1);
+}
+```

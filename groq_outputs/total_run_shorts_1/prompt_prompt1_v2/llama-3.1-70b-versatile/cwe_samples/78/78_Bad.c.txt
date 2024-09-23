@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION: 
+The given code is vulnerable to a command injection attack through the `system` function, which allows an attacker to execute arbitrary system commands by manipulating the `argv[1]` input.
+
+EXPLANATION:
+The `system` function in the given code is called with a string `cmd` that is constructed by concatenating a fixed string and the first command-line argument `argv[1]`. This allows an attacker to inject malicious system commands by providing them as the first argument to the program. For example, if an attacker provides the string "; rm -rf /" as the first argument, the program will execute the command "/usr/bin/cat ; rm -rf /", which can lead to the deletion of files on the system.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to use a safer way to execute the `cat` command, without directly passing user input to the `system` function. One way to do this is to use the `fork` and `exec` system calls instead of `system`, which allows for more fine-grained control over the executed command and its arguments. Additionally, the code should validate and sanitize the input before using it.
+
+Here is an example of how the code can be modified to fix the vulnerability:
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        printf("Usage: %s <filename>\n", argv[0]);
+        return 1;
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // Child process
+        execl("/usr/bin/cat", "cat", argv[1], NULL);
+        perror("execl");
+        return 1;
+    }
+
+    // Parent process
+    wait(NULL);
+    return 0;
+}
+```
+ORIGINAL CODE:
+```c
+int main(int argc, char** argv) {char cmd[CMD_MAX] = "/usr/bin/cat ";strcat(cmd, argv[1]);system(cmd);}
+```

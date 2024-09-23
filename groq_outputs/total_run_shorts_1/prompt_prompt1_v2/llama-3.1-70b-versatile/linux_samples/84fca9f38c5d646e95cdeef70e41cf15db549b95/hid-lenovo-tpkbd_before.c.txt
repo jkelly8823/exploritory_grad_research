@@ -1,0 +1,88 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 8
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to incorrect function call order. 
+Insecure use of the `hid_parse` and `hid_hw_start` functions in relation to error checking and control flow. 
+
+EXPLANATION:
+This segment of code has an error handling issue when creating the sysfs group. If the `sysfs_create_group` call fails, it proceeds to call `hid_parse` and `hid_hw_start`. However, if `hid_parse` or `hid_hw_start` fail, the return value of `sysfs_create_group` is ignored. This could result in further problems as the function continues to execute despite the failure of a critical operation. The return value of `sysfs_create_group` is not properly handled, as it is overwritten by the return values of `hid_parse` and `hid_hw_start`. However, under certain specific circumstances this might represent an insecure programming practice.
+
+Note: This issue is not necessarily a critical vulnerability. A potential attacker would likely not be able to exploit this condition as anything more than a system crash or unprogrammed shutdown. Rather than being specifically security related, this often represents unpolished or high-maintenance aspects of code.
+
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should reconsider the control flow. Here is a modified version of the code:
+
+```c
+struct tpkbd_data_pointer *data_pointer;
+size_t name_sz = strlen(dev_name(dev)) + 16;
+char *name_mute, *name_micmute;
+int ret;
+
+if (sysfs_create_group(&hdev->dev.kobj,
+                &tpkbd_attr_group_pointer)) {
+    hid_warn(hdev, "Could not create sysfs group\n");
+    // Propagate error, do not continue
+    return -ENODEV; // Failure propagating error - return immediately
+}
+
+ret = hid_parse(hdev);
+if (ret) {
+    hid_err(hdev, "hid_parse failed\n");
+    goto err_free;
+}
+
+ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+if (ret) {
+    hid_err(hdev, "hid_hw_start failed\n");
+    goto err_free;
+}
+
+uhdev = (struct usbhid_device *) hdev->driver_data;
+
+if (uhdev->ifnum == 1)
+    return tpkbd_probe_tp(hdev);
+
+return 0;
+err_free:
+return ret;
+}
+static void tpkbd_remove_tp(struct hid_device *hdev)
+```
+
+Note that specific values are used for examples and these are open to interpretation. `ENODEV` value is an example that can be returned from this point. Additionally, use 'err' tag after performing an error.
+
+ORIGINAL CODE:
+```c
+struct tpkbd_data_pointer *data_pointer;
+size_t name_sz = strlen(dev_name(dev)) + 16;
+char *name_mute, *name_micmute;
+int ret;
+
+if (sysfs_create_group(&hdev->dev.kobj,
+                &tpkbd_attr_group_pointer)) {
+    hid_warn(hdev, "Could not create sysfs group\n");
+ret = hid_parse(hdev);
+if (ret) {
+    hid_err(hdev, "hid_parse failed\n");
+    goto err_free;
+}
+
+ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+if (ret) {
+    hid_err(hdev, "hid_hw_start failed\n");
+    goto err_free;
+}
+
+uhdev = (struct usbhid_device *) hdev->driver_data;
+
+if (uhdev->ifnum == 1)
+    return tpkbd_probe_tp(hdev);
+
+return 0;
+err_free:
+return ret;
+}
+
+static void tpkbd_remove_tp(struct hid_device *hdev)
+```

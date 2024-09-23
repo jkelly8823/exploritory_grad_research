@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-17, 20-22, 27-29
+VULNERABILITY_DESCRIPTION:
+Insecure use of temporary files and potential for file descriptor leaks.
+
+EXPLANATION:
+The `getline` function within the `Error` class uses temporary file handles (`conn.makefile('r', encoding=self.encoding)` and `fp`) without proper closure in error scenarios. Although the file handles are closed using the `with` statement, the `with` statement may not always execute if an exception is thrown within the indented block.
+
+Furthermore, the lines `fp = conn.makefile('r', encoding=self.encoding)` and similar are repeated multiple times, which could lead to a file descriptor leak if an exception is raised between the creation of the file handle and its intended use.
+
+Additionally, while the `getline` method seems to handle reading a line in CRLF format from the FTP server, the snippet presented has an incomplete implementation of reading a line and closing temporary file handles properly.
+
+RECOMMENDATIONS:
+Use try-except blocks to ensure that temporary files are properly closed and deleted if an error occurs during their usage. Use a single allocation of file handles where possible to prevent file descriptor leaks.
+
+Implement a close operation after reading lines from temporary files and handle any exceptions that may be thrown.
+
+An example of secure handling of file handles could be:
+```python
+try:
+    with conn.makefile('r', encoding=self.encoding) as fp:
+        content = fp.read()
+except Exception as e:
+    # Handle the exception
+    pass
+finally:
+    # Close temporary file handles
+    fp.close()
+```
+
+ORIGINAL CODE:
+```
+# ...
+
+def getline(self):
+    line = self.file.readline()
+    if self.debugging > 1:
+        print('*get*', self.sanitize(line))
+    if not line: raise EOFError
+    if line[-2:] == CRLF: line = line[:-2]
+    with self.transfercmd(cmd) as conn, \
+             conn.makefile('r', encoding=self.encoding) as fp:
+        while 1:
+            line = fp.readline()
+            if self.debugging > 2: print('*retr*', repr(line))
+            if not line:
+                break
+            if line[-2:] == CRLF:
+    self.voidcmd('TYPE A')
+    with self.transfercmd(cmd) as conn:
+        while 1:
+            buf = fp.readline()
+            if not buf: break
+            if buf[-2:] != B_CRLF:
+                if buf[-1] in B_CRLF: buf = buf[:-1]
+                buf = buf + B_CRLF
+    fp = conn.makefile('r', encoding=self.encoding)
+    with fp, conn:
+        while 1:
+            line = fp.readline()
+            if self.debugging > 2: print('*retr*', repr(line))
+            if not line:
+                break
+            if line[-2:] == CRLF:
+    self.voidcmd('TYPE A')
+    with self.transfercmd(cmd) as conn:
+        while 1:
+            buf = fp.readline()
+            if not buf: break
+            if buf[-2:] != B_CRLF:
+                if buf[-1] in B_CRLF: buf = buf[:-1]
+                buf = buf + B_CRLF
+```

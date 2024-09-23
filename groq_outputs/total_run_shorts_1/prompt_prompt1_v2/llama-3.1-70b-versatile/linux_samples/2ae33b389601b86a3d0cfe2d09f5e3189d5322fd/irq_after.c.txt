@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-36
+VULNERABILITY_DESCRIPTION: Potential access to stale data or resource in a concurrent programming context due to the functions operating directly on `backups` and `wakeups`.
+EXPLANATION:
+The `at91_irq_suspend()` and `at91_irq_resume()` functions appear to manage suspend and resume operations for interrupts. These functions directly modify `backups` and `wakeups` with operations on a single interrupt controller or multiple aic's. Without context, it's possible that these data structures (`backups` and `wakeups`) are used by multiple threads or are otherwise accessed concurrently by different components.
+While not explicitly accessing a shared resource within this snippet, the functions may be part of a system where access to such variables can cause data inconsistency. To analyze the actual vulnerability in full detail and perform exhaustive assessment, additional context regarding the `backups` and `wakeups` is required.
+However, assuming they are indeed accessed by multiple threads and this code is run in such an environment, a concurrency issue is possible. `find_next_bit()` returns an index which may not be immediately acted upon as the code performs additional checks and operations. In this context, if these data structures are shared and this function executes as part of a system which is not single-threaded or only calls this function once in its lifetime (it does appear to be stateful code), these functions have potential vulnerabilities.
+Given the `if (has_aic5())` branch can potentially affect if a certain interrupt controller utilizes one or many interrupt controllers, access conflicts might arise in a multi-threaded context with both interrupts or controllers accessing/storing values in a shared storage.
+
+RECOMMENDATIONS:
+1. Use any synchronization primitives available to protect access to shared resources. `backups` and `wakeups` are seemingly global. Use a lock for these to protect against concurrent access.
+2. Validate whether thread-safe libraries and APIs are being used correctly for potential parallel execution. For e.g., if `find_next_bit()` function isn't utilized correctly in multi-threading scenarios, then make sure to implement proper thread-synchronization methods.
+3. Ensure if operations within the if-else condition can safely accommodate both a single controller situation (presumably) and usage of dual interrupt controllers depending on `has_aic5()`.
+
+ORIGINAL CODE:
+
+
+```c
+void at91_irq_suspend(void)
+{
+	int bit = -1;
+
+	if (has_aic5()) {
+		/* disable enabled irqs */
+		while ((bit = find_next_bit(backups, n_irqs, bit + 1)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IDCR, 1);
+		}
+		/* enable wakeup irqs */
+		bit = -1;
+		while ((bit = find_next_bit(wakeups, n_irqs, bit + 1)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IECR, 1);
+		}
+	} else {
+		at91_aic_write(AT91_AIC_IDCR, *backups);
+		at91_aic_write(AT91_AIC_IECR, *wakeups);
+
+void at91_irq_resume(void)
+{
+	int bit = -1;
+
+	if (has_aic5()) {
+		/* disable wakeup irqs */
+		while ((bit = find_next_bit(wakeups, n_irqs, bit + 1)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IDCR, 1);
+		}
+		/* enable irqs disabled for suspend */
+		bit = -1;
+		while ((bit = find_next_bit(backups, n_irqs, bit + 1)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IECR, 1);
+		}
+	} else {
+		at91_aic_write(AT91_AIC_IDCR, *wakeups);
+		at91_aic_write(AT91_AIC_IECR, *backups);
+```

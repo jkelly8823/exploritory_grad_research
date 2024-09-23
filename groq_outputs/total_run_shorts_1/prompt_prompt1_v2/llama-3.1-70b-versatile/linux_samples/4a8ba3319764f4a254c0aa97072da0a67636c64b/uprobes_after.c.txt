@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 59, 71
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a vulnerability in the emu_store_ril function where it does not properly check for buffer overflows when storing data in memory. It uses the sizeof operator to calculate the size of the data being stored, but this can be vulnerable to buffer overflow if the size of the data being stored is not correctly calculated.
+
+EXPLANATION:
+In the emu_store_ril function, it uses the sizeof operator to calculate the size of the data being stored, which is then used to calculate the mask for the alignment check. However, this size calculation can be vulnerable to buffer overflow if the size of the data being stored is not correctly calculated. 
+
+This is because the sizeof operator returns the size of the data type being stored, not the actual size of the data being stored. If the actual size of the data being stored is larger than the size of the data type, this can result in a buffer overflow.
+
+The function also uses the put_user macro to store the data in memory. However, this macro does not perform any bounds checking, which means that if the destination address is not within the correct bounds, this can also result in a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking to ensure that the destination address is within the correct bounds before storing the data in memory. You can use the access_ok function to perform this check.
+
+Additionally, you should use a more robust method to calculate the size of the data being stored, such as using the sizeof operator with a pointer to the data being stored, rather than relying on the size of the data type.
+
+Here is an example of how you can modify the emu_store_ril function to fix this vulnerability:
+
+```c
+#define emu_store_ril(regs, ptr, input)			\
+({							\
+	unsigned long size = sizeof(*input);		\
+	unsigned long mask = size - 1;			\
+	__typeof__(ptr) __ptr = (ptr);			\
+	int __rc = 0;					\
+							\
+	if (!test_facility(34))				\
+		__rc = EMU_ILLEGAL_OP;			\
+	else if ((u64 __force)__ptr & mask)		\
+		__rc = EMU_SPECIFICATION;		\
+	else if (!access_ok(VERIFY_WRITE, __ptr, size))	\
+		__rc = EMU_ADDRESSING;			\
+	else if (put_user(*(input), __ptr))		\
+		__rc = EMU_ADDRESSING;			\
+	if (__rc == 0)					\
+		sim_stor_event(regs, __ptr, size);	\
+	__rc;						\
+})
+```
+
+ORIGINAL CODE:
+
+```c
+#define emu_store_ril(regs, ptr, input)			\
+({							\
+	unsigned int mask = sizeof(*(ptr)) - 1;		\
+	__typeof__(ptr) __ptr = (ptr);			\
+	int __rc = 0;					\
+							\
+	if (!test_facility(34))				\
+		__rc = EMU_ILLEGAL_OP;			\
+	else if ((u64 __force)__ptr & mask)		\
+		__rc = EMU_SPECIFICATION;		\
+	else if (put_user(*(input), __ptr))		\
+		__rc = EMU_ADDRESSING;			\
+	if (__rc == 0)					\
+		sim_stor_event(regs, __ptr, mask + 1);	\
+	__rc;						\
+})
+```
+Note: The original code has been truncated to only include the relevant parts.

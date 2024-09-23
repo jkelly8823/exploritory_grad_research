@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+A potential TOCTOU (Time-of-Check to Time-of-Use) vulnerability exists in the given code snippet.
+
+EXPLANATION:
+The code checks if the page table entry (PTE) for the given virtual memory area (VMA) and page directory entry (PMD) is valid using the `pmd_none_or_trans_huge_or_clear_bad` function. However, this check is followed by a call to `split_huge_page_pmd`, which may modify the state of the PMD. Additionally, the `check_pte_range` function, which is called later, may also rely on the state of the PMD.
+
+In between these checks, the PMD state may change due to concurrent modification by another thread or external event, leading to a potential TOCTOU vulnerability. This could allow an attacker to exploit the gap between the check and the use of the PMD state, potentially leading to memory corruption or other security issues.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+1. Ensure that the PMD state is consistent between the check and the use. This can be achieved by holding a lock or using atomic operations to prevent concurrent modification.
+2. Consider using a more robust method to verify the PMD state, such as a retry mechanism or a more comprehensive check.
+3. Review the `split_huge_page_pmd` and `check_pte_range` functions to ensure they do not introduce any additional security risks.
+
+ORIGINAL CODE:
+```c
+do {
+    next = pmd_addr_end(addr, end);
+    split_huge_page_pmd(vma->vm_mm, pmd);
+    if (pmd_none_or_trans_huge_or_clear_bad(pmd))
+        continue;
+    if (check_pte_range(vma, pmd, addr, next, nodes,
+                flags, private))
+        return -EIO;
+```

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The code uses CAP_SYS_ADMIN capability to check for elevated privileges, which can be set by a process that is not running as the root user.
+
+EXPLANATION:
+The code checks if a socket buffer (skb) has the CAP_SYS_ADMIN capability, which is used to grant elevated privileges for system administration. However, CAP_SYS_ADMIN capability can be set by a process using the libcap library, which means a malicious process can also set this capability and bypass the privilege check.
+
+RECOMMENDATIONS:
+Instead of relying solely on CAP_SYS_ADMIN capability, it is recommended to also check the effective user ID (euid) or the real user ID (ruid) to ensure that the process running the code has elevated privileges. 
+
+```c
+if (geteuid() != 0 || !netlink_capable(skb, CAP_SYS_ADMIN)) {
+    err = -EPERM;
+    goto next_msg;
+}
+```
+
+However, the most secure approach would be to use LSM (Linux Security Modules) hooks to perform the privilege checks. 
+
+```c
+if (security_netlink_recv(skb, msg) < 0) {
+    err = -EPERM;
+    goto next_msg;
+}
+```
+In this method, the LSM module will check the capabilities and enforce the security policies, making the code more secure and less prone to capability bypass attacks.
+
+ORIGINAL CODE:
+```c
+            goto next_msg;
+        }
+
+        if (!netlink_capable(skb, CAP_SYS_ADMIN)) {
+            err = -EPERM;
+            goto next_msg;
+        }
+```

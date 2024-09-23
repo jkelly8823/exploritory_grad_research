@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 161-166
+VULNERABILITY_DESCRIPTION:
+Infinite loop and potential resource leak in its_vpe_deschedule function
+
+EXPLANATION:
+The vulnerability lies in the its_vpe_deschedule function, specifically in the do-while loop that waits for the ITS virtual pending table to clear. This loop will continue indefinitely until the table is cleaned or the count reaches 0. If the count reaches 0 before the table is cleaned, the function will print an error message and set the vpe->idai and vpe->pending_last flags to false, but the loop will not terminate. Additionally, there is no resource leak mitigation in this function.
+
+However, the major red flag lies in another infinite loop issue: suppose `gits_read_vpendbaser(vlpi_base + GICR_VPENDBASER)` always returns 0 (e.g., since a hardware race condition does not produce data, instead 32 bits of all 0's every iteration), it is possible to trigger a loop that runs `count` times, worst-case running `udelay(1)` one million times until returning False.
+
+Furthermore, it could be problematic with `pr_err_ratelimited`. Even though only one line of err output can occur per minute, this could likely saturate a kernel log. Best to instead consider kthread_yield() if another core processes descheduling. It can safely release back to regular scheduling without possible timing issues.
+
+
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider the following changes:
+
+1. Implement a proper loop termination condition, to prevent infinite runtime. Incorporate a more robust check to guarantee exit conditions.
+
+2. In cases where resource leaks are problematic (e.g., resource starvation resulting in crashes), to catch scenarios in which "normal execution is NOT resuming" implement loop termination prior to the final run of operations.
+
+3. It is recommended to investigate the use of kthread_yield() to see whether better context switching to give it a more uniform thread assignment rather than always exiting in another core.

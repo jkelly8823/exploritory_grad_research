@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Insufficient Error Handling: The code does not properly handle the result of svm_set_msr(), leading to potential control flow vulnerabilities.
+
+EXPLANATION:
+The svm_set_msr() function returns a value, which is checked. However, if svm_set_msr() fails, the code does not properly handle the error case before attempting to inject a general protection exception (GP) using kvm_inject_gp(). This can lead to unexpected behavior and potential crashes. Moreover, in the error case, a different trace function (trace_kvm_msr_write_ex) is called with the same arguments as the trace function called when svm_set_msr() succeeds (trace_kvm_msr_write), which might not be intended.
+
+RECOMMENDATIONS:
+1. Properly handle the error case of svm_set_msr() to ensure that the control flow is as expected.
+2. Ensure that both trace functions receive the correct arguments, and handle any potential side effects when calling these functions.
+3. Consider using a consistent approach to error handling to make the code easier to understand and maintain.
+
+ORIGINAL CODE:
+```c
+msr.host_initiated = false;
+
+svm->next_rip = kvm_rip_read(&svm->vcpu) + 2;
+if (svm_set_msr(&svm->vcpu, &msr)) {
+    trace_kvm_msr_write_ex(ecx, data);
+    kvm_inject_gp(&svm->vcpu, 0);
+} else {
+    trace_kvm_msr_write(ecx, data);
+```

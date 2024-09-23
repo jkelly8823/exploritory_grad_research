@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7
+VULNERABILITY_DESCRIPTION: 
+Resource Leak vulnerability due to potential failure to free resources in case of an error.
+
+EXPLANATION: 
+The code checks if `tcon->sclk1` is in an error state and returns early if it is. However, `tcon->sclk0` is not checked for an error state after calling `PTR_ERR(tcon->sclk0)`. Additionally, the code does not handle the case where `tcon->sclk1` is successfully acquired but then an error occurs later on. In such a case, the `tcon->sclk1` resource remains allocated and is not freed, leading to a resource leak.
+
+However, since this snippet appears to be part of a larger codebase, it's also possible that the `sun4i_tcon_free_clocks` function, which is called elsewhere in the code, is responsible for freeing these resources. Nevertheless, to ensure resource safety, the freeing of `tcon->sclk1` should be handled in the current function as well.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add error checking and resource freeing code after acquiring `tcon->sclk1`:
+```c
+if (tcon->quirks->has_channel_1) {
+	tcon->sclk1 = devm_clk_get(dev, "tcon-ch1");
+	if (IS_ERR(tcon->sclk1)) {
+		clk_put(tcon->sclk0); // Free tcon->sclk0 if sclk1 fails
+		err = PTR_ERR(tcon->sclk1);
+	}
+}
+```
+This ensures that `tcon->sclk0` and `tcon->sclk1` resources are properly freed when an error occurs.
+
+ORIGINAL CODE:
+```c
+		return PTR_ERR(tcon->sclk0);
+	}
+}
+
+	if (tcon->quirks->has_channel_1) {
+		tcon->sclk1 = devm_clk_get(dev, "tcon-ch1");
+		if (IS_ERR(tcon->sclk1)) {
+
+static void sun4i_tcon_free_clocks(struct sun4i_tcon *tcon)
+{
+	clk_disable_unprepare(tcon->clk);
+}
+
+static int sun4i_tcon_init_irq(struct device *dev,
+```

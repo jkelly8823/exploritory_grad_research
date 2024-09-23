@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability in the `vif_priv->active` assignment.
+EXPLANATION:
+The code appears to be freeing a `vif_priv` entry after setting `vif_priv->active` to `false`. However, the subsequent call to `rcu_assign_pointer(ar->vif_priv[vif_id].vif, NULL)` may not prevent other threads or interrupts from accessing the now-freed `vif_priv` structure before the RCU synchronization completes. This could lead to a use-after-free vulnerability if another part of the program tries to access `vif_priv` before the RCU synchronization completes.
+RECOMMENDATIONS:
+To fix this potential vulnerability, it's recommended to use `rcu_assign_pointer` before assigning `vif_priv->active` to `false` and freeing `vif_priv` entry. Additionally, use a memory barrier (e.g. `smp_wmb()` or `mb()`) to ensure that the RCU synchronization is complete before assigning `vif_priv->active` to `false` and freeing the `vif_priv` entry.
+
+```c
+rcu_assign_pointer(ar->vif_priv[vif_id].vif, NULL);
+smp_wmb();
+vif_priv->active = false;
+bitmap_release_region(&ar->vif_bitmap, vif_id, 0);
+ar->vifs--;
+```
+ORIGINAL CODE:
+```
+}
+
+unlock:
+	if (err && (vif_id >= 0)) {
+		vif_priv->active = false;
+		bitmap_release_region(&ar->vif_bitmap, vif_id, 0);
+		ar->vifs--;
+		rcu_assign_pointer(ar->vif_priv[vif_id].vif, NULL);
+```

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 9
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability due to Unbounded String Copy and use of gethostbyaddr
+
+EXPLANATION:
+The provided code segment contains a buffer overflow vulnerability and a potential issue with the use of gethostbyaddr. The buffer overflow occurs in the line `strcpy(hostname, hp->h_name);`, where the `strcpy` function is used to copy a string from `hp->h_name` to the `hostname` buffer without checking the length of the string being copied. If the string in `hp->h_name` is longer than or equal to 64 characters, it will overflow the fixed-size `hostname` buffer, potentially leading to memory corruption and arbitrary code execution.
+
+Additionally, the use of `gethostbyaddr` can also lead to a potential DNS spoofing vulnerability if the DNS server returns a hostname that exceeds the expected length, which can also lead to a buffer overflow.
+
+Furthermore, `inet_addr` can also return a null value in case of invalid input which can also lead to segmentation faults.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use bounded string copy functions like `strncpy` instead of `strcpy`, ensuring that the length of the string being copied is checked and does not exceed the size of the destination buffer. Additionally, use `_nc_gethostbyaddr_r` (aka gethostbyaddr_r) instead of `gethostbyaddr` for thread safety. Validate the data returned by these functions, including checking for null values and exceeding lengths.
+
+The following is an example of how the vulnerable lines can be modified:
+- `strncpy(hostname, hp->h_name, 64 - 1); hostname[63] = '\0';`
+- Use `inet_pton` to ensure null is not returned and to make sure an invalid address generates an error.
+- Error checking on the return of `gethostbyaddr`.
+
+ORIGINAL CODE:
+ 
+    void host_lookup(char *user_supplied_addr){
+        struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+       
+        /*routine that ensures user_supplied_addr is in the right format for conversion */
+       
+        validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+    }

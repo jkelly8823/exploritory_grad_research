@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference.
+
+EXPLANATION:
+The code snippet does not show the initialization of the `desc` pointer, but the function `read_segment_descriptor` returns an error code and assigns a value to the `desc` pointer. However, if the function call fails, it returns `ret`, but does not check if the `desc` pointer is null before using it later in the code. Although `desc` is a function argument, the function call `read_segment_descriptor` assigns a value to it, and this value could be null if the function call fails.
+
+Additionally, when `null_selector` is true, the function uses the `seg_desc` variable without verifying if `desc` was properly initialized with the `desc_addr`. 
+
+While the snippet does not explicitly dereference the `desc` pointer after the call to `read_segment_descriptor`, if the intention is to use it later in the function, a potential null pointer dereference could occur.
+
+RECOMMENDATIONS:
+Check the return value of `read_segment_descriptor` and verify if the `desc` pointer is not null before using it. The code should handle the case when `desc` is null, either by returning an error code or by skipping any code that relies on `desc`. Also, ensure that `desc` is properly initialized and verified when `null_selector` is true.
+
+ORIGINAL CODE:
+```
+...
+rpl = selector & 3;
+
+/* TR should be in GDT only */
+if (seg == VCPU_SREG_TR && (selector & (1 << 2)))
+	goto exception;
+
+/* NULL selector is not valid for TR, CS and (except for long mode) SS */
+if (null_selector) {
+	...
+	ret = read_segment_descriptor(ctxt, selector, &seg_desc, &desc_addr);
+	if (ret != X86EMUL_CONTINUE)
+		return ret;
+```

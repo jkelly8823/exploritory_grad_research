@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 3-5
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to 'Broadcast Exposure' due to declaring an intent-receiver in the manifest without proper intent-filter protection.
+
+EXPLANATION:
+Declaring intent-receivers in the manifest as shown in the code makes the ShutdownReceiver exposed to arbitrary broadcasts from any application with the android.intent.action.ACTION_SHUTDOWN permission, potentially leading to arbitrary code execution. 
+
+Even if the exploit is not executed directly the service will consume extra resources and even battery draining of battery by potentially sending fake shutdown intents that never actually allow the shutdown to happen.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the code should restrict the accessibility of ShutdownReceiver to other applications, for instance making it internal to the application.
+
+This may involve setting exported property as false, setting intent-filters to action(s) explicitly triggered by your app.
+
+```xml
+<receiver
+    android:name=".ShutdownReceiver"
+    android:exported="false" >
+        <intent-filter>
+            <action android:name="com.example.vulnerableApplication.MY_SHUTDOWN_ACTION" />
+        </intent-filter>
+</receiver>
+```
+
+The calling side must then explicitly call an Intent for the myshutdown action as configured and use Context.sendBroadcast instead of context.startActivity  
+
+```java
+Intent i = new Intent("com.example.vulnerableApplication.MY_SHUTDOWN_ACTION");
+sendBroadcast(i);
+```
+
+Define ACTION and MY_SHUTDOWN_ACTION properly and other intent configuration options that better control resource usage consumption of intents that bind a service.
+
+ORIGINAL CODE:
+```xml
+<manifest package="com.example.vulnerableApplication">
+    <application>
+       ...
+       
+
+          <receiver android:name=".ShutdownReceiver"><intent-filter><action android:name="android.intent.action.ACTION_SHUTDOWN" /></intent-filter></receiver>
+       
+
+       ...
+       
+       </application>
+ </manifest>
+```

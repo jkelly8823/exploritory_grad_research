@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12
+VULNERABILITY_DESCRIPTION:
+Dereferencing void pointer without casting can lead to undefined behavior due to potential differences in alignment and type.
+
+EXPLANATION:
+The bug occurs on lines 11-12 where we have the following code:
+
+uf.event_mask[0] = *((u32 *) f->event_mask + 0);
+uf.event_mask[1] = *((u32 *) f->event_mask + 1);
+
+Here, we see that we're casting a pointer to a `u32 *` pointer. This casting assumes that `f->event_mask` is already aligned to a 32-bit boundary. However, this assumption might not be true. 
+The reason is that when casting a `void *` to another pointer type, we might end up with misaligned memory access if the original buffer wasn't properly aligned for the target type.
+
+RECOMMENDATIONS:
+We can use memcpy() to avoid the assumption about alignment:
+
+```c
+memcpy(uf.event_mask, f->event_mask, sizeof(uf.event_mask));
+```
+
+This ensures that we respect the alignment of the original memory, preventing potential undefined behavior. 
+
+Alternatively, it would be best to explicitly define the memory layout and types for `f->event_mask` instead of relying on pointer magic.
+
+ORIGINAL CODE:
+```c
+*addr_len = sizeof(*haddr);
+haddr->hci_family = AF_BLUETOOTH;
+haddr->hci_dev    = hdev->id;
+haddr->hci_channel= 0;
+
+release_sock(sk);
+return 0;
+}
+		{
+			struct hci_filter *f = &hci_pi(sk)->filter;
+
+			memset(&uf, 0, sizeof(uf));
+			uf.type_mask = f->type_mask;
+			uf.opcode    = f->opcode;
+			uf.event_mask[0] = *((u32 *) f->event_mask + 0);
+			uf.event_mask[1] = *((u32 *) f->event_mask + 1);
+```

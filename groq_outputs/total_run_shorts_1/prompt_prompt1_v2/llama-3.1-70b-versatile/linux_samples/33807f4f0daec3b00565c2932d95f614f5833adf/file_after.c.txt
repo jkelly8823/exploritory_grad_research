@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 10-12, 14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a denial-of-service (DoS) due to the use of an unbounded semaphore and a potential lock timeout.
+
+EXPLANATION:
+The `down_read` function acquires the `lock_sem` semaphore for reading, which can cause the current thread to block if the semaphore is already held by another thread or process. However, there is no check for an error condition or a timeout, which could lead to a deadlock or an indefinite wait if the semaphore is never released.
+
+Additionally, the `down_read` and `up_read` functions are not paired correctly within the same variable scope. The `up_read` call can be reached even if the `down_read` call fails. This incorrect pairing can lead to undefined behavior.
+
+If the `generic_file_aio_write` function were to encounter an error, it could potentially leave the semaphore in an inconsistent state. There is also no check for the return code of the `down_read` and `up_read` functions.
+
+Furthermore, the lack of error handling in the `up_read` function means that an error in releasing the semaphore could go undetected, potentially leading to a resource leak.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, we recommend the following:
+
+- Verify the return values of `down_read` and `up_read` and handle any error conditions that may occur.
+- Implement a timeout mechanism to prevent the thread from indefinitely blocking while trying to acquire the semaphore.
+- Ensure the correct pairing of `down_read` and `up_read` calls within the same variable scope.
+- Consider using a spinlock or a mutex instead of a semaphore to avoid these issues.
+
+ORIGINAL CODE:
+```c
+struct cifsInodeInfo *cinode = CIFS_I(inode);
+struct TCP_Server_Info *server = tlink_tcon(cfile->tlink)->ses->server;
+ssize_t rc = -EACCES;
+loff_t lock_pos = pos;
+
+if (file->f_flags & O_APPEND)
+    lock_pos = i_size_read(inode);
+/*
+ * We need to hold the sem to be sure nobody modifies lock list
+ * with a brlock that prevents writing.
+ */
+down_read(&cinode->lock_sem);
+if (!cifs_find_lock_conflict(cfile, lock_pos, iov_length(iov, nr_segs),
+                 server->vals->exclusive_lock_type, NULL,
+                 CIFS_WRITE_OP))
+    rc = generic_file_aio_write(iocb, iov, nr_segs, pos);
+up_read(&cinode->lock_sem);
+return rc;
+```

@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 4-7, 9-12
+VULNERABILITY_DESCRIPTION: 
+Potential Denial-of-Service (DoS) through Resource Management Issues.
+
+EXPLANATION:
+The code snippet presented appears to be handling the removal and addition of headers in an IPv6 packet. However, there are several places where memory and resources are not being properly managed. 
+
+The `skb_postpull_rcsum(skb, oldhdr, sizeof(struct ipv6hdr) + ((hdr->hdrlen + 1) << 3));` line at line 4 appears to be handling a checksum, but the function itself is not the problem. 
+
+The issue lies in handling of the `skb_pull` function call on line 3. The `skb_pull` function is moving the network header forward and trimming the packet data. There is a risk here that the new network header length will not fit within the existing buffer, potentially causing a memory overwrite or, more likely, corruption.
+
+Furthermore, there are several lines (5-7) which contain a `return -1;` statement when memory allocation using `pskb_expand_head(skb, ...)` fails. This can result in skb objects not being properly cleaned up when allocation fails. This not only results in memory leaks but also creates opportunities for resource exhaustion attacks.
+
+The `skb_push(skb, ((chdr->hdrlen + 1) << 3) + sizeof(struct ipv6hdr));` function call on line 9 also potentially overflows the skb buffer, since there is no check for whether the addition of the size to be pushed will exceed the skb's allocated memory space.
+
+Additionally, if `skb_may_pull` or `pskb_expand_head` fail, skb objects are properly cleaned up using `kfree_skb(skb)`. However, when `skb_pull` or `skb_push` succeed, there is still an exposure that might lead to_skb buffer overflows when these buffer operations go awry.
+
+Another problem in this code snippet exists at line 1. Because skb memory must be a contiguous block of memory that fits entirely within a single page, the call to  `skb_pull(skb, ((hdr->hdrlen + 1) << 3));` is not guaranteed to be implemented and could result in skb being unable to pull out the required length from skb.
+
+RECOMMENDATIONS:
+1. Before calling `skb_pull(skb, ((hdr->hdrlen + 1) << 3));` at line 3, verify that `skb_may_pull(skb, ((hdr->hdrlen + 1) << 3))` fails before calling the pull and push functions in your skb operations. Be certain there is adequate skb memory for pulling from skb.
+2. If calls to `skb_pull` or `skb_push` fail because skb exceeds allocated memory, this has to be treated as a fatal protocol failure. Abort and restart operations. In a memory-constrained skb allocation scenario, always check for, then dynamically allocate skb if skb insufficient capacity to pull skb memory.
+3. At line 9, after `skb_push(skb, ((chdr->hdrlen + 1) << 3) + sizeof(struct ipv6hdr));` call is invoked, validate that skb has enough skb allocated size to allow valid push operability; skb is guaranteed to prevent skb writes outside skb bounds.
+
+ORIGINAL CODE:
+```
+	return -1;
+}
+
+if (!pskb_may_pull(skb, ipv6_rpl_srh_size(n, hdr->cmpri,
+					hdr->cmpre))) {
+		kfree_skb(skb);
+		return -1;
+	skb_pull(skb, ((hdr->hdrlen + 1) << 3));
+	skb_postpull_rcsum(skb, oldhdr,
+			   sizeof(struct ipv6hdr) + ((hdr->hdrlen + 1) << 3));
+	if (unlikely(!hdr->segments_left)) {
+		if (pskb_expand_head(skb, sizeof(struct ipv6hdr) + ((chdr->hdrlen + 1) << 3), 0,
+		 		 GFP_ATOMIC)) {
+			__IP6_INC_STATS(net, ip6_dst_idev(skb_dst(skb)), IPSTATS_MIB_OUTDISCARDS);
+			kfree_skb(skb);
+			kfree(buf);
+			return -1;
+		}
+
+		oldhdr = ipv6_hdr(skb);
+	}
+	skb_push(skb, ((chdr->hdrlen + 1) << 3) + sizeof(struct ipv6hdr));
+	skb_reset_network_header(skb);
+	skb_mac_header_rebuild(skb);
+	skb_set_transport_header(skb, sizeof(struct ipv6hdr));
+```

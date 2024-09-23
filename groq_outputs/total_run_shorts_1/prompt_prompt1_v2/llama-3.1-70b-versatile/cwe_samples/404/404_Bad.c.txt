@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION: 
+   This function contains an Unvalidated Input Vulnerability. It uses user-provided input as the filename for a file operation without proper validation or sanitization.
+
+EXPLANATION:
+   This vulnerability exists because the `fName` parameter passed into the `decodeFile` function is not validated or sanitized before being used in the `fopen` function call. This means an attacker could potentially exploit this vulnerability by crafting a malicious input that would allow them to read arbitrary files on the system. For instance, if an attacker were to provide a filename like `../../../../etc/passwd`, they might be able to access sensitive system files. Furthermore, the vulnerability could potentially lead to a Directory Traversal vulnerability, where an attacker could access files outside of the intended directory.
+
+RECOMMENDATIONS:
+   To fix this vulnerability, you should add input validation and sanitization for the `fName` parameter before using it in the `fopen` function call. Here are some recommended steps:
+   1. Check if the file exists and if it's a file, not a directory.
+   2. Validate the filename using a whitelist of allowed characters.
+   3. Use a path canonicalization function to normalize the path and prevent directory traversal.
+   4. Limit access to only the intended directory.
+   Here is an example of how you might implement these recommendations:
+   ```c
+   // ... 
+   if (!isValidFilename(fName)) {
+       return DECODE_FAIL;
+   }
+   char* canonicalPath = canonicalizePath(fName);
+   if (canonicalPath == NULL) {
+       return DECODE_FAIL;
+   }
+   FILE* f = fopen(canonicalPath, "r");
+   // ...
+   ```
+
+ORIGINAL CODE:
+```c
+int decodeFile(char* fName) {
+    char buf[BUF_SZ];FILE* f = fopen(fName, "r");if (!f) {printf("cannot open %s\n", fName);return DECODE_FAIL;}else {
+        while (fgets(buf, BUF_SZ, f)) {if (!checkChecksum(buf)) {return DECODE_FAIL;}else {decodeBlock(buf);}}
+    }fclose(f);return DECODE_SUCCESS;
+}
+```

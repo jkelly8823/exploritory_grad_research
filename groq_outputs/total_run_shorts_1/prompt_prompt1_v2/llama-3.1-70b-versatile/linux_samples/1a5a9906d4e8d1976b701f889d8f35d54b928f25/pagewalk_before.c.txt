@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Resource Consumption Vulnerability.
+
+EXPLANATION:
+The provided code snippet contains a vulnerability related to uncontrolled resource consumption. This occurs because the `_walk_pte_range` function can potentially cause an infinite loop due to its error handling mechanism. When `walk_pte_range` returns an error (`err`), the loop breaks. However, in certain scenarios, the error can occur in such a way that `next` remains unchanged, causing `addr` to potentially point to the same location on the next iteration, leading to infinite recursion.
+
+This pattern of behavior can cause significant resource accumulation, especially in cases where the `walk_pte_range` function performs system calls or I/O operations.
+
+RECOMMENDATIONS:
+The solution to this vulnerability requires proper handling of errors returned by `walk_pte_range` and limiting the number of iterations performed by the loop. Here are the recommendations:
+
+1. Implement a system to detect whether `walk_pte_range` continues to return errors repeatedly and break the loop when such conditions occur.
+
+2. Evaluate whether the same `addr` is processed multiple times and decide how to handle such cases (either skip it, log it, or re-evaluate it after a certain timeout).
+
+3. Review the calling function `walk_pte_range` to ensure that it properly updates the `next` address when returning successful execution.
+
+ORIGINAL CODE:
+```c
+	continue;
+
+	split_huge_page_pmd(walk->mm, pmd);
+	if (pmd_none_or_clear_bad(pmd))
+		goto again;
+	err = walk_pte_range(pmd, addr, next, walk);
+	if (err)
+		break;
+```

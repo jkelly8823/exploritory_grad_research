@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Unintended memory access and potential access control issue.
+
+EXPLANATION:
+The vulnerability lies in the fact that the code does not check if the `dd->status` pointer is valid before passing it to the `kvirt_to_phys` function. This could lead to unintended memory access and potentially reveal sensitive information or cause the program to crash.
+
+Furthermore, the code checks for the `VM_WRITE` flag, but it does not check if the current operation is allowed to read memory. This could potentially allow an attacker to read sensitive memory locations if the `VM_WRITE` flag is not set.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add a null check for the `dd->status` pointer before passing it to the `kvirt_to_phys` function. Additionally, consider adding a check to ensure that the current operation is allowed to read memory, even if the `VM_WRITE` flag is not set. 
+
+For example:
+
+```c
+if (dd->status != NULL && (flags & VM_READ) || !(flags & VM_WRITE)) {
+    memaddr = kvirt_to_phys((void *)dd->status);
+} else {
+    ret = -EPERM;
+    goto done;
+}
+```
+
+ORIGINAL CODE:
+```c
+	vmf = 1;
+	break;
+	case STATUS:
+		if (flags & VM_WRITE) {
+			ret = -EPERM;
+			goto done;
+		}
+		memaddr = kvirt_to_phys((void *)dd->status);
+```

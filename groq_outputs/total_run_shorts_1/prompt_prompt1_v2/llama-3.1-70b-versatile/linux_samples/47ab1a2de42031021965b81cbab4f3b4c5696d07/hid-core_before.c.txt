@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 8-13
+VULNERABILITY_DESCRIPTION:
+ Null pointer dereferences, potential memory leaks, and double-free vulnerabilities are present in the given code snippet.
+
+EXPLANATION:
+The code uses pointer arithmetic and dynamically allocates memory using kzalloc. However, the code does not properly check if the dynamically allocated memory is null before using it. This could potentially lead to a null pointer dereference.
+
+Additionally, the code does not check if the report and report_enum pointers are null before using them. If these pointers are null, it could also lead to a null pointer dereference.
+
+Furthermore, the code uses a nested loop to free reports. If the report pointer is null, the code does not check for it before freeing. This could lead to a null pointer dereference. 
+
+Most concerningly, the code assigns the pointer report_enum to a local variable, also named report_enum, which shadows the outer report_enum. This can cause unexpected behavior. In the given code snippet, it seems like this was done by accident, as the outter variable report_enum is never used again in the snippet. However, this is an example of confusing code.
+
+Moreover, the code in the switch statement does not use the kzalloc'd report, and then the code snippet does not free the kzalloc'd report in the event it assigns a valid value to parser->global.report_id. This could result in a memory leak.
+
+Lastly, it appears the code tries to handle the instance where a report_id is 0. However, this code does not free the report that was allocated with kzalloc before it returns -1. This is a memory leak.
+
+RECOMMENDATIONS:
+
+1. Check if dynamically allocated memory is null before using it. 
+   Use if (report == NULL) before using the report pointer.
+
+2. Check if the report_enum and report pointers are null before using them. 
+   Use if (report_enum == NULL) and if (report == NULL) before using these pointers.
+
+3. Do not shadow variables with the same names. 
+   Rename either the outer report_enum or the inner report_enum.
+
+4. In the event the kzalloc'd report is not used, free the kzalloc'd report in the switch.
+   Use kfree(report) after testing whether or not the variable is null.
+
+5. Do not perform free operations on the report in nested loops that access the same report.
+   Use only one loop to free the reports.
+
+6. Consider error handling in the event of kzalloc failure.
+
+7. Consider securing the return values to prevent an invalid report_id.
+
+ORIGINAL CODE:
+```c
+struct hid_report_enum *report_enum = device->report_enum + type;
+struct hid_report *report;
+
+if (report_enum->report_id_hash[id])
+	return report_enum->report_id_hash[id];
+
+report = kzalloc(sizeof(struct hid_report), GFP_KERNEL);
+
+case HID_GLOBAL_ITEM_TAG_REPORT_ID:
+	parser->global.report_id = item_udata(item);
+	if (parser->global.report_id == 0) {
+		hid_err(parser->device, "report_id 0 is invalid\n");
+		return -1;
+	}
+	return 0;
+
+for (i = 0; i < HID_REPORT_TYPES; i++) {
+	struct hid_report_enum *inner_report_enum = device->report_enum + i;
+
+	for (j = 0; j < 256; j++) {
+		struct hid_report *inner_report = inner_report_enum->report_id_hash[j];
+		if (inner_report)
+			hid_free_report(inner_report);
+	}
+```

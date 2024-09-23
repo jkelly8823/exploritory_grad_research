@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Resource Consumption and Input Validation.
+
+The code does not properly sanitize and validate user input from untrusted sources for memory mapping. There is no input validation or sanitization on `interp_elf_ex->e_type`, `load_addr_set`, `current->flags`, and `no_base` variables. These variables are used to calculate memory mapping parameters and might lead to some form of resource consumption or execution of arbitrary memory locations. Moreover, the code uses a fixed address (`ELF_ET_DYN_BASE`) to map executable code, which may lead to conflicts and crashes when the specified address range is already occupied.
+
+EXPLANATION:
+This vulnerability can occur if external input can influence the decision of whether to map memory as executable. This can be exploited by an attacker to execute arbitrary code in the context of the vulnerable process.
+
+Specifically, on line 1, the variable `interp_elf_ex->e_type` is used to determine the type of ELF object being mapped, and if it's an `ET_DYN` object, `MAP_FIXED` is set in `elf_flags`. However, line 7 uses `current->flags` which can cause execution at fixed addresses. An attacker controlling these variables can manipulate them to execute malicious code.
+
+RECOMMENDATIONS:
+
+1. Validate inputs - Ensure that `interp_elf_ex->e_type`, `load_addr_set`, `current->flags`, and `no_base` are validated and sanitized properly to prevent malicious or tainted inputs.
+2. Avoid fixed addresses - Utilize address space layout randomization (ASLR) and randomize base addresses.
+3. Implement least privilege - Limit CAPabilities as much as possible for userspace, and minimize privilege escalations in code.
+
+ORIGINAL CODE:
+```c
+} else
+	map_addr = vm_mmap(filep, addr, size, prot, type, off);
+
+	return(map_addr);
+}
+
+#endif /* !elf_map */
+				elf_prot |= PROT_EXEC;
+			vaddr = eppnt->p_vaddr;
+			if (interp_elf_ex->e_type == ET_EXEC || load_addr_set)
+				elf_type |= MAP_FIXED;
+			else if (no_base && interp_elf_ex->e_type == ET_DYN)
+				load_addr = -vaddr;
+
+			map_addr = elf_map(interpreter, load_addr + vaddr,
+		 * the ET_DYN load_addr calculations, proceed normally.
+		 */
+		if (loc->elf_ex.e_type == ET_EXEC || load_addr_set) {
+			elf_flags |= MAP_FIXED;
+		} else if (loc->elf_ex.e_type == ET_DYN) {
+			/*
+			 * This logic is run once for the first LOAD Program
+			 * Header for ET_DYN binaries to calculate the
+				load_bias = ELF_ET_DYN_BASE;
+				if (current->flags & PF_RANDOMIZE)
+					load_bias += arch_mmap_rnd();
+				elf_flags |= MAP_FIXED;
+			} else
+				load_bias = 0;
+
+			/*
+			(eppnt->p_filesz +
+			 ELF_PAGEOFFSET(eppnt->p_vaddr)),
+			PROT_READ | PROT_WRITE | PROT_EXEC,
+			MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE,
+			(eppnt->p_offset -
+			 ELF_PAGEOFFSET(eppnt->p_vaddr)));
+	if (error != ELF_PAGESTART(eppnt->p_vaddr))
+		goto out_free_ph;
+```

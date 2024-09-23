@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+ The code uses an ambiguous ternary conditional expression with regards to IS_ENABLED(CONFIG_ARM64) and arch_timer_use_virtual, but missing an access control or validation check around arch_timer_read_counter's function assignments.
+
+EXPLANATION:
+This snippet appears to be written in C. It checks if the system has a specific type of timer and then sets `arch_timer_read_counter` based on that condition. However, line 3 `if (IS_ENABLED(CONFIG_ARM64) || arch_timer_use_virtual)` lacks any form of input validation or sanitization on the variable 'arch_timer_use_virtual'. This lack of input validation could allow an adversary to manipulate the timer or other critical system components if 'arch_timer_use_virtual' is not properly validated elsewhere in the code. Furthermore, without seeing the full code, we have to assume it's safe to set 'arch_timer_read_counter' without synchronization as this might open a race condition vulnerability where if it's set at the right/wrong time, all sorts of undesirable outcomes could occur.
+
+RECOMMENDATIONS:
+Aim to reduce this ambiguity by rewriting the ternary conditionals to multi line functions with easy-to-read syntax. Implement explicit access control or validation on the assignment of 'arch_timer_read_counter' to secure the timer. Preferably use synchronization around the assignments. Below is an updated example:
+
+```c
+void set_timer_counter_type(int type) {
+    if (type & ARCH_CP15_TIMER) {
+        if (IS_ENABLED(CONFIG_ARM64) || is_arch_timer_virtual_enabled()) {
+            set_timer_counter(arch_counter_get_cntvct);
+        } else {
+            set_timer_counter(arch_counter_get_cntpct);
+        }
+    }
+}
+
+// Assume that this function exists in another part of the code
+bool is_arch_timer_virtual_enabled() {
+    // Perform all the necessary checks and validation
+    // to confirm that the virtual timer is in use and
+    // ready to be utilized.
+}
+
+// Assume that this function exists in another part of the code
+void set_timer_counter(void (*timer_get_func)(void)) {
+    // Apply synchronization
+    // if 'lock_timer' exists and is required by the system
+    lock_timer();
+    arch_timer_read_counter = timer_get_func;
+    unlock_timer();
+}
+```
+ORIGINAL CODE:
+```
+	/* Register the CP15 based counter if we have one */
+	if (type & ARCH_CP15_TIMER) {
+		if (IS_ENABLED(CONFIG_ARM64) || arch_timer_use_virtual)
+			arch_timer_read_counter = arch_counter_get_cntvct;
+		else
+			arch_timer_read_counter = arch_counter_get_cntpct;
+	} else {
+```

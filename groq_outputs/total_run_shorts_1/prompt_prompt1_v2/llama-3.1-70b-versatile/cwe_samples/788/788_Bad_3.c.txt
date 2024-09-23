@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability and Unbounded Copy
+
+EXPLANATION:
+The given code snippet is vulnerable to a buffer overflow vulnerability and unbounded copy. In lines 9-14, the code snippet copies the contents of the `msg->msgBody` array into the `message` array without checking the length of `msg->msgBody` against the size of the `message` array. If `msg->msgBody` is longer than `MESSAGE_SIZE`, it will cause a buffer overflow in `message`, potentially leading to arbitrary code execution or crashes. 
+
+Additionally, there is a potential out-of-bounds access in line 12, as `msg->msgLength` may be larger than `MESSAGE_SIZE`, but the access to `msg->msgBody[index]` is not checked against this boundary. This could result in undefined behavior.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, we should ensure that the length of `msg->msgBody` does not exceed `MESSAGE_SIZE` before copying it into `message`. This can be achieved by using a secure copy function like `strncpy` and checking the result of the copy operation. Additionally, the bounds of the `msg->msgBody` array should be checked before accessing it.
+
+Here is an example of how the fixed code might look:
+
+```c
+// ...
+
+// copy message body into string for processing
+int message_length = msg->msgLength;
+if (message_length >= MESSAGE_SIZE) {
+    // Handle the case where the message length is too long
+    // For example, truncate the message or return an error
+    message_length = MESSAGE_SIZE - 1; // leave space for the null terminator
+}
+
+strncpy(message, msg->msgBody, message_length);
+message[message_length] = '\0';
+
+// process message
+success = processMessage(message);
+
+// ...
+```
+
+
+ORIGINAL CODE:
+
+
+                  int processMessageFromSocket(int socket) {
+                        int success;
+                           char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+                           
+                           // get message from socket and store into buffer
+                           
+                           
+                           //Ignoring possibliity that buffer > BUFFER_SIZE
+                           if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+                              
+                                 
+                                 // place contents of the buffer into message structure
+                                 ExMessage *msg = recastBuffer(buffer);
+                                 
+                                 // copy message body into string for processing
+                                 int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+                                 
+                                 // process message
+                                 success = processMessage(message);
+                           }return success;
+                     }
+               
+               

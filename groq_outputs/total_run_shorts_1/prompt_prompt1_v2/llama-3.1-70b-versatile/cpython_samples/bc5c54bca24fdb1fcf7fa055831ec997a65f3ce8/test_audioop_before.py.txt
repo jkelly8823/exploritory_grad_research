@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Insecure Input Validation/Arbitrary Input to audioop.findmax function.
+
+EXPLANATION:
+The vulnerability arises in the line where the audioop.findmax function is called with a malicious input value '-2392392' which is an out of bounds value. This could potentially lead to a denial-of-service (DoS) or arbitrary code execution. Additionally, the string is created by joining all ASCII characters (0-255) into one string, making it a large and arbitrary input to the audioop.findmax function.
+
+However, upon further inspection it appears this is intended as a test for an exception being thrown for an over-large 'fragsize'; audioop.findmax's second argument should be within -32768 and -1.
+
+RECOMMENDATIONS:
+The input validation should be tightened for the 'fragsize' argument to the audioop.findmax function. Here is an example of input validation:
+
+    def test_max(self):
+        for i in range(32768, -32768-1, -1):
+            if i == 0:
+                continue  # Not sure if findmax can handle a 'fragsize' of 0
+            if i < -32768 or i <= -1:
+                self.assertRaises(audioop.error,
+                    audioop.findmax, ''.join(chr(x) for x in range(256)), i)
+            else:
+                audioop.findmax(''.join(chr(x) for x in range(256)), i) #Test that frag-size (i) does not cause an exception when legitimate.
+
+Note that since audioop is an extension built over C functions it might require directly accessing the C libraries themselves.
+
+ORIGINAL CODE:
+data = [gendata1(), gendata2(), gendata4()]
+
+class TestAudioop(unittest.TestCase):
+
+    def test_max(self):
+        self.assertRaises(audioop.error,
+            audioop.findmax, ''.join(chr(x) for x in range(256)), -2392392)
+
+def test_main():
+    run_unittest(TestAudioop)
+
+if __name__ == '__main__':

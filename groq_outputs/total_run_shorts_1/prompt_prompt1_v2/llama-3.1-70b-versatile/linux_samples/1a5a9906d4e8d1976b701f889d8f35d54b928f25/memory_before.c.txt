@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+A potential use-after-free vulnerability exists in the provided code snippet. 
+
+EXPLANATION:
+The vulnerability arises from the potential for the `vma` structure to be freed while the current thread still holds a reference to it. This occurs when the `zap_huge_pmd` function returns early, causing the loop to continue without taking any action to prevent the `vma` structure from being freed.
+
+In the line marked as 5, `zap_huge_pmd(tlb, vma, pmd, addr)`, if the `zap_huge_pmd` function fails, the code continues to execute without acquiring a new reference to `vma`. However, if the current thread doesn't hold a reference to `vma` and `vma` is freed in the mean time, a use-after-free vulnerability may occur.
+
+Additionally, the line `split_huge_page_pmd(vma->vm_mm, pmd);` can cause issues if `vma` does not hold a reference to `vma->vm_mm` because `vma->vm_mm` might have been set to null in the meantime. 
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, ensure that the current thread holds a reference to the `vma` structure until it is no longer needed. This can be achieved by adding a call to `vmacquire(vma)` before entering the loop and a call to `vmrelease(vma)` after exiting the loop.
+
+Also, references to `vma->vm_mm` must be ensured until it is not used anymore. 
+
+ORIGINAL CODE:
+```c
+do {
+	next = pmd_addr_end(addr, end);
+	if (pmd_trans_huge(*pmd)) {
+		if (next-addr != HPAGE_PMD_SIZE) {
+			VM_BUG_ON(!rwsem_is_locked(&tlb->mm->mmap_sem));
+			split_huge_page_pmd(vma->vm_mm, pmd);
+		} else if (zap_huge_pmd(tlb, vma, pmd, addr))
+			continue;
+		/* fall through */
+	}
+	if (pmd_none_or_clear_bad(pmd))
+		continue;
+	next = zap_pte_range(tlb, vma, pmd, addr, next, details);
+	cond_resched();
+} while (pmd++, addr = next, addr != end);
+
+return addr;
+```

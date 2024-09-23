@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 17
+VULNERABILITY_DESCRIPTION:
+A use-after-free vulnerability.
+
+EXPLANATION:
+The `work` structure is allocated memory using `kvzalloc` and then assigned to different members. However, after the structure is freed by `kfree(w)`, its members are still accessed and used. Specifically, `work->sg_list` and `work->num_sge` are passed to `mlx5_ib_prefetch_sg_list` and `work->dev` is checked if it's registered in the preceding if statement, but before that `kfree(w)` is called.
+
+However, in the given code snippet, the call to `kfree(w)` is made before exiting the function and accessing `work` members in the provided code is done in a separate function `mlx5_ib_advise_mr_prefetch`.  If we consider it a different code path, then there might not be an issue.
+
+However, there is an issue here. The provided snippet is checking for a condition `dev->ib_dev.reg_state != IB_DEV_REGISTERED` and returning an error code. Later on, another part of the code allocates memory for `work` and calls `mlx5_ib_prefetch_sg_list` if the state is registered. Between the checks, the state could have been changed to a different value. A potential TOCTOU issue exists.
+
+RECOMMENDATIONS:
+1. Ensure the state check `dev->ib_dev.reg_state != IB_DEV_REGISTERED` is done right before the `mlx5_ib_prefetch_sg_list` call. 
+
+However, considering the direct contextless call path, no use after free issues will occur.
+
+Also consider fixing/ strengthening the checks around the calls of the functions which potentially holds user inputted data, as once the TOCTOU( Time of check to time of use issue) gets handled we have no other such findings.
+
+ORIGINAL CODE:
+
+```c
+struct prefetch_mr_work *w =
+	container_of(work, struct prefetch_mr_work, work);
+
+if (w->dev->ib_dev.reg_state == IB_DEV_REGISTERED)
+	mlx5_ib_prefetch_sg_list(w->dev, w->pf_flags, w->sg_list,
+				 w->num_sge);
+
+kfree(w);
+}
+
+int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+	return mlx5_ib_prefetch_sg_list(dev, pf_flags, sg_list,
+						num_sge);
+
+if (dev->ib_dev.reg_state != IB_DEV_REGISTERED)
+	return -ENODEV;
+
+work = kvzalloc(struct_size(work, sg_list, num_sge), GFP_KERNEL);
+if (!work)
+	return -ENOMEM;
+
+memcpy(work->sg_list, sg_list, num_sge * sizeof(struct ib_sge));
+
+work->dev = dev;
+work->pf_flags = pf_flags;
+work->num_sge = num_sge;
+```

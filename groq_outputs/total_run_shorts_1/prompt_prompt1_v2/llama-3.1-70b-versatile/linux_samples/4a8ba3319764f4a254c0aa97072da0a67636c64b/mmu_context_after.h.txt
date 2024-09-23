@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Insufficient Input Validation
+
+EXPLANATION:
+The code snippet appears to be using `unlikely` to apply a conditional based on whether MPX (Memory Protection eXtension) is enabled in the CPU. However, within the conditional block, it calls `mpx_notify_unmap` without validating its parameters. This may potentially lead to null pointer dereferences or other issues if `mm`, `vma`, `start`, or `end` are not properly validated before being passed to `mpx_notify_unmap`. Additionally, there may be potential issues with integer overflows on the `start` and `end` parameters if they are not properly sanitized.
+
+RECOMMENDATIONS:
+Add input validation for the parameters `mm`, `vma`, `start`, and `end` before calling `mpx_notify_unmap`. Check that these parameters are non-null and valid (i.e., they do not overflow) before proceeding with the call. This will help prevent potential crashes or security vulnerabilities.
+
+Additionally, consider adding error handling for the case when input validation fails.
+
+ORIGINAL CODE:
+
+static inline void arch_unmap(struct mm_struct *mm, struct vm_area_struct *vma,
+			      unsigned long start, unsigned long end)
+{
+	/*
+	 * mpx_notify_unmap() goes and reads a rarely-hot
+	 * cacheline in the mm_struct.  That can be expensive
+	 * enough to be seen in profiles.
+	 *
+	 * The mpx_notify_unmap() call and its contents have been
+	 * observed to affect munmap() performance on hardware
+	 * where MPX is not present.
+	 *
+	 * The unlikely() optimizes for the fast case: no MPX
+	 * in the CPU, or no MPX use in the process.  Even if
+	 * we get this wrong (in the unlikely event that MPX
+	 * is widely enabled on some system) the overhead of
+	 * MPX itself (reading bounds tables) is expected to
+	 * overwhelm the overhead of getting this unlikely()
+	 * consistently wrong.
+	 */
+	if (unlikely(cpu_feature_enabled(X86_FEATURE_MPX)))
+		mpx_notify_unmap(mm, vma, start, end);
+}
+
+#endif /* _ASM_X86_MMU_CONTEXT_H */

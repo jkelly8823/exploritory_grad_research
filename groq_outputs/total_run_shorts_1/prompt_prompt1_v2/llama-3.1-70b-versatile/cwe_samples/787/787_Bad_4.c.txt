@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-13
+VULNERABILITY_DESCRIPTION:
+Buffer overflow and memory leaks
+
+EXPLANATION:
+The function `trimTrailingWhitespace` is vulnerable to buffer overflow and memory leaks. 
+
+In line 3, the function `malloc` is used to allocate memory for the `message` string. However, this memory is not freed before the function returns. This results in a memory leak.
+
+Additionally, the function does not check if the `malloc` call is successful before using the allocated memory. If `malloc` fails and returns `NULL`, the function will attempt to write to this null pointer, causing a null pointer dereference.
+
+Furthermore, in line 5, a variable length array `char message[length+1]` is declared. This shadow's the `message` variable declared in line 2. This can lead to confusion and is likely a bug.
+
+Moreover, the function does not check if the input string `strMessage` is null before accessing it, which can cause a null pointer dereference.
+
+Lastly, the function does not handle the case when the input string `strMessage` is an empty string. In this case, the while loop in line 12 will attempt to access memory outside the bounds of the `message` array.
+
+RECOMMENDATIONS:
+- Check the return value of `malloc` to ensure it is not `NULL` before using the allocated memory.
+- Use a more robust memory allocation function such as `calloc` that initializes the memory to zero.
+- Free the allocated memory before returning from the function.
+- Check if the input string `strMessage` is `NULL` before accessing it.
+- Handle the case when the input string `strMessage` is an empty string.
+- Remove the variable length array declaration in line 5.
+- Use `strncpy` or `memcpy` instead of a manual loop to copy the string.
+
+ORIGINAL CODE:
+```
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage;char *message = malloc(sizeof(char)*(length+1));
+       
+    // copy input string to a temporary string
+    char message[length+1];int index;for (index = 0; index < length; index++) {message[index] = strMessage[index];}message[index] = '\0';
+       
+    // trim trailing whitespace
+    int len = index-1;while (isspace(message[len])) {message[len] = '\0';len--;}
+       
+    // return string without trailing whitespace
+    retMessage = message;return retMessage;
+}
+```
+
+Possible fix:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    if (strMessage == NULL) {
+        return NULL;
+    }
+
+    char *message = calloc(length + 1, sizeof(char));
+    if (message == NULL) {
+        return NULL;
+    }
+
+    strncpy(message, strMessage, length);
+    message[length] = '\0';
+
+    // trim trailing whitespace
+    int len = length - 1;
+    while (len >= 0 && isspace(message[len])) {
+        message[len] = '\0';
+        len--;
+    }
+
+    char *retMessage = message;
+    return retMessage;
+}
+```
+Note that the fixed function still leaks memory, but this is left for the caller to handle, since it is common in C for the caller to be responsible for freeing allocated memory.

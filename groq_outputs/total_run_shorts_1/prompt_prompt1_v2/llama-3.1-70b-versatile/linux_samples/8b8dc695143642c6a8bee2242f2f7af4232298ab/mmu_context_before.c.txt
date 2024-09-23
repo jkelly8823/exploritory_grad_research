@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11, 12-16
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to potential memory leaks due to improper error handling in memory allocation.
+
+EXPLANATION:
+In the provided code snippet, memory is allocated using kmalloc() for the struct hash_mm_context and struct subpage_prot_table. However, in case the second kmalloc() call fails, the allocated memory for mm->context.hash_context is freed using kfree(). But if the first kmalloc() call fails, the allocated memory for mm->context.hash_context->spt is not freed because the inner block with kfree() is commented out. Although it is commented out, it may be commented out mistakenly because the actual implementation is missing. This situation might lead to memory leaks if not handled properly. 
+
+Even though it seems like memory is freed at both error paths, it's unclear because one of the paths is commented out. It would be better to handle similar situation via more elegant and straightforward error handling. This is a piece of code with a high risk of memory leaks which can be prevented with careful coding.
+
+RECOMMENDATIONS:
+- Ensure that all allocated memory is freed in error paths to prevent memory leaks.
+- Use goto or other techniques to simplify error handling code and avoid repeated calls to ida_free and kfree.
+- Remove the commented code if it is not intended for use and follow standard coding guidelines.
+- Consider using more robust memory management APIs like devm_kmalloc.
+
+ORIGINAL CODE:
+```c
+void slb_setup_new_exec(void);
+
+static int hash__init_new_context(struct mm_struct *mm)
+{
+	int index;
+
+	index = hash__alloc_context_id();
+	if (index < 0)
+		return index;
+
+	mm->context.hash_context = kmalloc(sizeof(struct hash_mm_context),
+					   GFP_KERNEL);
+	if (!mm->context.hash_context) {
+		ida_free(&mmu_context_ida, index);
+		return -ENOMEM;
+	}
+
+	/*
+	 * The old code would re-promote on fork, we don't do that when using
+	 * slices as it could cause problem promoting slices that have been
+			mm->context.hash_context->spt = kmalloc(sizeof(struct subpage_prot_table),
+								GFP_KERNEL);
+			if (!mm->context.hash_context->spt) {
+				ida_free(&mmu_context_ida, index);
+				kfree(mm->context.hash_context);
+				return -ENOMEM;
+			}
+		}
+#endif
+
+	}
+
+	pkey_mm_init(mm);
+	return index;
+```

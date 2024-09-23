@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 40-41, 45-46
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential integer overflow in the `nested_vmx_check_io_bitmaps` and `nested_vmx_setup_ctls_msrs` functions.
+
+EXPLANATION:
+In the `nested_vmx_check_io_bitmaps` function, the `size` variable is assigned a value from the `exit_qualification` and is then subtracted from in a while loop. If the `exit_qualification` value is large, it could cause the `size` variable to overflow, leading to an incorrect calculation.
+
+In the `nested_vmx_setup_ctls_msrs` function, the `msrs->pinbased_ctls_high` variable is being assigned a value using bitwise OR operators. If the values being ORed together exceed the maximum value that can be stored in `msrs->pinbased_ctls_high`, it could cause an integer overflow.
+
+RECOMMENDATIONS:
+To fix the potential integer overflow in `nested_vmx_check_io_bitmaps`, you can add a check to ensure that the `size` variable does not exceed the maximum allowed value before the while loop. You can also consider using a more robust data type, such as `size_t` or `uint64_t`, to store the `size` variable.
+
+To fix the potential integer overflow in `nested_vmx_setup_ctls_msrs`, you can check the maximum allowed value for `msrs->pinbased_ctls_high` and ensure that the values being ORed together do not exceed this value. You can also consider using a more robust data type, such as `uint64_t`, to store the `msrs->pinbased_ctls_high` variable.
+
+ORIGINAL CODE:
+```
+bool nested_vmx_check_io_bitmaps(struct kvm_vcpu *vcpu, unsigned int port,
+				 int size)
+{
+	...
+	while (size > 0) {
+		return false;
+	}
+}
+
+void nested_vmx_setup_ctls_msrs(struct nested_vmx_msrs *msrs, u32 ept_caps)
+{
+	...
+	msrs->pinbased_ctls_high |=
+		PIN_BASED_ALWAYSON_WITHOUT_TRUE_MSR |
+		PIN_BASED_VMX_PREEMPTION_TIMER;
+}
+```

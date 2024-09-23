@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability when reserving space in the netlink skb buffer.
+
+EXPLANATION:
+The `nla_reserve` function is used to reserve space in the netlink skb buffer. However, the size passed to this function is not validated to prevent potential integer overflows. This could allow an attacker to cause undefined behavior or potential crashes.
+
+In the given code snippet, `skb` is an `sk_buff` structure that represents a socket buffer. The `attrtype` and `0` arguments passed to `nla_reserve` potentially allow attacker-controlled values to define the buffer size. This lack of input validation potentially allows malicious exploitation of integer overflow vulnerabilities.
+
+RECOMMENDATIONS:
+To address this vulnerability, implement proper validation and error checking on the values passed to `nla_reserve`. This should involve verifying that the requested reservation size is within a valid range to avoid potential integer overflows. Implement input validation to prevent malicious buffer sizes.
+
+Here's an example of how this could be implemented:
+
+```c
+int requested_size = nla_total_size(sizeof(struct your_data));
+
+if (requested_size > skb_tailroom(skb)) {
+    return -EMSGSIZE; // Handle error condition: not enough buffer space
+}
+
+nla_reserve(skb, attrtype, requested_size);
+```
+
+ORIGINAL CODE:
+
+```c
+EXPORT_SYMBOL_GPL(sock_diag_put_meminfo);
+
+int sock_diag_put_filterinfo(bool may_report_filterinfo, struct sock *sk,
+                             struct sk_buff *skb, int attrtype)
+{
+    struct sock_fprog_kern *fprog;
+    struct sk_filter *filter;
+    unsigned int flen;
+    int err = 0;
+
+    if (!may_report_filterinfo) {
+        nla_reserve(skb, attrtype, 0);
+        return 0;
+    }
+```

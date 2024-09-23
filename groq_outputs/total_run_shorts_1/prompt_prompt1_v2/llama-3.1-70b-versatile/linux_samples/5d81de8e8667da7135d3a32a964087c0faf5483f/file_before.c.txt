@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-10
+VULNERABILITY_DESCRIPTION:
+The vulnerability in this code snippet is related to a missing bounds check on the 'nr_pages' variable, which is used to iterate through 'wdata->pages'. This could potentially lead to a buffer overflow when copying data from user space to kernel space.
+
+EXPLANATION:
+The function uses 'nr_pages' to iterate through 'wdata->pages', and copies data from user space to kernel space with 'iov_iter_copy_from_user'. However, there is no bounds check on 'nr_pages' to ensure that it doesn't exceed the actual size of 'wdata->pages'. This could lead to an out-of-bounds write if the user provides a large 'nr_pages' value.
+
+Additionally, the function uses 'iov_iter_advance' to advance the iterator 'it' after copying data. However, there is no check to ensure that the advance won't exceed the actual size of the data. This could lead to an invalid memory access or page fault.
+
+RECOMMENDATIONS:
+1. Add bounds checking on 'nr_pages' before using it to iterate through 'wdata->pages'.
+   For example: if (nr_pages > MAX_PAGE_CNT) nr_pages = MAX_PAGE_CNT;
+
+2. Use a safer way to advance the iterator 'it' and ensure it does not exceed the actual size of the data.
+   For example: iov_iter_advance(&it, min(copied, size));
+
+3. Consider using memcpy_fromiovec and memcpy_tobuf_user functions that handle user space and kernel space data transfers in a more secure way.
+
+ORIGINAL CODE:
+	unsigned long nr_segs, loff_t *poffset)
+{
+	unsigned long nr_pages, i;
+	size_t copied, len, cur_len;
+	ssize_t total_written = 0;
+	loff_t offset;
+	struct iov_iter it;
+	struct cifsFileInfo *open_file;
+
+		save_len = cur_len;
+		for (i = 0; i < nr_pages; i++) {
+			copied = min_t(const size_t, cur_len, PAGE_SIZE);
+			copied = iov_iter_copy_from_user(wdata->pages[i], &it,
+							 0, copied);
+			cur_len -= copied;
+			iov_iter_advance(&it, copied);
+		}
+		cur_len = save_len - cur_len;
+
+		wdata->sync_mode = WB_SYNC_ALL;
+		wdata->nr_pages = nr_pages;
+		wdata->offset = (__u64)offset;
+		wdata->cfile = cifsFileInfo_get(open_file);

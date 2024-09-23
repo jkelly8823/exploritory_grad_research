@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-23
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability.
+
+EXPLANATION:
+In the code snippet, there is a potential integer overflow vulnerability when handling lengths. The code uses a `for` loop to accumulate the length from the data, but it does not check for potential overflows when shifting and adding to the `len` variable. This could lead to an integer overflow, allowing an attacker to potentially manipulate the `dp` pointer, causing out-of-bounds memory access or other unintended behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can add checks to prevent integer overflows when accumulating the length. Here is a possible fix:
+```c
+n = len - 0x80;
+if (unlikely(n > sizeof(size_t) - 1))
+    goto length_too_long;
+if (unlikely(n > datalen - dp))
+    goto data_overrun_error;
+size_t accumulated_len = 0;
+for (n = n; n > 0; n--) {
+    len <<= 8;
+    if (accumulated_len > (SIZE_MAX - len) / 256)
+        goto length_too_long; // Prevent integer overflow
+    accumulated_len += len;
+    accumulated_len |= data[dp++];
+}
+dp += accumulated_len;
+goto next_tag;
+```
+ORIGINAL CODE:
+```c
+    /* Extract a tag from the data */
+    tag = data[dp++];
+    if (tag == 0) {
+        /* It appears to be an EOC. */
+        if (data[dp++] != 0)
+            goto invalid_eoc;
+        if (--indef_level <= 0) {
+
+    /* Extract the length */
+    len = data[dp++];
+    if (len <= 0x7f) {
+        dp += len;
+        goto next_tag;
+    }
+
+    if (unlikely(len == ASN1_INDEFINITE_LENGTH)) {
+        /* Indefinite length */
+        if (unlikely((tag & ASN1_CONS_BIT) == ASN1_PRIM << 5))
+    }
+
+    n = len - 0x80;
+    if (unlikely(n > sizeof(size_t) - 1))
+        goto length_too_long;
+    if (unlikely(n > datalen - dp))
+        goto data_overrun_error;
+    for (len = 0; n > 0; n--) {
+        len <<= 8;
+        len |= data[dp++];
+    }
+    dp += len;
+    goto next_tag;
+
+length_too_long:
+```

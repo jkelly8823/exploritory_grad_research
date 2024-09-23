@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Kernel Null Pointer Dereference
+
+EXPLANATION:
+The code snippet is vulnerable to a null pointer dereference. The kzalloc function is used to allocate memory for a new aggregate, but the code does not check if the allocation was successful before returning -ENOBUFS. However, if kzalloc returns NULL, the function will return without freeing any resources that may have been allocated earlier, such as memory for other structures in the qdisc_priv, potentially leading to memory leaks. Furthermore, returning an error without freeing the resources allocated earlier, may lead to unexpected behavior in the calling code. Also, a return -ENOBUFS indicates an "out of memory" error but, if kzalloc returns NULL, the actual error is a null pointer dereference.
+
+In the correct code, if kzalloc fails, then we should deallocate memory that has already been allocated before returning -ENOBUFS.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should ensure that all memory allocated is freed in the event of an allocation failure and handle the case where kzalloc returns NULL correctly.
+
+ORIGINAL CODE:
+```
+			u32 lmax)
+{
+	struct qfq_sched *q = qdisc_priv(sch);
+	struct qfq_aggregate *new_agg = qfq_find_agg(q, lmax, weight);
+
+	if (new_agg == NULL) { /* create new aggregate */
+		new_agg = kzalloc(sizeof(*new_agg), GFP_ATOMIC);
+		if (new_agg == NULL)
+			return -ENOBUFS;
+```
+
+Example of fixed code:
+
+```c
+			u32 lmax)
+{
+	struct qfq_sched *q = qdisc_priv(sch);
+	struct qfq_aggregate *new_agg = qfq_find_agg(q, lmax, weight);
+
+	if (new_agg == NULL) { /* create new aggregate */
+		new_agg = kzalloc(sizeof(*new_agg), GFP_ATOMIC);
+		if (new_agg == NULL) {
+			/* Handle any cleanup here */
+			return -ENOMEM; /* Preferably indicate the error with the right status value */
+		}
+```

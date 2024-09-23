@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION: 
+The `make_mmu_pages_available(vcpu)` function and the `__direct_map(vcpu, fault)` function are not checked for error conditions after the `lockdep_assert_held_write(&kvm->mmu_lock);` statement, potentially leading to a missing update on the lock when switching from a non-TDP MMU to a TDP MMU.
+EXPLANATION:
+The `lockdep_assert_held_write(&kvm->mmu_lock);` statement at the beginning of the code is used to ensure that the mmu_lock is held by the current thread. However, later on in the code, if the MMU is being used in TDP (Two Dimensional Paging) mode, it calls `read_unlock(&vcpu->kvm->mmu_lock);` when exiting the function using the `out_unlock` label. If an error occurs in the non-TDP MMU branch (i.e., the `make_mmu_pages_available(vcpu)` function or the `__direct_map(vcpu, fault)` function returns an error), the mmu_lock will not be re-acquired when switching from a non-TDP MMU to a TDP MMU in a subsequent iteration. This could potentially lead to issues if the TDP MMU is not expecting the lock to be in the state of a write lock.
+RECOMMENDATIONS:
+- Ensure that the `make_mmu_pages_available(vcpu)` and `__direct_map(vcpu, fault)` functions correctly handle the locking during error conditions.
+- Consider moving the `lockdep_assert_held_write(&kvm->mmu_lock);` check closer to the block of code that is using the lock in the TDP MMU mode.
+- If an error occurs in the non-TDP MMU branch, consider calling `write_lock(&kvm->mmu_lock)` before exiting the function if it will be used again in the TDP MMU branch.
+
+ORIGINAL CODE:
+
+```c
+{
+	bool list_unstable, zapped_root = false;
+
+	lockdep_assert_held_write(&kvm->mmu_lock);
+	trace_kvm_mmu_prepare_zap_page(sp);
+	++kvm->stat.mmu_shadow_zapped;
+	*nr_zapped = mmu_zap_unsync_children(kvm, sp, invalid_list);
+	*nr_zapped += kvm_mmu_page_unlink_children(kvm, sp, invalid_list);
+	if (is_page_fault_stale(vcpu, fault, mmu_seq))
+		goto out_unlock;
+
+	if (is_tdp_mmu_fault) {
+		r = kvm_tdp_mmu_map(vcpu, fault);
+	} else {
+		r = make_mmu_pages_available(vcpu);
+		if (r)
+			goto out_unlock;
+		r = __direct_map(vcpu, fault);
+	}
+
+out_unlock:
+	if (is_tdp_mmu_fault)
+		read_unlock(&vcpu->kvm->mmu_lock);
+```

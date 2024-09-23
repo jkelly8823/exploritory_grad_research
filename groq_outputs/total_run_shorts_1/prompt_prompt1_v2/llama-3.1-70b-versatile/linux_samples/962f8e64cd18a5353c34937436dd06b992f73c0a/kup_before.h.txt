@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability.
+
+EXPLANATION:
+The `allow_read_from_user` function allows reading data of size `size` from a user-provided buffer `from` without validating its size or bounds. This could lead to a buffer overflow vulnerability if not handled properly.
+
+RECOMMENDATIONS:
+* Validate the `size` parameter to ensure it is within a reasonable limit.
+* Ensure the user-provided buffer `from` has sufficient space to read `size` bytes of data, using methods such as bounds checking or kernel-based memory protection (e.g., access_ok(), __access_ok(), or user_memory_access_begin()).
+* Consider using kernel functions like copy_from_user() instead of implementating custom user-space data copying functions.
+
+ORIGINAL CODE:
+```c
+#define KUAP_CURRENT_WRITE	8
+#define KUAP_CURRENT		(KUAP_CURRENT_READ | KUAP_CURRENT_WRITE)
+
+#ifdef CONFIG_PPC64
+#include <asm/book3s/64/kup-radix.h>
+#endif
+#ifdef CONFIG_PPC_8xx
+#include <asm/nohash/32/kup-8xx.h>
+.macro kuap_check	current, gpr
+.endm
+
+#endif
+
+#else /* !__ASSEMBLY__ */
+
+void setup_kuap(bool disabled);
+#else
+static inline void setup_kuap(bool disabled) { }
+static inline void allow_user_access(void __user *to, const void __user *from,
+				     unsigned long size, unsigned long dir) { }
+static inline void prevent_user_access(void __user *to, const void __user *from,
+				       unsigned long size, unsigned long dir) { }
+static inline unsigned long prevent_user_access_return(void) { return 0UL; }
+static inline void restore_user_access(unsigned long flags) { }
+static inline bool
+bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
+{
+	return false;
+}
+#endif /* CONFIG_PPC_KUAP */
+
+static inline void allow_read_from_user(const void __user *from, unsigned long size)
+}

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+Resource leak due to incomplete error handling.
+EXPLANATION:
+The function `load_data` contains an error handling mechanism utilizing labels (`error`, `cleanup`). However, when jumping to `cleanup` directly with a successful initialization (i.e., `goto cleanup;` with `rv = 0`), the code doesn't free the memory allocated for `utcoff` and `dstoff`. In case of failure, the control jumps to `error` where these resources are freed. A potential resource leak might occur when these variables are not freed during successful executions, causing memory leaks.
+
+Additionally, `data_tuple` is initialized as `NULL`, but it is not checked if it was properly allocated/freed before and after being used (likely intended to be used in the omitted code).
+
+RECOMMENDATIONS:
+- Ensure all allocated resources are freed regardless of the initialization status.
+  Consider calling `free(utcoff)` and `free(dstoff)` before jumping to `cleanup;` in case of successful initialization.
+- Verify if `data_tuple` is properly allocated before using it.
+  Add a `Py_DECREF` call to decrease its reference count when it is no longer needed.
+
+ORIGINAL CODE:
+```c
+static int
+load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
+{
+    PyObject *data_tuple = NULL;
+
+    long *utcoff = NULL;
+    long *dstoff = NULL;
+        }
+    }
+
+    int rv = 0;
+    goto cleanup;
+error:
+    // These resources only need to be freed if we have failed, if we succeed
+    // in initializing a PyZoneInfo_ZoneInfo object, we can rely on its dealloc
+```

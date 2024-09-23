@@ -1,0 +1,117 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13, 43-48
+VULNERABILITY_DESCRIPTION:
+Potential data corruption due to concurrent memory access and lack of synchronization when updating shared variables.
+
+EXPLANATION:
+The code snippet appears to be part of a CPU initialization function. However, there are potential issues with concurrent memory access. In the code snippet, `cpu_start_id` and `cpu_start_ccount` are shared variables that are being updated and accessed by multiple threads or CPUs.
+
+The issue arises in the code snippet where `cpu_start_id` is updated and then immediately flushed to memory using `system_flush_invalidate_dcache_range`. However, this update is not synchronized, which means that other threads or CPUs may read stale values from `cpu_start_id` before the update is visible to them.
+
+Additionally, the code snippet attempts to synchronize the update of `cpu_start_ccount` using a busy-wait loop, but this is not a reliable synchronization mechanism and can lead to livelocks or starvation.
+
+Furthermore, the update of `cpu_start_id` in the loop at line 43-48 is not synchronized, and other threads or CPUs may read stale values from `cpu_start_id` before the update is visible to them.
+
+RECOMMENDATIONS:
+To fix these issues, we should use proper synchronization primitives, such as locks or atomic operations, to ensure that shared variables are updated and accessed in a thread-safe manner.
+
+Here's an example of how we can fix the update of `cpu_start_id`:
+
+```c
+#ifdef CONFIG_HOTPLUG_CPU
+spin_lock(&cpu_start_id_lock);
+cpu_start_id = cpu;
+spin_unlock(&cpu_start_id_lock);
+system_flush_invalidate_dcache_range((unsigned long)&cpu_start_id, sizeof(cpu_start_id));
+#endif
+```
+
+Similarly, we should use synchronization primitives to update and access `cpu_start_ccount`:
+
+```c
+while (!cpu_start_ccount) {
+	spin_lock(&cpu_start_ccount_lock);
+	ccount = cpu_start_ccount;
+	spin_unlock(&cpu_start_ccount_lock);
+	if (!ccount)
+		continue;
+}
+```
+
+Finally, we should use synchronization primitives to update `cpu_start_id` in the loop at line 43-48:
+
+```c
+while (time_before(jiffies, timeout)) {
+	spin_lock(&cpu_start_id_lock);
+	if (cpu_start_id == -cpu) {
+		platform_cpu_kill(cpu);
+		spin_unlock(&cpu_start_id_lock);
+		return;
+	}
+	spin_unlock(&cpu_start_id_lock);
+	system_invalidate_dcache_range((unsigned long)&cpu_start_id, sizeof(cpu_start_id));
+}
+```
+
+ORIGINAL CODE:
+```c
+{
+	unsigned i;
+
+	for (i = 0; i < max_cpus; ++i)
+		set_cpu_present(i, true);
+}
+
+void __init smp_init_cpus(void)
+	pr_info("%s: Core Count = %d\n", __func__, ncpus);
+	pr_info("%s: Core Id = %d\n", __func__, core_id);
+
+	for (i = 0; i < ncpus; ++i)
+		set_cpu_possible(i, true);
+}
+
+	int i;
+
+#ifdef CONFIG_HOTPLUG_CPU
+cpu_start_id = cpu;
+system_flush_invalidate_dcache_range(
+			(unsigned long)&cpu_start_id, sizeof(cpu_start_id));
+#endif
+	smp_call_function_single(0, mx_cpu_start, (void *)cpu, 1);
+
+	for (i = 0; i < 2; ++i) {
+			ccount = get_ccount();
+		while (!ccount);
+
+		cpu_start_ccount = ccount;
+
+		while (time_before(jiffies, timeout)) {
+			mb();
+			if (!cpu_start_ccount)
+				break;
+		}
+
+		if (cpu_start_ccount) {
+			smp_call_function_single(0, mx_cpu_stop,
+					(void *)cpu, 1);
+			cpu_start_ccount = 0;
+			return -EIO;
+		}
+	}
+	return 0;
+	pr_debug("%s: Calling wakeup_secondary(cpu:%d, idle:%p, sp: %08lx)\n",
+			__func__, cpu, idle, start_info.stack);
+
+	ret = boot_secondary(cpu, idle);
+	if (ret == 0) {
+		wait_for_completion_timeout(&cpu_running,
+				msecs_to_jiffies(1000));
+	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
+	while (time_before(jiffies, timeout)) {
+		system_invalidate_dcache_range((unsigned long)&cpu_start_id,
+				sizeof(cpu_start_id));
+		if (cpu_start_id == -cpu) {
+			platform_cpu_kill(cpu);
+			return;
+		}
+	}

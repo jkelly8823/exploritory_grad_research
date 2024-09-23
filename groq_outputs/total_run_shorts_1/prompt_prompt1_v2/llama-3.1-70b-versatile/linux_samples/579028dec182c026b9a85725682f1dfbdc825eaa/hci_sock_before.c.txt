@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 10
+VULNERABILITY_DESCRIPTION:
+A Use-After-Free vulnerability is present in the code.
+EXPLANATION:
+The code detaches sockets from an HCI device and then calls hci_dev_put(hdev), which presumably decreases the reference count of the device. However, the device 'hdev' is accessed before this point in the code, specifically in the if condition check and in the hci_dev_put function itself but via socket's hci_pi. This can result in a situation where the device 'hdev' is freed before all the sockets are detached, leading to a potential use-after-free vulnerability if hdev is accessed after hci_dev_put is called.
+
+Furthermore, 'hdev' might be valid at the moment it is checked in the if condition but still be invalid by the time it is actually put, because the pointer is not acquired with a mutex or lock that covers the entire operation from the check to the put.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a mechanism should be implemented to ensure the HCI device 'hdev' is not used after it has been freed. 
+
+- One possible fix is to move the call to hci_dev_put(hdev) outside the loop that iterates over all sockets and ensure it is called only after the loop is completed and the device has been detached from all sockets. 
+- Another option would be to acquire the reference to hdev from within the 'read_lock' and release the reference once the loop is completed, if feasible in the overall program context. 
+
+Additionally, consider using an access protection mechanism such as the one utilized for the sk_err and sk_state access above.
+
+ORIGINAL CODE:
+
+		/* Detach sockets from device */
+		read_lock(&hci_sk_list.lock);
+		sk_for_each(sk, &hci_sk_list.head) {
+			bh_lock_sock_nested(sk);
+			if (hci_pi(sk)->hdev == hdev) {
+				hci_pi(sk)->hdev = NULL;
+				sk->sk_err = EPIPE;
+				sk->sk_state = BT_OPEN;
+
+				hci_dev_put(hdev);
+			}
+			bh_unlock_sock(sk);
+		}
+		read_unlock(&hci_sk_list.lock);
+	}

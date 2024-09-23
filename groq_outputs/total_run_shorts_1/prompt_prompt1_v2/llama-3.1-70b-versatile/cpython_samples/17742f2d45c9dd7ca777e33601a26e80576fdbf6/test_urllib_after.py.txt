@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The code snippet demonstrates a DNS-based vulnerability that may allow an attacker to bypass the proxy.
+
+EXPLANATION:
+The code sets environment variables and checks proxy settings without validating or restricting the domains and ports in the proxy settings. An attacker could potentially manipulate the 'HTTP_PROXY' environment variable, set 'NO_PROXY' to include arbitrary domains or ports, and trick the application into resolving to an internal IP address or bypassing the proxy altogether.
+
+The test cases do not ensure that the proxy configurations are robust and correctly implemented. They do not follow the current recommended best practices for handling proxy configurations in Python, which suggests handling proxy settings through code and not through environment variables.
+
+Moreover, setting the domain directly in the code may raise security concerns, as it creates an opportunity for DNS rebinding attacks.
+
+RECOMMENDATIONS:
+To address these concerns, we recommend:
+
+* Always validate the input provided in the 'NO_PROXY' and 'HTTP_PROXY' variables before using them in your proxy settings.
+* Use secure configurations and do not rely solely on environment variables for configuring proxy settings.
+* Make sure to strip any suspicious characters in the domain names when handling proxy configurations.
+* For additional security, parse environments related to proxy more securely using a parsing library and applying stricter validation as per the requirements.
+
+ORIGINAL CODE:
+```python
+self.assertTrue(urllib.request.proxy_bypass_environment('anotherdomain.com:8888'))
+self.assertTrue(urllib.request.proxy_bypass_environment('newdomain.com:1234'))
+
+def test_proxy_cgi_ignore(self):
+    try:
+        self.env.set('HTTP_PROXY', 'http://somewhere:3128')
+        proxies = urllib.request.getproxies_environment()
+        self.assertEqual('http://somewhere:3128', proxies['http'])
+        self.env.set('REQUEST_METHOD', 'GET')
+        proxies = urllib.request.getproxies_environment()
+        self.assertNotIn('http', proxies)
+    finally:
+        self.env.unset('REQUEST_METHOD')
+        self.env.unset('HTTP_PROXY')
+
+def test_proxy_bypass_environment_host_match(self):
+    bypass = urllib.request.proxy_bypass_environment
+    self.env.set('NO_PROXY',
+                 'localhost, anotherdomain.com, newdomain.com:1234')
+```

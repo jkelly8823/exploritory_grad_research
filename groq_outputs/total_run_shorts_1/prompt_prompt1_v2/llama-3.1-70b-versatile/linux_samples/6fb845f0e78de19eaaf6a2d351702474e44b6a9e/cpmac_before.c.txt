@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Use of freed memory
+
+EXPLANATION:
+The line of concern is the first line of code where it attempts to access the len member of desc->skb after it has been freed. This is a result of the prior line where the pointer to desc->skb is freed.
+
+However, there is an issue at line 3 where we free the memory and then the else block follows. In the else block, it does attempt to use desc->skb.
+
+RECOMMENDATIONS:
+Best practice would be to set desc->skb to NULL immediately after accessing its members. This is not the case here because we may have tried to access desc->skb after it was freed, in the condition after we freed the memory.
+
+
+Here is a recommended fix for this code.
+Replace line 3 with
+desc->skb = NULL;
+dev_kfree_skb_irq(desc->skb);
+However this presents one issues for the "else" condition.
+
+Add the following line immediately before accessing the len member of desc->skb in the else condition.
+   if(desc->skb) {
+      // line of code accessing desc->skb
+    }
+
+Replace 
+netdev_dbg(dev, "sent 0x%p, len=%d\n", desc->skb, desc->skb->len);
+with
+    if(desc->skb){
+       netdev_dbg(dev, "sent 0x%p, len=%d\n", desc->skb, desc->skb->len);
+    }else{
+        netdev_dbg(dev, "sent  desc->skb NULL\n");
+    }
+
+ORIGINAL CODE:
+			netdev_dbg(dev, "sent 0x%p, len=%d\n",
+				   desc->skb, desc->skb->len);
+
+		dev_kfree_skb_irq(desc->skb);
+		desc->skb = NULL;
+		if (__netif_subqueue_stopped(dev, queue))
+			netif_wake_subqueue(dev, queue);
+	} else {

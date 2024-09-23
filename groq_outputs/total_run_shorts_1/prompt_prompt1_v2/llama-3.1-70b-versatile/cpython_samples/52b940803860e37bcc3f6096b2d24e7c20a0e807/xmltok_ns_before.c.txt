@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 158-162, 183
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential buffer overflow in the `NS(findEncoding)` function and a lack of error checking in the `XmlUtf8Convert` function.
+
+EXPLANATION:
+The `NS(findEncoding)` function uses a fixed-size buffer `buf` to store the converted string. However, the `XmlUtf8Convert` function does not check if the output pointer `p` exceeds the buffer size `ENCODING_MAX`. If the input string is too large, it may overflow the buffer, leading to a potential buffer overflow vulnerability. Additionally, the `XmlUtf8Convert` function returns a pointer to the beginning of the converted string without checking if the conversion was successful.
+
+In the `NS(XmlParseXmlDecl)` function, the `XmlUtf8Convert` function is called without error checking. If the conversion fails, the resulting pointer will be undefined, and the function may crash or produce unexpected results.
+
+RECOMMENDATIONS:
+1. Add bounds checking to the `XmlUtf8Convert` function to prevent buffer overflow. This can be done by checking if the output pointer `p` exceeds the buffer size `ENCODING_MAX`.
+2. Check the return value of `XmlUtf8Convert` in the `NS(findEncoding)` function to ensure that the conversion was successful.
+3. Consider using a dynamically allocated buffer instead of a fixed-size buffer to store the converted string.
+
+ORIGINAL CODE:
+```
+static const ENCODING *
+NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end)
+{
+#define ENCODING_MAX 128
+  char buf[ENCODING_MAX];
+  char *p = buf;
+  int i;
+  XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
+}
+
+int
+NS(XmlParseXmlDecl)(int isGeneralTextEntity,
+                    const ENCODING *enc,
+                    const char *ptr,
+                    const char *end,
+                    const char **badPtr,
+                    const char **versionPtr,
+                    const char **versionEndPtr,
+                    const char **encodingName,
+                    const ENCODING **encoding,
+                    int *standalone)
+{
+  return doParseXmlDecl(NS(findEncoding),
+                        isGeneralTextEntity,
+                        enc,
+                        ptr,
+                        end,
+                        badPtr,
+                        versionPtr,
+                        versionEndPtr,
+                        encodingName,
+                        encoding,
+                        standalone);
+}
+```

@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Unvalidated and Unsanitized Input
+
+EXPLANATION:
+The provided code snippet appears to be parsing an 802.11 element, potentially from a beacon frame or probe response. However, it does not validate the 'datalen' field of the sub-element before accessing its contents. This could lead to an out-of-bounds read if an improperly formatted sub-element is encountered. Additionally, the code only checks if 'sub->id' is not equal to 0 and 'sub->datalen' is less than 4, but does not check for any other invalid or unexpected values.
+
+RECOMMENDATIONS:
+It is recommended to add additional validation and sanitization checks for the sub-element's 'id' and 'datalen' fields. This could include checking that 'datalen' is not larger than the remaining buffer size, and that 'id' is within an expected range of values. Additionally, consider using safe string handling functions to prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+for_each_element_id(elem, WLAN_EID_MULTIPLE_BSSID, ie, ielen) {
+	if (elem->datalen < 4)
+		continue;
+	for_each_element(sub, elem->data + 1, elem->datalen - 1) {
+		u8 profile_len;
+
+		if (sub->id != 0 || sub->datalen < 4) {
+```
+
+Example fix:
+```c
+for_each_element_id(elem, WLAN_EID_MULTIPLE_BSSID, ie, ielen) {
+	if (elem->datalen < 4)
+		continue;
+	for_each_element(sub, elem->data + 1, elem->datalen - 1) {
+		if (sub->id < 0 || sub->id > MAX_SUBELEMENT_ID) {
+			// Handle invalid sub-element ID
+			continue;
+		}
+		if (sub->datalen < 4 || sub->datalen > MAX_SUBELEMENT_LEN) {
+			// Handle invalid sub-element length
+			continue;
+		}
+		u8 profile_len;
+		// ...
+```
+
+Note: MAX_SUBELEMENT_ID and MAX_SUBELEMENT_LEN should be defined to match the relevant 802.11 specification or implementation-specific requirements.

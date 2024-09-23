@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 4
+VULNERABILITY_DESCRIPTION:
+Inconsistent Error Handling in MSR Write Operation
+
+EXPLANATION:
+The code snippet contains inconsistent error handling for MSR write operations. The `kvm_set_msr` function may succeed or fail. However, only the failure case is logged with `trace_kvm_msr_write_ex` and an exception (`kvm_inject_gp`) is injected. The success case is logged differently, using `trace_kvm_msr_write`, but without any error handling or exception injection. This inconsistency may hide potential issues or errors in MSR write operations.
+
+However, the primary concern lies in the difference in handling errors versus successful MSR writes. The main vulnerability becomes apparent when `kvm_set_msr` is used. Without error handling in the success case, this creates a vulnerability if data (`ecx`, `data`) can be faked or manipulated maliciously. There isn't much to analyze considering just this snippet.
+
+RECOMMENDATIONS:
+To mitigate the vulnerability, ensure consistent error handling for both success and failure cases of MSR write operations. Include error handling or logging in the success case to ensure that MSR write operations are properly audited and monitored.
+
+Additionally, consider adding input validation or sanitization to ensure that malicious data cannot be written to the MSR.
+
+ORIGINAL CODE:
+```c
+	msr.host_initiated = false;
+
+	svm->next_rip = kvm_rip_read(&svm->vcpu) + 2;
+	if (kvm_set_msr(&svm->vcpu, &msr)) {
+		trace_kvm_msr_write_ex(ecx, data);
+		kvm_inject_gp(&svm->vcpu, 0);
+	} else {
+		trace_kvm_msr_write(ecx, data); 
+```
+
+Additional context for Recommendation (with out-of-snippet data):
+Any MSR writes should log events in their success cases, the msr.write_success_log(), it can contain info to the nature of the operation as well as write success with whatever data was utilized in the MSR write.
+Those success-logged writes can prevent future vulnerabilities that can potentially allow bypasses and unauthorised MSR writes.

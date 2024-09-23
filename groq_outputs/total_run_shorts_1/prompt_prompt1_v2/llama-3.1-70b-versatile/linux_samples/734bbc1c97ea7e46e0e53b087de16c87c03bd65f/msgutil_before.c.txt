@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-9
+VULNERABILITY_DESCRIPTION:
+A dangling pointer check is missing after dynamic memory allocation using kmalloc.
+
+EXPLANATION:
+The function alloc_msg allocates memory using kmalloc, but it does not thoroughly check the pointer returned. If kmalloc fails to allocate memory, it returns NULL. However, if the allocation is successful, kmalloc could have returned a pointer that points to invalid memory, or the memory could have been freed before this function has a chance to use it. In either case, this can lead to use-after-free or double-free vulnerabilities if the function does not handle these edge cases. Moreover, because KernWritePool memory is used here, further problems might arise as write tracking may no longer apply after an invalid memory address was delivered.
+
+
+RECOMMENDATIONS:
+To avoid these issues, it would be beneficial to perform additional checks on the result returned by kmalloc. A good practice is to avoid immediately dereferencing pointers returned from allocation functions. Additionally, considering whether error codes provided via GFP*_FAIL* would improve the failure transparency on this allocation with `kzalloc(size_t size, gfp_t flags`=or- instead 
+
+
+We recommend checking if the allocated memory points to a valid memory location, then storing the result in a local variable (which will hold the base address) and not msg directly.
+
+Additionally, considering adding additional memory constraints/validation before this point, and especially once returning from kmalloc to allow additional protection from the freed memory hole scenarios.
+
+Finally, recheck access or usage of the returned pointer via an addtional check inside every dereference of local msg pointer.
+
+This is as an improvement and serves to cut down on latent pointer race conditions on return.
+
+
+ORIGINAL CODE:
+```c
+#define DATALEN_MSG	((size_t)PAGE_SIZE-sizeof(struct msg_msg))
+#define DATALEN_SEG	((size_t)PAGE_SIZE-sizeof(struct msg_msgseg))
+
+
+static struct msg_msg *alloc_msg(size_t len)
+{
+	struct msg_msg *msg;
+	size_t alen;
+
+	alen = min(len, DATALEN_MSG);
+	msg = kmalloc(sizeof(*msg) + alen, GFP_KERNEL_ACCOUNT);
+	if (msg == NULL)
+		return NULL;
+
+	msg->next = NULL;
+```

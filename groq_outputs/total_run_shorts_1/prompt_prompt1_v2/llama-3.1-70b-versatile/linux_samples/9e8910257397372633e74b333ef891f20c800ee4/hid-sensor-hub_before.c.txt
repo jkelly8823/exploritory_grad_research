@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Resource leak in the event of an error - the mutex is locked but may not be unlocked if an error occurs.
+
+EXPLANATION:
+In this code snippet, the mutex is locked on line 1. If the report generation fails (line 2) or if the field_index is out of bounds (line 3), an error occurs and execution is diverted to the 'done_proc' label, but the code does not account for unlocking the mutex if an error occurs. This could result in a resource leak or deadlock if this thread holds other locks.
+
+RECOMMENDATIONS:
+To prevent this issue, ensure that mutex_unlock is called after locking the mutex, regardless of whether an error occurs. In the case of an error, you should unlock the mutex before exiting the function. Here's how to do this:
+
+```c
+// code...
+
+mutex_lock(&data->mutex);
+report = sensor_hub_report(report_id, hsdev->hdev, HID_FEATURE_REPORT);
+if (!report || (field_index >=  report->maxfield)) {
+    ret = -EINVAL;
+} else {
+    hid_hw_request(hsdev->hdev, report, HID_REQ_GET_REPORT);
+}
+// Move the unlock statement to the end, after the error case
+mutex_unlock(&data->mutex);
+goto done_proc;
+```
+
+OR 
+
+```c
+// code...
+
+mutex_lock(&data->mutex);
+report = sensor_hub_report(report_id, hsdev->hdev, HID_FEATURE_REPORT);
+if (!report || (field_index >=  report->maxfield)) {
+    ret = -EINVAL;
+    mutex_unlock(&data->mutex);  // Unlock mutex before exiting function
+    goto done_proc;
+}
+hid_hw_request(hsdev->hdev, report, HID_REQ_GET_REPORT);
+mutex_unlock(&data->mutex);  // Unlock mutex normally
+```
+
+ORIGINAL CODE:
+```c
+mutex_lock(&data->mutex);
+report = sensor_hub_report(report_id, hsdev->hdev, HID_FEATURE_REPORT);
+if (!report || (field_index >=  report->maxfield)) {
+    ret = -EINVAL;
+    goto done_proc;
+}
+hid_hw_request(hsdev->hdev, report, HID_REQ_GET_REPORT);
+```

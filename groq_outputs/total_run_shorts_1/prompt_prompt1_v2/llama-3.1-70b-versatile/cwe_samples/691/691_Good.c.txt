@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Double-close of a mutex and potential deadlock due to missing error handling for pthread_mutex_unlock.
+
+EXPLANATION:
+The code segment uses a mutex to protect a shared resource. However, there are two issues present:
+
+1.  The `pthread_mutex_unlock` function call is used as the return value of the function `f`. This is a problem because the return value of `pthread_mutex_unlock` should be checked to ensure that the mutex was successfully unlocked. If `pthread_mutex_unlock` fails, the function will still return its value as if the mutex unlock was successful.
+
+2.  The function will attempt to unlock an already locked mutex if `pthread_mutex_lock(mutex)` fails and returns a non-zero value. However, the function does not check if the mutex is currently locked before attempting to unlock it. This will result in a "double-close" condition where an attempt is made to unlock a mutex that is already unlocked, leading to undefined behavior.
+
+RECOMMENDATIONS:
+To fix these issues, the code should check the return value of `pthread_mutex_unlock` and handle any potential errors. Additionally, the function should only attempt to unlock the mutex if it was previously successfully locked. Here is a revised version of the function:
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (0 != result) return result;
+
+    /* access shared resource */
+
+    /* Only attempt to unlock the mutex if it was previously successfully locked */
+    result = pthread_mutex_unlock(mutex);
+    if (0 != result) {
+        /* Handle the error */
+        return result;
+    }
+
+    /* Return a successful value to indicate that the mutex was locked and unlocked successfully */
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+
+    /* access shared resource */
+
+    return pthread_mutex_unlock(mutex);
+}
+```

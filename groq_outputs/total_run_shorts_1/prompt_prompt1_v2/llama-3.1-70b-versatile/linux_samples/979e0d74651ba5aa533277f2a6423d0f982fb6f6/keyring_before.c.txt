@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION: Use of unvalidated input in BUG_ON assertion, which may potentially lead to a denial-of-service (DoS) due to an integer overflow in the BUG_ON assertion's validity check.
+
+EXPLANATION:
+The BUG_ON assertion in line 2 may be vulnerable to an integer overflow in its validity check when comparing `key` and `ctx->match_data`. The BUG_ON assertion checks if the two values are equal and triggers an error when they are not. However, if an attacker is able to manipulate `key` and `ctx->match_data`, they could potentially cause an integer overflow that causes the assertion to incorrectly trigger, leading to a DoS. Also, the use of `key` is not explicitly validated before being compared with `ctx->match_data`. This too increases the vulnerability to potential out of bounds input values.
+
+RECOMMENDATIONS:
+To prevent a denial-of-service (DoS) attack from an unvalidated input in the BUG_ON assertion, you should validate the input 'key' and `ctx->match_data` before using them in the BUG_ON assertion. Also, it might be beneficial to introduce range checking in addition to simple equality checks.
+
+```c
+if (key == NULL || ctx == NULL || ctx->match_data == NULL) {
+    // handle invalid context
+    return;
+}
+
+/*
+ * Validate that key points to a valid memory location within its containing data structure,
+ * e.g., a vector or array.
+ *
+ */
+if (!key_valid_location(key)) {
+    // handle invalid location
+    return;
+}
+
+if (key->serial < 0 || key->serial >= SOME_UPPER_BOUND) {
+    // handle invalid serial value
+    return;
+}
+
+if (ctx->match_data != key) {
+    ctx->result = ERR_PTR(-EDEADLK);
+    return 1;
+}
+```
+
+ORIGINAL CODE:
+kenter("{%d}", key->serial);
+
+BUG_ON(key != ctx->match_data);
+ctx->result = ERR_PTR(-EDEADLK);
+return 1;
+}

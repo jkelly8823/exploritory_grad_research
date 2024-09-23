@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1235-1240
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential use-after-free error. In the gntdev_ioctl_get_offset_for_vaddr function, a pointer to a struct grant_map (map) is stored in the vm_private_data field of a struct vm_area_struct (vma). Later, in the gntdev_ioctl_notify function, this pointer is used and potentially freed with gntdev_put_map. However, if the vma is unmapped before the pointer is used in gntdev_ioctl_notify, this can lead to a use-after-free error, potentially allowing an attacker to execute arbitrary code.
+
+EXPLANATION:
+The code provided has multiple locations where the map pointer is used and potentially freed. The use-after-free vulnerability is introduced when the vma is unmapped before the map pointer is used in gntdev_ioctl_notify. The map pointer is stored in the vm_private_data field of the struct vm_area_struct (vma). If this vma is unmapped before the map pointer is used in gntdev_ioctl_notify, the map pointer can be freed, and the subsequent use of this pointer can lead to a use-after-free error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following recommendations:
+
+1.  Use a lock to ensure that the map pointer is not used after it has been freed. This can be achieved by acquiring a lock before using the map pointer in gntdev_ioctl_notify and releasing the lock after the use of the map pointer.
+2.  Check if the map pointer is NULL before using it in gntdev_ioctl_notify. If the map pointer is NULL, it indicates that the map has been freed and should not be used.
+3.  Avoid storing pointers to dynamically allocated memory in the vm_private_data field of the struct vm_area_struct (vma). Instead, use a different data structure to manage the map pointers.
+
+ORIGINAL CODE:
+```c
+static long gntdev_ioctl_get_offset_for_vaddr(struct gntdev_priv *priv,
+	struct vm_area_struct *vma;
+	struct grant_map *map;
+	int rv = -EINVAL;
+
+	if (copy_from_user(&op, u, sizeof(op)) != 0)
+		return -EFAULT;
+	pr_debug("priv %p, offset for vaddr %lx\n", priv, (unsigned long)op.vaddr);
+
+	down_read(&current->mm->mmap_sem);
+	vma = find_vma(current->mm, op.vaddr);
+	if (!vma || vma->vm_ops != &gntdev_vmops)
+		goto out_unlock;
+
+	map = vma->vm_private_data;
+	if (!map)
+		goto out_unlock;
+
+	op.offset = map->index << PAGE_SHIFT;
+	op.count = map->count;
+	rv = 0;
+
+ out_unlock:
+	up_read(&current->mm->mmap_sem);
+
+	if (rv == 0 && copy_to_user(u, &op, sizeof(op)) != 0)
+		return -EFAULT;
+	return rv;
+}
+
+static long gntdev_ioctl_notify(struct gntdev_priv *priv, void __user *u)
+{
+out_put_map:
+	if (use_ptemod)
+		map->vma = NULL;
+	gntdev_put_map(priv, map);
+	return err;
+}
+```

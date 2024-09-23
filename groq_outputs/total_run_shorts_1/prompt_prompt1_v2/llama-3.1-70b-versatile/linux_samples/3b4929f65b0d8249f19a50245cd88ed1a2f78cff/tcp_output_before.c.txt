@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION: Potential Integer Overflow Vulnerability.
+
+EXPLANATION:
+The code appears to be manipulating the `mss_now` variable and potentially using it in subsequent calculations. However, the line `mss_now -= icsk->icsk_ext_hdr_len;` is vulnerable to an integer overflow. If the value of `icsk->icsk_ext_hdr_len` is sufficiently large, it could cause `mss_now` to wrap around, resulting in an unintended value. Furthermore, the subsequent if statement checking `mss_now` does not account for this possibility. Additionally, another potential issue exists on line 6 of the second code snippet where `skb_shift` is used without check the result of the read from `next_skb`.
+
+However, the actual vulnerability described here stems from an integer issue with regards to `mss_now -= icsk->icsk_ext_hdr_len;` in the first segment.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider adding checks to prevent integer overflows and underflows. Here is an example of how you could modify the code:
+
+```c
+mss_now = mss_now - (int32_t)icsk->icsk_ext_hdr_len;
+if (mss_now < 0) {
+    mss_now = 0;  // handle underflow case
+}
+```
+
+However, please ensure that truncation does not logically break the meaning or requirements behind the program.
+
+Also, a recommendation for the second hunk - 
+
+After `skb_copy_bits` and `skb_shift` calls, there's no check on whether any data was successfully read into `skb`. You should consider returning an error if they fail.
+
+ORIGINAL CODE:
+```c
+mss_now -= icsk->icsk_ext_hdr_len;
+
+/* Then reserve room for full set of TCP options and 8 bytes of data */
+if (mss_now < 48)
+mss_now = 48;
+return mss_now;
+}
+
+/* Calculate MSS. Not accounting for SACKs here.  */
+        if (next_skb_size <= skb_availroom(skb))
+            skb_copy_bits(next_skb, 0, skb_put(skb, next_skb_size),
+                    next_skb_size);
+        else if (!skb_shift(skb, next_skb, next_skb_size))
+            return false;
+    }
+    tcp_highest_sack_replace(sk, next_skb, skb);
+```

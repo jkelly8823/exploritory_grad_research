@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 16
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to the insecure use of the acpi_create_platform_device function. Specifically, the function is called without checking if the id->driver_data corresponds to INT3401_DEVICE for specific configurations defined in 14-16.
+
+EXPLANATION:
+In the code snippet provided, the acpi_create_platform_device function is called for specific device IDs (INT3401_DEVICE when defined(CONFIG_INT340X_THERMAL) || defined(CONFIG_INT340X_THERMAL_MODULE) and for Intel SoC DTS thermal when id->driver_data equals INT3401_DEVICE). However, when checking the Intel SoC DTS thermal condition, it doesn't consider the same set of configurations as the main check.
+
+This may lead to inconsistent and unexpected behavior as an improper call to acpi_create_platform_device for non-INT3401_DEVICE might be executed when certain configurations are set. This might not be the expected behavior of the function, as it should strictly correspond to INT3401_DEVICE.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should check for INT3401_DEVICE in the first condition for Intel SoC DTS thermal. Here is the recommended fix:
+
+```c
+static const struct acpi_device_id int340x_thermal_device_ids[] = {
+	{"INT3400"},
+	{"INT3401", INT3401_DEVICE},
+	{"INT3402"},
+	{"INT3403"},
+	{"INT3404"},
+	{"INT3406"},
+	const struct acpi_device_id *id)
+{
+#if defined(CONFIG_INT340X_THERMAL) || defined(CONFIG_INT340X_THERMAL_MODULE)
+	acpi_create_platform_device(adev);
+#elif defined(INTEL_SOC_DTS_THERMAL) || defined(INTEL_SOC_DTS_THERMAL_MODULE)
+	/* Fix: Consistent check with INT3401_DEVICE */
+	if (id->driver_data == INT3401_DEVICE) {
+	#if defined(CONFIG_INT340X_THERMAL) || defined(CONFIG_INT340X_THERMAL_MODULE)
+		/* Avoid calling acpi_create_platform_device here if not both conditions are met */
+	#else
+		acpi_create_platform_device(adev);
+	#endif
+	}
+#endif
+	return 1;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include "internal.h"
+
+#define INT3401_DEVICE 0X01
+static const struct acpi_device_id int340x_thermal_device_ids[] = {
+	{"INT3400"},
+	{"INT3401", INT3401_DEVICE},
+	{"INT3402"},
+	{"INT3403"},
+	{"INT3404"},
+	{"INT3406"},
+					const struct acpi_device_id *id)
+{
+#if defined(CONFIG_INT340X_THERMAL) || defined(CONFIG_INT340X_THERMAL_MODULE)
+	acpi_create_platform_device(adev);
+#elif defined(INTEL_SOC_DTS_THERMAL) || defined(INTEL_SOC_DTS_THERMAL_MODULE)
+	/* Intel SoC DTS thermal driver needs INT3401 to set IRQ descriptor */
+	if (id->driver_data == INT3401_DEVICE)
+		acpi_create_platform_device(adev);
+#endif
+	return 1;
+}
+```

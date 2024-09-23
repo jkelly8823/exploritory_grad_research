@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability. 
+
+EXPLANATION:
+The code calls `hci_conn_drop(conn)` twice. The first call to `hci_conn_drop(conn)` suggests that the connection is being released, which likely involves deallocating the memory used by `conn`. However, the code then calls `hdev` and `hci_conn_drop(conn)` again after releasing `conn`. If `hci_conn_drop(conn)` does indeed deallocate `conn`, then accessing `conn` in the lines following its first release results in use after free.
+
+RECOMMENDATIONS:
+Instead of calling `hci_conn_drop(conn)` twice, it is recommended to call it only once when the connection is actually supposed to be released. The lines that call `hdev` and the second `hci_conn_drop(conn)` should be executed before the first call to `hci_conn_drop(conn)`.
+
+ORIGINAL CODE:
+```c
+	if (!conn)
+		goto unlock;
+
+	/* Ignore NULL link key against CVE-2020-26555 */
+	if (!memcmp(ev->link_key, ZERO_KEY, HCI_LINK_KEY_SIZE)) {
+		bt_dev_dbg(hdev, "Ignore NULL link key (ZERO KEY) for %pMR",
+			   &ev->bdaddr);
+		hci_disconnect(conn, HCI_ERROR_AUTH_FAILURE);
+		hci_conn_drop(conn);
+		goto unlock;
+	}
+
+	hci_conn_hold(conn);
+	conn->disc_timeout = HCI_DISCONN_TIMEOUT;
+	hci_conn_drop(conn);
+```

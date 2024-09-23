@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-18
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) due to infinite loop.
+
+EXPLANATION:
+The provided code snippet contains a while loop that decrements the `fill_bytes` variable until it reaches zero. However, there is no check to prevent `fill_bytes` from being a very large or negative value, which could cause the loop to run indefinitely. This can lead to a denial of service (DoS) as the system is unable to perform any other tasks while the loop is running. This is particularly concerning as it seems to be related to hardware (SPI) and interrupt handling, where system instability or unresponsiveness could lead to bigger consequences.
+
+RECOMMENDATIONS:
+To prevent this, a sanity check should be added before the loop to ensure `fill_bytes` is within a reasonable range. This could be done by checking against a maximum value or by verifying that `fill_bytes` is not negative.
+
+Additionally, the `uniphier_spi_send(priv)` function call should also be analyzed for potential time complexities.
+
+Here is an example of how this could be done:
+
+```c
+if (fill_bytes > SSI_FIFO_DEPTH || fill_bytes < 0) {
+    // handle the error or set a maximum value
+    fill_bytes = SSI_FIFO_DEPTH;
+}
+
+while (fill_bytes--)
+    uniphier_spi_send(priv);
+```
+
+ORIGINAL CODE:
+```c
+}
+}
+
+static void uniphier_spi_fill_tx_fifo(struct uniphier_spi_priv *priv)
+{
+    unsigned int fifo_threshold, fill_bytes;
+    u32 val;
+
+    fifo_threshold = DIV_ROUND_UP(priv->rx_bytes,
+            bytes_per_word(priv->bits_per_word));
+    fifo_threshold = min(fifo_threshold, SSI_FIFO_DEPTH);
+
+    fill_bytes = fifo_threshold - (priv->rx_bytes - priv->tx_bytes);
+
+    /* set fifo threshold */
+    val = readl(priv->base + SSI_FC);
+    val &= ~(SSI_FC_TXFTH_MASK | SSI_FC_RXFTH_MASK);
+    val |= FIELD_PREP(SSI_FC_TXFTH_MASK, fifo_threshold);
+    val |= FIELD_PREP(SSI_FC_RXFTH_MASK, fifo_threshold);
+    writel(val, priv->base + SSI_FC);
+
+    while (fill_bytes--)
+        uniphier_spi_send(priv);
+}
+
+static void uniphier_spi_set_cs(struct spi_device *spi, bool enable)
+```

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Resource Consumption
+
+EXPLANATION:
+This vulnerability occurs because the code enters an infinite loop if there is an active connection, but it never checks if the server should continue to accept new connections. This can lead to an uncontrolled amount of resources being consumed as each new socket connection is created and started in a new thread. Additionally, there's a potential Integer.MAX_VALUE exception as the counter is never checked for being within its valid integer range.
+
+However, a critical issue with this code snippet is that it lacks error handling when a new connection is established but then not utilized. Specifically, this loop doesn't evaluate the connected client to find out their intention to communicate with the server or terminate the loop if no further connections are accepted, which implies an infinite loop that likely causes the server to eventually exhaust its resources.
+
+Furthermore, because "hasConnections" isn't reassigned to false anywhere within this part of the code, this loop does not seem as though it will terminate based on any other logic than when an IOException is raised due to the code calling serverSocket.close() to stop listening for connections.
+
+RECOMMENDATIONS:
+- Introduce a separate flag variable and change the flag from true to false under the certain conditions like a specific message from a connected client.
+- Handle potential "java.lang.OutOfMemoryError" that may arise from uncontrolled resource consumption.
+- Should improve Thread handling as creation of infinite threads are potential risk - you could limit your servers workload by establishing a connection accept queue with some form of a watchdog that verifies to ensure its acceptable and do actual socket IO only under that specific scenario.
+
+ORIGINAL CODE:
+```java
+public void acceptConnections() {
+    try {
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            t.start();
+        }
+        serverSocket.close();
+    } catch (IOException ex) {...}
+}
+```

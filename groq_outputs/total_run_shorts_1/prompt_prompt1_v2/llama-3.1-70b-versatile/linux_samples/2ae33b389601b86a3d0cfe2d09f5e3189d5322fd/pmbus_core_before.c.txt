@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code is potentially vulnerable to an integer overflow when calculating the size for the reallocation of memory for `data->group.attrs`.
+
+EXPLANATION:
+The code multiplies `data->max_attributes` by the size of a pointer to a `struct attribute` and casts it to a different type (size_t). However, if `data->max_attributes` exceeds the maximum value that can be stored in a size_t when multiplied by the size of a pointer to a `struct attribute`, this will result in an integer overflow.
+
+In this specific case, the multiplication operation itself is not performed on an integer overflow-prone type as `sizeof` operator results in a size_t. However, since this result will then be passed to `krealloc` function which expects a `size_t` as its second argument, the multiplication is effectively being performed on `data->max_attributes`, and then converted to a size_t.
+
+This could result in an insufficient amount of memory being allocated, leading to potential buffer overflow when storing `attr` in `data->group.attrs`.
+
+RECOMMENDATIONS:
+Consider adding checks to prevent integer overflow when calculating the size for the reallocation of memory.
+
+For example:
+```c
+size_t alloc_size = sizeof(struct attribute *) * (data->max_attributes + 1);
+if (alloc_size < sizeof(struct attribute *))
+{
+    // handle integer overflow error
+}
+data->group.attrs = krealloc(data->group.attrs, alloc_size, GFP_KERNEL);
+```
+Alternatively, the vulnerable line could also be rewritten with explicit bounds-checking as follows:
+```c
+size_t current_alloc_size = sizeof(struct attribute *) * data->max_attributes;
+if (current_alloc_size / sizeof(struct attribute *) != data->max_attributes)
+{
+    // handle integer overflow error
+}
+size_t next_alloc_size = current_alloc_size + sizeof(struct attribute *);
+data->group.attrs = krealloc(data->group.attrs, next_alloc_size, GFP_KERNEL);
+```
+
+ORIGINAL CODE:
+```c
+static int pmbus_add_attribute(struct pmbus_data *data, struct attribute *attr)
+{
+    if (data->num_attributes >= data->max_attributes - 1) {
+        data->max_attributes += PMBUS_ATTR_ALLOC_SIZE;
+        data->group.attrs = krealloc(data->group.attrs,
+                                     sizeof(struct attribute *) *
+                                     data->max_attributes, GFP_KERNEL);
+        if (data->group.attrs == NULL)
+            return -ENOMEM;
+    }
+
+    data->group.attrs[data->num_attributes++] = attr;
+    data->group.attrs[data->num_attributes] = NULL;
+}
+```

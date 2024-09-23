@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 24
+VULNERABILITY_DESCRIPTION:
+Insecure use of unlocked function calls.
+
+EXPLANATION:
+The provided code snippet appears to be a part of a network driver, specifically handling VIF (Virtual Interface) operations. Upon examining the code, it seems that multiple function calls are made without proper locking, which may result in potential race conditions. Specifically, lines 10 (`qtnf_cmd_send_del_intf(vif)`) and 24 (`qtnf_cmd_send_stop_ap(vif)`) contain function calls that seem to interact with shared resources (like VIF states). Without proper synchronization, it is possible that concurrent calls to these functions could interfere with each other, resulting in unexpected behavior or crashes.
+
+Additionally, line 24's error path includes an unchecked call to `qtnf_sta_list_lookup`, but the return result is used to conditionally return `0`, without checking the error return from `qtnf_cmd_send_stop_ap`. This may result in the function returning successfully even if `qtnf_cmd_send_stop_ap` failed.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider adding proper locking mechanisms to ensure that these function calls are thread-safe. For example:
+
+*   Use a spinlock or mutex to synchronize access to shared resources (like VIF states).
+*   Ensure that error returns from function calls are properly handled and not ignored, as in the case of `qtnf_cmd_send_stop_ap`.
+*   Consider reordering code to minimize the window of vulnerability, if locking is not feasible.
+
+ORIGINAL CODE:
+```c
+vif = qtnf_netdev_get_priv(wdev->netdev);
+
+qtnf_scan_done(vif->mac, true);
+
+if (qtnf_cmd_send_del_intf(vif))
+	pr_err("VIF%u.%u: failed to delete VIF\n", vif->mac->macid,
+		       vif->vifid);
+
+struct qtnf_vif *vif = qtnf_netdev_get_priv(dev);
+int ret;
+
+qtnf_scan_done(vif->mac, true);
+
+ret = qtnf_cmd_send_stop_ap(vif);
+if (ret) {
+	pr_err("VIF%u.%u: failed to stop AP operation in FW\n",
+		       vif->mac->macid, vif->vifid);
+    !qtnf_sta_list_lookup(&vif->sta_list, params->mac))
+	return 0;
+
+ret = qtnf_cmd_send_del_sta(vif, params);
+if (ret)
+	pr_err("VIF%u.%u: failed to delete STA %pM\n",
+		       vif->mac->macid, vif->vifid, params->mac);
+		}
+
+		vif->sta_state = QTNF_STA_DISCONNECTED;
+	}
+
+qtnf_scan_done(mac, true);
+}
+
+void qtnf_cfg80211_vif_reset(struct qtnf_vif *vif)
+{
+```

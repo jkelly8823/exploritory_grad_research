@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-14
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds write vulnerability in memset_io function due to missing bounds checking.
+
+EXPLANATION:
+The memset_io function does not perform any bounds checking on the destination memory region before performing the memset operation. If the size parameter 'c' is larger than the actual size of the memory region pointed to by 'a', it can result in writing beyond the bounds of the allocated memory, potentially causing data corruption or crashes.
+
+The memcpy_fromio and memcpy_toio functions are using the __iomem_memcpy function which seems to be using inline assembly for memcpy. However, the assembly does not validate the input length, making it vulnerable to buffer overflow attacks.
+
+The __iomem_memcpy function is used by both memcpy_fromio and memcpy_toio, which may also be vulnerable to the same issue if not validated properly before passing to the function.
+
+RECOMMENDATIONS:
+1. Add bounds checking to the memset_io function to ensure that the size parameter does not exceed the actual size of the allocated memory region.
+2. Validate the input length to the __iomem_memcpy function to prevent buffer overflow attacks.
+3. Validate the input to memcpy_fromio and memcpy_toio functions before passing to __iomem_memcpy.
+
+ORIGINAL CODE:
+```cpp
+#include <linux/module.h>
+#include <linux/io.h>
+
+/* Originally from i386/string.h */
+static __always_inline void __iomem_memcpy(void *to, const void *from, size_t n)
+{
+	unsigned long d0, d1, d2;
+	asm volatile("rep ; movsl\n\t"
+		     "testb $2,%b4\n\t"
+
+void memcpy_fromio(void *to, const volatile void __iomem *from, size_t n)
+{
+	__iomem_memcpy(to, (const void *)from, n);
+}
+EXPORT_SYMBOL(memcpy_fromio);
+
+void memcpy_toio(volatile void __iomem *to, const void *from, size_t n)
+{
+	__iomem_memcpy((void *)to, (const void *) from, n);
+}
+EXPORT_SYMBOL(memcpy_toio);
+
+void memset_io(volatile void __iomem *a, int b, size_t c)
+```

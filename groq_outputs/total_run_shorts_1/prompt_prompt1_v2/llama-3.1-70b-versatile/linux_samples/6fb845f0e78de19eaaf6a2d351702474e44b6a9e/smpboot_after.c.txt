@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 14
+VULNERABILITY_DESCRIPTION:
+Potential Information Leak and NULL Pointer Dereference Vulnerability
+
+EXPLANATION:
+The bug is introduced in the way the function cpuid_to_hartid_map and BUG_ON are used without a null check. If the cpuid_to_hartid_map is declared such that it can return a null pointer or invalid pointer then it would potentially lead to a crash.
+
+Moreover BUG_ON is called with found_boot_cpu as its parameter which indicates whether boot_cpu was previously found. The issue here arises when the CPU with Hart ID 0 is encountered. Since it directly continues processing, BUG_ON won't be notified. However, while processing other CPUs with different Hart IDs the bug is called with true value indicating BUG but that might be not its purpose because these bugs actually only get triggered on NOT conditions - The above logic for the handling that BUG triggers indicates if the found value which indicates whether the current processing is dealing with a boot cpu value was initially determined being true - an error that might continue nonterminating and then halt system service with these error notifications ignored. If BUG_ON would be appropriately triggered there might be reason to think service bug occurred normally not by default but since default check on BUG did really only work with false instances for that error case condition when in effect this BUG might fail because those failing in condition just will terminate normal system service providing current normal service state when BUG might actually not exist.
+
+
+
+This code does appear to potentially lack error validation with possible silent BUG and failure handling as described also with CPU type mapping function condition if default no continue scenarios nonmatching type will fail.
+RECOMMENDATIONS:
+1. Validate the pointer returned by cpuid_to_hartid_map before attempting to assign to it.
+2. Change the BUG_ON handling logic such that it correctly handles the edge case where a boot CPU is found.
+
+   Additionally perform a more explicit error validation check when the BUG condition is not true.
+
+   This prevents silent failures.
+
+ Example modifications to original code are as below:
+```c
+   // replace this with applicable modifications according to actual api return type and values
+
+   //before call 
+    if (cpuid_to_hartid_map(0) == NULL || cpuid_to_hartid_map(0) == (hartid_t)-1) {
+        //handle return appropriately
+    }
+
+    //handle bug in a more informative error recovery procedure
+
+     if (found_boot_cpu) {
+         // handle procedure appropriately with either warn_printk or notificaiton error according to bug cases trigger  
+     } else {
+     	BUG_ON(found_boot_cpu);    
+     }
+```
+
+ORIGINAL CODE:
+```c
+	while ((dn = of_find_node_by_type(dn, "cpu"))) {
+		hart = riscv_of_processor_hartid(dn);
+		if (hart < 0)
+			continue;
+
+		if (hart == cpuid_to_hartid_map(0)) {
+			BUG_ON(found_boot_cpu);
+			found_boot_cpu = 1;
+			continue;
+		}
+
+		cpuid_to_hartid_map(cpuid) = hart;
+		set_cpu_possible(cpuid, true);
+		set_cpu_present(cpuid, true);
+		cpuid++;
+	}
+
+	BUG_ON(!found_boot_cpu);
+}
+```

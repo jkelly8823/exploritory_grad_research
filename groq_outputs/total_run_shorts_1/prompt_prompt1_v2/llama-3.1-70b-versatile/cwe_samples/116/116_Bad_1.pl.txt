@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to Command Injection attacks, as it does not properly sanitize user input before passing it to a new command.
+EXPLANATION:
+The code uses the `GetUntrustedArgument` function to retrieve a user input string, which is then split into a command (`$cmd`) and an argument string (`$argstr`). However, the code does not properly validate or sanitize the input before passing it to a new command. Specifically, the `$argstr` variable is not sanitized for special characters or malicious input, and is then concatenated with the command and printed to a file handle. This allows an attacker to inject malicious commands or modify the intended command.
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend the following:
+
+1. Validate user input: Use a whitelist approach to validate the user input to ensure that it only contains expected characters and values.
+2. Sanitize the input: Use a secure encoding or escaping mechanism to sanitize the user input, especially the `$argstr` variable, to prevent malicious characters or commands from being injected.
+3. Use prepared statements: If possible, use prepared statements to separate the command from the input arguments, making it more difficult for an attacker to inject malicious commands.
+
+Here is an example of a potential fix:
+
+```perl
+$inputString = GetUntrustedArgument("command");
+($cmd, $argstr) = split(/\s+/, $inputString, 2);
+
+# Validate the command
+if ($cmd !~ /^[a-zA-Z_0-9]+$/) {
+    die "Error: invalid command\n";
+}
+
+# Validate the argument string
+if ($argstr =~ /[^a-zA-Z_0-9\s]/) {
+    die "Error: invalid argument string\n";
+}
+
+# Sanitize the argument string
+$argstr =~ s/\s+/ /gs;
+$argstr = UrlEncode($argstr);
+
+if (($cmd eq "BAN") && (! IsAdministrator($username))) {
+    die "Error: you are not the admin.\n";
+}
+
+# communicate with file server using a file handle
+$fh = GetServerFileHandle("myserver");
+print $fh "$cmd $argstr\n";
+```
+
+ORIGINAL CODE:
+```
+$inputString = GetUntrustedArgument("command");($cmd, $argstr) = split(/\s+/, $inputString, 2);
+                     
+# removes extra whitespace and also changes CRLF's to spaces
+$argstr =~ s/\s+/ /gs;
+$argstr = UrlEncode($argstr);if (($cmd eq "BAN") && (! IsAdministrator($username))) {die "Error: you are not the admin.\n";}
+                     
+# communicate with file server using a file handle
+$fh = GetServerFileHandle("myserver");
+print $fh "$cmd $argstr\n";
+```

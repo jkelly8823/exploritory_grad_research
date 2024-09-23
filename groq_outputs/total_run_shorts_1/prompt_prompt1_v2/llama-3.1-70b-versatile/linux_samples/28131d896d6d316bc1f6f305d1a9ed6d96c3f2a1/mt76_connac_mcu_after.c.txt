@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumber 9
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in mt76_mcu_send_msg function call
+EXPLANATION:
+The code includes a call to mt76_mcu_send_msg function with the size of the request structure. However, it is unclear whether the size of the request structure is dynamically allocated or fixed. If the size is dynamically allocated and not properly validated, it could potentially cause a buffer overflow. Moreover, it is unclear what the valid values for req strukture are (buffer size etc.).
+
+Furthermore, after looking at function declaration we could see, that function uses pointer to some structure, but structure is not defined in this code snipet.
+
+RECOMMENDATIONS:
+Review the code to ensure that the size of the request structure is properly validated to prevent potential buffer overflow. 
+
+Also it is worth to review mt76_mcu_send_msg function and check if it is not vulnerable for similar issue as defined above in data that passes to MCU.
+
+```c 
+struct {
+//... some defenitions here
+}
+mt76_mcu_send_msg(dev, MCU_CMD_REG_WRITE, &req, sizeof(req), false);
+```
+ It is also recommended to make structures explicitly known within source code that is evaluated, generally this would follow more standard practices for developers etc.
+
+It is also worth adding some kind of size limit and/or check on data that goes to MCU.
+
+```c 
+u32 size = sizeof(req);
+if (size > MAX Buffered data allowsed) {
+// some data buffer overflow action
+}
+mt76_mcu_send_msg(dev, MCU_CMD_REG_WRITE, &req, size, false);
+```
+ or 
+
+```c 
+if (sizeof(req) !== size) {
+// data is corrupted
+}
+```
+ this problem can occur if code has data races etc or functions above/below in the same functions family.
+ all assumptions should be proven, with some log if there is.
+ 
+
+ORIGINAL CODE:
+```c
+mt76_connac_mcu_set_wow_ctrl(phy, vif, suspend, wowlan);
+}
+EXPORT_SYMBOL_GPL(mt76_connac_mcu_set_suspend_iter);
+#endif /* CONFIG_PM */
+
+u32 mt76_connac_mcu_reg_rr(struct mt76_dev *dev, u32 offset)
+{
+    struct {
+    mt76_mcu_send_msg(dev, MCU_CMD_REG_WRITE, &req, sizeof(req), false);
+}
+EXPORT_SYMBOL_GPL(mt76_connac_mcu_reg_wr);
+
+MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+MODULE_LICENSE("Dual BSD/GPL");
+```

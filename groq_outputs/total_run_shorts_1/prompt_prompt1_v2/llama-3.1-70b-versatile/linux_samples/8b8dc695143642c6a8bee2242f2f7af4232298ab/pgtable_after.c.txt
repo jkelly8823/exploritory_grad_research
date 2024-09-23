@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference and the return value of `pmdp` is not validated before it's dereferenced.
+
+EXPLANATION:
+In the code snippet, `pmdp` is assigned the result of `pmd_offset(&pud, ea)`. However, it does not perform any validation on the return value of `pmd_offset` to ensure that it's not null. Later, the value of `pmdp` is dereferenced and assigned to `ret_pte`. If `pmd_offset` returns a null pointer, this will result in a null pointer dereference, leading to undefined behavior, potentially resulting in a segmentation fault or program crash.
+
+Furthermore, when `pmd_none(pmd)` is true, the function simply returns `NULL` without any additional validation. However, when `pmd_none(pmd)` is false, the code proceeds to use `pmdp` without validating its value.
+
+RECOMMENDATIONS:
+1. Validate the return value of `pmd_offset` before using it.
+2. Initialize `ret_pte` with a default value to prevent return of null in cases where it's not explicitly set.
+3. After calling `pmd_offset`, check if the pointer is valid before using it to prevent potential null pointer dereferences.
+
+ORIGINAL CODE:
+
+	pdshift = PMD_SHIFT;
+	pmdp = pmd_offset(&pud, ea);
+	pmd  = READ_ONCE(*pmdp);
+
+	/*
+	 * A hugepage collapse is captured by this condition, see
+	 * pmdp_collapse_flush.
+	 */
+	if (pmd_none(pmd))
+		return NULL;
+
+#ifdef CONFIG_PPC_BOOK3S_64
+	/*
+	 * A hugepage split is captured by this condition, see
+	 * pmdp_invalidate.
+	 *
+	 * Huge page modification can be caught here too.
+	 */
+	if (pmd_is_serializing(pmd))
+		return NULL;
+#endif
+
+	if (pmd_trans_huge(pmd) || pmd_devmap(pmd)) {
+		if (is_thp)
+			*is_thp = true;
+		ret_pte = (pte_t *)pmdp;

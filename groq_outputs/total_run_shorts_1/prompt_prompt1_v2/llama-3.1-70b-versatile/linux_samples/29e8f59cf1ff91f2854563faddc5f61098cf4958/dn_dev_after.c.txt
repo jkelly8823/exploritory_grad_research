@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 8, 9, 11, 12
+VULNERABILITY_DESCRIPTION:
+Duplicate CAP_NET_ADMIN checks and Conditional Statement Reordering
+
+EXPLANATION:
+This code snippet contains a duplicate check for CAP_NET_ADMIN capability, which is unnecessary and can lead to potential security issues. Additionally, the conditional statements are re-ordered, which can cause unexpected behavior. 
+
+The code checks if the CAP_NET_ADMIN capability is present in two separate instances (lines 4 and 9). If this capability is not present, it returns -EPERM in the first instance and does not affect the functionality of the code, but the second instance occurs after it. However, there's also another 'return -EINVAL;' statement on lines 8 and 12. Since CAP_NET_ADMIN capability checks occur in an if-else fashion (lines 4, 9), it does not result in reordering issues.
+
+However, lines 8 and 12 seem redundant. A function should ideally return one and only one error code as its output for a given condition or error state for clear semantics of error messages. Since we've already checked that 'net_eq(net, &init_net)' on lines 5 and 11, the 'return -EINVAL' on lines 8 and 12 might have been intended for some other instance or condition; thus, it remains unclear and potentially incorrect and so is included in the report.
+
+RECOMMENDATIONS:
+1. Remove the duplicate CAP_NET_ADMIN capability check. The functionality of this code seems to be that it does not allow access to the net namespace other than the initial network namespace, so even if CAP_NET_ADMIN capability is not checked multiple times, 'net_eq(net, &init_net)' check handles this scenario accurately.
+
+2. Re-evaluate the conditional statement ordering to ensure the intended behavior is implemented. The semantics and ordering of CAP_NET_ADMIN checks and return statements may need re-checking. Ensure that the network operations that come after this code snippet have necessary protection, similar semantics of each variable and necessary protection in place to safely handle network namespace operations. 
+
+
+ORIGINAL CODE:
+```c
+struct dn_ifaddr __rcu **ifap;
+int err = -EINVAL;
+
+if (!netlink_capable(skb, CAP_NET_ADMIN))
+	return -EPERM;
+
+if (!net_eq(net, &init_net))
+	goto errout;
+struct dn_ifaddr *ifa;
+int err;
+
+if (!netlink_capable(skb, CAP_NET_ADMIN))
+	return -EPERM;
+
+if (!net_eq(net, &init_net))
+	return -EINVAL;
+```

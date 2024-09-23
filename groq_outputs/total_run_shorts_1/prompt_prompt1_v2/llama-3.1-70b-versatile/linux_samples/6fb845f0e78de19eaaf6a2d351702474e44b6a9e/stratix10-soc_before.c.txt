@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a use-after-free error when calling of_node_put(fw_np) after successfully registering the platform driver.
+
+EXPLANATION:
+The function of_node_put(fw_np) is called after registering the platform driver. However, if the registration is successful, the driver will likely take a reference to the device tree node fw_np. When the function returns, fw_np is put, which may drop the reference count to zero and free the node. This could lead to a use-after-free error if the driver tries to access fw_np later.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should not call of_node_put(fw_np) after registering the platform driver. Instead, it is recommended to keep the device tree node reference for as long as the driver is active.
+
+Additionally, consider increasing the reference count of fw_np before registering the driver to prevent the node from being freed prematurely. This can be achieved by calling of_node_get(fw_np) before registering the driver.
+
+ORIGINAL CODE:
+
+		return -ENODEV;
+
+	np = of_find_matching_node(fw_np, s10_of_match);
+	if (!np) {
+		of_node_put(fw_np);
+		return -ENODEV;
+	}
+
+	of_node_put(np);
+	ret = of_platform_populate(fw_np, s10_of_match, NULL, NULL);
+	of_node_put(fw_np);
+	if (ret)
+		return ret;
+
+	return platform_driver_register(&s10_driver);

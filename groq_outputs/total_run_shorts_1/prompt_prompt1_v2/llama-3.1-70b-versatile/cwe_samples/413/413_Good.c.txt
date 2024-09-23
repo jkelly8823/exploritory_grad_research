@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION: Resource leak due to inconsistent mutex unlock
+EXPLANATION:
+The provided code snippet contains a vulnerability due to inconsistent mutex unlocking. Specifically, the function is supposed to unlock the mutex regardless of whether an error occurs before reaching the unlock point. However, the unlock is only executed when the function reaches the end normally. 
+
+In this case, the mutex will be left locked if the function returns before it reaches the unlock command. This would prevent other threads from accessing the shared resource, resulting in a resource leak.
+
+Additionally, the second call to pthread_mutex_unlock may return an error which isn't checked. This could also lead to an inconsistent state if another thread was waiting to lock the mutex.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the mutex is always unlocked before leaving the function, regardless of whether an error occurred. This can be achieved using a try-catch block or using cleanup code under all exit paths. Here's a simplified solution that might be adapted to the full function depending on the full codebase.
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result = pthread_mutex_lock(mutex);
+    if (0 != result) return result;
+
+    try {
+        /* access shared resource */
+    } catch (const std::exception& e) {
+        return pthread_mutex_unlock(mutex) || result;
+    }
+
+    return pthread_mutex_unlock(mutex);
+}
+```
+Or with cleanup code:
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result = 0;
+    int unlock_result = pthread_mutex_unlock(mutex);
+
+    if (0 != (result = pthread_mutex_lock(mutex))) goto END;
+
+    /* access shared resource */
+
+END:
+    if (unlock_result != 0 && result == 0) result = unlock_result;
+
+    return result;
+}
+```
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex); if (0 != result) return result;
+
+    /* access shared resource */
+
+
+    return pthread_mutex_unlock(mutex);
+}
+```

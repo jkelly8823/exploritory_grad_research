@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an authentication bypass due to an incorrect use of `assign` statements within a loop. 
+
+EXPLANATION:
+The `assign` statement in SystemVerilog is used to continuously assign the right-hand side to the left-hand side, creating a continuous assignment. When used inside a loop, this can cause issues due to the non-blocking nature of the assignments. 
+
+In this specific case, we see that inside a loop `assign` is used for the `check_pass` variable. This results in `check_pass` only being assigned the result of the comparison of the last iteration, as the `assign` statement continuously overwrites any previous values assigned to `check_pass`. However, what makes this vulnerability severe is the use of `continue` after assigning 1 to `check_pass`. This will effectively cause every subsequent iteration to overwrite the 0s that would have otherwise been assigned to `check_pass` in cases where a password mismatch occurred, due to the previous iterations's assign statement continuously overwriting the value.
+
+This results in `grant_access` being set to 1 as soon as the first successful match is found, regardless of the subsequent iterations. An attacker can easily bypass authentication by entering any single correct digit.
+
+RECOMMENDATIONS:
+Use blocking assignments (`=`) instead of continuous assignments (`assign`) when assignments are needed within a loop. However, due to the nature of the task and the apparent intent to create combinatorial logic with this code, a more correct solution would involve creating combinatorial logic that compares the passwords and only sets `grant_access` to 1 if all 4 parts of the passwords match.
+
+Here's an example of how it could be fixed:
+
+```verilog
+always_comb @ (posedge clk)
+begin
+    grant_access = 1'b0;
+    for (i = 0; i < 4; i++) begin
+        if (entered_pass[(i*8 - 1) : i] eq golden_pass[(i*8 - 1) : i]) begin
+            grant_access = grant_access && 1'b1;
+        end else begin
+            grant_access = grant_access && 1'b0;
+        end
+    end
+end
+```
+or using `check_pass` array but without continuous assignments and break/continue
+```verilog
+always_comb @ (posedge clk)
+begin
+    for (i = 0; i < 4; i++) begin
+        if (entered_pass[(i*8 - 1) : i] eq golden_pass[(i*8 - 1) : i]) begin
+            check_pass[i] = 1'b1;
+        end else begin
+            check_pass[i] = 1'b0;
+        end
+    end
+    grant_access = 1'b0;
+    for (i = 0; i < 4; i++) begin
+        grant_access = grant_access || check_pass[i];
+        if (i == 3 && grant_access == 1'b0) begin
+            grant_access = 1'b1; 
+        end 
+    end
+end
+```
+
+In any case, combinatorial checks and conditions need to ensure that check_pass always evaluates the entire entered_pass against the golden_pass.
+
+ORIGINAL CODE:
+```
+always_comb @ (posedge clk)
+                    
+    begin
+		     
+     assign check_pass[3:0] = 4'b0;
+     for (i = 0; i < 4; i++) begin
+		     
+    	    	if (entered_pass[(i*8 - 1) : i] eq golden_pass([(i*8 - 1) : i])
+		
+ 菌ne assign check_pass[i] = 1;
+    	    	continue;
+		
+    	    	else
+			
+    	    	assign check_pass[i] = 0;
+    	    	break;
+		
+    	    	end
+		     
+     assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;
+		     
+    end
+	```

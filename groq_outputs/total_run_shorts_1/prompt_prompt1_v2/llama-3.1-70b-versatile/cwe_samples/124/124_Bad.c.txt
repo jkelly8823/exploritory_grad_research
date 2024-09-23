@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Memory leak and potential null pointer dereference vulnerability due to incorrect use of malloc and variable reuse.
+
+EXPLANATION:
+In this code, `char *message` is declared as a local variable array, but it is not used beyond its declaration. However, `message` is then reused as a pointer to a dynamically allocated memory block. This is confusing and can lead to incorrect assumptions about the variable's lifetime. Furthermore, the memory allocated for this dynamically created `message` is not freed, which results in a memory leak. Additionally, `malloc` can return `NULL` if it is unable to allocate memory, and this possibility is not checked for in the code. If `malloc` does return `NULL`, using this value will cause a null pointer dereference.
+
+RECOMMENDATIONS:
+- Free the dynamically allocated memory for `message` when it's no longer needed to prevent memory leaks.
+- Check the return value of `malloc` to handle cases where memory allocation fails.
+
+Here is the corrected code:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage = malloc(sizeof(char)*(length+1));
+    if(retMessage == NULL) {
+        // handle malloc failure
+        return NULL;
+    }
+    
+    // copy input string to a temporary string
+    int index;
+    for (index = 0; index < length; index++) {
+        retMessage[index] = strMessage[index];
+    }
+    retMessage[index] = '\0';
+    
+    // trim trailing whitespace
+    int len = index-1;
+    while (isspace(retMessage[len])) {
+        retMessage[len] = '\0';
+        len--;
+    }
+    
+    return retMessage;
+    // caller is responsible for freeing retMessage when it is no longer needed
+}
+```
+
+Alternatively, the function can also free the memory before returning:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *message = strMessage;
+    int len = length - 1;
+    while (len >= 0 && isspace(message[len])) {
+        len--;
+    }
+    return strndup(message, len + 1);
+    // caller is responsible for freeing the returned string when it is no longer needed
+}
+```
+
+ORIGINAL CODE:
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage;char *message = malloc(sizeof(char)*(length+1));
+    
+    // copy input string to a temporary string
+    char message[length+1];int index;for (index = 0; index < length; index++) {message[index] = strMessage[index];}message[index] = '\0';
+    
+    // trim trailing whitespace
+    int len = index-1;while (isspace(message[len])) {message[len] = '\0';len--;}
+    
+    // return string without trailing whitespace
+    retMessage = message;return retMessage;
+}
+```

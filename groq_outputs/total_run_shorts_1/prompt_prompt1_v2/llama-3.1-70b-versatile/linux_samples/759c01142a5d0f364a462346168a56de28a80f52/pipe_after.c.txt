@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-15
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential integer underflow issue when allocating memory for pipe buffers.
+
+EXPLANATION:
+In the `alloc_pipe_info` function, the code checks if the user has exceeded the soft or hard limit of pipe buffers. If the soft limit has been exceeded, it reduces the number of pipe buffers to allocate to 1. However, this value is not checked for underflow when used in the `kzalloc` function to allocate memory for the pipe buffers. If an attacker can manipulate the values of `pipe_user_pages_soft` or `pipe_user_pages_hard` to be very large, this could potentially cause the `pipe_bufs` variable to underflow, leading to a denial-of-service or potentially even code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add checks to ensure that the `pipe_bufs` value is within a reasonable range before using it to allocate memory. Additionally, consider adding checks to prevent underflow when calculating the size of memory to allocate.
+
+```c
+struct pipe_inode_info *alloc_pipe_info(void)
+{
+    // ...
+    if (!too_many_pipe_buffers_hard(user)) {
+        if (too_many_pipe_buffers_soft(user))
+            pipe_bufs = 1;
+
+        // Add check for underflow
+        if (pipe_bufs <= 0) {
+            kfree(pipe);
+            return NULL;
+        }
+
+        pipe->bufs = kzalloc(sizeof(struct pipe_buffer) * pipe_bufs, GFP_KERNEL);
+        // ...
+```
+
+ORIGINAL CODE:
+```
+struct pipe_inode_info *alloc_pipe_info(void)
+{
+    struct pipe_inode_info *pipe;
+
+    pipe = kzalloc(sizeof(struct pipe_inode_info), GFP_KERNEL);
+    if (pipe) {
+        unsigned long pipe_bufs = PIPE_DEF_BUFFERS;
+        struct user_struct *user = get_current_user();
+
+        if (!too_many_pipe_buffers_hard(user)) {
+            if (too_many_pipe_buffers_soft(user))
+                pipe_bufs = 1;
+            pipe->bufs = kzalloc(sizeof(struct pipe_buffer) * pipe_bufs, GFP_KERNEL);
+        }
+
+        if (pipe->bufs) {
+            init_waitqueue_head(&pipe->wait);
+            pipe->r_counter = pipe->w_counter = 1;
+            pipe->buffers = pipe_bufs;
+            pipe->user = user;
+            account_pipe_buffers(pipe, 0, pipe_bufs);
+            mutex_init(&pipe->mutex);
+            return pipe;
+        }
+        free_uid(user);
+        kfree(pipe);
+    }
+
+    return NULL;
+```

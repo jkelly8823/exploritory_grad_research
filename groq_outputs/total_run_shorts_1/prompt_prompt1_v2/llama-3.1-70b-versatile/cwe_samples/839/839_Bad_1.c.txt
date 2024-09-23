@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-11
+VULNERABILITY_DESCRIPTION:
+Unvalidated and Insecure Use of strncpy function, potentially leading to buffer overflow vulnerability (CWE-119).
+
+EXPLANATION:
+The code uses a sign-extended short integer 's' as the count parameter to the strncpy function. Since 's' is a negative value (-1), it will be converted to a large positive value (4294967295) when used as an unsigned int. This is because of the fact that the variable 'sz' is used for formatting in the printf statement and the potential value of 's' is not checked for the strncpy call.
+
+This enables an attacker to overflow the 'path' buffer by providing a sufficiently long path name, allowing the possibility of code execution and allowing the attacker to inject arbitrary data into memory.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+
+1. Validate the value of 's' to prevent sign extension to a large positive value. Since the size of the buffer is 256, any value greater than this should be checked and the function should fail if the value is not valid.
+
+2. Use sizeof instead of hardcoding the buffer size to prevent errors and ensure safety.
+
+3. Use strlcpy or strncpy_s instead of strncpy. These functions ensure that the buffer is null-terminated and prevent buffer overflow.
+
+4. Add a bounds check for the 'path' array before the strncpy call to prevent a potential buffer overflow.
+
+modified code example (strlcpy is recommended if available):
+
+```c
+#include <string.h>
+
+// ...
+
+/* Ensure that the value of 's' is not negative and is safe for buffer size */
+s = GetUntrustedInt();
+if (s < 0 || s > 256) {
+    DiePainfully("Invalid size\n");
+}
+
+/* Use sizeof instead of hardcoding the buffer size */
+strncpy(path, input, sizeof(path) - 1);
+path[sizeof(path) - 1] = '\0'; 
+
+// or if strlcpy is available:
+// strlcpy(path, input, sizeof(path));
+```
+
+ORIGINAL CODE:
+
+```c
+/* ... */
+                  int GetUntrustedInt () {return(0x0000FFFF);}
+                     void main (int argc, char **argv) {
+                        char path[256];char *input;int i;short s;unsigned int sz;
+                           i = GetUntrustedInt();s = i;/* s is -1 so it passes the safety check - CWE-697 */if (s > 256) {DiePainfully("go away!\n");}
+                           /* s is sign-extended and saved in sz */sz = s;
+                           /* output: i=65535, s=-1, sz=4294967295 - your mileage may vary */printf("i=%d, s=%d, sz=%u\n", i, s, sz);
+                           input = GetUserInput("Enter pathname:");
+                           /* strncpy interprets s as unsigned int, so it's treated as MAX_INT(CWE-195), enabling buffer overflow (CWE-119) */strncpy(path, input, s);path[255] = '\0'; /* don't want CWE-170 */printf("Path is: %s\n", path);
+                     }
+               
+                ```

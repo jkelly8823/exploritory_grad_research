@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Insecure direct object reference (IDOR) and lack of input validation.
+
+EXPLANATION:
+The insecure direct object reference vulnerability and lack of input validation issue are present in the lines omap_mux_init_signal("sys_nirq1", OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE) and omap_mux_init_signal("fref_clk0_out.sys_drm_msecure", OMAP_PIN_OUTPUT).
+
+The code snippet uses omap_mux_init_signal() to initialize signals with hard-coded pins and modes. This can introduce a vulnerability when dealing with devices that have reconfigurable pins. An attacker may be able to reconfigure these pins, creating unintended behavior.
+
+Additionally, the twl4030_platform_data in the omap4_pmic_init() function is being directly passed without proper validation. This could lead to potential issues such as escalating user privileges by referencing devices or resources not intended for the user.
+
+RECOMMENDATIONS:
+To avoid the IDOR and input validation vulnerabilities, we recommend adding proper validation to the passed data to ensure that it is in the expected format and within the allowed ranges. 
+
+Additionally, instead of hard-coding the pin values, we recommend using pre-defined configurations or a safer method that ensures the use of allowed pins and modes. Refer to the specific hardware documentation for safe pin configurations.
+
+ORIGINAL CODE:
+
+	omap_register_i2c_bus(bus, clkrate, &pmic_i2c_board_info, 1);
+}
+
+#ifdef CONFIG_ARCH_OMAP4
+void __init omap4_pmic_init(const char *pmic_type,
+		    struct twl4030_platform_data *pmic_data,
+		    struct i2c_board_info *devices, int nr_devices)
+{
+	/* PMIC part*/
+	unsigned int irq;
+
+	omap_mux_init_signal("sys_nirq1", OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE);
+	omap_mux_init_signal("fref_clk0_out.sys_drm_msecure", OMAP_PIN_OUTPUT);
+	irq = omap4_xlate_irq(7 + OMAP44XX_IRQ_GIC_START);
+	omap_pmic_init(1, 400, pmic_type, irq, pmic_data);
+
+	/* Register additional devices on i2c1 bus if needed */
+	if (devices)
+		i2c_register_board_info(1, devices, nr_devices);
+}
+#endif
+
+void __init omap_pmic_late_init(void)
+{
+	/* Init the OMAP TWL parameters (if PMIC has been registerd) */

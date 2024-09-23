@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 27-28
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code snippet is a potential spinlock unlock mismatch. The function `blk_cleanup_queue` locks several mutexes and spinlocks, but there is no evidence of unlocking the mutex `q->sysfs_lock` and the spinlock was locked with `spin_lock_irq(lock)`, but `spin_unlock_irq(lock)` is not called, which is not shown in this code snippet. Additionally, there is also a potential mistake of passing `lock` as a parameter to `spin_lock_irq`. Spinlocks in the Linux kernel are typically associated with a variable name that is used consistently for locking and unlocking.
+
+EXPLANATION:
+The `spin_lock_irq(lock)` function locks the spinlock `lock` and disables local interrupts. The function `spin_unlock_irq(lock)` unlocks the spinlock `lock` and reenables local interrupts. However, in this case, the variable `lock` is passed as a function parameter, which is unusual and might lead to confusion. After acquiring both the mutex `q->sysfs_lock` and the spinlock `lock`, there are no visible corresponding unlock functions within the provided code snippet.
+
+RECOMMENDATIONS:
+To address this vulnerability, ensure that all mutexes and spinlocks are unlocked after use. Use the corresponding `mutex_unlock` function for the mutex `q->sysfs_lock` and the `spin_unlock_irq` function for the spinlock `lock`. Confirm that the code using these locks properly handles interrupts. Use a statically declared spinlock variable and ensure consistent usage of the lock.
+
+ORIGINAL CODE:
+
+}
+EXPORT_SYMBOL_GPL(blk_queue_bypass_end);
+
+void blk_set_queue_dying(struct request_queue *q)
+{
+	queue_flag_set_unlocked(QUEUE_FLAG_DYING, q);
+
+	if (q->mq_ops)
+		blk_mq_wake_waiters(q);
+	else {
+		struct request_list *rl;
+
+		blk_queue_for_each_rl(rl, q) {
+			if (rl->rq_pool) {
+				wake_up(&rl->wait[BLK_RW_SYNC]);
+				wake_up(&rl->wait[BLK_RW_ASYNC]);
+			}
+		}
+	}
+}
+EXPORT_SYMBOL_GPL(blk_set_queue_dying);
+
+/**
+ * blk_cleanup_queue - shutdown a request queue
+ * @q: request queue to shutdown
+ *
+
+	/* mark @q DYING, no new request or merges will be allowed afterwards */
+	mutex_lock(&q->sysfs_lock);
+	blk_set_queue_dying(q);
+	spin_lock_irq(lock);
+
+	/*
+	* A dying queue is permanently in bypass mode till released. Note

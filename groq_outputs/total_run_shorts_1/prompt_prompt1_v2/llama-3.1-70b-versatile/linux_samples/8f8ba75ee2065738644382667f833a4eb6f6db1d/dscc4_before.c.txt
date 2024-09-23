@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential memory leak due to incorrect error handling.
+
+EXPLANATION:
+The code allocates memory using `pci_alloc_consistent`, which returns a pointer to the allocated memory. However, in the event of a memory allocation failure, the function immediately jumps to the `err_free_irq_5` label without freeing any previously allocated resources. This can lead to memory leaks if the function was previously able to allocate memory successfully before failing. 
+
+The issue is specifically on line 4, `if (!priv->iqcfg) goto err_free_irq_5;` where the function does not properly handle the memory allocation error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should free any previously allocated memory before jumping to the error handling label. This will prevent memory leaks in the event of a memory allocation failure. Here's an example of how you could modify the code:
+```c
+if (!priv->iqcfg) {
+    /* Free any previously allocated resources here */
+    pci_free_consistent(pdev, IRQ_RING_SIZE*sizeof(__le32), priv->iqcfg_dma);
+    goto err_free_irq_5;
+}
+```
+ORIGINAL CODE:
+```
+}
+/* Global interrupt queue */
+	writel((u32)(((IRQ_RING_SIZE >> 5) - 1) << 20), ioaddr + IQLENR1);
+	priv->iqcfg = (__le32 *) pci_alloc_consistent(pdev,
+		IRQ_RING_SIZE*sizeof(__le32), &priv->iqcfg_dma);
+	if (!priv->iqcfg)
+	 goto err_free_irq_5;
+	writel(priv->iqcfg_dma, ioaddr + IQCFG);
+
+	rc = -ENOMEM;
+
+	/*
+	 * SCC 0-3 private rx/tx irq structures
+	 * IQRX/TXi needs to be set soon. Learned it the hard way...
+	 */
+```

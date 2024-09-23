@@ -1,0 +1,43 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No evident vulnerabilities found in the given code snippet.
+
+EXPLANATION:
+The provided code snippet is a C function `wcn36xx_pmc_enter_bmps_state` which is responsible for putting the Wi-Fi interface into the BMPS state. It checks the `allow_bmps` status, and then calls `wcn36xx_smd_enter_bmps`. If the call is successful, it updates the driver flags.
+
+The code seems to handle potential errors by checking the return value of `wcn36xx_smd_enter_bmps` and taking suitable actions. There are no visible buffer overflows, null pointer dereferences or use-after-free errors.
+
+However, we can't rule out any issues related to concurrency, timing or data validation, as this code is most likely a part of a larger project and we don't have enough context to fully analyze its behavior.
+
+RECOMMENDATIONS:
+There are no recommendations as the given code snippet doesn't demonstrate any vulnerabilities.
+
+ORIGINAL CODE:
+```c
+#include "wcn36xx.h"
+
+int wcn36xx_pmc_enter_bmps_state(struct wcn36xx *wcn,
+				 struct ieee80211_vif *vif)
+{
+	int ret = 0;
+	struct wcn36xx_vif *vif_priv = wcn36xx_vif_to_priv(vif);
+
+	if (!vif_priv->allow_bmps)
+		return -ENOTSUPP;
+
+	ret = wcn36xx_smd_enter_bmps(wcn, vif);
+	if (!ret) {
+		wcn36xx_dbg(WCN36XX_DBG_PMC, "Entered BMPS\n");
+		vif_priv->pw_state = WCN36XX_BMPS;
+		vif->driver_flags |= IEEE80211_VIF_BEACON_FILTER;
+	} else {
+		/*
+		 * One of the reasons why HW will not enter BMPS is because
+		 * received just after auth complete
+		 */
+		wcn36xx_err("Can not enter BMPS!\n");
+	}
+	return ret;
+}
+```

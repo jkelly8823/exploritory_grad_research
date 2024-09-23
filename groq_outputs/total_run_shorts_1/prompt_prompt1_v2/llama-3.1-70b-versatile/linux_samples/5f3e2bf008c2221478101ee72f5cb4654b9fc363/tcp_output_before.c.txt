@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Potential Integer Overflow Vulnerability.
+EXPLANATION:
+The code snippet appears to be calculating the maximum segment size (MSS) for TCP connections. However, it is vulnerable to an integer overflow. The subtraction `mss_now -= icsk->icsk_ext_hdr_len;` could result in a negative value if `icsk->icsk_ext_hdr_len` is greater than `mss_now`. This negative value will then be compared to `TCP_MIN_SND_MSS` and assigned to `mss_now` if it is less than `TCP_MIN_SND_MSS`. The overflow could potentially lead to the wrong MSS being chosen.
+RECOMMENDATIONS:
+To fix the potential integer overflow, the code should be modified to handle negative values that can result from the subtraction. Here are some steps you can take:
+1. Ensure that `mss_now` and `icsk->icsk_ext_hdr_len` are both unsigned integers.
+2. If `mss_now` can be zero before the subtraction, consider adding a check to prevent the underflow:
+```c
+if (mss_now >= icsk->icsk_ext_hdr_len) {
+    mss_now -= icsk->icsk_ext_hdr_len;
+} else {
+    // Handle underflow, for example:
+    mss_now = 0;
+}
+```
+3. Alternatively, you can use a safe subtraction function that prevents overflow or underflow:
+```c
+mss_now = safe_subtract(mss_now, icsk->icsk_ext_hdr_len);
+```
+
+ORIGINAL CODE:
+```c
+mss_now -= icsk->icsk_ext_hdr_len;
+
+/* Then reserve room for full set of TCP options and 8 bytes of data */
+if (mss_now < TCP_MIN_SND_MSS)
+    mss_now = TCP_MIN_SND_MSS;
+return mss_now;
+}
+
+/* Calculate MSS. Not accounting for SACKs here.  */
+```

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 5
+VULNERABILITY_DESCRIPTION:
+Format String Vulnerability (潜在printf Format String Injection, and Buffer Overflow/Memory Corruption)
+EXPLANATION:
+This code is vulnerable due to the presence of an unprotected 'printf' function in the 'printWrapper' function. It takes an untrusted input from the command line as an argument (argv[1]) and directly uses it as a format string to 'printf'. This can potentially lead to a format string injection attack if the input contains maliciously crafted formatting specifiers. This allows an attacker to write to arbitrary memory locations and cause undefined behavior, including a potential buffer overflow or memory corruption when assigning argv[1] to buf in the main function.
+
+Furthermore, in the main function, a 'memcpy' is performed from 'argv[1]' to 'buf'. No length check is performed, which allows an attacker to overflow 'buf' and lead to undefined behavior if 'argv[1]' is longer than the assigned size.
+
+RECOMMENDATIONS:
+1) Always validate and sanitize input data, especially if it's coming from an untrusted source.
+2) When using 'printf', use a format string as an argument or validate any dynamic format specifiers.
+3) Include bounds checking for both 'memcpy' and 'printf' functions to prevent buffer overflows.
+4) Prefer using safer string handling alternatives like 'strcpy' and 'snprintf' with accurate buffer length.
+5) In 'printWrapper', adding a format specifier like this:
+   ```c
+   printf("%s", string);
+   ```
+   This would ensure 'printf' doesn't treat the string as a format string.
+6) Always assume 'argv[1]' can have different lengths and check for those edge cases.
+   Here is example for the check in the main function:
+   ```c
+   if (strlen(argv[1]) < 5012) {
+       memcpy(buf, argv[1], strlen(argv[1]));
+   } else {
+       printf("Too long string for processing\n");
+       return 1;
+   }
+   ```
+Note that it is also possible to prevent buffer overflow through a stack approach in your compiler using its options.
+
+ORIGINAL CODE:
+#include <stdio.h>
+void printWrapper(char *string) {
+    printf(string);
+}
+int main(int argc, char **argv) {
+    char buf[5012];memcpy(buf, argv[1], 5012);printWrapper(argv[1]);return (0);
+}

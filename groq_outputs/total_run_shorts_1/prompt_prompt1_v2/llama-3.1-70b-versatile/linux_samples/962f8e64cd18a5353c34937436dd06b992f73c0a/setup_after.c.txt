@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 9-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Time-of-Check to Time-of-Use (TOCTOU) vulnerability.
+
+EXPLANATION:
+The vulnerability lies in the fact that the `security_ftr_enabled` function is called twice with the same arguments, but the return value is stored in a variable that is not guaranteed to be updated atomically. This means that the value of the `enable` variable may change between the two calls to `security_ftr_enabled`, potentially leading to a situation where the wrong value is used to enable or disable the security feature.
+
+In the given code, this vulnerability could allow an attacker to bypass security mitigations or inject malicious code by manipulating the values of `SEC_FTR_FAVOUR_SECURITY` and `SEC_FTR_L1D_FLUSH_ENTRY` or `SEC_FTR_L1D_FLUSH_UACCESS` between the time the checks are made and the time the setup functions are called.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend reordering the code to minimize the time between the check and the use of the security features. Additionally, consider using a lock or other synchronization mechanism to ensure that the values of the security features are not modified between the time the check is made and the time the setup functions are called.
+
+Here's an example of how the code could be rewritten to fix the vulnerability:
+
+```c
+void pseries_setup_security_mitigations(void)
+{
+    bool favour_security = security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY);
+
+    if (favour_security) {
+        bool l1d_flush_entry = security_ftr_enabled(SEC_FTR_L1D_FLUSH_ENTRY);
+        bool l1d_flush_uaccess = security_ftr_enabled(SEC_FTR_L1D_FLUSH_UACCESS);
+
+        setup_entry_flush(l1d_flush_entry);
+        setup_uaccess_flush(l1d_flush_uaccess);
+    }
+
+    // ... rest of the function ...
+}
+```
+
+ORIGINAL CODE:
+```c
+void pseries_setup_security_mitigations(void)
+{
+    struct h_cpu_char_result result;
+    enum l1d_flush_type types;
+    bool enable;
+
+    setup_rfi_flush(types, enable);
+    setup_count_cache_flush();
+
+    enable = security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY) &&
+            security_ftr_enabled(SEC_FTR_L1D_FLUSH_ENTRY);
+    setup_entry_flush(enable);
+
+    enable = security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY) &&
+            security_ftr_enabled(SEC_FTR_L1D_FLUSH_UACCESS);
+    setup_uaccess_flush(enable);
+
+    setup_stf_barrier();
+}
+
+// ... rest of the code ...
+```

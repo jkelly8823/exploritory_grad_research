@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+EXPLANATION:
+In the `hid_debug_event` function, the code uses `kfifo_in` to add a string to a ring buffer without any bounds checking. If the string `buf` is longer than `HID_DEBUG_FIFOSIZE`, it may overflow the buffer, potentially leading to arbitrary code execution.
+
+The vulnerable lines (7-11) lack any checks to prevent buffer overflows. Specifically, the length of the string `buf` is obtained using `strlen(buf)`, but this length is not compared against the maximum size of the buffer.
+
+While `kfifo_in` may return an error if the buffer is full, it is not being checked for in this case. Additionally, even if an error is returned, the function does not take any action to prevent the overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking before calling `kfifo_in`. Specifically, you should check the length of `buf` against the maximum size of the buffer and return an error or truncate the buffer if it is too large.
+
+Here's an example of how to fix this:
+```c
+int len = strlen(buf);
+if (len > HID_DEBUG_FIFOSIZE) {
+    // handle error or truncate buffer
+    return -EINVAL;
+}
+kfifo_in(&list->hid_debug_fifo, buf, len);
+```
+ORIGINAL CODE:
+```c
+void hid_debug_event(struct hid_device *hdev, char *buf)
+{
+    struct hid_debug_list *list;
+    unsigned long flags;
+
+    spin_lock_irqsave(&hdev->debug_list_lock, flags);
+    list_for_each_entry(list, &hdev->debug_list, node)
+        kfifo_in(&list->hid_debug_fifo, buf, strlen(buf));
+    spin_unlock_irqrestore(&hdev->debug_list_lock, flags);
+
+    wake_up_interruptible(&hdev->debug_wait);
+}
+```

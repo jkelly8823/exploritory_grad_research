@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6, 13
+VULNERABILITY_DESCRIPTION: Unrestricted Server Port Usage and Potential Denial-of-Service (DoS) Attack
+EXPLANATION: 
+The provided code snippet creates a server socket on a fixed port and waits for incoming connections. However, this approach presents two potential vulnerabilities. Firstly, using a fixed port number increases the risk of attacks targeting the server, especially if the port is well-known. Moreover, the lack of input validation on the used port number can lead to the server binding to a system-reserved or protected port, potentially causing unintended behavior. Additionally, the unlimited loop `while(listening)` that repeatedly calls `start()` can cause the system to create multiple threads with the same characteristics. This may lead to resource exhaustion, causing the server to become unresponsive to legitimate requests.
+
+Furthermore, the `public StockSymbolBean()` calls the `start()` method, which can be problematic due to potential concurrency issues since the bean's thread instance is not guaranteed to complete before a new instance is created and `start()` is called.
+
+RECOMMENDATIONS:
+- Define a flexible server port configuration mechanism that takes into consideration restricted or reserved ports.
+- Implement proper port range validation, ideally by using a combination of configuration parameters and the `SecurityManager.checkListen( port )` method.
+- Update the server initialization process to eliminate the loop and only instantiate a single server socket instance that monitors incoming connections.
+- Apply proper concurrency control when starting a server socket instance from a multithreaded bean architecture, using `synchronized` blocks or atomic operations as necessary.
+
+ORIGINAL CODE:
+```java
+@Stateless
+public class StockSymbolBean extends Thread implements StockSymbolRemote {
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    boolean listening = false;
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        } catch (IOException ex) {...}
+        listening = true;
+        while(listening) {start();}
+    }
+    public String getStockSymbol(String name) {...}
+    public BigDecimal getStockValue(String symbol) {...}
+    public void run() {
+        try {clientSocket = serverSocket.accept();
+        } catch (IOException e) {...}...
+    }
+}
+```

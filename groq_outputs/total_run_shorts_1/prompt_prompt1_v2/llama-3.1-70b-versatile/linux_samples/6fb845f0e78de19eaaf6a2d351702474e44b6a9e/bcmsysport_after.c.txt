@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 14
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in the memcpy operations.
+
+EXPLANATION:
+The code snippet uses the memcpy function to copy data from the wol->sopass and wol->sopass arrays to the priv->sopass array. The size of the data being copied is specified using the sizeof(priv->sopass) expression. However, the sizeof operator only returns the size of the type of the priv->sopass variable, not the actual size of the array. If the size of the array wol->sopass is larger than the size of priv->sopass, this could result in a buffer overflow.
+
+Additionally, on line 14, the memcpy operation is not validated for a successful transfer of data. If the transfer is not successful and does not fill the priv->sopass buffer, but the length of the buffer is then used to index or transfer that memory, then it will result in a buffer overflow or other undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the destination buffer (priv->sopass) is large enough to hold the data being copied. Also, validate the return value of memcpy to ensure the data was correctly copied.
+
+Additionally, consider using size-checked APIs such as memmove instead of memcpy, or utilize size-checked calls like strlcpy when possible.
+
+ORIGINAL CODE:
+```c
+struct ethtool_wolinfo *wol)
+{
+	struct bcm_sysport_priv *priv = netdev_priv(dev);
+
+	wol->supported = WAKE_MAGIC | WAKE_MAGICSECURE | WAKE_FILTER;
+	wol->wolopts = priv->wolopts;
+
+	if (!(priv->wolopts & WAKE_MAGICSECURE))
+		return;
+
+	memcpy(wol->sopass, priv->sopass, sizeof(priv->sopass));
+}
+
+static int bcm_sysport_set_wol(struct net_device *dev,
+			       struct ethtool_wolinfo *wol)
+	if (wol->wolopts & ~supported)
+		return -EINVAL;
+
+	if (wol->wolopts & WAKE_MAGICSECURE)
+		memcpy(priv->sopass, wol->sopass, sizeof(priv->sopass));
+
+	/* Flag the device and relevant IRQ as wakeup capable */
+	if (wol->wolopts) {
+		device_set_wakeup_enable(kdev, 1);
+(unsigned int index, i = 0;
+	u32 reg;
+
+	reg = umac_readl(priv, UMAC_MPD_CTRL);
+	if (priv->wolopts & (WAKE_MAGIC | WAKE_MAGICSECURE))
+		reg |= MPD_EN;
+	reg &= ~PSW_EN;
+	if (priv->wolopts & WAKE_MAGICSECURE) {
+		/* Program the SecureOn password */
+		umac_writel(priv, get_unaligned_be16(&priv->sopass[0]),
+			    UMAC_PSW_MS);
+		umac_writel(priv, get_unaligned_be32(&priv->sopass[2]),
+			    UMAC_PSW_LS);
+		reg |= PSW_EN;
+	}
+	umac_writel(priv, reg, UMAC_MPD_CTRL);
+
+	if (priv->wolopts & WAKE_FILTER) {
+		/* Turn on ACPI matching to steal packets from RBUF */
+```

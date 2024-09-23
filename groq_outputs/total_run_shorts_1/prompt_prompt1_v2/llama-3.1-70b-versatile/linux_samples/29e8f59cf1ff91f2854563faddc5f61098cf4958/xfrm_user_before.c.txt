@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Potential privileges escalation due to inadequate capability checking for socket operations.
+EXPLANATION:
+The code checks for the CAP_NET_ADMIN privilege before proceeding with socket operations, but it does not verify whether the capability is persistent across namespace boundaries. This could lead to a scenario where a malicious user gains elevated privileges by exploiting a capability that is available in one namespace but not in others.
+RECOMMENDATIONS:
+Instead of only checking for CAP_NET_ADMIN, the code should also verify the persistency of the capability across namespaces using the `nsown_capable` function, which checks if the capability is available in the current namespace and in all its parent namespaces. This ensures that the capability is consistently available and reduces the risk of privilege escalation.
+
+Here's an example of how to do this:
+
+```c
+if (!nsown_capable(net->user_ns, CAP_NET_ADMIN))
+    return -EPERM;
+```
+ORIGINAL CODE:
+
+link = &xfrm_dispatch[type];
+
+/* All operations require privileges, even GET */
+if (!ns_capable(net->user_ns, CAP_NET_ADMIN))
+    return -EPERM;
+
+if ((type == (XFRM_MSG_GETSA - XFRM_MSG_BASE) ||
+     type == (XFRM_MSG_GETPOLICY - XFRM_MSG_BASE)) &&

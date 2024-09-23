@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION:
+The __ldcw macro is vulnerable to a potential atomicity issue in a multi-threaded environment.
+
+EXPLANATION:
+The __ldcw macro uses inline assembly to perform a lockless 64-bit load using the __LDCW instruction. However, the use of the "memory" clobber list in the assembly template does not provide any guarantees of atomicity with respect to concurrent access by other threads. Since the __LDCW instruction is not inherently atomic, the macro may not be thread-safe in certain scenarios.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider using a synchronization mechanism, such as a mutex or spinlock, to ensure exclusive access to the memory location being accessed by the __ldcw macro. Alternatively, consider using an atomic load instruction or a built-in function that provides atomicity guarantees, such as the `atomic_load` function from the `<stdatomic.h>` header.
+
+ORIGINAL CODE:
+
+
+#endif /*!CONFIG_PA20*/
+
+/* LDCW, the only atomic read-write operation PA-RISC has. *sigh*.
+   We don't explicitly expose that "*a" may be written as reload
+   fails to find a register in class R1_REGS when "a" needs to be
+   reloaded when generating 64-bit PIC code.  Instead, we clobber
+   memory to indicate to the compiler that the assembly code reads
+   or writes to items other than those listed in the input and output
+   operands.  This may pessimize the code somewhat but __ldcw is
+   usually used within code blocks surrounded by memory barriors.  */
+#define __ldcw(a) ({						\
+	unsigned __ret;						\
+	__asm__ __volatile__(__LDCW " 0(%1),%0"			\
+		: "=r" (__ret) : "r" (a) : "memory");		\
+	__ret;							\
+})
+
+#ifdef CONFIG_SMP

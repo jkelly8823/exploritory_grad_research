@@ -14,6 +14,8 @@ def main():
     print(os.getenv('parser_dir'))
     for root, dirs, files in os.walk(os.getenv('parser_dir')):
         for filename in files:
+            if filename == 'fail_log.txt.txt':
+                continue
             file_path = os.path.join(root, filename)
             path_parts = Path(file_path).parts
 
@@ -24,7 +26,7 @@ def main():
             pattern = r"VULNERABLE.*:.*(YES)|(NO)"
 
             # Search for matches using regex
-            matches = re.findall(pattern, output)
+            matches = re.findall(pattern, output, re.IGNORECASE)
 
             llmVuln = -1
             for match in matches:
@@ -42,6 +44,8 @@ def main():
             trueVuln = True
             # print(path_parts)
             if ('cwe' in path_parts[4].lower()) and ('good' in path_parts[6].lower()):
+                trueVuln = False
+            if ('cwe' not in path_parts[4].lower()) and ('_after.' in path_parts[6].lower()):
                 trueVuln = False
 
             # New row data as a dictionary

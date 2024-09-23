@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Use after null pointer dereference.
+
+EXPLANATION:
+The vulnerability is present in the line where we check if `self->itself` is equal to `NULL`. This check is performed after we have already used `self->itself` in the line `self->itself = XML_ParserCreate(encoding);`. If `self->itself` was not previously initialized and `XML_ParserCreate(encoding)` returns `NULL`, then the check on line 6 is too late. However, in this context, since this code snippet is used in an `else` branch, `self->itself` must have been previously initialized to `NULL` (or a non-NULL value has been assigned to it). 
+
+However, this is not true: in the else statement before it is used and then assigned, it was potentially assigned a non-null value. 
+
+However in the line after the else statement, it returns the value assigned, which can be NULL if it was not in the else condition. Without the full code snippet it is hard to declare if this is a vulnerability. Even if a condition assigned `NULL` there is error-checking code in place. Given the current context we can only assume potential error management downstream has not happened yet.
+
+RECOMMENDATIONS:
+Verify that `self->itself` is not `NULL` before its use, especially in code not shown. Additionally,  when a function returns `NULL` to indicate an error, it is good practice to  check  if the returned pointer is `NULL` immediately after the function call to prevent potential use-after-null-pointer assignments.
+
+ORIGINAL CODE:
+```python
+else {
+    self->itself = XML_ParserCreate(encoding);
+}
+self->intern = intern;
+Py_XINCREF(self->intern);
+PyObject_GC_Track(self);
+if (self->itself == NULL) {
+```

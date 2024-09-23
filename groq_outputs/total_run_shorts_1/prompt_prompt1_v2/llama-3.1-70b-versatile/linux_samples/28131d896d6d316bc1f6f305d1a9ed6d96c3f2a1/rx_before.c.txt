@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-12
+VULNERABILITY_DESCRIPTION:
+Unsupported Input Validation - Unvalidated use of potentially tainted values can lead to incorrect handling and potential denial of service.
+
+EXPLANATION:
+In this code snippet, the values of `inta_fh` and `inta_hw` are not validated prior to use in the error handling logic. It is unclear whether these values are directly derived from user input or external data, but their use in a context where errors are reported to the end user could be leveraged to inject misleading or forged error messages. 
+
+Furthermore, when the code logs the error state with the comment "Microcode SW error detected. Restarting 0x%X.\n" the value of `inta_fh` is included directly in the output. This may not pose an immediate risk, but user-facing error messages should generally be sanitized to prevent exposure of potentially sensitive information.
+
+RECOMMENDATIONS:
+1. Validate the values of `inta_fh` and `inta_hw` before using them in the error handling logic to prevent manipulation.
+2. Implement additional input validation on these values to ensure they conform to expected formats and ranges.
+3. Sanitize any user-facing error messages to prevent exposure of potentially sensitive information.
+4. Review the code to ensure that error conditions do not reveal information about the internal workings of the system.
+
+ORIGINAL CODE:
+	u32 inta_fh_msk = ~MSIX_FH_INT_CAUSES_DATA_QUEUE;
+	u32 inta_fh, inta_hw;
+	bool polling = false;
+
+	if (trans_pcie->shared_vec_mask & IWL_SHARED_IRQ_NON_RX)
+		inta_fh_msk |= MSIX_FH_INT_CAUSES_Q0;
+
+		wake_up(&trans_pcie->ucode_write_waitq);
+	}
+
+	/* Error detected by uCode */
+	if ((inta_fh & MSIX_FH_INT_CAUSES_FH_ERR) ||
+	    (inta_hw & MSIX_HW_INT_CAUSES_REG_SW_ERR)) {
+		IWL_ERR(trans,
+			"Microcode SW error detected. Restarting 0x%X.\n",
+			inta_fh);
+		isr_stats->sw++;

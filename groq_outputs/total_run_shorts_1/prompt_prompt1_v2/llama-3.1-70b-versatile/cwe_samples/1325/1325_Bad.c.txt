@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-14
+VULNERABILITY_DESCRIPTION:
+Stack Overflow due to excessive alloca usage
+
+EXPLANATION:
+The vulnerability in this code is the use of `alloca` within a loop, allocating memory on the stack without freeing it. This can lead to a stack overflow, especially if `end_limit` is large. `alloca` allocates memory on the stack, and this memory is automatically released when the function returns. However, in this case, memory is being allocated in a loop, and this can quickly exceed the maximum stack size. Furthermore, the `p = *p;` line introduces an additional stack address into the calculation, which is likely an error and further exacerbates the problem.
+
+Also, `alloca` is used with `sizeof(int *)` which returns a pointer size (usually 4 or 8 bytes), not an integer size. This makes it unclear what is intended to be stored at the allocated memory location.
+
+Additionally, `base` is initially set to `NULL`, but no check is performed before dereferencing `p` (which is initially `base`). This results in dereferencing a `NULL` pointer on the first iteration of the loop, causing undefined behavior.
+
+RECOMMENDATIONS:
+The recommended fix for this code would be to use dynamic memory allocation (e.g., `malloc` or `calloc`) instead of `alloca` to allocate memory on the heap rather than on the stack. It's also recommended to perform a check for `NULL` before dereferencing any pointer. Here's an example of the fixed code:
+
+```c
+int end_limit = get_nmbr_obj_from_db();
+int i;
+int **base = NULL;  // int ** for array of pointers
+base = malloc(end_limit * sizeof(int *));
+if (!base) {
+    // handle memory allocation failure
+}
+
+for (i = 0; i < end_limit; i++) {
+    base[i] = malloc(sizeof(int));
+    if (!base[i]) {
+        // handle memory allocation failure
+    }
+    // You can now safely use base[i] as a pointer to an integer
+}
+
+```
+It's also important to remember to free the allocated memory when it is no longer needed to prevent memory leaks.
+
+ORIGINAL CODE:
+```c
+// Gets the size from the number of objects in a database, which over time can conceivably get very large
+int end_limit = get_nmbr_obj_from_db();
+int i;
+int *base = NULL;
+int *p = base;
+for (i = 0; i < end_limit; i++)
+{
+    *p = alloca(sizeof(int *)); // Allocate memory on the stack
+    p = *p; // // Point to the next location to be saved
+}
+```

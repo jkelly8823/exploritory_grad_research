@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-16 (both blocks)
+VULNERABILITY_DESCRIPTION:
+Integer Division By Zero vulnerability is present.
+
+EXPLANATION:
+The code contains two blocks that perform a similar operation: retrieving a clock rate and performing a calculation based on that rate. However, there is no check to ensure that the divisor in the calculation is non-zero before performing the division. If the `clk` value is zero (which can happen if `clk_get_rate(priv->plat->stmmac_clk)` and `priv->plat->clk_ref_rate` are both zero), the code will attempt to divide by zero, leading to undefined behavior.
+
+Additionally, there is a lack of error handling in case the division overflows or underflows.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should check to ensure the divisor is non-zero before performing the division:
+
+```c
+unsigned long clk = clk_get_rate(priv->plat->stmmac_clk);
+if (clk) {
+    // ... use clk ...
+} else {
+    clk = priv->plat->clk_ref_rate;
+    if (clk) {
+        // ... use clk ...
+    } else {
+        // Handle error: unable to retrieve valid clock rate
+        return 0;
+    }
+}
+```
+
+Additionally, we can prevent division overflows by casting the result of the multiplication to a larger type before dividing:
+
+```c
+return ((usec * (clk / 1000000L)) / 256);
+return ((riwt * 256) / (clk / 1000000L));
+```
+
+Here, the `L` suffix casts the literal `1000000` to a `long`, preventing overflow when performing the division.
+
+ORIGINAL CODE:
+```c
+{
+    unsigned long clk = clk_get_rate(priv->plat->stmmac_clk);
+
+    if (!clk) {
+        clk = priv->plat->clk_ref_rate;
+        if (!clk)
+            return 0;
+    }
+
+    return (usec * (clk / 1000000)) / 256;
+}
+
+{
+    unsigned long clk = clk_get_rate(priv->plat->stmmac_clk);
+
+    if (!clk) {
+        clk = priv->plat->clk_ref_rate;
+        if (!clk)
+            return 0;
+    }
+
+    return (riwt * 256) / (clk / 1000000);
+}
+```

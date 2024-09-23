@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Unvalidated User Input
+
+EXPLANATION:
+In the `pv_eoi_get_pending` function, user input is retrieved from `pv_eoi_get_user`. However, the `pv_eoi_get_user` function is called with no validation of its return value before being used in the `printk` statement. The function `pv_eoi_get_user` seems to retrieve a value from an MSR (Model-Specific Register), which can potentially be user-controlled. While it's not entirely clear how `pv_eoi_get_user` works without its definition, assuming it does provide unvalidated user input, the potential for a denial-of-service or information disclosure vulnerability exists.
+
+Additionally, `pv_eoi_get_user` returns an integer value which is stored in `val` but isn't really validated, just checked if its less than 0. If this return value isn't checked correctly, then there's an integer-based vulnerability.
+
+
+However, there is a glaringly obvious function call, `printk(KERN_WARNING "Can't read EOI MSR value: 0x%llx\n", ...`. 
+Despite any of the previously mentioned potential threats; 
+in line 3, the code suffers from a traditional stack-based buffer overflow opportunity
+
+
+RECOMMENDATIONS:
+Before using any user input, it should be validated for its expected values and range. 
+
+The function should check that the returned `val` falls within an accepted range, preventing unintended results or potential integer overflows.
+Reorder validation and checks such that information cannot be used maliciously.
+Reorder potential debug statements, and refactor for clarity, making sure in the instance of an unavailable 'msr_val', an early, and controlled exit will happen. 
+
+
+Additionally, either the buffer overflow must be properly addressed using techniques such as snprintf() or a completely different logging framework.
+
+ORIGINAL CODE:
+
+static bool pv_eoi_get_pending(struct kvm_vcpu *vcpu)
+{
+	u8 val;
+	if (pv_eoi_get_user(vcpu, &val) < 0)
+		printk(KERN_WARNING "Can't read EOI MSR value: 0x%llx\n",
+			   (unsigned long long)vcpu->arch.pv_eoi.msr_val);
+	return val & 0x1;
+}

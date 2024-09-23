@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 13
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Potential Time-of-Check-to-Time-of-Use (TOCTOU) attacks. TOCTOU vulnerabilities occur when the time between checking the permissions and using the permissions allows an attacker to alter the system to exploit the vulnerability.
+
+EXPLANATION:
+The code is checking the inode mode and capabilities multiple times to determine if the operation should be allowed. However, the results of these checks are not atomic. Between the time of the check (e.g., checking if the user has CAP_DAC_OVERRIDE capability) and the time of the use (the return statement), an attacker could potentially alter the inode mode or capabilities, thus exploiting the vulnerability.
+
+RECOMMENDATIONS:
+1. Consider using a more atomic approach, such as using a single system call that combines the check and use, or acquiring a lock that prevents the inode mode and capabilities from being altered.
+2. Ensure that the inode and dir objects are not modified concurrently, e.g., by locking the inode or using some other synchronization mechanism.
+
+ORIGINAL CODE:
+
+
+	if (S_ISDIR(inode->i_mode)) {
+		/* DACs are overridable for directories */
+		if (capable_wrt_inode_uidgid(inode, CAP_DAC_OVERRIDE))
+			return 0;
+		if (!(mask & MAY_WRITE))
+			if (capable_wrt_inode_uidgid(inode,
+						     CAP_DAC_READ_SEARCH))
+				return 0;
+		return -EACCES;
+	}
+	/*
+	 * at least one exec bit set.
+	 */
+	if (!(mask & MAY_EXEC) || (inode->i_mode & S_IXUGO))
+		if (capable_wrt_inode_uidgid(inode, CAP_DAC_OVERRIDE))
+			return 0;
+
+	/*
+	 * Searching includes executable on directories, else just read.
+	 */
+	mask &= MAY_READ | MAY_WRITE | MAY_EXEC;
+	if (mask == MAY_READ)
+		if (capable_wrt_inode_uidgid(inode, CAP_DAC_READ_SEARCH))
+			return 0;
+
+	return -EACCES;
+}
+		return 0;
+	if (uid_eq(dir->i_uid, fsuid))
+		return 0;
+	return !capable_wrt_inode_uidgid(inode, CAP_FOWNER);
+}

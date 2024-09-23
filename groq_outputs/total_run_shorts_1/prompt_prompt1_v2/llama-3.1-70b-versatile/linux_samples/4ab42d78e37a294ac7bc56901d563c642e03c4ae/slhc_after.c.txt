@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-25
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability
+EXPLANATION:
+In the given code, when the allocation for `comp->tstate` fails, the error handling path (`out_free`) is called. However, this path frees `comp`, but does not free `comp->rstate` in case `rslots` is greater than 0. This results in a double-free vulnerability in the subsequent call to `out_free` in the error handling path for allocation of `comp`. Furthermore, there's an absence of freeing `comp->rstate` when `comp` allocation fails in the first place (`out_fail`). 
+RECOMMENDATIONS:
+To fix the vulnerability, ensure that `comp->rstate` is properly freed in both error handling paths. Here is a suggested fix:
+```c
+if (tslots > 0) {
+	size_t tsize = tslots * sizeof(struct cstate);
+	comp->tstate = kzalloc(tsize, GFP_KERNEL);
+	if (! comp->tstate) {
+		kfree(comp->rstate);  // Free rstate
+		kfree(comp);  // Free comp
+		return ERR_PTR(-ENOMEM);
+	}
+}
+...
+out_free:
+	kfree(comp->rstate);  // Free rstate
+out_free2:
+	kfree(comp);
+out_fail:
+	return ERR_PTR(-ENOMEM);
+```
+ORIGINAL CODE:
+```c
+static unsigned char * put16(unsigned char *cp, unsigned short x);
+static unsigned short pull16(unsigned char **cpp);
+
+/* Allocate compression data structure
+ *	slots must be in range 0 to 255 (zero meaning no compression)
+ * Returns pointer to structure or ERR_PTR() on error.
+ */
+struct slcompress *
+slhc_init(int rslots, int tslots)
+{
+	register struct cstate *ts;
+	struct slcompress *comp;
+
+	if (rslots < 0 || rslots > 255 || tslots < 0 || tslots > 255)
+		return ERR_PTR(-EINVAL);
+
+	comp = kzalloc(sizeof(struct slcompress), GFP_KERNEL);
+	if (! comp)
+		goto out_fail;
+
+	if (rslots > 0) {
+		size_t rsize = rslots * sizeof(struct cstate);
+		comp->rstate = kzalloc(rsize, GFP_KERNEL);
+		if (! comp->rstate)
+			goto out_free;
+		comp->rslot_limit = rslots - 1;
+	}
+
+	if (tslots > 0) {
+		size_t tsize = tslots * sizeof(struct cstate);
+		comp->tstate = kzalloc(tsize, GFP_KERNEL);
+		if (! comp->tstate)
+			goto out_free2;
+out_free:
+	kfree(comp);
+out_fail:
+	return ERR_PTR(-ENOMEM);
+}
+
+
+/* Free a compression data structure */
+```

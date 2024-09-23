@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumbers 10
+VULNERABILITY_DESCRIPTION:
+Incorrect Usage of Synchronous I/O Operation
+EXPLANATION:
+The vulnerability exists on line 10, which involves a synchronous I/O operation using `iowrite32` directly writing to a hardware register. Writing directly to a hardware register from a synchronous context like this can cause unpredictable behavior and potentially lead to a kernel panic. This function call does not provide any synchronization mechanism or locking protection for the operation.
+RECOMMENDATIONS:
+It is recommended to avoid performing I/O operations in a synchronous context. The operation should be redesigned to occur asynchronously or should be properly synchronized with other parts of the code. This may involve using interrupt handlers, tasklets, or any other form of asynchronous processing. If direct memory mapping is needed for this resource, ensure proper protection through using accessor methods provided for handling such locations or if none available implement these appropriately yourself.
+ORIGINAL CODE:
+	void __iomem *intc_msk_base = ioremap_nocache(0xe6900040, 0x10);
+	void __iomem *pfc_inta_ctrl = ioremap_nocache(0xe605807c, 0x4);
+
+#ifdef CONFIG_ARCH_SHMOBILE_LEGACY
+	void __iomem *gic_dist_base = ioremap_nocache(0xc2800000, 0x1000);
+	void __iomem *gic_cpu_base = ioremap_nocache(0xc2000000, 0x1000);
+
+	gic_init(0, 29, gic_dist_base, gic_cpu_base);
+#else
+	irqchip_init();
+#endif
+
+	/* route signals to GIC */
+	iowrite32(0x0, pfc_inta_ctrl);

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 12-13, 19-20
+VULNERABILITY_DESCRIPTION:
+String formatting with untrusted input vulnerability.
+
+EXPLANATION:
+In several locations within the given code snippet, a string is passed to the bt_dev_err and bt_dev_info functions, where it is then formatted with sprintf-like functionality. However, a string that is not guaranteed to be properly formatted is passed directly into these functions. The string 'fwname' is a variable input that comes from an external source (a firmware name), and directly passing it to a string formatting function like this can potentially allow for a buffer overflow or arbitrary code execution if the string 'fwname' is not properly validated. The issue lies on lines 4-5, 12-13, and 19-20 where the 'fwname' variable is directly passed as an argument to a function that formats strings.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate and restrict the characters used in 'fwname' to safe and expected formats, removing any potentially malicious input. For example, you could use a regular expression to filter the string for only alphanumeric characters and a limited set of special characters, like dashes and underscores. If such restrictions cannot be made, you should use a secure string formatting function that limits the number of characters written to the output string and prevents buffer overflow. Ideally, these functions should have built-in protection against buffer overflows.
+
+Additionally, the 'sfi' argument in the btusb_setup_intel_newgen_get_fw_name and btusb_setup_intel_new_get_fw_name functions seems to be hardcoded, which may make these functions less flexible and less secure in case the naming format changes or if different firmware uses a different format string. However, without more context or access to the implementation of these functions, we cannot determine with certainty if this constitutes a vulnerability.
+
+ORIGINAL CODE:
+}
+btusb_setup_intel_newgen_get_fw_name(ver, fwname, sizeof(fwname), "sfi");
+err = firmware_request_nowarn(&fw, fwname, &hdev->dev);
+if (err < 0) {
+    if (!test_bit(BTUSB_BOOTLOADER, &data->flags)) {
+        /* Firmware has already been loaded */
+        set_bit(BTUSB_FIRMWARE_LOADED, &data->flags);
+        return 0;
+    }
+
+    bt_dev_err(hdev, "Failed to load Intel firmware file %s (%d)",
+           fwname, err);
+
+    return err;
+}
+
+bt_dev_info(hdev, "Found device firmware: %s", fwname);
+err = btusb_setup_intel_new_get_fw_name(ver, params, fwname,
+                sizeof(fwname), "sfi");
+if (err < 0) {
+    if (!test_bit(BTUSB_BOOTLOADER, &data->flags)) {
+        /* Firmware has already been loaded */
+        set_bit(BTUSB_FIRMWARE_LOADED, &data->flags);
+        return 0;
+    }
+
+    bt_dev_err(hdev, "Unsupported Intel firmware naming");
+    return -EINVAL;
+}
+
+err = firmware_request_nowarn(&fw, fwname, &hdev->dev);
+if (err < 0) {
+    if (!test_bit(BTUSB_BOOTLOADER, &data->flags)) {
+        /* Firmware has already been loaded */
+        set_bit(BTUSB_FIRMWARE_LOADED, &data->flags);
+        return 0;
+    }
+
+    bt_dev_err(hdev, "Failed to load Intel firmware file %s (%d)",
+           fwname, err);
+    return err;
+}

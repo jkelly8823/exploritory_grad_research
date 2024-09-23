@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Resource leak due to potentially unchecked error handling.
+
+EXPLANATION:
+The code checks if there are any processes waiting in the suspend queue and wakes them up if so. However, it does so without checking the return value of `wake_up()`, which can fail under certain conditions (e.g., out-of-memory errors). If `wake_up()` fails, the error is not propagated or handled, which can lead to resource leaks and other unexpected behavior.
+
+Additionally, there's no check to prevent concurrent access to the waitqueue. This could lead to a data race between this code path and the one that puts a process on the waitqueue.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend checking the return value of `wake_up()` and handling any potential errors. This could involve logging an error message or rolling back any changes made before attempting to wake up the waiters.
+
+Another recommendation is to ensure proper synchronization when accessing the waitqueue to prevent data races. This can be achieved by acquiring the necessary locks or using synchronization primitives that guarantee mutual exclusion.
+
+Before waking up the waiters, also consider checking if there are actually processes waiting to be woken up to avoid unnecessary overhead.
+
+```c
+if (unlikely(waitqueue_active(&md->wait))) {
+    if (wake_up(&md->wait)) {
+        // Handle the error case
+    }
+}
+```
+
+ORIGINAL CODE:
+```
+				    true, duration, &io->stats_aux);
+
+	/* nudge anyone waiting on suspend queue */
+	if (unlikely(waitqueue_active(&md->wait)))
+		wake_up(&md->wait);
+}
+
+/*
+			return r;
+	}
+
+	bio_trim(clone, sector - clone->bi_iter.bi_sector, len);
+
+	return 0;
+}
+```

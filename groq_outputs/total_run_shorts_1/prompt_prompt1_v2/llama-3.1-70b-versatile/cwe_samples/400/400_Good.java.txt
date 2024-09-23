@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 13
+VULNERABILITY_DESCRIPTION:
+Resource leak and inappropriate use of ExecutorService.
+
+EXPLANATION:
+The code creates a new ServerSocket and accepts incoming connections. However, the ExecutorService is created and used incorrectly. A new ExecutorService is created for each incoming connection, which can lead to excessive resource usage and resource leaks. The ExecutorService should be created once and used to manage all incoming connections. Additionally, the executor service is not shutdown after use, which can prevent the program from exiting cleanly.
+
+RECOMMENDATIONS:
+Create a single ExecutorService and reuse it to manage all incoming connections. Use the `shutdown` method to properly shut down the executor service when it's no longer needed. Use try-with-resources to ensure the server socket is properly closed.
+
+ORIGINAL CODE:
+```java
+public static final int SERVER_PORT = 4444;
+public static final int MAX_CONNECTIONS = 10;
+...
+public void acceptConnections() {
+    try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
+        int counter = 0;
+        boolean hasConnections = true;
+        ExecutorService pool = Executors.newFixedThreadPool(MAX_CONNECTIONS);
+        while (hasConnections) {
+            hasConnections = checkForMoreConnections();
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            pool.execute(t);
+        }
+        pool.shutdown();
+    } catch (IOException ex) {
+        // handle exception
+    }
+}
+```
+Note: The recommended code uses a try-with-resources statement to ensure proper closing of the server socket, creates a single executor service and reuses it to manage all incoming connections, and shuts down the executor service when it's no longer needed.

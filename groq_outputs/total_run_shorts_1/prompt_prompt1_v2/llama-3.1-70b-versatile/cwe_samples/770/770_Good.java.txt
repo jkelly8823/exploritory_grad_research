@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION:
+Resource Leak and Denial of Service (DoS) vulnerabilities
+
+EXPLANATION:
+In this code snippet, there are two primary concerns. The first concern is that a new ExecutorService is instantiated and used to execute a client socket thread in each iteration of the while loop. However, this ExecutorService is never shut down. This could lead to a denial of service (DoS) scenario where the server is unable to process any further requests because its thread pool has exhausted its available threads. 
+
+Furthermore, although it does not directly contribute to this problem, I will also identify a second concern in this code that an exception may be thrown such that serverSocket.close() will not be called. This could also lead to a resource leak scenario because the SERVER_PORT socket is not properly cleaned up in the event of an exception. This can also hinder the responsiveness of the server.
+
+RECOMMENDATIONS:
+The first and most critical recommendation is to declare the ExecutorService instance before the while loop is entered and re-use it to process each incoming request until the ExecutorService is no longer needed (at which point it can be shutdown() explicitly).
+
+Also, the serverSocket.close() statement should be rearranged to use the Java 'try-with-resources' idiom in order to handle its deinitialization. This will guarantee serverSocket.close() regardless of the occurrence of an exception.
+
+Here is a corrected code segment:
+
+```java
+ExecutorService pool = Executors.newFixedThreadPool(MAX_CONNECTIONS); 
+try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
+    int counter = 0;
+    boolean hasConnections = true;
+    while (hasConnections) {
+        hasConnections = checkForMoreConnections();
+        Socket client = serverSocket.accept();
+        Thread t = new Thread(new ClientSocketThread(client));
+        t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+        pool.execute(t);
+    }
+} catch (IOException ex) {...} finally {
+    pool.shutdownNow();
+}
+```
+
+ORIGINAL CODE:
+
+```java
+public static final int SERVER_PORT = 4444;public static final int MAX_CONNECTIONS = 10;...
+public void acceptConnections() {
+    try {ServerSocket serverSocket = new ServerSocket(SERVER_PORT);int counter = 0;boolean hasConnections = true;while (hasConnections) {hasConnections = checkForMoreConnections();Socket client = serverSocket.accept();Thread t = new Thread(new ClientSocketThread(client));t.setName(client.getInetAddress().getHostName() + ":" + counter++);ExecutorService pool = Executors.newFixedThreadPool(MAX_CONNECTIONS);pool.execute(t);}serverSocket.close();
+} catch (IOException ex) {...}
+```

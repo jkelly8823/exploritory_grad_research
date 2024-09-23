@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-17, 23-25
+VULNERABILITY_DESCRIPTION:
+Resource leak and incomplete data handling due to inconsistent function exit points.
+
+EXPLANATION:
+This code seems to be performing checks for various features (SMEP, SMAP, fsgsbase) and updates certain data structures based on the results. However, it also performs different actions depending on the input parameters (e.g., updating permission bitmasks or calling `kvm_update_cpuid`). 
+
+The `struct timespec ts` and related functions seem to be performing timing-related functions, and they appear unrelated to the previous code. However, the mixing of these two blocks of code within a single function increases the risk of error.
+
+There is a resource leak if the code continues past certain conditions and exits without properly cleaning up or restoring state. Specifically, if `kvm_mmu_reset_context(vcpu)` is called but the function does not return, `vcpu_match_mmio_gva` is called without any regard to the previous call.
+
+There is also incomplete data handling. If certain conditions are met, `kvm_update_cpuid` and `update_permission_bitmask` are called. However, there are paths where neither of these functions is called. This introduces potential issues if they are not also called upon other exit paths.
+
+Additionally, the timing-related code may introduce timing side channel attacks if the exit time of these functions can be determined by an attacker. 
+
+The inconsistent data handling and incomplete function exit points could lead to resource leaks and/or incorrect operation.
+
+RECOMMENDATIONS:
+1. Move the timing-related code into its own function.
+2. Ensure that exit points from the function are consistent to prevent resource leaks. Use a switch statement or a cleaner logic structure to handle conditionals in the code.
+3. Ensure that state is properly cleaned up after calls to `kvm_mmu_reset_context(vcpu)` and `kvm_update_cpuid(vcpu)`, or that it is handled properly even if the code continues past these calls.
+
+ORIGINAL CODE:
+```c
+if (!guest_cpuid_has_smep(vcpu) && (cr4 & X86_CR4_SMEP))
+	return 1;
+
+if (!guest_cpuid_has_smap(vcpu) && (cr4 & X86_CR4_SMAP))
+	return 1;
+
+if (!guest_cpuid_has_fsgsbase(vcpu) && (cr4 & X86_CR4_FSGSBASE))
+	return 1;
+
+if (is_long_mode(vcpu)) {
+    (!(cr4 & X86_CR4_PCIDE) && (old_cr4 & X86_CR4_PCIDE)))
+		kvm_mmu_reset_context(vcpu);
+
+if ((cr4 ^ old_cr4) & X86_CR4_SMAP)
+	update_permission_bitmask(vcpu, vcpu->arch.walk_mmu, false);
+
+if ((cr4 ^ old_cr4) & X86_CR4_OSXSAVE)
+	kvm_update_cpuid(vcpu);
+
+return 0;
+{
+	struct timespec ts;
+
+	ktime_get_ts(&ts);
+	monotonic_to_bootbased(&ts);
+	return timespec_to_ns(&ts);
+}
+		| (write ? PFERR_WRITE_MASK : 0);
+
+if (vcpu_match_mmio_gva(vcpu, gva)
+    && !permission_fault(vcpu, vcpu->arch.walk_mmu,
+				vcpu->arch.access, access)) {
+		*gpa = vcpu->arch.mmio_gfn << PAGE_SHIFT |
+					(gva & (PAGE_SIZE - 1));
+		trace_vcpu_match_mmio(gva, *gpa, write, false);
+		return 1;
+```

@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential buffer overflow. The code checks if the inode size plus the extra isize is larger than the total inode size. However, it does not validate whether the raw_inode pointer is valid before accessing its contents.
+
+EXPLANATION:
+In this code snippet, there is a lack of input validation on the 'raw_inode' pointer. If the 'iloc' argument passed to ext4_raw_inode() is invalid or corrupted, it can return a pointer to unallocated memory, a memory location that has already been deallocated, or even a memory-mapped area that contains attacker-controlled data. In such a scenario, when the code attempts to access 'raw_inode->i_extra_isize', it can lead to a buffer overflow. Even though this snippet does not appear to have the traditional hallmarks of a buffer overflow, corrupting adjacent data or the program counter can happen through the exploitation of this vulnerability.
+
+RECOMMENDATIONS:
+Before using the 'raw_inode' pointer, validate that it points to a valid and properly allocated memory region. 
+
+*   Add checks to ensure that 'iloc' is a valid argument before calling 'ext4_raw_inode()'.
+*   Verify the returned 'raw_inode' pointer is not NULL and has sufficient memory allocated for use.
+*   Consider adding error handling for scenarios where 'raw_inode' is invalid or corrupted.
+
+ORIGINAL CODE:
+
+    goto bad_inode;
+    raw_inode = ext4_raw_inode(&iloc);
+
+    if ((ino == EXT4_ROOT_INO) && (raw_inode->i_links_count == 0)) {
+        EXT4_ERROR_INODE(inode, "root inode unallocated");
+        ret = -EFSCORRUPTED;
+        goto bad_inode;
+    }
+
+    if (EXT4_INODE_SIZE(inode->i_sb) > EXT4_GOOD_OLD_INODE_SIZE) {
+        ei->i_extra_isize = le16_to_cpu(raw_inode->i_extra_isize);
+        if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize >
+            EXT4_INODE_SIZE(inode->i_sb) ||

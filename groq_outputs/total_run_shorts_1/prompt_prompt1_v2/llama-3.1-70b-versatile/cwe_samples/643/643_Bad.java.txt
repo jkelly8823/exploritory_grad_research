@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to XPath injection, which can allow an attacker to inject malicious XPath expressions and potentially extract or modify sensitive data.
+
+EXPLANATION:
+The provided code is using XPath expressions to query an XML database. However, the XPath expression is being constructed by directly concatenating user input (`login.getUserName()` and `login.getPassword()`) without any proper sanitization or validation. This allows an attacker to inject malicious XPath expressions, potentially leading to unauthorized access or data exposure. For example, an attacker could inject a XPath expression that returns a list of all users' home directories, or even modify the XML database by injecting an UPDATE statement.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following steps:
+- Use a parameterized XPath expression, where the user input is treated as a parameter and not directly concatenated into the XPath expression.
+- Implement proper input validation and sanitization for the user input.
+- Consider using a simple, straightforward authentication mechanism instead of XPath queries.
+- Use prepared statements for the XPath expressions, similar to those used for SQL queries.
+
+ORIGINAL CODE:
+```java
+ XPath xpath = XPathFactory.newInstance().newXPath();
+XPathExpression xlogin = xpath.compile("//users/user[login/text()='" + login.getUserName() + "' and password/text() = '" + login.getPassword() + "']/home_dir/text()");
+Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+String homedir = xlogin.evaluate(d);
+```
+
+Note: The code snippet should be refactored to use parameterized XPath expressions, where user input is passed as parameters, rather than being directly concatenated into the XPath expression. Here's a revised version of the code snippet:
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();
+String xPathExpr = "//users/user[login/text()='$login' and password/text() = '$password']/home_dir/text()";
+XPathExpression xlogin = xpath.compile(xPathExpr);
+xlogin = xpath.compile(xPathExpr);
+xpath.setXPathVariableResolver(new XPathVariableResolver() {
+    public Object resolveVariable(QName varName) {
+        if (varName.getLocalPart().equals("login")) {
+            return login.getUserName();
+        } else if (varName.getLocalPart().equals("password")) {
+            return login.getPassword();
+        } else {
+            return null;
+        }
+    }
+});
+Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+String homedir = xlogin.evaluate(d);
+```

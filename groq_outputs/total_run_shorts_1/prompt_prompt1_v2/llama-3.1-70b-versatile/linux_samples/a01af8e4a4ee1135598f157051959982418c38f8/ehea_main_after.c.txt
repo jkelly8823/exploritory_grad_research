@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Multiple
+VULNERABILITY_DESCRIPTION:
+Usage of netdev_alloc_skb without subsequent memory error checking prior to filling the skb buffer.
+EXPLANATION:
+The function netdev_alloc_skb is used to allocate an skb, but its return value is only checked after the allocation, and without any subsequent memory checks prior to writing data into the skb buffer. Although the allocation check is present, it only covers the case when skb is NULL, but when skb is allocated without sufficient memory available to be populated, writing to the buffer may lead to a potential out-of-bounds write or to other memory corruption issues. This problem could be compounded if other functions also handle the skb as valid. We see at least three instances of this pattern, each of which are vulnerable.
+RECOMMENDATIONS:
+1. Introduce and check for sufficient skb memory capacity. Handle properly any skb allocation failure before copying data to it. You may check `skb->truesize` or `skb_cow_data(skb)` to determine if there is enough space available. Failure of skb_cow_data will allow you to decide what to do with an skb having insufficient data space left for other system components to modify it.
+2. Take advantage of `skb_put_data(skb, data, len)` for testing whether putting data space into an skb will be successful before attempting it - and thus preventing crashes.
+
+ORIGINAL CODE:
+```c
+			skb_arr_rq1[index] = netdev_alloc_skb(dev,
+							      EHEA_L_PKT_SIZE);
+			if (!skb_arr_rq1[index]) {
+				ehea_info("Unable to allocate enough skb in the array\n");
+				pr->rq1_skba.os_skbs = fill_wqes - i;
+				break;
+			}
+		}
+	struct net_device *dev = pr->port->netdev;
+	int i;
+
+	if (nr_rq1a > pr->rq1_skba.len) {
+		ehea_error("NR_RQ1A bigger than skb array len\n");
+		return;
+	}
+
+	for (i = 0; i < nr_rq1a; i++) {
+		skb_arr_rq1[i] = netdev_alloc_skb(dev, EHEA_L_PKT_SIZE);
+		if (!skb_arr_rq1[i]) {
+			ehea_info("No enough memory to allocate skb array\n");
+			break;
+		}
+	}
+	/* Ring doorbell */
+	ehea_update_rq1a(pr->qp, i);
+}
+
+static int ehea_refill_rq_def(struct ehea_port_res *pr,
+			      struct ehea_q_skb_arr *q_skba, int rq_nr,
+
+					skb = netdev_alloc_skb(dev,
+							       EHEA_L_PKT_SIZE);
+					if (!skb) {
+						ehea_info("Not enough memory to allocate skb\n");
+						break;
+					}
+				}
+				skb_copy_to_linear_data(skb, ((char *)cqe) + 64,
+						 cqe->num_bytes_transfered - 4);
+				ehea_fill_skb(dev, skb, cqe);
+```

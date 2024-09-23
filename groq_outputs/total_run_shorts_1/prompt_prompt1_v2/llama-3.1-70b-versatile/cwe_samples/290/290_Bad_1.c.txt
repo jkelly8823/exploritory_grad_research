@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a DNS Spoofing Attack. The `gethostbyaddr()` function is used to perform a reverse DNS lookup, and the code then uses the returned hostname (`hp->h_name`) to verify the legitimacy of the host. However, this is not a secure way to verify the hostname because DNS spoofing attacks can trick the function into returning a fake hostname.
+
+EXPLANATION:
+The code relies on the `gethostbyaddr()` function to perform a reverse DNS lookup and verify the hostname of the host. However, this function is not secure because it uses the `hosts` file and DNS to resolve hostnames, which can be tampered with. Additionally, `gethostbyaddr()` is a non-reentrant function and has been deprecated in favor of `getnameinfo()` due to its security and reentrancy issues. The code uses `!strncmp()` to compare the returned hostname with the trusted hostname, which is also not a secure way to compare strings.
+
+RECOMMENDATIONS:
+To secure this code, we should use a secure and reentrant function to verify the hostname. One option is to use the `getnameinfo()` function or the `getaddrinfo()` function with the `AI_CANONNAME` flag set. Additionally, we should use a secure way to compare strings, such as using `strcmp()` or `strncasecmp()`.
+
+We should also verify that the resulting hostname matches the original DNS query, and we should verify the SSL/TLS certificate of the host to ensure that it matches the expected hostname. This way, we can prevent DNS spoofing attacks.
+
+Here is a sample code snippet that uses `getnameinfo()`:
+
+```c
+// Replacement code
+struct hostent *hp;
+struct in_addr myaddr;
+char* tHost = "trustme.example.com";
+myaddr.s_addr = inet_addr(ip_addr_string);
+
+char hostname[NI_MAXHOST];
+int res = getnameinfo((char *) &myaddr, sizeof(struct in_addr), hostname, NI_MAXHOST, NULL, 0, NI_NAMEREQD);
+
+if (res == 0 && strcmp(hp->h_name, tHost) == 0) {
+    trusted = true;
+} else {
+    trusted = false;
+}
+```
+
+ORIGINAL CODE:
+```c
+struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";myaddr.s_addr=inet_addr(ip_addr_string);
+hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {trusted = true;} else {trusted = false;}
+```

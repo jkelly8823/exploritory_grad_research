@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-18, 21-24
+VULNERABILITY_DESCRIPTION:
+Permission Bypass through Time and Mode Manipulation
+EXPLANATION:
+The code is vulnerable to a permission bypass, specifically when setting the inode time and mode. The check for `in_group_p(inode->i_gid)` is performed, but it does not account for the actual group ID being set by the user. A malicious user could potentially set a different group ID for the inode, bypassing the `in_group_p` check. Additionally, the mode is not properly sanitized before being applied to the inode, potentially allowing a malicious user to set arbitrary mode bits, including the setgid bit, even if they do not have the necessary capabilities.
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add an additional check to verify that the group ID being set is the same as the group ID that the user is currently in, and to also sanitize the mode bits being applied to the inode to ensure that they do not include any bits that the user does not have the necessary capabilities to set. Specifically, it is recommended to add a check to verify that `attr->ia_gid` is the same as `inode->i_gid` before applying the mode bits, and to remove the `S_ISGID` bit from `attr->ia_mode` if the user is not in the group or does not have the necessary capabilities.
+
+ORIGINAL CODE:
+```
+	if ((ia_valid & ATTR_UID) &&
+	    (!uid_eq(current_fsuid(), inode->i_uid) ||
+	     !uid_eq(attr->ia_uid, inode->i_uid)) &&
+	    !inode_capable(inode, CAP_CHOWN))
+		return -EPERM;
+
+	/* Make sure caller can chgrp. */
+	if ((ia_valid & ATTR_GID) &&
+	    (!uid_eq(current_fsuid(), inode->i_uid) ||
+	    (!in_group_p(attr->ia_gid) && !gid_eq(attr->ia_gid, inode->i_gid))) &&
+	    !inode_capable(inode, CAP_CHOWN))
+		return -EPERM;
+
+	/* Make sure a caller can chmod. */
+	if (ia_valid & ATTR_MODE) {
+		/* Also check the setgid bit! */
+		if (!in_group_p((ia_valid & ATTR_GID) ? attr->ia_gid :
+				inode->i_gid) &&
+		    !inode_capable(inode, CAP_FSETID))
+			attr->ia_mode &= ~S_ISGID;
+	}
+
+	/* Check for setting the inode time. */
+		umode_t mode = attr->ia_mode;
+
+		if (!in_group_p(inode->i_gid) &&
+		    !inode_capable(inode, CAP_FSETID))
+			mode &= ~S_ISGID;
+		inode->i_mode = mode;
+	}
+}
+```

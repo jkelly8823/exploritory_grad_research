@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+The function `release_thread` calls the ` BUG()` macro when it encounters a specific unexpected situation, potentially causing a kernel panic and allowing for a denial-of-service (DoS) attack.
+
+EXPLANATION:
+The `BUG()` macro is used to report a bug, which can be abused by an attacker to cause a denial-of-service (DoS) attack by inducing the function to hit this path. While the `BUG()` macro can be useful for detecting bugs, it should be used in situations where there are no security implications. 
+
+In this case, it would be more appropriate to use an error-handling mechanism, as an unexpected LDT is likely a result of incorrect behavior by the program. However, calling `BUG()` causes the system to crash without an opportunity to handle the error, allowing for an attacker to leverage this functionality to take down the system.
+
+RECOMMENDATIONS:
+Replace `BUG()` with an error-handling mechanism such as an error return or a panic with a safer handler. 
+
+Additionally, this function could add more debugging information or perhaps re-evaluate the conditions under which `BUG()` is called, allowing for easier identification of root causes. Either method would reduce the surface area available for a DoS attack.
+
+ORIGINAL CODE:
+```c
+void release_thread(struct task_struct *dead_task)
+{
+	if (dead_task->mm) {
+		if (dead_task->mm->context.size) {
+			pr_warn("WARNING: dead process %s still has LDT? <%p/%d>\n",
+				dead_task->comm,
+				dead_task->mm->context.ldt,
+				dead_task->mm->context.size);
+			BUG();
+		}
+	}
+}
+```

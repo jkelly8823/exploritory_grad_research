@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9 (XmlUtf8Convert)
+VULNERABILITY_DESCRIPTION:
+ Potential buffer overflow vulnerability. The `XmlUtf8Convert` function may write past the bounds of the `buf` array.
+EXPLANATION:
+The `buf` array has a fixed size of `ENCODING_MAX`, which is defined as 128. The `XmlUtf8Convert` function is called with `p + ENCODING_MAX - 1` as the maximum output size. However, this does not guarantee that the function will not overflow the buffer. If the input to `XmlUtf8Convert` is large enough, it could potentially write past the end of the `buf` array, leading to undefined behavior.
+RECOMMENDATIONS:
+To fix this vulnerability, you could use a buffer overflow prevention technique such as bounds checking or error handling when calling `XmlUtf8Convert`. This can be achieved by checking the return value of `XmlUtf8Convert` to see if it succeeded or failed, and then handling the result accordingly. Additionally, consider using a dynamically-sized buffer instead of a fixed-size buffer.
+
+Here is a possible fix:
+
+```c
+static const ENCODING *
+NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end) {
+  size_t required_size = XmlUtf8GetRequiredSize(enc, ptr, end);
+  if (required_size == 0) {
+    // Handle error
+    return NULL;
+  }
+  char* buf = malloc(required_size);
+  if (buf == NULL) {
+    // Handle error
+    return NULL;
+  }
+  char *p = buf;
+  XmlUtf8Convert(enc, &ptr, end, &p, buf + required_size);
+  // ...
+  free(buf);
+  return enc;
+}
+```
+
+ORIGINAL CODE:
+```c
+static const ENCODING *
+NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end) {
+#  define ENCODING_MAX 128
+  char buf[ENCODING_MAX];
+  char *p = buf;
+  int i;
+  XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
+  if (ptr != end)
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential Uncontrolled Resource Consumption vulnerability due to the lack of validation for the input of the `rb.reg` and `rb.bit` values being stored in the `uncore` and further used by `intel_uncore_write_fw(uncore, rb.reg, rb.bit)`.
+
+EXPLANATION:
+The code uses the `rb.reg` and `rb.bit` values directly without validating if they are within a valid range or not. If these values are not correctly sanitized or checked for valid input, it can lead to arbitrary writes to system memory locations, potentially allowing a malicious actor to consume arbitrary amounts of system resources.
+
+Additionally, the lack of validation could allow for exposure of internal system structures. Without proper validation, `rb.reg` and `rb.bit` could also refer to internal system structures or flags that should not be directly exposed or modified.
+
+RECOMMENDATIONS:
+To address this issue, the code should perform bounds validation on `rb.reg` and `rb.bit` and check them against valid values to prevent uncontrolled resource consumption and prevent out of bounds writes. 
+
+Example code from the Intel Media SDK suggests that input validation would be necessary to prevent invalid memory access.
+
+Here's an example of how this can be simplified for `rb.reg`:
+
+```c
+if (rb.reg < MIN_REGISTER || rb.reg > MAX_REGISTER) {
+    // Handle the out of range error
+}
+```
+
+You should replace the MIN_REGISTER and MAX_REGISTER with your actual valid register range.
+
+After validating the register value range, you can then safely use it to write to the internal system resource.
+
+ORIGINAL CODE:
+```c
+if (!i915_mmio_reg_offset(rb.reg))
+    continue;
+
+intel_uncore_write_fw(uncore, rb.reg, rb.bit);
+awake |= engine->mask;
+}
+```

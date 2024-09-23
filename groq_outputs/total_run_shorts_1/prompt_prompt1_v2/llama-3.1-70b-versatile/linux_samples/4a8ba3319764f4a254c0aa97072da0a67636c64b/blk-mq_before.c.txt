@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 111-112
+VULNERABILITY_DESCRIPTION:
+The function blk_mq_freeze_queue_wait has a potential deadlock due to re-entrant call to itself without proper synchronization.
+
+EXPLANATION:
+The function blk_mq_freeze_queue_wait is waiting for the percpu_ref_is_zero condition to be met, but before that, it is calling itself recursively. This re-entrant call can cause a deadlock if another task is waiting for the same condition to be met. This is because the second call to blk_mq_freeze_queue_wait will block and wait for the condition again, but since the first call has already locked the lock, it will never be able to make progress, resulting in a deadlock.
+
+Additionally, in the context of Linux kernel, it's generally not recommended to call the same function recursively, especially if it involves waiting for some condition. Instead, the function should be refactored to use a loop or a state machine to handle such situations.
+
+RECOMMENDATIONS:
+The recommended fix is to refactor the function to avoid recursive calls and use a loop to wait for the condition to be met. The proper synchronization mechanism should be used to ensure that the condition is checked safely.
+
+Here is a possible fix:
+
+```c
+static void blk_mq_freeze_queue_wait(struct request_queue *q)
+{
+	while (!percpu_ref_is_zero(&q->mq_usage_counter))
+		wait_event(q->mq_freeze_wq, percpu_ref_is_zero(&q->mq_usage_counter));
+}
+```
+
+ORIGINAL CODE:
+```c
+...
+static void blk_mq_freeze_queue_wait(struct request_queue *q)
+{
+    wait_event(q->mq_freeze_wq, percpu_ref_is_zero(&q->mq_usage_counter));
+    blk_mq_freeze_queue_wait(q);
+}
+...
+```

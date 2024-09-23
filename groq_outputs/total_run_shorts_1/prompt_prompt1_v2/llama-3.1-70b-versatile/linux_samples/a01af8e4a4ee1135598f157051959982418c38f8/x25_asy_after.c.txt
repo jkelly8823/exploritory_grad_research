@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 32
+VULNERABILITY_DESCRIPTION:
+Resource leak due to unchecked error return value from dev_close.
+
+EXPLANATION:
+The function x25_asy_close_tty calls dev_close and then checks the return value of lapb_unregister, but it does not check the return value of dev_close. If dev_close fails and returns an error, lapb_unregister will still be called. This could potentially result in a resource leak, as lapb_unregister may not be able to properly deregister the device if dev_close failed.
+
+More importantly, there is no check to ensure that rtnl_lock is held when calling dev_close, but there is an unlock after the call. This might be problematic if the rtnl_lock was not previously locked before calling dev_close. If not, this can result in an error or unexpected behavior.
+
+One other issue is the absence of checks for x25_asy_free called in case lapb_unregister fails. That call might allocate memory if error occurred which could result in uncontrolled memory increase.
+
+
+RECOMMENDATIONS:
+- Check the return value of dev_close before calling lapb_unregister.
+- Remove dev_close function call if lapb_unregister fails. 
+- Unlock the rtnl_lock only if lapb_unregister fails after calling dev_close function.
+
+ORIGINAL CODE:
+```c
+static int x25_asy_close(struct net_device *dev)
+{
+	struct x25_asy *sl = netdev_priv(dev);
+
+	spin_lock(&sl->lock);
+	if (sl->tty)
+		clear_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
+	netif_stop_queue(dev);
+	sl->rcount = 0;
+	sl->xleft  = 0;
+	spin_unlock(&sl->lock);
+	return 0;
+}
+
+static void x25_asy_close_tty(struct tty_struct *tty)
+{
+	struct x25_asy *sl = tty->disc_data;
+	int err;
+
+	/* First make sure we're connected. */
+	if (!sl || sl->magic != X25_ASY_MAGIC)
+		return;
+	err = dev_close(sl->dev);
+	rtnl_unlock();
+
+	if (err) {
+		/* add code to handle dev_close error */
+	} else {
+		err = lapb_unregister(sl->dev);
+		if (err != LAPB_OK)
+			printk(KERN_ERR "x25_asy_close: lapb_unregister error -%d\n",
+				err);
+	}
+
+	tty->disc_data = NULL;
+	sl->tty = NULL;
+	if(err == 0) {
+		x25_asy_free(sl);
+	} else {
+		/* add code to free memory */
+	}
+}
+```

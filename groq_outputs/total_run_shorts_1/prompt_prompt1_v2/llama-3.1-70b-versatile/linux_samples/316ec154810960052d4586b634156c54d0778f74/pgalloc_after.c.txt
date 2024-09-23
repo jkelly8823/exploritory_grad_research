@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 10
+VULNERABILITY_DESCRIPTION:
+Data Race Vulnerability
+
+EXPLANATION:
+The provided code snippet is vulnerable to data races due to the potential concurrent modification of shared variables `current->thread.mm_segment`, `S390_lowcore.user_asce`, and the use of shared flags `current->active_mm`. Specifically, the values of these variables are accessed and modified by the code in a non-thread-safe manner.
+
+The code tries to adapt `user_asce` based on `current->thread.mm_segment`. However, these values may be changed simultaneously by multiple threads or the scheduler, leading to uncontrolled concurrent updates that could affect the memory management state.
+
+The `__ctl_load` function calls may write shared data using potentially interruptible and non-blocking calls, thus elevating the possibility of concurrent access.
+
+Furthermore, the calls to `clear_cpu_flag(CIF_ASCE_PRIMARY)`, `test_cpu_flag(CIF_ASCE_SECONDARY)`, and `__tlb_flush_local` might introduce platform-specific concerns.
+
+RECOMMENDATIONS:
+- Consider introducing synchronization mechanisms, such as mutex locks or spinlocks, to guard the shared variables from concurrent access and modifications.
+- Prefer using atomic value management for shared flags and variables where applicable.
+- Review the code's requirements to identify and assert platform-specific conditions to guarantee multi-threaded safety.
+- Analyze platform-specific functions for data consistency and consider data alignment if applicable.
+
+ORIGINAL CODE:
+```c
+{
+	struct mm_struct *mm = arg;
+
+	/* we must change all active ASCEs to avoid the creation of new TLBs */
+	if (current->active_mm == mm) {
+		S390_lowcore.user_asce = mm->context.asce;
+		if (current->thread.mm_segment == USER_DS) {
+			__ctl_load(S390_lowcore.user_asce, 1, 1);
+			/* Mark user-ASCE present in CR1 */
+			clear_cpu_flag(CIF_ASCE_PRIMARY);
+		}
+		if (current->thread.mm_segment == USER_DS_SACF) {
+			__ctl_load(S390_lowcore.user_asce, 7, 7);
+			/* enable_sacf_uaccess does all or nothing */
+			WARN_ON(!test_cpu_flag(CIF_ASCE_SECONDARY));
+		}
+	}
+	__tlb_flush_local();
+}
+
+int crst_table_upgrade(struct mm_struct *mm, unsigned long end)
+```

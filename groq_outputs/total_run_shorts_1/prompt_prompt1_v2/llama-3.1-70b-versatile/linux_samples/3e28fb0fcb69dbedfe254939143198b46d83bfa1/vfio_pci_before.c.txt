@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION: 
+Insecure dynamic resource registration with unsanitized input.
+
+EXPLANATION:
+The function `pci_add_dynid` is called with potentially untrusted input parameters: `vendor`, `device`, `subvendor`, `subdevice`, `class`, and `class_mask`. If these input parameters are not sanitized and validated, a malicious actor can cause the program to register an arbitrary ID with the system. This can lead to unauthorized access or resource exhaustion.
+
+However, upon further examination, this is not a traditional input validation problem as is the case with many vulnerable programs. This issue does not pertain to string parsing or injection attacks, but rather unchecked resource registration. There is no code snippet provided that explicitly displays misuse of any potential dynamically obtained parameters as such. Ultimately the severity and consequence of this largely depend on how and what data is being passed to this function.
+
+
+It is also worth noting that there are only two lines that provide some safeguard against these conditions failing. The `if (rc)` condition means that should `pci_add_dynid` return an error value, an error message will be printed. But it still must be ensured that untrusted data cannot bypass resource registration functions' input validation on their parameters.
+
+RECOMMENDATIONS:
+1. Ensure `vendor`, `device`, `subvendor`, `subdevice`, `class`, and `class_mask` are validated before passing them to `pci_add_dynid`.
+2. Check the validity of the data before calling `pci_add_dynid`. For instance, ensure `vendor` and `device` are within expected ranges.
+3. Consider adding additional logging or error handling beyond `pr_warn` to signal that `pci_add_dynid` failed.
+4. Avoid passing untrusted data as parameters to `pci_add_dynid`. 
+
+ORIGINAL CODE:
+```
+	rc = pci_add_dynid(&vfio_pci_driver, vendor, device,
+				   subvendor, subdevice, class, class_mask, 0);
+		if (rc)
+			pr_warn("failed to add dynamic id [%04hx:%04hx[%04hx:%04hx]] class %#08x/%08x (%d)\n",
+				vendor, device, subvendor, subdevice,
+				class, class_mask, rc);
+		else
+			pr_info("add [%04hx:%04hx[%04hx:%04hx]] class %#08x/%08x\n",
+				vendor, device, subvendor, subdevice,
+				class, class_mask);
+	}
+```

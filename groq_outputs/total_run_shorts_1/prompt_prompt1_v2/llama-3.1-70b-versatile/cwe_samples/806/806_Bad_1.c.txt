@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-13
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow vulnerability.
+
+EXPLANATION:
+The vulnerability arises from the use of `strncpy` to copy the `filename` string into the `buf` buffer. The `length` parameter is used as the maximum number of characters to copy, but it does not guarantee null-termination of the `buf` buffer. If `length` is equal to `LOG_INPUT_SIZE`, the buffer will not have a null-terminator. This can cause issues when the buffer is later passed to the `saveToLogFile` function, which likely expects a null-terminated string. Furthermore, if `length` is greater than `LOG_INPUT_SIZE`, `strncpy` will only copy the first `LOG_INPUT_SIZE` characters, potentially resulting in a truncated string. This can lead to unexpected behavior or security issues if the truncated string is used later in the program.
+
+Additionally, there is a potential out-of-bounds bug if the `saveToLogFile` function does not check the length of the string passed to it and accesses memory beyond the bounds of the `buf` buffer.
+
+RECOMMENDATIONS:
+1. Use `strncpy` with `length + 1` to ensure null-termination of the `buf` buffer:
+   ```
+   strncpy(buf, filename, length);
+   buf[length] = '\0';  // Ensure null-termination
+   ```
+Alternatively, use `snprintf` to ensure null-termination:
+   ```
+   snprintf(buf, LOG_INPUT_SIZE, "%s", filename);
+   ```
+
+2. Validate the `length` parameter to ensure it is not greater than or equal to `LOG_INPUT_SIZE`. If it is, either truncate the string or increase the buffer size:
+   ```
+   if (length >= LOG_INPUT_SIZE) {
+       length = LOG_INPUT_SIZE - 1; // Save space for null-terminator
+       strncpy(buf, filename, length);
+       buf[length] = '\0';  // Ensure null-termination
+   }
+   ```
+
+3. Verify that the `saveToLogFile` function properly handles truncated or unterminated strings. Consider adding bounds checking or input validation in this function.
+
+ORIGINAL CODE:
+```
+#define LOG_INPUT_SIZE 40
+
+// saves the file name to a log file
+int outputFilenameToLog(char *filename, int length) {
+    int success;
+
+    // buffer with size set to maximum size for input to log file
+    char buf[LOG_INPUT_SIZE];
+
+    // copy filename to buffer
+    strncpy(buf, filename, length);
+
+    // save to log file
+    success = saveToLogFile(buf);
+    return success;
+}
+```

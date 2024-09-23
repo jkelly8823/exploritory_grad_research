@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 35,51
+VULNERABILITY_DESCRIPTION:
+The code has a potential null byte injection vulnerability. This occurs when user input is incorporated into the common name of an SSL certificate without proper validation or sanitization. The null byte injection allows an attacker to potentially bypass domain validation by terminating the string at a null character. This is shown in CVE-2013-4073, which affects Python prior to 3.3.3.
+
+EXPLANATION:
+The issue is here because the test code explicitly uses null bytecode certification with SSL certificates and manipulates it into valid domain names. While the aim appears to test handling and correct refusal of null bytecode within an SSL certificate, there is a possibility of injecting null bytecode else with within this code. Furthermore, there is a function "ok" with acceptance that null byte injection was permitted into the SSL subject certification. Under conditions where error checking is potentially disabled or function handlers were changed/modified, this kind of function "ok" is of some concern.
+
+RECOMMENDATIONS:
+1. Validate user input thoroughly before incorporating it into the common name of an SSL certificate.
+2. Remove or escape null bytes from the certificate common name to prevent potential null byte injection attacks.
+3. In the given case as null bytes being bad is mentioned in CVE-2013-4073 the "fail" should throw actual errors so that when a null byte certification occurs, it forces a different handling way on that path,  if such handling creates it through user entry under those non-HTTP or TLS services scenarios including error messages with request content and IP addresses, with such details of why requests failed with validation.
+
+ORIGINAL CODE:
+WRONGCERT = data_file("XXXnonexisting.pem")
+BADKEY = data_file("badkey.pem")
+NOKIACERT = data_file("nokia.pem")
+NULLBYTECERT = data_file("nullbytecert.pem")
+
+
+def handle_error(prefix):
+    exc_format = ' '.join(traceback.format_exception(*sys.exc_info()))
+                          ('DNS', 'projects.forum.nokia.com'))
+                        )
+
+    def test_parse_cert_CVE_2013_4073(self):
+        p = ssl._ssl._test_decode_cert(NULLBYTECERT)
+        if support.verbose:
+            sys.stdout.write("\n" + pprint.pformat(p) + "\n")
+        subject = ((('countryName', 'US'),),
+                   (('stateOrProvinceName', 'Oregon'),),
+                   (('localityName', 'Beaverton'),),
+                   (('organizationName', 'Python Software Foundation'),),
+                   (('organizationalUnitName', 'Python Core Development'),),
+                   (('commonName', 'null.python.org\x00example.org'),),
+                   (('emailAddress', 'python-dev@python.org'),))
+        self.assertEqual(p['subject'], subject)
+        self.assertEqual(p['issuer'], subject)
+        self.assertEqual(p['subjectAltName'],
+                         (('DNS', 'altnull.python.org\x00example.com'),
+                         ('email', 'null@python.org\x00user@example.org'),
+                         ('URI', 'http://null.python.org\x00http://example.org'),
+                         ('IP Address', '192.0.2.1'),
+                         ('IP Address', '2001:DB8:0:0:0:0:0:1\n'))
+                        )
+
+    def test_DER_to_PEM(self):
+        with open(SVN_PYTHON_ORG_ROOT_CERT, 'r') as f:
+            pem = f.read()
+        d1 = ssl.PEM_cert_to_DER_cert(pem)
+        fail(cert, 'foo.a.com')
+        fail(cert, 'bar.foo.com')
+
+        # NULL bytes are bad, CVE-2013-4073
+        cert = {'subject': ((('commonName',
+                              'null.python.org\x00example.org'),),)}
+        ok(cert, 'null.python.org\x00example.org') # or raise an error?
+        fail(cert, 'example.org')
+        fail(cert, 'null.python.org')
+
+        # Slightly fake real-world example
+        cert = {'notAfter': 'Jun 26 21:41:46 2011 GMT',
+                'subject': ((('commonName', 'linuxfrz.org'),),),
+                'subjectAltName': (('DNS', 'linuxfr.org'),

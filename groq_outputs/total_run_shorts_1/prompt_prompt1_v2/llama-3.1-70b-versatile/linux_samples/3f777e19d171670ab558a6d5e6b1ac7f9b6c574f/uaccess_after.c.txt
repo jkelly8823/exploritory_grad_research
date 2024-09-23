@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 7-8, 10-11
+VULNERABILITY_DESCRIPTION:
+This code contains a potential race condition between the time that interrupts are disabled with local_irq_save() and when they are re-enabled with local_irq_restore(). It also contains potential integer overflow bugs with certain operations involving unsigned long values.
+
+EXPLANATION:
+This code appears to be updating the current process's mm_segment and also updating the current CPU flags to allow access to certain memory locations (specifically, the kernel's secondary address space control element). It temporarily disables interrupts using local_irq_save() to prevent concurrent modification or interference by other threads or interrupt handlers. However, the execution after re-enabling interrupts using local_irq_restore() still provides an opportunity for the execution context to be transitioned away, and thus other interrupts (that were blocked in this context) are executed and this can further lead to Race Conditions for shared data.
+
+As well as that the use of bitwise OR operation of variable current->thread.mm_segment |= 1; can lead to data overflow.
+
+And operations involving unsigned long values and it is possible if cr or asce contains large value then over flow may occur in __ctl_store(cr, 1, 1) or __ctl_load(asce, 7, 7) (this relies on specifics of specific binary and may not be universally applicable)
+
+RECOMMENDATIONS:
+* Implement more restrictive locking or access control mechanisms to prevent concurrent access and/or updates of shared resources such as the current->thread.mm_segment and CIF_ASCE_SECONDARY flags.
+* Use bounds checking to avoid overflows in arithmetic operations involving unsigned long values that could potentially lead to unexpected behavior.
+* More detailed analysis of the __ctl_store() and __ctl_load() functions is necessary to identify any other potential security risks.
+* Ensure that race conditions are addressed by managing interrupt context
+
+ORIGINAL CODE:
+{
+	mm_segment_t old_fs;
+	unsigned long asce, cr;
+	unsigned long flags;
+
+	old_fs = current->thread.mm_segment;
+	if (old_fs & 1)
+		return old_fs;
+	/* protect against a concurrent page table upgrade */
+	local_irq_save(flags);
+	current->thread.mm_segment |= 1;
+	asce = S390_lowcore.kernel_asce;
+	if (likely(old_fs == USER_DS)) {
+		__ctl_store(cr, 1, 1);
+		__ctl_load(asce, 7, 7);
+		set_cpu_flag(CIF_ASCE_SECONDARY);
+	}
+	local_irq_restore(flags);
+	return old_fs;
+}
+EXPORT_SYMBOL(enable_sacf_uaccess);

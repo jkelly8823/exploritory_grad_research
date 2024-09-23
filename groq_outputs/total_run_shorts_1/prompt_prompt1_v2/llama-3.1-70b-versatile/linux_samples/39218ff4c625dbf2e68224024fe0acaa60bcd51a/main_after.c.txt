@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential denial-of-service (DoS) attack through an unvalidated user input. Specifically, the `early_randomize_kstack_offset` function reads user input from the command line parameter `buf` and directly uses it to control the execution flow of the code.
+
+EXPLANATION:
+The `early_randomize_kstack_offset` function reads a boolean value from the user input `buf` and uses it to enable or disable the randomization of the kernel stack offset. However, the input is not validated properly, which could allow an attacker to exploit this vulnerability by providing an invalid input, potentially causing a denial-of-service. Although the `kstrtobool` function checks for invalid input, it still returns the result in an integer, which might lead to unexpected behavior when handled incorrectly.
+
+RECOMMENDATIONS:
+1. Properly validate the user input before using it to prevent potential errors.
+2. Consider using a more robust input validation mechanism to ensure the user input conforms to expected formats.
+3. Implement additional error handling to handle unexpected input or errors during the parsing process.
+4. Consider adding logic to restrict the actions that can be performed through this interface to prevent potential exploitation.
+
+ORIGINAL CODE:
+```c
+pti_init();
+}
+
+#ifdef CONFIG_HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET
+DEFINE_STATIC_KEY_MAYBE_RO(CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT,
+			   randomize_kstack_offset);
+DEFINE_PER_CPU(u32, kstack_offset);
+
+static int __init early_randomize_kstack_offset(char *buf)
+{
+	int ret;
+	bool bool_result;
+
+	ret = kstrtobool(buf, &bool_result);
+	if (ret)
+		return ret;
+
+	if (bool_result)
+		static_branch_enable(&randomize_kstack_offset);
+	else
+		static_branch_disable(&randomize_kstack_offset);
+	return 0;
+}
+early_param("randomize_kstack_offset", early_randomize_kstack_offset);
+#endif
+
+void __init __weak arch_call_rest_init(void)
+{
+	rest_init();
+}
+```

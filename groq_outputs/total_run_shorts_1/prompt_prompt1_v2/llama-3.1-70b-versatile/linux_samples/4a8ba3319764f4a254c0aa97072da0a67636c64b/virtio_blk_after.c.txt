@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+ Use of Goto Statement
+EXPLANATION:
+ The use of goto statements can be problematic because they can lead to code that is difficult to understand and maintain. However, this alone is not typically enough of a reason to flag code as vulnerable. In this case, though, the unguarded goto causes the disk queue to be initialized with a value assigned before a crucial error check. If an error is encountered in the initialization, but the error propagates only after setting vblk->disk->queue, then either a NULL value or a custom err pointer is assigned to q, but the original value to disk->queue is already modified by this point. As such, q is compared with being an error, while vblk could be having a valid disk value leaked in error scenarios.
+RECOMMENDATIONS:
+Reorganize the code such that error conditions are handled first. Use it more in line with the usage in typical while struct cases, to avoid causing resource leaks due to jumped labels.
+
+ORIGINAL CODE:
+		goto out_put_disk;
+
+	q = vblk->disk->queue = blk_mq_init_queue(&vblk->tag_set);
+	if (IS_ERR(q)) {
+		err = -ENOMEM;
+		goto out_free_tags;
+	}
+ 
+
+Example Fix:
+
+```c
+q = blk_mq_init_queue(&vblk->tag_set);
+if (IS_ERR(q)) {
+    err = -ENOMEM;
+    free tags allocations
+    return
+}
+vblk->disk->queue = q
+```

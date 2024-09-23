@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+Integer underflow vulnerability in iov_iter_copy_from_user function.
+
+EXPLANATION:
+The `iov_iter_copy_from_user` function is used to copy data from a user-space buffer to a kernel-space buffer. However, the `iov_iter_advance` function is called with the `copied` value, which is not checked for underflow. If `copied` is less than 0, the `iov_iter_advance` function will underflow, leading to incorrect behavior.
+
+However, the more severe issue lies in the fact that the code does not check the return value of `iov_iter_copy_from_user` for an underflow. The function may return a negative value, indicating an error. The code only checks if `copied` is less than `bytes`, but it does not handle the case where `copied` is a very large positive number that is the result of an underflow. This can lead to incorrect behavior and potentially allow an attacker to write arbitrary data to kernel space.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should check the return value of `iov_iter_copy_from_user` for errors and handle the case where `copied` is a very large positive number that is the result of an underflow. You should also ensure that the `iov_iter_advance` function is called with a safe value to prevent underflow.
+
+Here is an example of how the code could be fixed:
+
+```c
+copied = iov_iter_copy_from_user(wdata->pages[i], &it, 0, bytes);
+if (copied < 0) {
+    // Handle error
+    printk(KERN_ERR "iov_iter_copy_from_user failed with error %ld\n", copied);
+    rc = -EFAULT;
+    break;
+} else if (copied != bytes) {
+    iov_iter_advance(&it, copied);
+}
+```
+
+ORIGINAL CODE:
+				 norske
+		 unsigned long nr_segs, loff_t *poffset)
+{
+	unsigned long nr_pages, i;
+	size_t bytes, copied, len, cur_len;
+	ssize_t total_written = 0;
+	loff_t offset;
+	struct iov_iter it;
+	struct cifsFileInfo *open_file;
+
+		save_len = cur_len;
+		for (i = 0; i < nr_pages; i++) {
+			bytes = min_t(const size_t, cur_len, PAGE_SIZE);
+			copied = iov_iter_copy_from_user(wdata->pages[i], &it,
+							 0, bytes);
+			cur_len -= copied;
+			iov_iter_advance(&it, copied);
+			/*
+			 * If we didn't copy as much as we expected, then that
+			 * may mean we trod into an unmapped area. Stop copying
+			 * at that point. On the next pass through the big
+			 * loop, we'll likely end up getting a zero-length
+			 * write and bailing out of it.
+			 */
+			if (copied < bytes)
+				break;
+		}
+		cur_len = save_len - cur_len;
+
+		/*
+		 * If we have no data to send, then that probably means that
+		 * the copy above failed altogether. That's most likely because
+		 * the address in the iovec was bogus. Set the rc to -EFAULT,
+		 * free anything we allocated and bail out.
+		 */
+		if (!cur_len) {
+			for (i = 0; i < nr_pages; i++)
+				put_page(wdata->pages[i]);
+			kfree(wdata);
+			rc = -EFAULT;
+			break;
+		}
+
+		/*
+		 * i + 1 now represents the number of pages we actually used in
+		 * the copy phase above. Bring nr_pages down to that, and free
+		 * any pages that we didn't use.
+		 */
+		for ( ; nr_pages > i + 1; nr_pages--)
+			put_page(wdata->pages[nr_pages - 1]);
+
+		wdata->sync_mode = WB_SYNC_ALL;
+		wdata->nr_pages = nr_pages;
+		wdata->offset = (__u64)offset;
+		wdata->cfile = cifsFileInfo_get(open_file);

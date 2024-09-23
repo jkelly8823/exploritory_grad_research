@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to a potential NULL pointer dereference due to the incorrect usage of the IS_ERR() and PTR_ERR() macros.
+
+EXPLANATION: 
+The code checks if `exynos_drm_pdev` is an error using `IS_ERR()` and then tries to retrieve the error code using `PTR_ERR()`. However, `PTR_ERR()` returns the actual pointer, not the error code, if the pointer is not an error. If `exynos_drm_pdev` is not an error but still NULL, passing it to `PTR_ERR()` will not return an error code but instead will return NULL, potentially causing a NULL pointer dereference. Furthermore, when `PTR_ERR()` is called with a non-NULL, non-error `exynos_drm_pdev`, it would still return `NULL` but would incorrectly indicate a non-error.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the code should be modified to correctly handle the error case and check for NULL pointers. 
+
+Here is an example of how to fix the vulnerability:
+
+```c
+exynos_drm_pdev = platform_device_register_simple("exynos-drm", -1, NULL, 0);
+if (IS_ERR(exynos_drm_pdev)) {
+    err = PTR_ERR(exynos_drm_pdev);
+    // Also ensure the code does not panic if PTR_ERR returns NULL
+    if (err) {
+        return err;
+    } else {
+        // If PTR_ERR returns NULL, then handle the error accordingly.
+        return -ENODEV;
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+if (!is_exynos)
+	return -ENODEV;
+
+/*
+ * Register device object only in case of Exynos SoC.
+ *
+ * Below codes resolves temporarily infinite loop issue incurred
+ * by Exynos drm driver when using multi-platform kernel.
+ * So these codes will be replaced with more generic way later.
+ */
+if (!of_machine_is_compatible("samsung,exynos3") &&
+		!of_machine_is_compatible("samsung,exynos4") &&
+		!of_machine_is_compatible("samsung,exynos5"))
+	return -ENODEV;
+
+exynos_drm_pdev = platform_device_register_simple("exynos-drm", -1, NULL, 0);
+if (IS_ERR(exynos_drm_pdev))
+	return PTR_ERR(exynos_drm_pdev);
+```

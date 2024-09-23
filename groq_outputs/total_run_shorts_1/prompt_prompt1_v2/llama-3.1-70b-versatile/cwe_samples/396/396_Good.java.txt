@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION: 
+Resource leak due to swallowing InvocationTargetException.
+
+EXPLANATION:
+The InvocationTargetException is being caught and its error is logged. However, the original exception that caused this InvocationTargetException is being swallowed along with it. This means that the original exception's cause is not being propagated or logged. As a result, crucial diagnostic information is being lost, which could hinder debugging efforts.
+
+Additionally, InvocationTargetException often wraps other exceptions. Not unwrapping this exception makes it more difficult to do proper error handling, potentially leading to resource leaks.
+
+RECOMMENDATIONS:
+Instead of catching InvocationTargetException directly, consider catching its underlying cause. If this is not feasible, at least handle InvocationTargetException in a more informed manner. For instance:
+
+```java
+try {
+    doExchange();
+} catch (InvocationTargetException e) {
+    Throwable cause = e.getTargetException();
+    if (cause instanceof IOException) {
+        logger.error("doExchange failed", cause);
+    } else if (cause instanceof SQLException) {
+        logger.error("doExchange failed", cause);
+    } else {
+        logger.error("doExchange failed", e);
+    }
+} catch (IOException e) {
+    logger.error("doExchange failed", e);
+} catch (SQLException e) {
+    logger.error("doExchange failed", e);
+}
+```
+Alternatively, you could catch the Throwable type and handle each specific exception separately. Also, make sure that resources are being closed properly, ideally using a try-with-resources or a finally block.
+
+ORIGINAL CODE:
+try {doExchange();}catch (IOException e) {logger.error("doExchange failed", e);}catch (InvocationTargetException e) {
+    logger.error("doExchange failed", e);
+} catch (SQLException e) {logger.error("doExchange failed", e);}

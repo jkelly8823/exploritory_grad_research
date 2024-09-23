@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-6
+VULNERABILITY_DESCRIPTION:
+Unrestricted File Download Vulnerability and Insecure API Usage.
+
+EXPLANATION:
+The code contains two vulnerabilities. First, the use of `urllib.request.URLopener()` is insecure as it allows for untrusted input to be passed to the `retrieve()` method, potentially leading to remote code execution or unrestricted file download. The `retrieve()` method can be tricked into downloading and executing arbitrary files.
+
+Additionally, the `DummyURLopener` class does not properly check for and reject malicious URLs in the `open_local_file()` method. Although it checks for the `local_file://` scheme in the test methods, it does not prevent the downloading of local files.
+
+The fact that `urllib.request.URLopener()` is being used in conjunction with a class that extends it (`DummyURLopener`) and that it does not prevent local file downloads or execution is concerning.
+
+The reason the vulnerability exists is because the code is bypassing security controls by directly calling `open_local_file()` instead of letting `urllib.request.URLopener()` handle it normally, which would provide protection against some malicious URLs. Additionally, the test methods for `local_file://` scheme are checking if an `OSError` exception is being raised, which could be an indication that they are testing the behavior of the bypassing.
+
+It is crucial to point out that Python 3's built-in `urllib` library discourages using `URLopener()` and rather encourages the use of `session` objects.
+
+RECOMMENDATIONS:
+1) To prevent this vulnerability, use more secure methods for downloading files such as the `requests` library, which provides better support for secure transfers and prevents untrusted input from being passed to methods that can lead to remote code execution.
+
+2) Instead of directly extending `urllib.request.URLopener()`, use `requests.Session()` to interact with URLs in a more secure and modern way.
+
+3) Implement proper checks for malicious input in the `open_local_file()` method and reject any suspicious URLs to prevent local file downloads and remote code execution.
+
+ORIGINAL CODE:
+```python
+filename, _ = urllib.request.URLopener().retrieve(url)
+self.assertEqual(os.path.splitext(filename)[1], ".txt")
+
+@support.ignore_warnings(category=DeprecationWarning)
+def test_local_file_open(self):
+    # bpo-35907, CVE-2019-9948: urllib must reject local_file:// scheme
+    class DummyURLopener(urllib.request.URLopener):
+        def open_local_file(self, url):
+            return url
+    for url in ('local_file://example', 'local-file://example'):
+        self.assertRaises(OSError, urllib.request.urlopen, url)
+        self.assertRaises(OSError, urllib.request.URLopener().open, url)
+        self.assertRaises(OSError, urllib.request.URLopener().retrieve, url)
+        self.assertRaises(OSError, DummyURLopener().open, url)
+        self.assertRaises(OSError, DummyURLopener().retrieve, url)
+
+# Just commented them out.
+# Can't really tell why keep failing in windows and sparc.
+# Everywhere else they work ok, but on those machines, sometimes 
+```

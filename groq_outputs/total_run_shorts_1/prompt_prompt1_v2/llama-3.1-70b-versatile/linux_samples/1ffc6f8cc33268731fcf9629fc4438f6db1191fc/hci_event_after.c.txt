@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+Missing bounds checking in input parsing of &ev->bdaddr and &ev->link_type
+
+EXPLANATION:
+The given code snippet appears to handle an incoming Bluetooth connection. In line 3, the code logs the &ev->bdaddr pointer using the "%pMR" format specifier, and in line 5, it logs the same address with a message indicating a connection rejection. The problem lies in the potential for an invalid or untrusted address being printed. 
+
+In the broader context of Bluetooth security, malicious devices can potentially send spoofed or truncated addresses, triggering vulnerabilities. The Bluetooth Core specification and various implementations often require addresses to be in a specific format (6 bytes, with certain rules for formatting the address fields).
+
+Without bounds checking on the input address ev->bdaddr, it is possible that an attacker could send a truncated or modified address that could not be properly verified by the code. In the log message, this could potentially lead to an invalid read from process memory if &ev->bdaddr does not point to a valid, initialized 6 byte address.
+
+Furthermore, this lack of checks could potentially be used to expose information about the process and system.
+
+RECOMMENDATIONS:
+1. Sanitize function arguments for validity. Assuming ev is an event or packet structure, add checks to ensure it contains valid addresses. 
+2. Before logging the ev->bdaddr pointer, verify that its contents are indeed a valid Bluetooth address.
+
+Here is a possible implementation:
+
+
+	if (ev && ev->bdaddr && ev->bdaddr[0] != 0xFF && eve->bdaddr[5] != 0x00) {
+		// log or process valid addresses only
+		bt_dev_dbg(hdev, "bdaddr %pMR type 0x%x", &ev->bdaddr, ev->link_type);
+		...
+	}
+
+ORIGINAL CODE:
+bt_dev_dbg(hdev, "bdaddr %pMR type 0x%x", &ev->bdaddr, ev->link_type);
+
+	/* Reject incoming connection from device with same BD ADDR against
+	 * CVE-2020-26555
+	 */
+	if (!bacmp(&hdev->bdaddr, &ev->bdaddr))
+	{
+		bt_dev_dbg(hdev, "Reject connection with same BD_ADDR %pMR\n",
+			   &ev->bdaddr);
+		hci_reject_conn(hdev, &ev->bdaddr);
+		return;
+	}
+
+	mask |= hci_proto_connect_ind(hdev, &ev->bdaddr, ev->link_type,
+				      &flags);
+
+	if (!(mask & HCI_LM_ACCEPT)) {

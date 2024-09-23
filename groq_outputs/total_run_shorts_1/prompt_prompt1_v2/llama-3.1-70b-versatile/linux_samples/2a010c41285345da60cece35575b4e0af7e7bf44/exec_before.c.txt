@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability
+
+EXPLANATION:
+A use-after-free vulnerability exists in the code. When the `free_bprm` function is called, it calls `allow_write_access(exec)` and then `fput(exec)`, but it returns `-ENOEXEC` without checking the output of `fput(exec)`. If the `fput` function decrements the reference count and the file is closed, calling `exec` after `fput` would be a use-after-free vulnerability.
+
+However, looking closer, it is the line `bprm->file = bprm->interpreter;` that is the source of the use-after-free vulnerability, and `bprm->executable` is set afterwards. This makes it so the execuable is not actually ever executed, and a following return will occur as the executable is set to NULL, but just after an assignment is made.
+
+`bprm->interpreter = NULL;` line before `bprm->executable` is set seems like incorrect assignment order. This could mean that there is a use-after-free in program flow using any logic that wants to access the interpreter, because we first are taking the value of `bprm->executable` which might be the previous location in memory, and are then setting the actual executable location in memory as nothing before immediately putting it into use in another function, that may not be apparent in the code that is given.
+
+Further review would however still be necessary and seem warranted given the stakes.
+
+RECOMMENDATIONS:
+Reorder the assignments for `bprm->executable` and `bprm->interpreter` so that `interpreter` is assigned to be equal to `executable` before the actual `interpreter` is set as `NULL`. Ensure proper logic exists for handling file flow to prevent any further errors.
+
+```c
+/* Previous Lines are not included. */
+static void free_bprm(struct linux_binprm *bprm)
+{
+	bprm->interpreter = NULL;
+	bprm->executable = bprm->file;
+	bprm->file = bprm->executable;
+
+/* Original lines continue here... */
+    allow_write_access(exec);
+    if (unlikely(bprm->have_execfd)) {
+    if (bprm->executable) {
+    fput(exec);
+    return -ENOEXEC;
+```
+
+ORIGINAL CODE:
+```c
+	path_noexec(&file->f_path)))
+		goto exit;
+
+	err = deny_write_access(file);
+	if (err)
+		goto exit;
+
+out:
+	return file;
+
+exit:
+ *
+ * Returns ERR_PTR on failure or allocated struct file on success.
+ *
+ * As this is a wrapper for the internal do_open_execat(), callers
+ * must call allow_write_access() before fput() on release. Also see
+ * do_close_execat().
+ */
+struct file *open_exec(const char *name)
+{
+/* Matches do_open_execat() */
+static void do_close_execat(struct file *file)
+{
+	if (!file)
+		return;
+	allow_write_access(file);
+	fput(file);
+}
+
+static void free_bprm(struct linux_binprm *bprm)
+{
+		bprm->file = bprm->interpreter;
+		bprm->interpreter = NULL;
+
+		allow_write_access(exec);
+		if (unlikely(bprm->have_execfd)) {
+			if (bprm->executable) {
+				fput(exec);
+				return -ENOEXEC;

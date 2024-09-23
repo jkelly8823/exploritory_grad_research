@@ -1,0 +1,109 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 47-49, 57-58, 61-62
+VULNERABILITY_DESCRIPTION:
+Memory leaks and potential use-after-free vulnerabilities exist due to incorrect error handling.
+
+EXPLANATION:
+In the code snippet provided, there are several error handling paths where `iounmap()` and `kfree()` are called in a sequence that can lead to memory leaks or use-after-free conditions. Specifically, in the `error_dma_iomap` and `error_out` paths, `iounmap((void __iomem *)host_pvt.sata_dma_regs)` is called before `dma_dwc_exit(hsdev)`, but then `dma_dwc_exit(hsdev)` is called again after `iounmap((void __iomem *)host_pvt.sata_dma_regs)`. This can result in double-free or use-after-free conditions if `dma_dwc_exit(hsdev)` tries to access the memory that was already mapped.
+
+Similarly, `iounmap(base)` is called in the `error_iomap` path, but then `base` is not checked for being `NULL` before the function continues execution. This can lead to a use-after-free condition if `base` is not `NULL`.
+
+RECOMMENDATIONS:
+1. Ensure that all error handling paths properly release resources to prevent memory leaks and use-after-free conditions.
+2. Validate pointers before dereferencing them to prevent null pointer dereferences.
+3. Consider using a more robust error handling approach, such as using a single error handling path that is responsible for releasing all resources.
+
+Here is an example of how the corrected code might look:
+```c
+error_out:
+    dma_dwc_exit(hsdev);
+    iounmap((void __iomem *)host_pvt.sata_dma_regs);
+    iounmap(base);
+    kfree(hsdev);
+    kfree(host);
+error_dma_iomap:
+    iounmap((void __iomem *)host_pvt.sata_dma_regs);
+error_iomap:
+    if (base != NULL) {
+        iounmap(base);
+    }
+error_kmalloc:
+    kfree(hsdev);
+```
+ORIGINAL CODE:
+```c
+if (err) {
+    dev_err(host_pvt.dwc_dev, "%s: dma_request_interrupts returns"
+        " %d\n", __func__, err);
+    return err;
+}
+
+/* Enabe DMA */
+out_le32(&(host_pvt.sata_dma_regs->dma_cfg.low), DMA_EN);
+    sata_dma_regs);
+
+return 0;
+}
+
+static int sata_dwc_scr_read(struct ata_link *link, unsigned int scr, u32 *val)
+{
+char *ver = (char *)&versionr;
+u8 *base = NULL;
+int err = 0;
+int irq;
+struct ata_host *host;
+struct ata_port_info pi = sata_dwc_port_info[0];
+const struct ata_port_info *ppi[] = { &pi, NULL };
+struct device_node *np = ofdev->dev.of_node;
+if (irq == NO_IRQ) {
+    dev_err(&ofdev->dev, "no SATA DMA irq\n");
+    err = -ENODEV;
+    goto error_iomap;
+}
+
+/* Get physical SATA DMA register base address */
+host_pvt.sata_dma_regs = of_iomap(ofdev->dev.of_node, 1);
+    dev_err(&ofdev->dev, "ioremap failed for AHBDMA register"
+        " address\n");
+    err = -ENODEV;
+    goto error_iomap;
+}
+
+/* Save dev for later use in dev_xxx() routines */
+host_pvt.dwc_dev = &ofdev->dev;
+
+/* Initialize AHB DMAC */
+err = dma_dwc_init(hsdev, irq);
+if (err)
+    goto error_dma_iomap;
+
+/* Enable SATA Interrupts */
+sata_dwc_enable_interrupts(hsdev);
+
+ * device discovery process, invoking our port_start() handler &
+ * error_handler() to execute a dummy Softreset EH session
+ */
+err = ata_host_activate(host, irq, sata_dwc_isr, 0, &sata_dwc_sht);
+if (err)
+    dev_err(&ofdev->dev, "failed to activate host");
+
+dev_set_drvdata(&ofdev->dev, host);
+return 0;
+error_out:
+    /* Free SATA DMA resources */
+    dma_dwc_exit(hsdev);
+error_dma_iomap:
+iounmap((void __iomem *)host_pvt.sata_dma_regs);
+error_iomap:
+iounmap(base);
+error_kmalloc:
+    kfree(hsdev);
+    /* Free SATA DMA resources */
+    dma_dwc_exit(hsdev);
+
+    iounmap((void __iomem *)host_pvt.sata_dma_regs);
+    iounmap(hsdev->reg_base);
+    kfree(hsdev);
+    kfree(host);
+dev_dbg(&ofdev->dev, "done\n");
+```

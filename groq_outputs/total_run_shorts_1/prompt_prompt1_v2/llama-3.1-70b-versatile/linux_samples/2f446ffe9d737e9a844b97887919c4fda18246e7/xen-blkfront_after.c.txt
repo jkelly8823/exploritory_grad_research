@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-13
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a resource leak vulnerability due to the incorrect handling of the indirect_pages list after a memory allocation failure.
+
+EXPLANATION:
+In the given code, if `alloc_page` fails to allocate a page for `indirect_page`, the function jumps to `out_of_memory` using the `goto` statement. However, before this jump occurs, the function may have already successfully allocated `indirect_page` s and added them to the `indirect_pages` list. If `alloc_page` fails to allocate another `indirect_page`, the previously allocated `indirect_page` s are not properly cleaned up. As a result, these pages will leak and consume memory indefinitely.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is necessary to properly clean up any previously allocated `indirect_page` s when `alloc_page` fails to allocate another page. This can be achieved by introducing a loop that removes and frees all pages in the `indirect_pages` list when an allocation failure is encountered.
+
+```c
+for (i = 0; i < num; i++) {
+    struct page *indirect_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+    if (!indirect_page) {
+        // Iterate over indirect_pages list and free any pages that were previously allocated
+        struct page *tmp;
+        while (!list_empty(&rinfo->indirect_pages)) {
+            INDIRECT_PAGE_LIST_ITER(tmp, &rinfo->indirect_pages) {
+                list_del(&tmp->lru);
+                __free_page(tmp);
+            } end INDIRECT_PAGE_LIST_ITER(tmp, &rinfo->indirect_pages);
+        }
+        kfree(gnt_list_entry);
+        goto out_of_memory;
+    }
+    list_add(&indirect_page->lru, &rinfo->indirect_pages);
+}
+```
+
+ORIGINAL CODE:
+```
+goto out_of_memory;
+
+if (info->feature_persistent) {
+    granted_page = alloc_page(GFP_NOIO | __GFP_ZERO);
+    if (!granted_page) {
+        kfree(gnt_list_entry);
+        goto out_of_memory;
+    }
+
+BUG_ON(!list_empty(&rinfo->indirect_pages));
+for (i = 0; i < num; i++) {
+    struct page *indirect_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+    if (!indirect_page)
+        goto out_of_memory;
+    list_add(&indirect_page->lru, &rinfo->indirect_pages);
+}
+```

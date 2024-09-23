@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+Resource leak due to delayed cleanup in error-free execution path.
+
+EXPLANATION:
+Upon reviewing the provided code snippet, I noticed that in the error-free execution path, the cleanup operations `busy = false` and `vdev->config->del_vqs(vdev)` are executed after the function `virtrng_probe` returns `0` at Line 9. This indicates that these lines are unreachable and can cause resource leaks when an error does not occur. Additionally, the line `hwrng_unregister(&virtio_hwrng)` should also be executed in the error-free path to properly release any acquired resources.
+
+RECOMMENDATIONS:
+Move the cleanup operations to before the `return 0` statement in the error-free path, ensuring that necessary resources are released regardless of whether an error occurs during execution. This will prevent potential resource leaks and ensure proper cleanup.
+
+ORIGINAL CODE:
+```c
+{
+	int err;
+
+	/* We expect a single virtqueue. */
+	vq = virtio_find_single_vq(vdev, random_recv_done, "input");
+	if (IS_ERR(vq))
+		return PTR_ERR(vq);
+
+	err = hwrng_register(&virtio_hwrng);
+	if (err) {
+		vdev->config->del_vqs(vdev);
+		return err;
+	}
+
+.busy = false;
+	vdev->config->del_vqs(vdev);
+	hwrng_unregister(&virtio_hwrng);
+	return 0;
+}
+static int virtrng_probe(struct virtio_device *vdev)
+{```

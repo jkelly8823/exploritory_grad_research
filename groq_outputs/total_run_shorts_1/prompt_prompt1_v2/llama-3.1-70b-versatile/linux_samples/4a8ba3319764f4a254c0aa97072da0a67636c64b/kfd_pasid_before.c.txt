@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Potential kernel information leak through integer overflow in 'set_bit' function.
+
+EXPLANATION:
+The vulnerability lies in the 'set_bit' function. Although 'pasid_limit' is assigned the value of 'max_num_of_processes' and checked for allocation errors, there's still room for a potential vulnerability if 'pasid_limit' exceeds the maximum value of 'BITS_TO_LONGS'. This could lead to an integer overflow when setting 'pasid_bitmap'. However, the 'set_bit' function itself may cause issues if the bit position '0' is out of range of the allocation. 
+
+However, another interpretation of this code leads to a more subtle issue. The 'pasid_bitmap' has allocated 'BITS_TO_LONGS(pasid_limit)' bytes but used 'set_bit' directly with value '0'. This forces an assumption about the size of this allocation which, without declaring a fixed value 'pasid_limit', does not allow us to know for certain if size if less than maximum allocation amount. Information leaks using low-level code exploits knowledge of internal kernel data.
+
+RECOMMENDATIONS:
+Add additional checks for out of bounds errors in 'set_bit' function calls, verifying that 'pasid_bitmap' has been allocated a size sufficient to safely 'set_bit' without potential overflows. Include error checking code that covers this additional scenario to handle unexpected errors from an 'out of bounds' 'set_bit' function. On this code directly, one can perform a check like this:
+
+```c
+if (pasid_limit > ((BITS_TO_LONGS(pasid_limit) - 1) * 8))
+   // handle large bit index
+```
+Alternatively use 'test_and_set_bit' instead of 'set_bit' as 'test_and_set_bit' does indeed check for bit out of range itself:
+
+```c
+if (!test_and_set_bit(0, pasid_bitmap)) 
+    // it isn't set
+```
+However this may need optimization in your context with kernel's internal usage.
+
+ORIGINAL CODE:
+```c
+{
+	pasid_limit = max_num_of_processes;
+
+	pasid_bitmap = kzalloc(BITS_TO_LONGS(pasid_limit), GFP_KERNEL);
+	if (!pasid_bitmap)
+		return -ENOMEM;
+
+	set_bit(0, pasid_bitmap); /* PASID 0 is reserved. */
+}
+```

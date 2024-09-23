@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+In the `mgmt_set_powered_failed` function, the `cmd_status` function call does not check for error codes that may indicate a memory corruption or invalid data.
+
+EXPLANATION:
+In the `mgmt_set_powered_failed` function, after obtaining the `status`, the `cmd_status` function is called with the obtained `status` value. However, the `cmd_status` function does not validate the `status` value before using it. This may lead to a potential vulnerability where the function `cmd_status` may write memory based on user-supplied data.
+
+Furthermore, if the `cmd_status` function does not properly handle the `status` value, and the `status` value is large enough, it may cause a buffer overflow when writing the `status` to the memory location intended to store it.
+
+The specific vulnerability in this code is that it does not validate the `err` value before converting it to a `status` value. Therefore, if `err` is not `-ERFKILL` and is larger than `MGMT_STATUS_FAILED`, the `status` value may not be valid. However, it will still be used.
+
+RECOMMENDATIONS:
+- Add validation for the `status` value before passing it to `cmd_status`.
+- Check the `cmd_status` function to ensure it handles `status` values correctly and securely.
+- Ensure that `status` is properly validated and bound-checked within `cmd_status` to prevent potential buffer overflows.
+
+ORIGINAL CODE:
+
+		break;
+
+	case DISCOV_TYPE_LE:
+		if (!test_bit(HCI_LE_ENABLED, &hdev->dev_flags)) {
+			err = cmd_status(sk, hdev->id, MGMT_OP_START_DISCOVERY,
+					 MGMT_STATUS_NOT_SUPPORTED);
+			mgmt_pending_remove(cmd);
+			goto failed;
+	return err;
+}
+
+int mgmt_set_powered_failed(struct hci_dev *hdev, int err)
+{
+	struct pending_cmd *cmd;
+	u8 status;
+
+	cmd = mgmt_pending_find(MGMT_OP_SET_POWERED, hdev);
+	if (!cmd)
+		return -ENOENT;
+
+	if (err == -ERFKILL)
+		status = MGMT_STATUS_RFKILLED;
+	else
+		status = MGMT_STATUS_FAILED;
+
+	err = cmd_status(cmd->sk, hdev->id, MGMT_OP_SET_POWERED, status);
+
+	mgmt_pending_remove(cmd);
+
+	return err;
+}
+
+int mgmt_discoverable(struct hci_dev *hdev, u8 discoverable)
+{
+	struct cmd_lookup match = { NULL, hdev };
+	bool changed = false;

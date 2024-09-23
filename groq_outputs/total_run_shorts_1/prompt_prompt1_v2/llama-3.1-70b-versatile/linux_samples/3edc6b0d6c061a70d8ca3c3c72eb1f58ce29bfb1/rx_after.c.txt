@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 36-41, 43-46
+VULNERABILITY_DESCRIPTION:
+Insufficient key validation.
+
+EXPLANATION:
+The code provided seems to handle protected Wi-Fi frames and fragment reassembly. However, the key validation checks have potential issues that could allow unauthorized access to protected frames. Specifically, the code checks for the presence of a decryption flag and the key color match in different conditions, but they are not consistently applied. If the status flag indicates that the frame has been decrypted, but the key color does not match, the frame is dropped. However, there is no explicit check for non-zero key color before this condition.
+
+The issue arises from inconsistent key validation, where frames could potentially bypass key color checks. For example, if the key is NULL or missing in the rx structure, the key color comparison will not be performed even though the frame might be decrypted. This can potentially allow an attacker to inject arbitrary frames that seem to be validly encrypted.
+
+RECOMMENDATIONS:
+To resolve this issue, you should ensure that key validation is consistently performed in all possible paths that process protected frames. Before processing protected frames, you should check for non-NULL key presence and validate the color. Here's an example:
+
+```c
+if (rx->key == NULL || rx->key->color == 0) {
+    // handle error or drop frame
+}
+
+// use rx->key->color for validation
+if (rx->key->color != entry->key_color) {
+    // handle mismatch error or drop frame
+}
+```
+
+Also, consider using non-zero key color validation before the status flag checks, to prevent unauthorized access.
+
+ORIGINAL CODE:
+```c
+unsigned int frag, seq;
+struct ieee80211_fragment_entry *entry;
+struct sk_buff *skb;
+struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
+
+hdr = (struct ieee80211_hdr *)rx->skb->data;
+fc = hdr->frame_control;
+
+                sizeof(rx->key->u.gcmp.rx_pn[queue]));
+    BUILD_BUG_ON(IEEE80211_CCMP_PN_LEN !=
+        IEEE80211_GCMP_PN_LEN);
+} else if (rx->key &&
+    (ieee80211_has_protected(fc) ||
+        (status->flag & RX_FLAG_DECRYPTED))) {
+    entry->is_protected = true;
+    entry->key_color = rx->key->color;
+}
+return RX_QUEUED;
+    return RX_DROP_UNUSABLE;
+memcpy(entry->last_pn, pn, IEEE80211_CCMP_PN_LEN);
+} else if (entry->is_protected &&
+    (!rx->key ||
+        (!ieee80211_has_protected(fc) &&
+            !(status->flag & RX_FLAG_DECRYPTED)) ||
+        rx->key->color != entry->key_color)) {
+    /* Drop this as a mixed key or fragment cache attack, even
+     * if for TKIP Michael MIC should protect us, and WEP is a
+     * lost cause anyway.
+     */
+    return RX_DROP_UNUSABLE;
+} else if (entry->is_protected && rx->key &&
+    entry->key_color != rx->key->color &&
+    (status->flag & RX_FLAG_DECRYPTED)) {
+    return RX_DROP_UNUSABLE;
+}
+
+skb_pull(rx->skb, ieee80211_hdrlen(fc));
+__skb_queue_tail(&entry->skb_list, rx->skb);
+```

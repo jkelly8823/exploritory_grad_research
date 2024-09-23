@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Denial of Service (DoS) due to a potentially infinite loop caused by a partial POST request.
+
+EXPLANATION:
+The `test_partial_post` method is designed to test that a partial POST request does not cause the server to enter an infinite loop. However, the test itself does not prevent an infinite loop from occurring. The request is made with a `Content-Length` header set to 100, but the request body only contains the string "bye". This discrepancy can cause the server to wait indefinitely for the remaining 93 bytes of the request body, potentially leading to a denial-of-service vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the server correctly handles partial POST requests. This can be achieved by adding error handling to detect and reject requests with mismatched `Content-Length` headers and request bodies.
+
+One possible solution is to modify the server to reject requests with incorrect `Content-Length` headers. This can be done by checking the request headers and body before processing the request.
+
+ORIGINAL CODE:
+```python
+def tearDown(self):
+    # wait on the server thread to terminate
+    self.evt.wait()
+
+    # disable traceback reporting
+    xmlrpc.server.SimpleXMLRPCServer._send_traceback_header = False
+
+    server = xmlrpclib.ServerProxy("http://%s:%d/RPC2" % (ADDR, PORT))
+    self.assertEqual(server.add("a", "\xe9"), "a\xe9")
+
+def test_partial_post(self):
+    # Check that a partial POST doesn't make the server loop: issue #14001.
+    conn = http.client.HTTPConnection(ADDR, PORT)
+    conn.request('POST', '/RPC2 HTTP/1.0\r\nContent-Length: 100\r\n\r\nbye')
+    conn.close()
+
+class MultiPathServerTestCase(BaseServerTestCase):
+    threadFunc = staticmethod(http_multi_server)
+    request_count = 2
+    def test_path1(self):
+```

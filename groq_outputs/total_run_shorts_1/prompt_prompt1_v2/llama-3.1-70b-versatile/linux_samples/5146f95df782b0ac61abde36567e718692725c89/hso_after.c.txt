@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 16
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds access and buffer overflow.
+
+EXPLANATION:
+In the code snippet provided, there are two potential vulnerabilities. 
+
+First, in the line `if (if_num > 16)`, the code checks if `if_num` is within the bounds of the `config_data` array. However, this check only ensures that `if_num` does not exceed the upper bound of the array. It does not verify the lower bound. In many programming languages, including C and C++, array indices must be non-negative. Hence, if `if_num` is a negative number, the code may access memory before the beginning of the array, leading to undefined behavior.
+
+Second, in the loop `for (i = 0; i <= if_num; ++i)`, the code checks each element of the `driver_info` array until it finds a zero-terminated element. However, it does not check if `if_num` is a valid index before accessing `((u32 *)(id->driver_info))[if_num]`. This may lead to a buffer overflow if `if_num` is equal to or greater than the actual size of the `driver_info` array.
+
+Additionally, there are potential issues with the usage of `kfree` and `goto` that may lead to use-after-free vulnerabilities in certain contexts, but these issues are less clear without additional context.
+
+RECOMMENDATIONS:
+- Validate that `if_num` is a non-negative integer before using it as an array index.
+- Add a bounds check for the `driver_info` array before accessing its elements.
+- Consider using `memcpy` or a bounds-safe alternative to access the `driver_info` array.
+
+ORIGINAL CODE:
+```
+	return -EIO;
+}
+
+/* check if we have a valid interface */
+if (if_num > 16) {
+	kfree(config_data);
+	return -EINVAL;
+}
+
+switch (config_data[if_num]) {
+case 0x0:
+	result = 0;
+	break;
+
+/* Get the interface/port specification from either driver_info or from
+ * the device itself */
+if (id->driver_info) {
+	/* if_num is controlled by the device, driver_info is a 0 terminated
+	 * array. Make sure, the access is in bounds! */
+	for (i = 0; i <= if_num; ++i)
+		if (((u32 *)(id->driver_info))[i] == 0)
+			goto exit;
+	port_spec = ((u32 *)(id->driver_info))[if_num];
+} else {
+	port_spec = hso_get_config_data(interface);
+	if (port_spec < 0)
+		goto exit;
+}
+
+/* Check if we need to switch to alt interfaces prior to port
+ * configuration */
+if (interface->num_altsetting > 1)
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential Use After Free Vulnerability
+
+EXPLANATION:
+The vulnerability is present on line 5, where the code accesses the `ima_rules` pointer after having previously taken an RCU read lock. However, the `ima_rules` pointer may have been freed by another thread between the time the lock was taken and the time it was accessed. This is because RCU read locks do not prevent concurrent writers from modifying or freeing the protected data.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the `ima_rules` pointer remains valid throughout the execution of the code within the RCU read lock. This can be done by checking if the `ima_rules` pointer is NULL before dereferencing it, and by using a strong reference to prevent the pointer from being freed.
+
+Additionally, consider using `rcu_dereference_raw_protected()` instead of `rcu_dereference()`, which checks if the pointer is within the protected region before dereferencing it. This can help prevent use-after-free vulnerabilities.
+
+Here is a sample fix:
+
+```c
+if (id >= READING_MAX_ID)
+    return false;
+
+func = read_idmap[id] ?: FILE_CHECK;
+
+rcu_read_lock();
+if (ima_rules) {
+    ima_rules_tmp = rcu_dereference_raw_protected(ima_rules, mutex);
+    // ...
+}
+
+```
+
+ORIGINAL CODE:
+
+```c
+if (id >= READING_MAX_ID)
+    return false;
+
+func = read_idmap[id] ?: FILE_CHECK;
+
+rcu_read_lock();
+ima_rules_tmp = rcu_dereference(ima_rules);
+```

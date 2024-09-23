@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+A potential synchronous cancellation point vulnerability exists in the given code snippet.
+
+EXPLANATION:
+The `smp_call_function_single` function can be interrupted by a hardware NMI or a signal handled by the kernel in a non-reentrant way, leading to kernel crashes or unpredictable behavior. The code calls this function without proper synchronization or locking mechanisms, increasing the risk of a crash or corruption when multiple CPUs are online.
+
+RECOMMENDATIONS:
+To mitigate the vulnerability, the code should use `smp_call_function_single_ipi` with proper synchronization or locking mechanisms to ensure reentrancy. 
+
+Here's an example of the fixed code:
+```c
+static int __cpuinit dbg_reset_notify(struct notifier_block *self,
+				      unsigned long action, void *cpu)
+{
+	disable_irq();
+	if ((action & ~CPU_TASKS_FROZEN) == CPU_ONLINE)
+		smp_call_function_single_ipi((int)cpu, reset_ctrl_regs, NULL, 1);
+	enable_irq();
+
+	return NOTIFY_OK;
+}
+```
+
+Alternatively, `smp_call_function_single_async` can be used if the function can handle asynchronous cancellation.
+
+ORIGINAL CODE:
+```c
+static int __cpuinit dbg_reset_notify(struct notifier_block *self,
+				      unsigned long action, void *cpu)
+{
+	if ((action & ~CPU_TASKS_FROZEN) == CPU_ONLINE)
+		smp_call_function_single((int)cpu, reset_ctrl_regs, NULL, 1);
+
+	return NOTIFY_OK;
+}
+```

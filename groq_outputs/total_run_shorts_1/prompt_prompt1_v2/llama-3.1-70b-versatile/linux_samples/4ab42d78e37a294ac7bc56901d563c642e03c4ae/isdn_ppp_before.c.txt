@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 11-14
+VULNERABILITY_DESCRIPTION:
+Resource management issue with potential use-after-free vulnerability
+
+EXPLANATION:
+The code snippet has a potential vulnerability due to incorrect handling of the `slcomp` resource. The `slhc_init` function is used to allocate a new compression context for PPP packets. However, if this allocation fails, the `sltmp` is NULL, and no free operation is performed on the existing `is->slcomp` resource. This can lead to a use-after-free scenario if the existing `is->slcomp` resource is freed later in the code.
+
+Additionally, when the `sltmp` allocation is successful, the existing `is->slcomp` resource is freed using `slhc_free` before being reassigned to `sltmp`. This looks like a safe operation, but it can still lead to a potential double-free issue if the `sltmp` allocation fails and the error path is not correctly handled.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should correctly handle the `slcomp` resource by freeing the existing resource only after the new allocation has been successfully completed. Also, the code should check for NULL before freeing the existing resource to prevent double-free issues. Here is an example of how to fix this:
+
+```c
+sltmp = slhc_init(16, val);
+if (!sltmp) {
+    printk(KERN_ERR "ippp, can't realloc slhc struct\n");
+    return -ENOMEM;
+}
+if (is->slcomp) {
+    slhc_free(is->slcomp);
+}
+is->slcomp = sltmp;
+```
+
+ORIGINAL CODE:
+
+```c
+ * VJ header compression init
+ */
+	is->slcomp = slhc_init(16, 16);	/* not necessary for 2. link in bundle */
+	if (!is->slcomp) {
+		isdn_ppp_ccp_reset_free(is);
+		return -ENOMEM;
+	}
+#endif
+#ifdef CONFIG_IPPP_FILTER
+	is->pass_filter = NULL;
+			is->maxcid = val;
+#ifdef CONFIG_ISDN_PPP_VJ
+			sltmp = slhc_init(16, val);
+			if (!sltmp) {
+				printk(KERN_ERR "ippp, can't realloc slhc struct\n");
+				return -ENOMEM;
+			}
+			if (is->slcomp)
+				slhc_free(is->slcomp);
+			is->slcomp = sltmp;
+#endif
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Use of Potential NULL Pointer in RCU Critical Section
+
+EXPLANATION:
+The code snippet uses a read lock from the RCU (Read-Copy Update) synchronization primitives. This is correctly done to ensure that the data being accessed (ima_rules) is not concurrently modified. However, the vulnerability stems from the potential dereference of a NULL pointer (ima_rules_tmp) after acquiring the read lock. If ima_rules is NULL, then rcu_dereference(ima_rules) will also be NULL. Dereferencing a NULL pointer (in this case, implicitly by the assignment to ima_rules_tmp) can result in a segmentation fault or a null pointer dereference, leading to a denial-of-service (DoS) condition.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a check to ensure that ima_rules is not NULL before dereferencing it. The corrected code would be:
+```c
+ima_rules_tmp = rcu_dereference(ima_rules);
+if (ima_rules_tmp) {
+    // rest of the code here
+} else {
+    // Handle NULL case
+}
+```
+Alternatively, you could also use a conditional statement to check for NULL before dereferencing:
+```c
+if (ima_rules) {
+    ima_rules_tmp = rcu_dereference(ima_rules);
+    // rest of the code here
+} else {
+    // Handle NULL case
+}
+```
+This check should be performed after acquiring the RCU read lock to ensure that the NULL check is valid for the duration of the lock.
+
+ORIGINAL CODE:
+```c
+if (id >= READING_MAX_ID)
+    return false;
+
+if (id == READING_KEXEC_IMAGE && !(ima_appraise & IMA_APPRAISE_ENFORCE)
+    && security_locked_down(LOCKDOWN_KEXEC))
+    return false;
+
+func = read_idmap[id] ?: FILE_CHECK;
+
+rcu_read_lock();
+ima_rules_tmp = rcu_dereference(ima_rules);
+```

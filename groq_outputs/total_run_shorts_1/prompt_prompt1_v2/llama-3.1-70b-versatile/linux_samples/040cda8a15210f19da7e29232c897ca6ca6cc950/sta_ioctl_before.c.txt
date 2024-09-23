@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 8-9, 14-15
+VULNERABILITY_DESCRIPTION:
+The given code snippet contains a memory allocation vulnerability and potential buffer overflow vulnerabilities.
+
+EXPLANATION:
+The code allocates memory using `kzalloc` without checking the return value. This can lead to a null pointer dereference if the allocation fails. Additionally, the code copies data to `priv->adapter->country_code` and `domain_info->country_code` without bounds checking, which can result in a buffer overflow if the data exceeds the buffer size.
+
+Moreover, the code uses `memcpy` and assignments to copy data from `country_ie` to other variables. Since `country_ie` is not declared in the code snippet, its size and contents are unknown. However, assuming it's a char array or a struct, the indices used (2 and 3) do not provide any information about the validity of the access, which can potentially result in an out-of-bounds access.
+
+RECOMMENDATIONS:
+To fix the memory allocation vulnerability, check the return value of `kzalloc` and handle the allocation failure. To mitigate the buffer overflow vulnerability, perform bounds checking before accessing or copying data. The following code snippet illustrates how to address these vulnerabilities:
+
+```c
+bss_desc = kzalloc(sizeof(struct mwifiex_bssdescriptor), GFP_KERNEL);
+if (!bss_desc) {
+    // Handle allocation failure
+    return -ENOMEM;
+}
+
+// Perform bounds checking before accessing or copying data
+if (2 < sizeof(country_ie) && 3 < sizeof(country_ie)) {
+    memcpy(priv->adapter->country_code, &country_ie[2], 2);
+    domain_info->country_code[0] = country_ie[2];
+    domain_info->country_code[1] = country_ie[3];
+} else {
+    // Handle bounds error
+    return -EINVAL;
+}
+
+// Rest of the code
+```
+
+ORIGINAL CODE:
+```c
+                "11D: skip setting domain info in FW\n");
+        return 0;
+    }
+    memcpy(priv->adapter->country_code, &country_ie[2], 2);
+
+    domain_info->country_code[0] = country_ie[2];
+    domain_info->country_code[1] = country_ie[3];
+    priv->scan_block = false;
+
+    if (bss) {
+        if (adapter->region_code == 0x00)
+            mwifiex_process_country_ie(priv, bss);
+
+        /* Allocate and fill new bss descriptor */
+        bss_desc = kzalloc(sizeof(struct mwifiex_bssdescriptor),
+                   GFP_KERNEL);
+```

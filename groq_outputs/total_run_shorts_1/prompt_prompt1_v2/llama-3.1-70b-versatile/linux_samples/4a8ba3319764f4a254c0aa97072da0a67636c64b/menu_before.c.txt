@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+EXPLANATION:
+In the provided code snippet, the `new_factor` value is decremented by its integer division by `DECAY`. However, the result of this division operation is an integer, so the remainder of the division operation is truncated and discarded.
+
+If the value of `new_factor` is less than `DECAY`, this operation can result in a negative value or zero depending on the value of `DECAY`. Additionally, if the value of `new_factor` is exactly divisible by `DECAY`, the value of `new_factor` will be zero and all subsequent decrements of `new_factor` by `DECAY` will have no effect.
+
+In some cases, this integer division operation may be exploited to produce arbitrary output values, potentially leading to an integer overflow vulnerability.
+
+However, given the context of this code snippet (which appears to be related to power state management), it is more likely that the result of the division operation simply reduces the stability and accuracy of the correction ratio updates rather than any immediately exploitable vulnerability.
+
+RECOMMENDATIONS:
+Update the line `new_factor -= new_factor / DECAY;` to handle potential loss of precision due to integer division. Potential modifications may include casting `new_factor` to a floating point value, scaling all components of the calculation, or simply adding a correction factor to counteract the potential loss of precision.
+
+Additionally, this issue should be tracked to see if it leads to negative functionality and exploitability potential if replicated with similar calculations done in related codeblocks.
+
+ORIGINAL CODE:
+```
+    * power state and occurrence of the wakeup event.
+    *
+    * If the entered idle state didn't support residency measurements,
+    * we are basically lost in the dark how much time passed.
+    * As a compromise, assume we slept for the whole expected time.
+    *
+    * Any measured amount of time will include the exit latency.
+    * Since we are interested in when the wakeup begun, not when it
+    * was completed, we must subtract the exit latency. However, if
+    * the measured amount of time is less than the exit latency,
+    * assume the state was never reached and the exit latency is 0.
+    */
+if (unlikely(target->flags & CPUIDLE_FLAG_TIME_INVALID)) {
+    /* Use timer value as is */
+    measured_us = data->next_timer_us;
+
+} else {
+    /* Use measured value */
+    measured_us = cpuidle_get_last_residency(dev);
+
+    /* Deduct exit latency */
+    if (measured_us > target->exit_latency)
+        measured_us -= target->exit_latency;
+
+    /* Make sure our coefficients do not exceed unity */
+    if (measured_us > data->next_timer_us)
+        measured_us = data->next_timer_us;
+}
+
+/* Update our correction ratio */
+new_factor = data->correction_factor[data->bucket];
+new_factor -= new_factor / DECAY;
+```

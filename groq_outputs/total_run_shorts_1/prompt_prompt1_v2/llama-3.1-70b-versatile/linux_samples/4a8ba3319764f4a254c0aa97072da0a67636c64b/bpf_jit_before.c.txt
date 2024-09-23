@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Use After Free Vulnerability
+
+EXPLANATION:
+The vulnerability exists because the code first calls `module_free(NULL, fp->bpf_func)`, which frees the memory pointed to by `fp->bpf_func`, and then calls `bpf_prog_unlock_free(fp)`, which uses the `fp` pointer without any checks to ensure it is still valid. This is a use-after-free condition because it is possible that `fp` has been freed when it is passed to `bpf_prog_unlock_free(fp)`. This can potentially allow an attacker to execute arbitrary code.
+
+However, since this is only potentially vulnerable if the programmer intended `bpf_prog_unlock_free(fp)` to behave differently depending on the return value of `module_free(NULL, fp->bpf_func)`, and the provided context does not indicate that `bpf_prog_unlock_free(fp)` checks for this condition before continuing execution, then there is still a potential vulnerability present.
+
+RECOMMENDATIONS:
+Reorder the operations to prevent the use-after-free condition. First, unlock and free the `fp` struct using `bpf_prog_unlock_free(fp)` and then free the memory pointed to by `fp->bpf_func`. 
+
+```c
+void bpf_jit_free(struct bpf_prog *fp)
+{
+	if (fp->jited) {
+		bpf_prog_unlock_free(fp);
+		module_free(NULL, fp->bpf_func);
+	}
+}
+```
+
+ORIGINAL CODE:
+```c
+void bpf_jit_free(struct bpf_prog *fp)
+{
+	if (fp->jited)
+		module_free(NULL, fp->bpf_func);
+
+	bpf_prog_unlock_free(fp);
+}
+```

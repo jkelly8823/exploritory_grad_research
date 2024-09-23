@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 38-40
+VULNERABILITY DESCRIPTION:
+The vulnerability is an out-of-bounds memory access in the `get_new_step_size` function. The function takes a `step_size` as an argument and returns a value that is 8 times larger. However, the function does not perform any bounds checking on the `step_size` argument, which could result in an out-of-bounds memory access when the return value is used to access memory.
+
+EXPLANATION:
+The `get_new_step_size` function uses the bitwise shift operator (`<<`) to multiply the `step_size` argument by 8. However, this operation does not perform any bounds checking, and if the `step_size` argument is already near the maximum value for an `unsigned long`, the result of the shift operation will cause an underflow, resulting in an unexpected and potentially out-of-bounds memory access.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `get_new_step_size` function should perform bounds checking on the `step_size` argument before returning a value. This can be done by checking if the result of the shift operation would exceed the maximum value for an `unsigned long`. If so, an error should be returned or an alternate strategy should be employed to prevent the out-of-bounds memory access.
+
+Additionally, the caller should also perform bounds checking on the value returned by `get_new_step_size` before using it to access memory.
+
+ORIGINAL CODE:
+
+    static unsigned long __init get_new_step_size(unsigned long step_size)
+    {
+        /*
+         * Initial mapped size is PMD_SIZE (2M).
+         * We can not set step_size to be PUD_SIZE (1G) yet.
+         * In worse case, when we cross the 1G boundary, and
+         * PG_LEVEL_2M is not set, we will need 1+1+512 pages (2M + 8k)
+         * to map 1G range with PTE. Hence we use one less than the
+         * difference of page table level shifts.
+         *
+         * Don't need to worry about overflow in the top-down case, on 32bit,
+         * when step_size is 0, round_down() returns 0 for start, and that
+         * turns it into 0x100000000ULL.
+         * In the bottom-up case, round_up(x, 0) returns 0 though too, which
+         * needs to be taken into consideration by the code below.
+         */
+        return step_size << (PMD_SHIFT - PAGE_SHIFT - 1);
+    }
+
+    ...
+
+    if (mapped_ram_size >= step_size)
+        step_size = get_new_step_size(step_size);

@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference in the `ide_queue_sense_rq` function.
+
+EXPLANATION:
+In the `ide_queue_sense_rq` function, the `drive` and `drive->sense_rq` variables are accessed and used without checking for null before. However, if `drive->sense_rq` is null, calling `ide_req(sense_rq)` will cause a null pointer dereference, potentially leading to a kernel panic or information disclosure.
+
+While it seems like the error handling for the case where `drive->sense_rq_armed` is false might prevent this, there's no guarantee that `drive->sense_rq` isn't null even if `drive->sense_rq_armed` is true.
+
+RECOMMENDATIONS:
+Add a null pointer check for `drive->sense_rq` before accessing it to prevent potential crashes. Here's an updated code snippet:
+
+```c
+int ide_queue_sense_rq(ide_drive_t *drive, void *special)
+{
+	ide_hwif_t *hwif = drive->hwif;
+	struct request *sense_rq;
+	unsigned long flags;
+
+	spin_lock_irqsave(&hwif->lock, flags);
+
+	/* deferred failure from ide_prep_sense() */
+	if (!drive->sense_rq_armed || drive->sense_rq == NULL) {
+		if (!drive->sense_rq_armed)
+			printk(KERN_WARNING PFX "%s: error queuing a sense request\n",
+			       drive->name);
+		else
+			printk(KERN_WARNING PFX "%s: sense request is null\n", drive->name);
+		spin_unlock_irqrestore(&hwif->lock, flags);
+		return -ENOMEM;
+	}
+
+	sense_rq = drive->sense_rq;
+	ide_req(sense_rq)->special = special;
+	drive->sense_rq_armed = false;
+
+	drive->hwif->rq = NULL;
+
+	ide_insert_request_head(drive, sense_rq);
+	spin_unlock_irqrestore(&hwif->lock, flags);
+	return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+int ide_queue_sense_rq(ide_drive_t *drive, void *special)
+{
+	ide_hwif_t *hwif = drive->hwif;
+	struct request *sense_rq;
+	unsigned long flags;
+
+	spin_lock_irqsave(&hwif->lock, flags);
+
+	/* deferred failure from ide_prep_sense() */
+	if (!drive->sense_rq_armed) {
+		printk(KERN_WARNING PFX "%s: error queuing a sense request\n",
+		       drive->name);
+		spin_unlock_irqrestore(&hwif->lock, flags);
+		return -ENOMEM;
+	}
+
+	sense_rq = drive->sense_rq;
+	ide_req(sense_rq)->special = special;
+	drive->sense_rq_armed = false;
+
+	drive->hwif->rq = NULL;
+
+	ide_insert_request_head(drive, sense_rq);
+	spin_unlock_irqrestore(&hwif->lock, flags);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ide_queue_sense_rq);
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+ CWE-732: Incorrect Permission Assignment for Critical Resource
+EXPLANATION:
+The issue arises from the third else if statement, where the instructions appear to be duplicated and repeated almost verbatim. This logic appears to have been executed previously. It could lead to incorrect permissions being assigned to a critical resource.
+
+However, the potential vulnerability in this segment of code lies with how it may be handling information given and stored in the registers as assigned prior (in this case Jr 'oldval' and Jr 'newval'). Old registers' values seem to have been moved, as values of old registers ("Jr" (oldval)) being over written ("Jr" (newval)). Use of duplicated and reused memory reference here may lead to some potential vulnerabilities depending upon the previously assigned permissions in this call stack.
+
+Another serious vulnerability arises from line 14 where a new value is being written to "*uval = val". It's possible that 'val' could potentially hold values representing sensitive user settings, like database passwords or other secret configurations.
+
+RECOMMENDATIONS:
+1. Code reusage efficiency needs to be provided. This is especially true for instruction that could be taking from CPU. Take CPU time slice from this source into consideration before proceeding any execution calls to see "overriding user information at location "i" (-EFAULT)", avoid more than duplicated repetitive calls.
+2. Memory location is better to consider all CPU instructions must be run on registers on per- core basis before eventually get "val".
+3. Code does not initialize "val" so to mitigate attacks like buffer overflows and other Memory corruption attacks on this 'val'. Ensure initial validation on 'val' before any assignment to "*uval" occurs.
+4. Avoid registering vulnerable CPU values being given for execution here (with instructions of interest of CPU execution to cause unauthorized manipulation of memory). Overlaps from prior tasks, and being dependent here, as determined will decide what can and can not be used from the CPUs data at that instance point.
+
+ORIGINAL CODE:
+
+"i" (-EFAULT)						\
+		: "memory");						\
+	} else if (cpu_has_llsc) {					\
+		loongson_llsc_mb();					\
+		__asm__ __volatile__(					\
+		"	.set	push				\n"	\
+		"	.set	noat				\n"	\
+		"	.set	push				\n"	\
+		  "i" (-EFAULT)
+		: "memory");
+	} else if (cpu_has_llsc) {
+		loongson_llsc_mb();
+		__asm__ __volatile__(
+		"# futex_atomic_cmpxchg_inatomic			\n"
+		"	.set	push					\n"
+		"	.set	noat					\n"
+		: GCC_OFF_SMALL_ASM() (*uaddr), "Jr" (oldval), "Jr" (newval),
+		  "i" (-EFAULT)
+		: "memory");
+		loongson_llsc_mb();
+	} else
+		return -ENOSYS;
+
+	*uval = val;

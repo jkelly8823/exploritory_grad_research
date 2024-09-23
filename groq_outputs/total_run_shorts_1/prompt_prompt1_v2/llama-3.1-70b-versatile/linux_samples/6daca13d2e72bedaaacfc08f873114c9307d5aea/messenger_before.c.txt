@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Insecure error message handling.
+
+EXPLANATION:
+The code snippet provided assumes that the connection object `con` is properly initialized and its members are accessible. However, when `verify_authorizer_reply` fails (i.e., `ret` is less than 0), the error message "bad authorize reply" is assigned to `con->error_msg` directly without proper sanitization. This might lead to issues in the program's functionality or potentially disclose sensitive information about the error, as it directly outputs user-controlled data ("authorize reply"). A better practice is to use a more generic or secure error message that doesn't reveal sensitive information about the error.
+
+RECOMMENDATIONS:
+Instead of directly assigning a sensitive error message to `con->error_msg`, it would be better to use a generic or more secure error message. This can be achieved by logging the specific error message internally or by assigning a more generic error message for output. For example:
+
+```c
+if (ret < 0) {
+    if (con->error_msg_log) {
+        snprintf(con->error_msg_log, ERROR_MSG_LOG_SIZE, "Error verifying authorize reply (ret %d)", ret);
+    }
+    con->error_msg = "Authorization failed";
+    return ret;
+}
+```
+
+ORIGINAL CODE:
+```c
+if (con->auth) {
+    /*
+     * Any connection that defines ->get_authorizer()
+     * should also define ->verify_authorizer_reply().
+     * See get_connect_authorizer().
+     */
+    ret = con->ops->verify_authorizer_reply(con);
+    if (ret < 0) {
+        con->error_msg = "bad authorize reply";
+        return ret;
+```

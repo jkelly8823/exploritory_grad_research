@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 3
+VULNERABILITY_DESCRIPTION:
+Potential Server Side Request Forgery (SSRF) and Remote File Inclusion (RFI) vulnerabilities are present due to the potential insecure use of HTTP redirects, as well as potential lack of input validation for the `$errorPageURL` variable.
+
+EXPLANATION:
+The provided code snippet appears to be written in PHP and seems to be handling authentication based on the requesting IP address. The code first checks if the requesting IP address is in the `$ipAllowList`. If it's not, it echoes an error message and redirects the user to a URL stored in the `$errorPageURL` variable using `http_redirect`. However, the code does not validate the contents of `$errorPageURL`, which could be a potential security risk if it's controlled by an attacker. 
+
+Moreover, the redirect could potentially be used to trick the server into accessing an internal or external URL, effectively performing a Server Side Request Forgery (SSRF) attack or Remote File Inclusion (RFI) attack if the URL contains a protocol that supports this, such as `file://` or an internal network scheme.
+
+Additionally, the use of `$requestingIP = $_SERVER['REMOTE_ADDR']` could also be security-relevant as it does not consider any proxy servers in between the client and server. However, this should be assessed on a per setup basis rather than representing a vulnerability in the code itself.
+
+RECOMMENDATIONS:
+1.  Always validate the contents of the `$errorPageURL` before performing the redirect. Make sure the URL is in the format you expect it to be and it's within the same origin to prevent potential SSRF and RFI attacks.
+2.  Ensure the `$errorPageURL` is hardcoded to a local, static HTML page which can't be modified to include malicious scripts or protocols.
+3.  In case the `$errorPageURL` is generated dynamically or passed from user input, use `header` or `session` injection to make sure the request originates from the current session.
+4.  Reconsider how you're handing IP addresses from proxy servers. For example, when using client-side applications you can decide for yourself how much to trust the proxy or the initial request. However, if you have the user using common web clients like browser then you probably cannot reliably access certain pieces of information.
+
+ORIGINAL CODE:
+```php
+$requestingIP = $_SERVER['REMOTE_ADDR'];if(!in_array($requestingIP,$ipAllowList)){echo "You are not authorized to view this page";http_redirect($errorPageURL);}$status = getServerStatus();echo $status;
+```

@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability occurs due to the potential integer overflow in the line `rlebuflen = (int) (1.05 * xsize + 10);`. In this line, the multiplication and addition operations can result in a floating-point number that exceeds the maximum limit of an integer. When this value is cast to an integer, it can cause an integer overflow, resulting in undefined behavior.
+
+Additionally, the variable `xsize` is multiplied by 1.05, which can result in a large value. If `xsize` is close to the maximum limit of an integer, this multiplication can also cause an integer overflow. 
+
+Furthermore, in the line `tablen = ysize * zsize * sizeof(Py_Int32);`, there is no validation to check for overflow before calculating `tablen`. This can result in an integer overflow if `ysize` or `zsize` is large, causing undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following steps can be taken:
+
+* Before multiplying `xsize` by 1.05, validate that the result will not overflow the integer range.
+* Use a safer method to calculate `rlebuflen`, such as using a library function that handles overflow checks.
+* Validate the result of the multiplication in the line `tablen = ysize * zsize * sizeof(Py_Int32);` to prevent integer overflow.
+
+Here is an example of how this code could be modified to prevent integer overflows:
+
+```c
+rlebuflen = xsize + (int) (xsize * 0.05);
+if (rlebuflen > INT_MAX - 10) {
+    PyErr_NoMemory();
+    goto finally;
+}
+rlebuflen += 10;
+
+// and
+
+tablen = ysize * zsize * sizeof(Py_Int32);
+if (tablen < 0 || (ysize * zsize > tablen / sizeof(Py_Int32))) {
+    PyErr_NoMemory();
+    goto finally;
+}
+```
+
+ORIGINAL CODE:
+```c
+xsize = image.xsize;
+ysize = image.ysize;
+zsize = image.zsize;
+tablen = xsize * ysize * zsize * sizeof(Py_Int32);
+if (xsize != (((tablen / ysize) / zsize) / sizeof(Py_Int32))) {
+    PyErr_NoMemory();
+    goto finally;
+}
+if (rle) {
+    tablen = ysize * zsize * sizeof(Py_Int32);
+    rlebuflen = (int) (1.05 * xsize +10);
+    if ((tablen / sizeof(Py_Int32)) != (ysize * zsize) ||
+```

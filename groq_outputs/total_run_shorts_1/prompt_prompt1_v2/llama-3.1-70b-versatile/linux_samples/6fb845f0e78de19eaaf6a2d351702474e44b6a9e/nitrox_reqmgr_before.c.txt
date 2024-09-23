@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Deserialization of Untrusted Data and Insufficient Validation of User Input Data.
+
+EXPLANATION:
+The code snippet is susceptible to a data integrity issue. The 'err' value is derived from the dereferenced value of 'sr->resp.orh', which may be a user-controlled value. However, there is no validation or sanitization performed on this value. This could potentially be exploited to cause undefined behavior or inject malicious data. Furthermore, this value is directly used in the 'sr->callback' function, which may further exacerbate any potential security issues.
+
+Additionally, there is potential for a use-after-free vulnerability as 'softreq_destroy(sr)' is called, but 'sr' is still being accessed and used after being destroyed.
+
+RECOMMENDATIONS:
+- Validate and sanitize 'sr->resp.orh' before using it. Consider checking its value against expected ranges or formats.
+- Ensure that 'sr' is not accessed after 'softreq_destroy(sr)' is called.
+- Implement additional checks to verify that 'sr' is valid before calling 'sr->callback' to prevent potential 'use-after-free' or dangling pointer issues.
+
+ORIGINAL CODE:
+
+```c
+struct nitrox_device *ndev = cmdq->ndev;
+struct nitrox_softreq *sr;
+int req_completed = 0, err = 0, budget;
+
+/* check all pending requests */
+budget = atomic_read(&cmdq->pending_count);
+
+	smp_mb__after_atomic();
+	/* remove from response list */
+	response_list_del(sr, cmdq);
+
+	/* ORH error code */
+	err = READ_ONCE(*sr->resp.orh) & 0xff;
+
+	if (sr->callback)
+		sr->callback(sr->cb_arg, err);
+	softreq_destroy(sr);
+
+	req_completed++;
+}
+```

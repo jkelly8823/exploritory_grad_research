@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 13-14
+VULNERABILITY_DESCRIPTION:
+Concurrent Modification of Shared Data Structures without Proper Synchronization
+
+EXPLANATION:
+This code snippet appears to be part of a Linux kernel module handling Unix domain sockets. The code is vulnerable to concurrent modification of the shared data structure `gc_inflight_list` without proper synchronization.
+
+In the first function `unix_notinflight` was most of the way correct, however it did miss one line 7.
+
+On line 7, `unix_tot_inflight` is incremented without synchronization. This variable seems to be a global counter, and its modification can lead to a data race if multiple threads access it concurrently.
+
+Additionally, on lines 13-14, `atomic_long_dec_and_test(&u->inflight)` and `list_del_init(&u->link)` are not synchronized with the `unary_tot_inflight` from above, which may cause issues if these variables depend on each other.
+
+
+RECOMMENDATIONS:
+To fix this vulnerability, synchronization primitives should be used to protect access to the shared data structure. Specifically:
+
+*   Use a spinlock or mutex to synchronize access to `unix_tot_inflight`. 
+*   Verify that access to `gc_inflight_list` is properly synchronized and will not introduce deadlocks
+
+ORIGINAL CODE:
+```c
+{
+	struct sock *s = unix_get_socket(fp);
+
+	if (s) {
+		struct unix_sock *u = unix_sk(s);
+
+		spin_lock(&unix_gc_lock);
+
+		if (atomic_long_inc_return(&u->inflight) == 1) {
+			BUG_ON(!list_empty(&u->link));
+			list_add_tail(&u->link, &gc_inflight_list);
+		} else {
+			BUG_ON(list_empty(&u->link));
+		}
+		unix_tot_inflight++;
+		spin_unlock(&unix_gc_lock);
+	}
+}
+
+void unix_notinflight(struct file *fp)
+{
+	struct sock *s = unix_get_socket(fp);
+
+	if (s) {
+		struct unix_sock *u = unix_sk(s);
+
+		spin_lock(&unix_gc_lock);
+		BUG_ON(list_empty(&u->link));
+
+		if (atomic_long_dec_and_test(&u->inflight))
+			list_del_init(&u->link);
+		unix_tot_inflight--;
+		spin_unlock(&unix_gc_lock);
+	}
+}
+
+static void scan_inflight(struct sock *x, void (*func)(struct unix_sock *),
+			  struct sk_buff_head *hitlist)
+```

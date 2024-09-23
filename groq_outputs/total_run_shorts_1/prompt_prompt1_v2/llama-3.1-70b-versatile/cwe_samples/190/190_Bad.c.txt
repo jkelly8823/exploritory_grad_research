@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Memory allocation with unvalidated input, leading to potential integer overflow and buffer overflow vulnerabilities.
+
+EXPLANATION:
+The code snippet assigns the result of `get_num_imgs()` to `num_imgs`, then multiplies this value by the size of `img_t` to allocate memory for `table_ptr`. However, there is no validation on the value of `num_imgs` before it's used to allocate memory. If `get_num_imgs()` returns a large or negative value, this could lead to an integer overflow when multiplied by the size of `img_t`, causing a buffer overflow vulnerability.
+
+Another concern is that `malloc` does not perform any checks on the size parameter. If `num_imgs` is too large or the heap is too small, `malloc` will return `NULL`, which is not checked in this snippet. This can lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, validate the return value of `get_num_imgs()` and ensure it's within a reasonable range before using it to allocate memory. Additionally, check the return value of `malloc` to ensure that memory was allocated successfully.
+
+Example of secure code:
+```c
+num_imgs = get_num_imgs();
+
+if (num_imgs <= 0 || num_imgs > MAX_IMAGES) {
+    // handle error
+}
+
+// Validate that the allocation size does not overflow
+size_t allocation_size = sizeof(img_t) * (size_t)num_imgs;
+if (allocation_size / sizeof(img_t) != (size_t)num_imgs) {
+    // handle integer overflow
+}
+
+table_ptr = malloc(allocation_size);
+if (table_ptr == NULL) {
+    // handle malloc failure
+}
+```
+ORIGINAL CODE:
+```c
+img_t table_ptr; /*struct containing img data, 10kB each*/
+int num_imgs;
+...
+num_imgs = get_num_imgs();
+table_ptr = (img_t*)malloc(sizeof(img_t)*num_imgs);
+```

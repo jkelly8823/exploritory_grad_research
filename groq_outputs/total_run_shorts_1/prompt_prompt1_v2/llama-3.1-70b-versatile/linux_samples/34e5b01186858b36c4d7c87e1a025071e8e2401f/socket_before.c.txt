@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13
+VULNERABILITY_DESCRIPTION:
+ Potential null pointer dereference and missing error handling on spin lock operation.
+
+EXPLANATION:
+ The provided code snippet includes a block where a spin lock is acquired and an element is added to a list. However, before the lock is acquired, the code checks a condition `net->sctp.default_auto_asconf`. If this condition is false, the lock is not acquired, but the variable `sp->do_auto_asconf` is still modified. This could potentially lead to a race condition if another thread is accessing the same variable.
+
+Additionally, the spin lock is acquired without checking if it is already held by another thread. If this is the case, it could lead to a deadlock. It is essential to handle the spin lock operation properly, including checks for lock ownership and error handling.
+
+RECOMMENDATIONS:
+ Ensure that the lock is properly acquired before accessing the shared resource, and that the lock ownership is checked to prevent potential deadlocks. It is also recommended to add error checking after acquiring the lock to handle potential errors.
+
+```c
+if (net->sctp.default_auto_asconf) {
+    spin_lock(&sock_net(sk)->sctp.addr_wq_lock);
+    if (!spin_is_locked(&sock_net(sk)->sctp.addr_wq_lock)) { // Check ownership
+        // Handle potential error
+    }
+    list_add_tail(&sp->auto_asconf_list, &net->sctp.auto_asconf_splist);
+    sp->do_auto_asconf = 1;
+    spin_unlock(&sock_net(sk)->sctp.addr_wq_lock);
+} else {
+    sp->do_auto_asconf = 0;
+}
+```
+ORIGINAL CODE:
+
+```c
+return af;
+}
+
+/* Bind a local address either to an endpoint or to an association.  */
+static int sctp_do_bind(struct sock *sk, union sctp_addr *addr, int len)
+{
+    struct net *net = sock_net(sk);
+        return -EADDRINUSE;
+
+    /* Refresh ephemeral port.  */
+    if (!bp->port)
+        bp->port = inet_sk(sk)->inet_num;
+
+    /* Add the address to the bind address list.
+     * Use GFP_ATOMIC since BHs will be disabled.
+     */
+    sk_sockets_allocated_inc(sk);
+    sock_prot_inuse_add(net, sk->sk_prot, 1);
+
+    /* Nothing can fail after this block, otherwise
+     * sctp_destroy_sock() will be called without addr_wq_lock held
+     */
+    if (net->sctp.default_auto_asconf) {
+        spin_lock(&sock_net(sk)->sctp.addr_wq_lock);
+        list_add_tail(&sp->auto_asconf_list,
+            &net->sctp.auto_asconf_splist);
+        sp->do_auto_asconf = 1;
+        spin_unlock(&sock_net(sk)->sctp.addr_wq_lock);
+    } else {
+        sp->do_auto_asconf = 0;
+    }
+
+    local_bh_enable();
+
+    return 0;
+}
+            return err;
+    }
+
+    /* Move any messages in the old socket's receive queue that are for the
+     * peeled off association to the new socket's receive queue.
+     */
+    sctp_skb_for_each(skb, &oldsk->sk_receive_queue, tmp)
+```

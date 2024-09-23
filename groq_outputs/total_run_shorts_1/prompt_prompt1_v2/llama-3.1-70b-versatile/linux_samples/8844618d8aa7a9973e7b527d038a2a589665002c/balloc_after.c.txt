@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-9
+VULNERABILITY_DESCRIPTION: 
+A potential error path vulnerability exists due to unlocked or partially locked critical sections.
+
+EXPLANATION:
+An error path can cause a potential resource leak issue. When an error occurs (`err = -EFSCORRUPTED`), the function jumps to the label "out" with `goto out`, but before this, it doesn't lock the buffer "bh". If an error occurs before this point, the buffer "bh" can stay locked. Although the `unlock_buffer(bh)` call is present, it only occurs when `block_group == 0`. For any other group, `unlock_buffer(bh)` isn't called after an error occurs, potentially causing the buffer to stay locked, which can lead to issues and potential crashes when trying to access this buffer later on.
+
+Moreover, `ext4_unlock_group(sb, block_group)` is missing when an error occurs due to the call `err = ext4_init_block_bitmap(sb, bh, block_group, desc)`. Therefore, even when `block_group == 0` isn't true, the group can stay locked on error paths.
+
+RECOMMENDATIONS:
+To mitigate this issue, it's recommended to always unlock or clean up any locked resources, like `ext4_unlock_group(sb, block_group)`, and buffers, like `unlock_buffer(bh)`, no matter which error path is taken. 
+Unlocked code should ensure that the lock or group locking is handled for all potential error paths, including `err = -EFSCORRUPTED`. 
+This also includes other groups blocks besides group zero, when an error path occurs in any operation.
+Additionally, verify that memory allocation, and assignment operations occur without any errors prior to any locking, to ensure proper release of any locked resources upon encountering any potential errors.
+
+ORIGINAL CODE:
+```c
+	goto verify;
+}
+ext4_lock_group(sb, block_group);
+if (ext4_has_group_desc_csum(sb) &&
+    (desc->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))) {
+	if (block_group == 0) {
+		ext4_unlock_group(sb, block_group);
+		unlock_buffer(bh);
+		ext4_error(sb, "Block bitmap for bg 0 marked "
+			   "uninitialized");
+		err = -EFSCORRUPTED;
+	.goto out;
+	}
+	err = ext4_init_block_bitmap(sb, bh, block_group, desc);
+	set_bitmap_uptodate(bh);
+	set_buffer_uptodate(bh);
+	set_buffer_verified(bh);
+```

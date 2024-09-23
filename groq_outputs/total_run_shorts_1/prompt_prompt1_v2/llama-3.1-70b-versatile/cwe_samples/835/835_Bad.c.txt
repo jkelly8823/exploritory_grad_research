@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION: 
+The vulnerability is a potential denial of service (DoS) due to infinite loop in case of socket creation failure and lack of proper error handling.
+
+EXPLANATION:
+The vulnerability stems from the fact that in the event of socket creation failure, the code attempts to establish a connection to the server in an infinite loop without checking for specific error codes related to socket creation. The `socket()` function may return -1 and set `errno` to indicate the error, but the code does not handle this error code. If a socket cannot be created, the code will keep calling `connect()` on an invalid socket descriptor, which will likely always fail. This could cause a denial of service by consuming excessive CPU resources or by preventing other processes from utilizing the available sockets.
+
+Additionally, line 6 directly assigns the result of `memset(&servaddr, 0, sizeof(servaddr))` which returns an `int`, and does not set `servaddr` to NULL in case it fails. However the memset operation should return a pointer on success while NULL on failure but since 'servaddr' is only being passed as an argument to memset its success actually depends on the result of memset. Thus the issue in this case is ignored.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add proper error handling to the socket creation and connection establishment code. Specifically, you should:
+1. Check for `socket()` errors and handle them accordingly. If `socket()` fails, you should exit the function and report the error.
+2. Check for `connect()` errors and handle them accordingly. If `connect()` fails due to network issues, you should implement a retry mechanism with a reasonable timeout.
+
+Here is a recommended modification for the code:
+
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    int servsock;
+    int connected;
+    struct sockaddr_in servaddr;
+
+    // create socket to connect to server
+    servsock = socket(AF_INET, SOCK_STREAM, 0);
+    if (servsock < 0) {
+        // Handle the error
+        perror("socket");
+        return -1;
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+    servaddr.sin_addr.s_addr = inet_addr(hostaddr);
+
+    do {
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        if (connected < 0 && errno != ECONNREFUSED) {
+            // Handle the error
+            perror("connect");
+            return -1;
+        }
+
+        if (connected > -1) {
+            // read and process messages
+        }
+
+        // keep trying to establish connection to the server
+    } while (connected < 0);
+
+    // close socket and return success or failure
+}
+
+ORIGINAL CODE:
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...int servsock;int connected;struct sockaddr_in servaddr;
+    
+    // create socket to connect to server
+    servsock = socket( AF_INET, SOCK_STREAM, 0);memset( &servaddr, 0, sizeof(servaddr));servaddr.sin_family = AF_INET;servaddr.sin_port = htons(port);servaddr.sin_addr.s_addr = inet_addr(hostaddr);
+    do {
+        
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        
+        // if connected then read and process messages from server
+        if (connected > -1) {
+            
+            // read and process messages
+            ...
+        }
+    
+    // keep trying to establish connection to the server
+    } while (connected < 0);
+    
+    // close socket and return success or failure
+    ...
+}
+```

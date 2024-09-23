@@ -1,0 +1,89 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 18, 23, 28, 33, 38
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+EXPLANATION:
+The `getline` method (and multiple other methods in the snippet) reads a line from the server with a maximum size defined by the `maxline` parameter. However, it does not handle the case where the line is exactly equal to `maxline + 1` characters long. This can lead to a buffer overflow when processing the line. The code assumes that a line will either be shorter than `maxline + 1` characters or will have a single character following `maxline` characters. However, in practice, many FTP servers do not follow this convention and may respond with longer lines.
+
+Additionally, there are multiple usages of `readline(self.maxline + 1)` across different parts of the code. This repetition can lead to inconsistencies if `maxline` is updated in the future.
+
+The CRLF handling logic in the code can also be improved. It checks for both CRLF and CR (when CRLF is truncated to a single CR) at multiple places, which seems redundant.
+
+RECOMMENDATIONS:
+- Consider using a more robust method to handle the `getline` functionality such as using `while` loop to continuously read chunks of data and accumulate the line until it ends with a CRLF sequence.
+- Update CRLF handling to handle it consistently across the entire class.
+- Use named constants for line termination sequences instead of relying on a specific separator string to increase readability and maintainability.
+- Use exception handling to catch and process cases where the readline fails and results in an unexpected outcome.
+
+ORIGINAL CODE:
+[provided code]
+```python
+# The standard FTP server control port
+FTP_PORT = 21
+# The sizehint parameter passed to readline() calls
+MAXLINE = 8192
+
+# Exception raised when an error or invalid response is received
+class Error(Exception): 
+    debugging = 0 
+    host = '' 
+    port = FTP_PORT 
+    maxline = MAXLINE 
+    sock = None 
+    file = None 
+    welcome = None 
+    passiveserver = 1 
+
+    # Internal: return one line from the server, stripping CRLF.
+    # Raise EOFError if the connection is closed
+    def getline(self):
+        line = self.file.readline(self.maxline + 1)
+        if len(line) > self.maxline:
+            raise Error("got more than %d bytes" % self.maxline)
+        if self.debugging > 1:
+            print('*get*', self.sanitize(line))
+        if not line: 
+            raise EOFError
+        if line[-2:] == CRLF: 
+            line = line[:-2]
+        with self.transfercmd(cmd) as conn,  \
+                conn.makefile('r', encoding=self.encoding) as fp:
+            while 1:
+                line = fp.readline(self.maxline + 1)
+                if len(line) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if self.debugging > 2: print('*retr*', repr(line))
+                if not line:
+                    break
+                if line[-2:] == CRLF:
+        self.voidcmd('TYPE A')
+        with self.transfercmd(cmd) as conn:
+            while 1:
+                buf = fp.readline(self.maxline + 1)
+                if len(buf) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if not buf: break
+                if buf[-2:] != B_CRLF:
+                    if buf[-1] in B_CRLF: buf = buf[:-1]
+                    buf = buf + B_CRLF
+        fp = conn.makefile('r', encoding=self.encoding)
+        try:
+            while 1:
+                line = fp.readline(self.maxline + 1)
+                if len(line) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if self.debugging > 2: print('*retr*', repr(line))
+                if not line:
+                    break
+                if line[-2:] == CRLF:
+        conn = self.transfercmd(cmd)
+        try:
+            while 1:
+                buf = fp.readline(self.maxline + 1)
+                if len(buf) > self.maxline:
+                    raise Error("got more than %d bytes" % self.maxline)
+                if not buf: break
+                if buf[-2:] != B_CRLF:
+                    if buf[-1] in B_CRLF: buf = buf[:-1]
+                    buf = buf + B_CRLF
+```

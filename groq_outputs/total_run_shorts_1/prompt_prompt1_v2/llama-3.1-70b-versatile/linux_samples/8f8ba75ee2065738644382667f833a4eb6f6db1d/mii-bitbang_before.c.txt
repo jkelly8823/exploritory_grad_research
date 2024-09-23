@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Unchecked allocation and potential integer overflow vulnerability in kmalloc.
+
+EXPLANATION:
+The vulnerability in this code snippet is due to the fact that kmalloc's allocation size can potentially overflow. The code multiplies sizeof(int) with PHY_MAX_ADDR, which could result in an integer overflow if PHY_MAX_ADDR is large. Additionally, kmalloc returns a pointer that can be NULL if the allocation fails. However, the error handling does not check for the possibility that kmalloc might return an error due to an integer overflow or other reasons. This can lead to a situation where an under-allocated block of memory might be used, potentially resulting in unexpected behavior or even memory corruption.
+
+RECOMMENDATIONS:
+Before performing allocation, you should check for potential integer overflow by ensuring that the multiplication does not exceed INT_MAX. Also, ensure to handle the case where kmalloc's allocation fails, and possibly provide more error handling mechanisms, for instance logging the error message, returning error codes, or triggering a fatal error to prevent undefined behavior.
+
+Here is how it could be implemented:
+```c
+const size_t allocation_size = sizeof(int) * PHY_MAX_ADDR;
+if (allocation_size > KMALLOC_MAX_SIZE || allocation_size < sizeof(int)) {
+    dev_err(&ofdev->dev, "kmalloc: allocation size overflow\n");
+    goto out_unmap_regs;
+}
+new_bus->irq = kmalloc(allocation_size, GFP_KERNEL);
+if (!new_bus->irq) {
+    dev_err(&ofdev->dev, "kmalloc: memory allocation failed\n");
+    goto out_unmap_regs;
+}
+```
+ORIGINAL CODE:
+```c
+new_bus->phy_mask = ~0;
+new_bus->irq = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);
+if (!new_bus->irq)
+    goto out_unmap_regs;
+
+new_bus->parent = &ofdev->dev;
+dev_set_drvdata(&ofdev->dev, new_bus);
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to misuse of the `strncat` function.
+
+EXPLANATION:
+The code uses the `strncat` function to append strings to the `fullname` buffer. However, the `strncat` function adds a null terminator after the specified maximum number of characters, and in this case, the maximum number of characters is calculated as `sizeof(fullname) - strlen(fullname) - 1`. This approach is incorrect because it can still lead to a buffer overflow if the `firstname` or `lastname` strings are null-terminated strings that are almost as large as their respective buffers.
+
+A buffer overflow occurs when the sum of the lengths of `firstname` and `lastname` (including the null terminator) exceeds the size of the `fullname` buffer, which is 40 bytes in this case. This can happen even if the lengths of `firstname` and `lastname` individually do not exceed the size of their respective buffers.
+
+Additionally, the check `sizeof(fullname)-strlen(fullname)-1` is not a robust way to prevent buffer overflows because it relies on the correct initialization of the `fullname` buffer with null characters, which is not guaranteed by the provided code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can use the `snprintf` function instead of `strncat`, which provides more flexibility and control over the formatting and buffer limits.
+
+Here is an example of how to use `snprintf` to safely build the `fullname` string:
+```c
+char firstname[20]; char lastname[20]; char fullname[40];
+snprintf(fullname, sizeof(fullname), "%s %s", firstname, lastname);
+```
+Alternatively, you can use `strcpy` and `strcat` functions with careful error handling to ensure that the buffer is not overflowed:
+```c
+char firstname[20]; char lastname[20]; char fullname[40];
+strcpy(fullname, firstname);
+strcat(fullname, " ");
+strcat(fullname, lastname);
+```
+However, this approach is still not as safe as `snprintf` because it requires manual error handling to prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+char firstname[20]; char lastname[20]; char fullname[40];
+fullname[0] = '\0';
+strncat(fullname, firstname, sizeof(fullname)-strlen(fullname)-1);
+strncat(fullname, lastname, sizeof(fullname)-strlen(fullname)-1);
+```

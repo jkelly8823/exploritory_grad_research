@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION:
+Use after free. The xfer pointer is potentially used after it has been freed.
+
+EXPLANATION:
+The code in `dw_i3c_master_dequeue_xfer` function removes a dw_i3c_xfer structure from a linked list. However, after this removal, the `xfer` pointer is still used in `dw_i3c_master_end_xfer_locked` function. If the `dw_i3c_master_dequeue_xfer` function is called from some other thread, then the memory pointed by `xfer` might have been freed and reused. Accessing this memory can lead to a use after free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to verify if `dw_i3c_master_dequeue_xfer` is called after `dw_i3c_master_end_xfer_locked` in any execution path. If it is, then `dw_i3c_master_end_xfer_locked` function should not access `xfer` pointer after `dw_i3c_master_dequeue_xfer` is called. One way to achieve this is by using a flag to check if `xfer` has been dequeued. Alternatively, xfer should be accessed before `dw_i3c_master_dequeue_xfer` is called.
+
+ORIGINAL CODE:
+```c
+spin_unlock_irqrestore(&master->xferqueue.lock, flags);
+}
+
+static void dw_i3c_master_dequeue_xfer(struct dw_i3c_master *master,
+				       struct dw_i3c_xfer *xfer)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&master->xferqueue.lock, flags);
+	if (master->xferqueue.cur == xfer) {
+		u32 status;
+
+		master->xferqueue.cur = NULL;
+	} else {
+		list_del_init(&xfer->node);
+	}
+	spin_unlock_irqrestore(&master->xferqueue.lock, flags);
+}
+
+static void dw_i3c_master_end_xfer_locked(struct dw_i3c_master *master, u32 isr)
+	complete(&xfer->comp);
+
+	if (ret < 0) {
+		dw_i3c_master_dequeue_xfer(master, xfer);
+		writel(readl(master->regs + DEVICE_CTRL) | DEV_CTRL_RESUME,
+		       master->regs + DEVICE_CTRL);
+	}
+```

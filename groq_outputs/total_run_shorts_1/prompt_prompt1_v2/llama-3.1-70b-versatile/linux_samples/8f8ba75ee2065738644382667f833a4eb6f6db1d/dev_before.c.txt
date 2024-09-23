@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Use of potentially null pointer without null check.
+
+EXPLANATION:
+The code snippet contains a potential null pointer dereference vulnerability. In the line `if (pt_prev->func(skb, skb->dev, pt_prev, orig_dev))`, the code accesses the `func` member of the `pt_prev` structure without checking if `pt_prev` is null. Although it seems like there is a null check for `pt_prev` in the if statement above, it only checks for the existence of `pt_prev` in the scope of the immediate if statement, it may not guarantee that `pt_prev` is non-null when accessing its member later.
+
+However, considering the if statement `if (pt_prev)`, the vulnerability actually lies in the line `deliver_skb(skb2, pt_prev, skb->dev);`. The variable `skb2` is used without checking if it's null. 
+
+RECOMMENDATIONS:
+Add null checks before using `skb2` and `pt_prev` to prevent null pointer dereferences. Here's how you can do it:
+
+```c
+if (skb2 != NULL && pt_prev != NULL) {
+    deliver_skb(skb2, pt_prev, skb->dev);
+    pt_prev = ptype;
+    continue;
+}
+```
+
+ORIGINAL CODE:
+```c
+return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
+}
+
+/*
+ *	Support routine. Sends outgoing frames to any network
+ *	taps currently in use.
+ */
+		 * they originated from - MvS (miquels@drinkel.ow.org)
+		 */
+		if ((ptype->dev == dev || !ptype->dev) &&
+		    (ptype->af_packet_priv == NULL ||
+		     (struct sock *)ptype->af_packet_priv != skb->sk)) {
+			if (pt_prev) {
+				deliver_skb(skb2, pt_prev, skb->dev);
+				pt_prev = ptype;
+				continue;
+
+/**
+ * netdev_wait_allrefs - wait until all references are gone.
+ *
+ * This is called when unregistering network devices.
+ *
+ * Any protocol or device that holds a reference should register
+```

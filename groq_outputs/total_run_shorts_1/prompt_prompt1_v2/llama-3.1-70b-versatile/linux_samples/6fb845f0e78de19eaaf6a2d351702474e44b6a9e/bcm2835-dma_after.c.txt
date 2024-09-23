@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 10 - Possible Use-After-Free vulnerability
+VULNERABILITY_DESCRIPTION:
+A possible use-after-free vulnerability may exist in the provided code.
+
+EXPLANATION:
+In the "bcm2835_dma_start_desc" function, after calling "vchan_terminate_vdesc(&c->desc->vd)" which likely releases the descriptor, the code calls "bcm2835_dma_abort(c)". Within this function, the code is accessing the "chan_base" which is derived from the struct pointed to by "c". This access happens after the vchan_terminate_vdesc call which may have freed the descriptor memory. However, regardless of whether the vdesc call frees the descriptor or not, it does not prevent "bcm2835_dma_abort" from happening after the descriptor has been released as c->desc is still being used even after vchan_terminate_vdesc(c->desc->vd) has released it.
+
+However, the actual structure instance under consideration is actually c not c->desc. Since vchan_terminate_vdesc does not actually alter c in this snippet the code isn't using the memory after free. Therefore this analysis is actually dependent on vchan_terminate_vdesc.
+
+Additionally, within the function itself it does utilize memory pointed to by "c" without first verifying its validity after it has been freed. Even though it appears that the code isn't truly using memory after it's been freed the vchan_terminate_vdesc call releases the descriptor and could potentially have been a UAF (Use-After-Free) vulnerability.
+
+To clarify:
+UAF wasn't utilized here but there's still potential for accessing released memory as the data after vchan_terminate_vdesc is also an issue with lack of a null pointer check at the call of bcm2835_dma_abort.
+
+
+RECOMMENDATIONS:
+1. Null pointer check: Add a null pointer check before the line vchan_terminate_vdesc is called and after the call as well, so a usage of the null pointer can be prevented.
+
+
+Additionally, a simple null pointer check can be added in the release (if any) to make sure terminated descriptor has null to show that descriptor was released (or completed, in this term may apply a custom value, based on design choice). There could probably be other solution too based on the design.

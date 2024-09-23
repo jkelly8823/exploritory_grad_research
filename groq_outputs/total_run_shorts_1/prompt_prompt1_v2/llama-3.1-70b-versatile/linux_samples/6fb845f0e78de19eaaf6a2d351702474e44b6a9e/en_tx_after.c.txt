@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-9
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable to a potential use-after-free issue due to an unordered read of the 'wqe' pointer after 'mlx5e_sq_fetch_wqe' function call, which may have modified the 'wqe' pointer.
+
+EXPLANATION:
+The code snippet contains a potential vulnerability due to an unordered read of the 'wqe' pointer after 'mlx5e_sq_fetch_wqe' function call. The 'mlx5e_sq_fetch_wqe' function may modify the 'wqe' pointer, but there is no guarantee on the ordering of the read and write operations. As a result, the 'wqe' pointer may be read before the write operation is completed, leading to a potential use-after-free issue.
+
+Additionally, the code checks the value of 'contig_wqebbs_room' and if it's less than 'num_wqebbs', it calls 'mlx5e_fill_sq_frag_edge' and then 'mlx5e_sq_fetch_wqe'. After 'mlx5e_sq_fetch_wqe' is called, the 'wqe' pointer is used again, but there's no guarantee that 'mlx5e_sq_fetch_wqe' won't modify 'wqe' to point to an already freed memory location.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should re-order the operations to avoid reading 'wqe' after 'mlx5e_sq_fetch_wqe'. We should first store the original value of 'wqe->eth' and then call 'mlx5e_sq_fetch_wqe'. After that, we can restore the original value of 'wqe->eth' using the stored value.
+
+Here is the fixed code:
+
+```c
+num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
+contig_wqebbs_room = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
+if (unlikely(contig_wqebbs_room < num_wqebbs)) {
+#ifdef CONFIG_MLX5_EN_IPSEC
+    struct mlx5_wqe_eth_seg cur_eth = wqe->eth;
+#endif
+    mlx5e_fill_sq_frag_edge(sq, wq, pi, contig_wqebbs_room);
+    mlx5e_sq_fetch_wqe(sq, &wqe, &pi);
+   威e_sq_fetch_wqe(sq, &wqe, &pi);
+    /* Fetch the new wqe before doing any operations on wqe->eth */
+    struct mlx5_wqe_eth_seg new_eth = wqe->eth;
+#ifdef CONFIG_MLX5_EN_IPSEC
+    wqe->eth = cur_eth;
+#endif
+    /* Original wqe operations go here */
+}
+
+/* fill wqe */
+wi   = &sq->db.wqe_info[pi];
+```
+However, the given snippet of code is very small, I would like to look at a larger codebase to be certain.
+
+ORIGINAL CODE:
+```c
+num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
+contig_wqebbs_room = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
+if (unlikely(contig_wqebbs_room < num_wqebbs)) {
+#ifdef CONFIG_MLX5_EN_IPSEC
+    struct mlx5_wqe_eth_seg cur_eth = wqe->eth;
+#endif
+    mlx5e_fill_sq_frag_edge(sq, wq, pi, contig_wqebbs_room);
+    mlx5e_sq_fetch_wqe(sq, &wqe, &pi);
+#ifdef CONFIG_MLX5_EN_IPSEC
+    wqe->eth = cur_eth;
+#endif
+}
+
+/* fill wqe */
+wi   = &sq->db.wqe_info[pi];
+```

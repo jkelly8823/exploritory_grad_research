@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-4
+VULNERABILITY_DESCRIPTION:
+Insecure Password Hashing and Comparison
+
+EXPLANATION:
+This code snippet demonstrates multiple security concerns. Firstly, the password hashing algorithm used is SHA, which is not suitable for password storage. SHA is a fast hashing algorithm that can be easily brute-forced with modern hardware. Additionally, the code is using the `MessageDigest` instance incorrectly. The `digest` variable seems to be calling `digest()` on `password` instead of `encer`, which is the correct instance. Furthermore, the comparison of the hashed passwords using the `equal` method is also insecure, as it may be vulnerable to timing attacks.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, we recommend the following:
+- Use a password hashing algorithm like Argon2, PBKDF2, or Bcrypt, which are designed to be slow and computationally expensive, making them more resistant to brute-force attacks.
+- Use the correct `MessageDigest` instance (`encer`) to generate the digest.
+- Use a secure string comparison method like `java.util.Arrays.equals()` or `java.security.MessageDigest.isEqual()` to compare the hashed passwords. This will prevent timing attacks.
+- Consider using a library like OWASP's ESAPI or Apache Shiro that provides secure password hashing and comparison functionality.
+
+ORIGINAL CODE:
+```java
+String plainText = new String(plainTextIn);
+MessageDigest encer = MessageDigest.getInstance("SHA");
+encer.update(plainTextIn);
+byte[] digest = password.digest();
+//Login if hash matches stored hash
+if (equal(digest,secret_password())) {
+    login_user();
+}
+```
+
+Example of secure password hashing using PBKDF2:
+```java
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+
+public class PasswordHasher {
+    private static final int ITERATIONS = 1000;
+    private static final int KEY_LENGTH = 128;
+
+    public static byte[] hashPassword(String password) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        SecureRandom random = new SecureRandom();
+        byte[] salt = new byte[16];
+        random.nextBytes(salt);
+
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, ITERATIONS, KEY_LENGTH);
+        SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        byte[] hash = f.generateSecret(spec).getEncoded();
+
+        return hash;
+    }
+}
+```

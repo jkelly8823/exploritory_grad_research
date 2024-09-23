@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The code may have a data corruption issue in a multi-threaded or multi-queue environment.
+EXPLANATION:
+The vulnerability appears to be related to incorrect handling of multi-queue support. The code sets `cp->tx_old[ring] = entry;` after decrementing a socket buffer (skb) counter, but before this line, there's a comment stating this is wrong for multiple tx rings. The line seems to be updating a per-queue value (`cp->tx_old[ring]`) with data (`entry`) that may not be properly synchronized or protected.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper synchronization mechanisms should be used to protect updates to `cp->tx_old[ring]` when dealing with multiple tx rings. This could include using locks or atomic operations to ensure thread-safety or using queue-specific data structures that don't require shared updates. Additionally, correct multi-queue implementation should be done to ensure the network device can handle it correctly.
+
+
+ORIGINAL CODE:
+```
+		cp->net_stats[ring].tx_packets++;
+		cp->net_stats[ring].tx_bytes += skb->len;
+		spin_unlock(&cp->stat_lock[ring]);
+		dev_kfree_skb_irq(skb);
+	}
+	cp->tx_old[ring] = entry;
+
+	/* this is wrong for multiple tx rings. the net device needs
+```

@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+XSS (Cross-Site Scripting) vulnerability due to insufficient escaping of user input in HTML output.
+ 
+EXPLANATION:
+The vulnerability is found in the code snippet where user input is directly inserted into HTML output using `echo` statements. Although `htmlentities` is being used to escape the inputs, the `src` attribute of the `img` tag is not properly sanitized. An attacker could potentially inject malicious content, such as breaking out of the `src` attribute and adding additional attributes or tags. Specifically, an attacker might try to inject a quote followed by JavaScript code, leading to code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, more rigorous sanitization and validation should be performed on user input. Instead of simply using `htmlentities`, also consider using a library that specializes in validating and sanitizing input for correct HTML output. 
+Additionally, for the specific img `src` and `img` `alt` attributes, we can use more specific escapes:
+```php
+$validImageSource = preg_match('/^[^"?*\[\]\\]+$/i', $picSource);
+if ($validImageSource === 0) {
+    // Input was invalid, take a proper action. Consider setting it to a default
+}
+echo "<title>Welcome, " . filter_var($username, FILTER_SANITIZE_STRING) ."</title>";
+
+// Usage of attribute specific filtering for src and alt attributes to mitigate XSS risks
+echo "<img src='". filter_var($picSource, FILTER_SANITIZE_STRING) ."' alt='". filter_var($picAltText, FILTER_SANITIZE_STRING) . "'>";
+```
+This validation uses regular expressions to prevent malicious input, and then uses attribute-specific escaping using `filter_var`.
+
+ORIGINAL CODE:
+```php
+$username = $_POST['username'];$picSource = $_POST['picsource'];$picAltText = $_POST['picalttext'];
+...
+echo "<title>Welcome, " . htmlentities($username) ."</title>";echo "<img src='". htmlentities($picSource) ." ' alt='". htmlentities($picAltText) . '" />';
+...
+```

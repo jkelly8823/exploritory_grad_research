@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The use of inline assembly with 'asm volatile' and in particular with an output that relies on the "memory" constraint can lead to a potential data corruption vulnerability when dealing with concurrent access, or can cause issues with compiler optimizations.
+EXPLANATION:
+In this code snippet, the 'asm volatile' function is used to execute inline assembly code. However, using the "memory" constraint may not always be sufficient to prevent data corruption or compiler optimization issues. This is because the "memory" constraint only ensures that all registered variables are invalidated after the assembly code is executed, but does not prevent other writes to memory. 
+
+In multi-threaded environments, or in cases where other interrupt handlers or concurrent code paths can modify memory locations that this inline assembly is trying to affect, this lack of protection can result in unpredictable behavior. Furthermore, aggressive compiler optimizations may not be properly accounted for, potentially leading to unexpected results.
+RECOMMENDATIONS:
+In order to prevent potential data corruption and compiler optimization issues, we recommend the use of a lock-free synchronization mechanism, such as atomic operations, or more fine-grained synchronization primitives such as spinlocks. Further, any shared data being modified by this inline assembly should be properly protected using the appropriate synchronization primitives to prevent concurrent modifications.
+
+We also recommend the use of alternative synchronization methods or memory barriers, which would be more portable and maintainable than inline assembly.
+
+In this case, without the entire code context, we cannot provide an exact fix; the code must be re-designed with regard to data synchronization and thread-safety considerations.
+
+ORIGINAL CODE:
+		}
+	}
+	asm volatile("ptesync": : :"memory");
+	asm volatile(PPC_INVALIDATE_ERAT : : :"memory");
+}
+
+void kvmppc_check_need_tlb_flush(struct kvm *kvm, int pcpu,
+				 struct kvm_nested_guest *nested)

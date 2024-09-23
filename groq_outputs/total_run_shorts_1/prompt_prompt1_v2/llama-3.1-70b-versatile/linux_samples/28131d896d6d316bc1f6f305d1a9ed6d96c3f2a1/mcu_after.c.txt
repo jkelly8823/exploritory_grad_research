@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 114-147
+VULNERABILITY_DESCRIPTION:
+Unintended Information Exposure due to Improper Error Handling
+EXPLANATION:
+In the `mt7915_mcu_sta_rate_ctrl_tlv` function, there is an issue with the handling of error conditions. Specifically, when the code attempts to access the `sta->ht_cap`, `sta->vht_cap`, or `sta->he_cap` fields, it doesn't check if these fields are valid or if their values are within expected bounds.
+
+If these fields contain garbage or out-of-bounds values, this can lead to incorrect or unintended behavior, potentially exposing sensitive information. Furthermore, if the `sta` structure is not properly initialized or is partially corrupted, this function can lead to a null pointer dereference or other memory handling issues.
+
+In addition, the function doesn't validate if the `sta` structure and its fields are correctly aligned with the structure definition. This can lead to incorrect data interpretation or hardware alignment issues.
+
+RECOMMENDATIONS:
+1. Add input validation for the `sta` structure and its fields to ensure they are valid and properly initialized before accessing them.
+2. Use pointer validation to prevent null pointer dereferences when accessing the `sta->ht_cap`, `sta->vht_cap`, or `sta->he_cap` fields.
+3. Use bounds checking for numeric values obtained from these fields to prevent out-of-bounds access.
+4. Implement error handling and propagation to inform the caller about any issues encountered during execution.
+
+ORIGINAL CODE:
+ Due to the complexity and size of the code, I'll provide a non-vulnerable version for the `mt7915_mcu_sta_rate_ctrl_tlv` function to demonstrate how to fix this vulnerability.
+
+```c
+static void
+mt7915_mcu_sta_rate_ctrl_tlv(struct sk_buff *skb, struct mt7915_dev *dev,
+			     struct ieee80211_vif *vif, struct ieee80211_sta *sta)
+{
+    if (!sta || !sta->ht_cap || !sta->vht_cap || !sta->he_cap) {
+        /* Handle null pointer or invalid sta structure */
+        printk(KERN_ERR "Invalid sta structure\n");
+        return;
+    }
+
+    if (sta->ht_cap->ht_supported) {
+        if (sta->ht_cap->ampdu_factor > 0x3) {
+            printk(KERN_ERR "Invalid ampdu_factor value\n");
+            return;
+        }
+        ra->supp_mode |= MODE_HT;
+        ra->af = sta->ht_cap->ampdu_factor;
+        ra->ht_gf = !!(sta->ht_cap->cap & IEEE80211_HT_CAP_GRN_FLD);
+
+        if (sta->ht_cap->cap & IEEE80211_HT_CAP_LDPC_CODING)
+            cap |= STA_CAP_LDPC;
+
+        mt7915_mcu_set_sta_ht_mcs(sta, ra->ht_mcs,
+                      mask->control[band].ht_mcs);
+        ra->supp_ht_mcs = *(__le32 *)ra->ht_mcs;
+    }
+
+    // Additional validation and bounds checking for vht and he_caps
+    // ...
+}
+```

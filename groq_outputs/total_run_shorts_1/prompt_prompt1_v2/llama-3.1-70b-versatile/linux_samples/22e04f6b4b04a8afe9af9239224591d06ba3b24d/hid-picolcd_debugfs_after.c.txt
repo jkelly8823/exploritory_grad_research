@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 35
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability.
+EXPLANATION:
+In this code segment, we can see two instances of kfree() being called before their respective pointers are used again later in the function. 
+
+The variable 'raw_data' is freed on line 35, but there's no return statement after this line. Instead, execution continues and 'raw_data' is used in subsequent lines of the function. This could lead to unpredictable behavior and crashes, as 'raw_data' is no longer allocated.
+
+The variable 'buff' is freed on line 6 if 'raw_data' is null, but 'buff' is then used in subsequent lines of the function without being reassigned. This could also lead to unpredictable behavior and crashes.
+
+Another potential use after free vulnerability is also present. On line 6, if 'buff' is null, the function returns, but 'buff' is not allocated anywhere in the provided code. 
+
+However, assuming 'buff' is correctly initialized elsewhere, and not null, the actual bug related to 'buff' itself, is the fact that the allocation of 'buff', isn't shown in this snippet, which can be considered an allocation bug if 'buff' allocations aren't properly performed elsewhere.
+
+Additionally, variables such as 'data' and 'hdev' are used without being checked if they are null or not before using them. Check these variables before using them.
+
+RECOMMENDATIONS:
+- The allocation of 'buff' needs to be explicitly shown before the if condition.
+- Check for null pointer check before using 'buff', 'hdev' and 'data'.
+- When freeing 'raw_data', make sure to set it to null to prevent any further use and add a return after freeing 'raw_data' if 'report' is null.
+- 'buff' should be set to null after being freed to prevent any further use.
+
+ORIGINAL CODE:
+```c
+void picolcd_debug_out_report(struct picolcd_data *data,
+		struct hid_device *hdev, struct hid_report *report)
+{
+	u8 *raw_data;
+	int raw_size = (report->size >> 3) + 1;
+	char *buff;
+#define BUFF_SZ 256
+
+	if (!buff)
+		return;
+
+	raw_data = hid_alloc_report_buf(report, GFP_ATOMIC);
+	if (!raw_data) {
+		kfree(buff);
+		return;
+	}
+
+	snprintf(buff, BUFF_SZ, "\nout report %d (size %d) =  ",
+			report->id, raw_size);
+	hid_debug_event(hdev, buff);
+	raw_data[0] = report->id;
+	hid_output_report(report, raw_data);
+	dump_buff_as_hex(buff, BUFF_SZ, raw_data, raw_size);
+	hid_debug_event(hdev, buff);
+
+	switch (report->id) {
+	case REPORT_LED_STATE:
+		/* 1 data byte with GPO state */
+		snprintf(buff, BUFF_SZ, "out report %s (%d, size=%d)\n",
+		break;
+	}
+	wake_up_interruptible(&hdev->debug_wait);
+	kfree(raw_data);
+	kfree(buff);
+}
+
+void picolcd_debug_raw_event(struct picolcd_data *data,
+```

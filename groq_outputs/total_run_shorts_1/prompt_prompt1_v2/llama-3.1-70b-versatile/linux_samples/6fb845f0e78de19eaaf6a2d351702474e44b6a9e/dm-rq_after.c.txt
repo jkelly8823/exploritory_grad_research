@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a race condition due to the use of `unlikely()` macro and `wq_has_sleeper()` without acquiring the necessary lock.
+
+EXPLANATION:
+The `unlikely()` macro is not a synchronization primitive and does not provide any protection against concurrent access. The `wq_has_sleeper()` function checks if there are any processes waiting on the wait queue, but this check is not atomic with the subsequent `wake_up()` call. 
+
+If another thread is modifying the wait queue while this code is executing, the `wake_up()` call might be triggered unnecessarily or might miss waking up a sleeper. This is a classic example of a TOCTOU (Time-of-Check to Time-of-Use) vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the necessary lock should be acquired before checking the wait queue and waking up the sleepers. The lock should be held while both operations are performed to prevent concurrent modifications. 
+
+The corrected code could look something like this:
+
+```c
+static void rq_completed(struct mapped_device *md)
+{
+	spin_lock_irq(&md->queue_lock);
+	if (wq_has_sleeper(&md->wait))
+		wake_up(&md->wait);
+	spin_unlock_irq(&md->queue_lock);
+
+	/* ... */
+}
+```
+
+Note: The `queue_lock` is assumed to be a spinlock that protects the wait queue. The actual lock and locking function may vary based on the specific use case.
+
+ORIGINAL CODE:
+```c
+static void rq_completed(struct mapped_device *md)
+{
+	/* nudge anyone waiting on suspend queue */
+	if (unlikely(wq_has_sleeper(&md->wait)))
+		wake_up(&md->wait);
+
+	/*
+	 * dm_put() must be at the end of this function. See the comment above
+```

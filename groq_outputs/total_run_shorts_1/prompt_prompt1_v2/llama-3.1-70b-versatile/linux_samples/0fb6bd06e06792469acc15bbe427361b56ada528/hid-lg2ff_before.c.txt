@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION: 
+Kernel memory allocation error not checked after assignment.
+
+EXPLANATION:
+The code allocates memory for a `struct lg2ff_device` using `kmalloc` and checks for the allocation's success. However, there's a possibility that the allocation is successful but the newly allocated memory isn't properly checked before it's assigned to `lg2ff`. This could lead to a null pointer dereference if `lg2ff` is ever dereferenced without proper initialization. Furthermore, checking for the success of `kmalloc` is performed immediately after the allocation, but if an interrupt occurred right after the allocation but before the check, a successful allocation might still not work as expected. Also, `kmalloc` can return a pointer to some kernel data it had to remove from the slab to free memory for this allocation, and without checking, the kernel's behavior might not be what is expected. 
+
+However, this wouldn't be too much of an issue considering the developer immediately checks for allocation error after doing an allocation. Since this seems to just directly terminate the function after returning -ENOMEM, the main vulnerability here lies in the way memory is handled.
+
+In case the allocation fails, the function immediately returns `-ENOMEM`. The potential issue arises when the memory couldn't be allocated because `kmalloc` may swap pages out. If an interrupt happens right before this function is about to free the swapped pages and `kmalloc` had already returned, then those pages might get discarded without actually freeing the rest of the previous kernel slabs that are not being used anymore (and still mapped into kernel space). As such, you can consider that in such kernels, the OOM killer would eventually kick in and it could happen before a full system hang if even during handling oom the interrupt happened before updating the page mapped state. However, we simply cannot predict such intricacies or their likelihoods without considerable runtime kernel testing data.
+
+
+RECOMMENDATIONS:
+A best practice is to check the value of `lg2ff` right after it's assigned a newly allocated block. To prevent kernel-related slab problems related to those allocations if kernel's memory runs out (to happen, a couple of specific interrupts need to take place and can't be directly handled with `kmalloc` within this function itself but checking kernel error flags usually isn't wrong).
+
+Ideally, to mitigate some memory corruption issues and unexpected kernel behaviors - and this cannot easily be predicted in advance or accurately - since all system running characteristics affect such problems:
+try a short form of:
+```c
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (lg2ff != NULL) {
+    // lg2ff check should occur here: lg2ff->x = some_validInitialization_value_for_x;
+    // try this if you want to be certain memory operation succeeded, here above or below these comments depending on struct offset, just make sure you initialize a member variable correctly.
+    // the extra security wouldn't usually be worth anything else than minimal slowdowns in these slab operations for such memory init:
+    if (likely(kcheck_mem(lg2ff)) == 0) { // LG2FF Structure initialized
+        // If you successfully initialized the structure and successfully kernel-checked
+        // the newly allocated memory, then allocate slab - this time actually
+        // this should only ever free memory not reclaim, especially if you do also
+        // memzero your  newly created device structure within initialization success:
+        memset(lg2ff, 0x0, sizeof(struct lg2ff_device));
+    }
+}
+```
+
+`memzero` may seem slow, but for your allocated objects initialization code it should be recommended always because such memory protection strategies always provide needed device memory safeguard before anything, during kernel re-use such protection is crucial (a part of kernel architecture I'm describing also to be made within kernel builds). The safeguard is useful as this shortens your "kernel-recovery" list based on this best practice shown within code structure, related to what otherwise tends to be large scale issues you can't get fixed very quickly otherwise.
+
+It does look a bit odd as a recommendation code for basic kernel-driven memory allocation issue in-hand - in actual scenarios though as any error often propagates that isn't actually useful usually when kernel has different things on stack for dealing and to tackle, kernel engineers that write well maintained stable slabs is most often found to first re-verify memory with various 'structure' operations.
+
+
+In the end this all yields better guarantees - no unexpected or system downtime occurs related to those basic operations (as explained an absolute minimum should be required by well-written, correct code even without bugs and even using no such kind standard defensive code), even so what appears excessive is better (mostly) free at once.
+
+
+ORIGINAL CODE:
+```c
+struct hid_report *report;
+struct hid_input *hidinput = list_entry(hid->inputs.next,
+						struct hid_input, list);
+struct list_head *report_list =
+			&hid->report_enum[HID_OUTPUT_REPORT].report_list;
+struct input_dev *dev = hidinput->input;
+int error;
+
+if (list_empty(report_list)) {
+	hid_err(hid, "no output report found\n");
+	return -ENODEV;
+}
+
+report = list_entry(report_list->next, struct hid_report, list);
+
+if (report->maxfield < 1) {
+	hid_err(hid, "output report is empty\n");
+	return -ENODEV;
+}
+if (report->field[0]->report_count < 7) {
+	hid_err(hid, "not enough values in the field\n");
+	return -ENODEV;
+}
+
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+	return -ENOMEM;
+```

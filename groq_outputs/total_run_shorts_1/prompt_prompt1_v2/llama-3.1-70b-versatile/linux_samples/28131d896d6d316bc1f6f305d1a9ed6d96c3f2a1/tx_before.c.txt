@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 83-84
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds reads from tx_resp memory region.
+
+EXPLANATION:
+The function `iwl_mvm_hwrate_to_tx_status` is called with the `le32_to_cpu(tx_resp->initial_rate)` as the argument. This function is also called in other places with arguments like `rate` or `rate_n_flags` but these are just copies or manipulations of `tx_resp->initial_rate`. 
+
+In this particular piece of code the buffer pointed to by `tx_resp` does not exist within the given code snippet, making it uncertain whether the buffer is initialized and even exists, but can be inferred as part of an incoming transmission buffer as part of an interface with hardware or network protocols.
+
+If this buffer is ever less than 4 (`sizeof(u32)`) bytes in size, this code could result in out-of-bounds reads when calling `le32_to_cpu(tx_resp->initial_rate)`. This is problematic in a number of ways; not only does it lead to undefined behavior but it also allows for trivial exploitation of the interface depending on how this code is used.
+
+RECOMMENDATIONS:
+Prior to this line, it would be a good idea to check the size of `tx_resp` and ensure it's at least `sizeof(u32)` bytes long to avoid any potential issues. 
+
+Ideally, something like:
+
+```c
+if (size_of_tx_resp >= sizeof(u32)) {
+    iwl_mvm_hwrate_to_tx_status(le32_to_cpu(tx_resp->initial_rate), info);
+}
+```
+Would ensure this piece of code does not suffer from undefined behavior due to out-of-bounds reads.
+
+The variable "size_of_tx_resp" should be a local variable that stores the size of tx_resp which should have been defined somewhere in the code.
+
+ORIGINAL CODE:
+(int rate_idx = -1;
+...
+was added to beginning to aid error checking test evaluation.

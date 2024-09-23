@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The given code snippet appears to be a part of a Linux kernel tracing function and uses the `pS` format specifier in the `TP_printk` function to print kernel addresses as symbolic offsets. However, this can potentially lead to a kernel address exposure vulnerability.
+
+EXPLANATION:
+The `%pS` format specifier is used to print kernel addresses as symbolic offsets. This can be used to print function names and their addresses. While this is a feature in the Linux kernel to improve debugging, it can also be exploited to leak kernel addresses to userspace. This information can be used by attackers to create bypasses for exploit mitigation techniques like ASLR (Address Space Layout Randomization).
+
+The `TP_printk` function is used to print the `%pS` formatted string to the kernel logs, which can be read by userspace programs through the sysfs interface.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to avoid exposing kernel addresses to userspace. Instead of printing the actual addresses, consider using an abstracted identifier or an offset relative to a fixed base address. Alternatively, ensure that the kernel logs are not accessible to unprivileged userspace programs.
+
+Another approach would be to validate the userspace request and restrict the `%pS` format specifier to be used only by authorized users.
+
+Additionally, review and refactor the code to follow the principle of least privilege, where the minimum amount of privilege is granted to userspace programs.
+
+ORIGINAL CODE:
+
+    TP_ARGS(ip, parent_ip),
+
+    TP_STRUCT__entry(
+        __field(s32, caller_offs)
+        __field(s32, parent_offs)
+    ),
+
+    TP_fast_assign(
+        __entry->caller_offs = (s32)(ip - (unsigned long)_stext);
+        __entry->parent_offs = (s32)(parent_ip - (unsigned long)_stext);
+    ),
+
+    TP_printk("caller=%pS parent=%pS",
+          (void *)((unsigned long)(_stext) + __entry->caller_offs),

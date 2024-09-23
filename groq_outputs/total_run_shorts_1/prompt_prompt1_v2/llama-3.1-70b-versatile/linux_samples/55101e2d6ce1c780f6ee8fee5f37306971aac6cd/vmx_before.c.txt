@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+Bit manipulation vulnerability, potentially leading to unintended changes to the CR4 register.
+
+EXPLANATION:
+The code is using bitwise operations (&=, |=, &= ~) on the CR4 register. However, the order of operations and the clearing of bits before setting others can lead to unintended changes. Specifically, on line 2, the X86_CR4_PAE bit is cleared (hw_cr4 &= ~X86_CR4_PAE), and on line 3, the X86_CR4_PSE bit is set (hw_cr4 |= X86_CR4_PSE). If the intention is to change these bits selectively, this approach could lead to issues if not properly managed. Furthermore, on line 5, the X86_CR4_SMEP bit is cleared without prior checks or error handling. This might cause security issues if not properly addressed.
+
+RECOMMENDATIONS:
+To avoid unintended changes, the bit manipulation operations should be performed carefully. Each operation should be performed only after checking the current state of the relevant bits. Consider using conditional statements to specifically target the desired bits before modifying them. For example, before clearing a bit, verify that it's set to begin with. The corrected code might look like this:
+
+    if (hw_cr4 & X86_CR4_PAE) {
+        hw_cr4 &= ~X86_CR4_PAE;
+    }
+    if (!(hw_cr4 & X86_CR4_PSE)) {
+        hw_cr4 |= X86_CR4_PSE;
+    }
+    if (hw_cr4 & X86_CR4_SMEP) {
+        hw_cr4 &= ~X86_CR4_SMEP;
+    }
+
+ORIGINAL CODE:
+            hw_cr4 &= ~X86_CR4_PAE;
+            hw_cr4 |= X86_CR4_PSE;
+            /*
+             * SMEP is disabled if CPU is in non-paging mode in
+             * hardware. However KVM always uses paging mode to
+             * emulate guest non-paging mode with TDP.
+             * To emulate this behavior, SMEP needs to be manually
+             * disabled when guest switches to non-paging mode.
+             */
+            hw_cr4 &= ~X86_CR4_SMEP;
+        } else if (!(cr4 & X86_CR4_PAE)) {
+            hw_cr4 &= ~X86_CR4_PAE;
+        }

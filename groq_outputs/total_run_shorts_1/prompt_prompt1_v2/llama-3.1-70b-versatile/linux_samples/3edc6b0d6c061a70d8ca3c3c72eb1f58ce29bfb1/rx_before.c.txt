@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-16, 19
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability and Possible Information Disclosure
+
+EXPLANATION: 
+This code contains a memcpy function call that copies data into the entry->last_pn buffer without proper bounds checking. The size of the destination buffer is assumed to be IEEE80211_CCMP_PN_LEN, but this assumption is not validated before the copy operation. This can lead to a buffer overflow if the size of pn exceeds the size of the destination buffer. Additionally, in the lines following this operation, if the packet is marked as 'is_protected' but 'rx->key' is null, the code can leak information as the return value 'RX_DROP_UNUSABLE' can be used to deduce if the packet was dropped due to an invalid key. Furthermore, the code depends on ieee80211_has_protected(fc) returning true for unencrypted packets. However, the value of fc, and consequently the FC_TYPE(fc), are not validated, so this protects the fragment verification through key color checks in this instance but without safe handling elsewhere, potential issues may arise. It is however noteworthy that, there might be such safe handling which circumvents any issues at a program instance prior to this snippet.
+
+However, assuming no such previous mechanism to provide protection for IEEE80211_FC_TYPE_DATA 'is_protected' logic, the only other relevant security concern at this fragment without variable definitions seems to be the memcpy without bounds check.
+
+RECOMMENDATIONS:
+Replace the memcpy function call with a safer version that provides bounds checking, such as 'memcpy_s' or 'snprintf'. Additionally, validate the size of 'pn' before copying it into 'entry->last_pn' to prevent buffer overflows. It would also be a good practice to have more informative defensive mechanism steps like proper diagnostic logging when key check with color fails in both current or other branches in process tree.
+
+		//Instead of
+		memcpy(entry->last_pn, pn, IEEE80211_CCMP_PN_LEN);
+
+		//Consider
+		memcpy_s(entry->last_pn, sizeof(entry->last_pn), pn, min(sizeof(entry->last_pn), IEEE80211_CCMP_PN_LEN));
+
+OR if the compiler targeted supports it 
+
+		//Instead of
+		memcpy(entry->last_pn, pn, IEEE80211_CCMP_PN_LEN);
+
+		//Consider
+	 strncpy ( entry->last_pn ,  pn , IEEE80211_CCMP_PN_LEN);
+	 entry->last_pn[IEEE80211_CCMP_PN_LEN-1] = 0;
+OR depending on CPU architecture strings functions available can even reformed with memset backtrace with defensive copying mechanism  although that particular attempt may make  string search slightly more complicated
+
+Alternatively, for any systems depending directly on such functions we can track or determine which pointer truly depends directly before filling which can also double as an indirect check
+
+ORIGINAL CODE:
+	unsigned int frag, seq;
+	struct ieee80211_fragment_entry *entry;
+	struct sk_buff *skb;
+
+	hdr = (struct ieee80211_hdr *)rx->skb->data;
+	fc = hdr->frame_control;
+
+				     sizeof(rx->key->u.gcmp.rx_pn[queue]));
+			BUILD_BUG_ON(IEEE80211_CCMP_PN_LEN !=
+				     IEEE80211_GCMP_PN_LEN);
+		} else if (rx->key && ieee80211_has_protected(fc)) {
+			entry->is_protected = true;
+			entry->key_color = rx->key->color;
+		}
+		return RX_QUEUED;
+			return RX_DROP_UNUSABLE;
+		memcpy(entry->last_pn, pn, IEEE80211_CCMP_PN_LEN);
+	} else if (entry->is_protected &&
+		   (!rx->key || !ieee80211_has_protected(fc) ||
+		    rx->key->color != entry->key_color)) {
+		/* Drop this as a mixed key or fragment cache attack, even
+		 * if for TKIP Michael MIC should protect us, and WEP is a
+		 * lost cause anyway.
+		 */
+		return RX_DROP_UNUSABLE;
+	}
+
+	skb_pull(rx->skb, ieee80211_hdrlen(fc));
+	__skb_queue_tail(&entry->skb_list, rx->skb);

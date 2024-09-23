@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 14
+VULNERABILITY_DESCRIPTION: Potential memory corruption due to unchecked return values and pointer arithmetic.
+
+EXPLANATION:
+The code appears to be a decompression function for Linux kernel boot parameters. However, two potential security issues are present. 
+
+The decompress function call does not check its return value, which may indicate an error. If an error occurs during decompression, the function will continue executing with potentially corrupted data. 
+
+Furthermore, in the handle_relocations call, the function uses the output_len parameter as an argument, but it's not validated if the length has changed after decompression. This might result in incorrect relocations and memory corruption.
+
+Additionally, the variable 'output' is a pointer, and in the handle_relocations function, the value of output might be modified, before calling the above function with another pointer 'output_orig'. But there is a conditional clause for comparing it, and one condition to prevent if being pointer, is already ensured by using output !=  output_orig.
+
+But the critical review point here, is for not having proper Error Handling for functions used.
+
+
+RECOMMENDATIONS:
+- Always check the return value of decompression function calls and handle any errors accordingly.
+- Validate the output length after decompression and before using it in further operations.
+- Consider validation if output address is exactly one page below original, and correctly placed offset.
+
+
+ORIGINAL CODE:
+
+unsigned long output_len,
+unsigned long run_size)
+{
+	unsigned char *output_orig = output;
+
+	real_mode = rmode;
+
+	sanitize_boot_params(real_mode);
+
+	debug_putstr("\nDecompressing Linux... ");
+	decompress(input_data, input_len, NULL, NULL, output, NULL, error);
+	parse_elf(output);
+	/*
+	 * 32-bit always performs relocations. 64-bit relocations are only
+	 * needed if kASLR has chosen a different load address.
+	 */
+	if (!IS_ENABLED(CONFIG_X86_64) || output != output_orig)
+		handle_relocations(output, output_len);
+	debug_putstr("done.\nBooting the kernel.\n");
+	return output;
+}

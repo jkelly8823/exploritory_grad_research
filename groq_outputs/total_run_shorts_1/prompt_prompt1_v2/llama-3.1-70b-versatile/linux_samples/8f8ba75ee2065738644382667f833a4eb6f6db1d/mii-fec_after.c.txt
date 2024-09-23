@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 11
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability and null pointer dereference.
+
+EXPLANATION:
+The line `snprintf(new_bus->id, MII_BUS_ID_SIZE, "%x", res.start);` may cause a buffer overflow if the string representation of `res.start` exceeds `MII_BUS_ID_SIZE` bytes. This could potentially write past the end of the `new_bus->id` buffer, leading to undefined behavior. 
+
+Additionally, the line `new_bus->irq = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);` may return a null pointer if the allocation fails. However, no bounds checking is performed before assigning this pointer to `new_bus->irq` and `new_bus->irq` is not validated as non-null before `kmalloc` in any way. The allocation result should be checked to ensure it's not null.
+
+RECOMMENDATIONS:
+To fix the potential buffer overflow vulnerability, use `snprintf` with the maximum buffer size to prevent overflows, and check its return value to ensure the buffer was not truncated. Also, check the return value of `kmalloc` and handle the case where it returns null.
+```c
+// Safe version of the first line
+if (snprintf(new_bus->id, MII_BUS_ID_SIZE, "%x", res.start) >= MII_BUS_ID_SIZE) {
+    // Handle the error
+}
+
+// Safe version of the kmalloc block
+new_bus->irq = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);
+if (new_bus->irq == NULL) {
+    // Handle the allocation error
+}
+```
+ORIGINAL CODE:
+```c
+	snprintf(new_bus->id, MII_BUS_ID_SIZE, "%x", res.start);
+
+	fec->fecp = ioremap(res.start, resource_size(&res));
+	if (!fec->fecp) {
+		ret = -ENOMEM;
+		goto out_fec;
+	}
+
+	if (get_bus_freq) {
+		clock = get_bus_freq(ofdev->dev.of_node);
+		if (!clock) {
+
+	new_bus->phy_mask = ~0;
+	new_bus->irq = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);
+	if (!new_bus->irq) {
+		ret = -ENOMEM;
+		goto out_unmap_regs;
+	}
+
+	new_bus->parent = &ofdev->dev;
+	dev_set_drvdata(&ofdev->dev, new_bus);
+```

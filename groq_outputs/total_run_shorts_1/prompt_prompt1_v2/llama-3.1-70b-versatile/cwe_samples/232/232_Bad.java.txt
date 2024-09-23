@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to SQL Injection.
+
+EXPLANATION:
+The code constructs a SQL query using user-supplied input ('address') directly. However, instead of directly incorporating the user input, it uses a PreparedStatement with a parameterized query, which helps prevent SQL injection. The vulnerability actually lies in line 4, where the email address 'cwe@example.com' is hardcoded, and the address is being set for it. 
+
+However, that is not the issue, the problem here is for the address parameter in that update query; it uses '?' in place of the actual value of 'address'. The PreparedStatement's setString(1, address) will correctly replace '?' in the query with 'address', and this is an example of a prepared statement properly being used for the 'address' to protect against SQL injection.
+
+There is still another concern: the variable 'con' and 'emailAddress' which presumingly means 'emailAddress' is an instance of 'PreparedStatement' are not being used properly to execute the SQL query. Unless we look at the more complete code snippet. 
+
+After reviewing again. That part where: `"UPDATE shippingInfo SET address='?' WHERE email='cwe@example.com'"` is defined is not too wrong - The quote around ? might escape ?, which is used by PreparedStatements.
+
+So, a cleaner solution should replace this fixed email, which remains vulnerable. Use prepared statement parameters.
+
+Why I still think this code isn't great practice is because there must be other email addresses for shipping. but to fix based on assumption of input address for update:
+
+RECOMMENDATIONS:
+Define 'email' from 'request' similar to address i.e `String email = request.getParameter("email");` and then 
+- `String updateString = "UPDATE shippingInfo SET address=? WHERE email=?";`
+and then:
+- `emailAddress = con.prepareStatement(updateString);`
+- `emailAddress.setString(1, address);` 
+- `emailAddress.setString(2, email);`
+
+ORIGINAL CODE:
+```java
+String address = request.getParameter("address");
+address = address.trim();
+String updateString = "UPDATE shippingInfo SET address='?' WHERE email='cwe@example.com'";
+emailAddress = con.prepareStatement(updateString);
+emailAddress.setString(1, address);
+```

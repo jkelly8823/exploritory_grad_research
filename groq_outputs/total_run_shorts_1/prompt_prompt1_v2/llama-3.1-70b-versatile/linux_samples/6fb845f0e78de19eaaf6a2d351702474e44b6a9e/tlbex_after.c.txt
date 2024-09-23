@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 14, 23, 32
+VULNERABILITY_DESCRIPTION: Uncontrolled use of the sync instruction without proper synchronization.
+EXPLANATION:
+The code contains instances of the uasm_i_sync instruction being used to synchronize CPU execution without proper synchronization. This instruction should be used with caution, as incorrect usage can lead to unpredictable behavior or data corruption. The code enables CPU workarounds based on CPU features like CONFIG_CPU_LOONGSON3_WORKAROUNDS. However, this does not ensure the safety of the sync instruction without proper synchronization in all cases. Specifically, if the CPU workarounds are enabled, the uasm_i_sync instruction is called multiple times without any further checks. Additionally, some configurations include code paths that use unconditional jumps (e.g., uasm_i_jr) that do not consider synchronization. Although specific hardware workarounds are involved, the conditionality under which synchronization is active needs to be clearer, and their implications require a reevaluation of synchronization requirements in the entire codebase. This may potentially indicate a possible synchronization vulnerability in this segment of code.
+RECOMMENDATIONS:
+- Refactor the usage of uasm_i_sync to ensure it is synchronized properly with other instructions.
+- Evaluate the CPU workarounds to ensure that all potential synchronization requirements are met throughout the entire codebase.
+- Implement conditional checks to determine when synchronization is needed and make sure that CPU workarounds cover all possible scenarios.
+
+ORIGINAL CODE:
+```
+* to mimic that here by taking a load/istream page
+* fault.
+*/
+	if (IS_ENABLED(CONFIG_CPU_LOONGSON3_WORKAROUNDS))
+		uasm_i_sync(p, 0);
+	UASM_i_LA(p, ptr, (unsigned long)tlb_do_page_fault_0);
+	uasm_i_jr(p, ptr);
+
+	if (mode == refill_scratch) {
+iPTE_LW(u32 **p, unsigned int pte, unsigned int ptr)
+{
+#ifdef CONFIG_SMP
+	if (IS_ENABLED(CONFIG_CPU_LOONGSON3_WORKAROUNDS))
+		uasm_i_sync(p, 0);
+# ifdef CONFIG_PHYS_ADDR_T_64BIT
+	if (cpu_has_64bits)
+		uasm_i_lld(p, pte, 0, ptr);
+	else
+#endif
+
+	uasm_l_nopage_tlbl(&l, p);
+	if (IS_ENABLED(CONFIG_CPU_LOONGSON3_WORKAROUNDS))
+		uasm_i_sync(&p, 0);
+	build_restore_work_registers(&p);
+#ifdef CONFIG_CPU_MICROMIPS
+	if ((unsigned long)tlb_do_page_fault_0 & 1) {
+		uasm_i_lui(&p, K0, uasm_rel_hi((long)tlb_do_page_fault_0));
+#endif
+
+	uasm_l_nopage_tlbs(&l, p);
+	if (IS_ENABLED(CONFIG_CPU_LOONGSON3_WORKAROUNDS))
+		uasm_i_sync(&p, 0);
+	build_restore_work_registers(&p);
+#ifdef CONFIG_CPU_MICROMIPS
+	if ((unsigned long)tlb_do_page_fault_1 & 1) {
+		uasm_i_lui(&p, K0, uasm_rel_hi((long)tlb_do_page_fault_1);
+#endif
+
+	uasm_l_nopage_tlbm(&l, p);
+	if (IS_ENABLED(CONFIG_CPU_LOONGSON3_WORKAROUNDS))
+		uasm_i_sync(&p, 0);
+	build_restore_work_registers(&p);
+#ifdef CONFIG_CPU_MICROMIPS
+	if ((unsigned long)tlb_do_page_fault_1 & 1) {
+		uasm_i_lui(&p, K0, uasm_rel_hi((long)tlb_do_page_fault_1));
+```

@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 6
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a data leakage and unauthorized function call due to inadequate input validation in the `webView:shouldStartLoadWithRequest:navigationType:` method. This allows an attacker to access and manipulate sensitive data in the web view or function invocation with the "specialFunction" prefix.
+
+EXPLANATION:
+In this code snippet, we see that if the URL scheme is "exampleScheme" and the function string starts with "specialFunction," then the program uses the `[self writeDataToView:[URL query]]` call to make data available back to the web view. The input from the URL query is directly used without proper validation. 
+
+This approach poses two significant risks. Firstly, if the URL contains sensitive data, this could be leaked in the `writeDataToView:` method. Secondly, the code also enables unauthorized function invocation for function name starting with the "specialFunction" prefix, which can allow potential attackers to call arbitrary functions and extract sensitive information or take control.
+
+However, without seeing more of the `writeDataToView:` method implementation, the full extent of the vulnerability remains unclear.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, implement proper validation and sanitization on the input URL query, along with proper controls for actions taken based on URL parameters. 
+Here is an example of improved validation of the input URL query:
+
+```
+NSString *functionString = [URL resourceSpecifier];
+NSString *query = [URL query];
+
+// 1. Validate the input strings
+if ( [functionString hasPrefix:@"specialFunction"] && query != nil && query.length > 0 ) {
+    // 2. Verify the "specialFunction" related parameters and authenticity
+    //    Here, exampleAuthVerification() should be your existing or custom authenticity check
+    if(exampleAuthVerification(query)) {
+        [self writeDataToView:[URL query]];
+    } else {
+        NSLog( @"Attempted unauthorized access to specialFunction detected" );
+        return NO;
+    }
+} else {
+    return YES;
+}
+```
+ORIGINAL CODE:
+```
+-(BOOL) webView:(UIWebView *)exWebView shouldStartLoadWithRequest:(NSURLRequest *)exRequest navigationType:(UIWebViewNavigationType)exNavigationType{
+    NSURL *URL = [exRequest URL];if ([[URL scheme] isEqualToString:@"exampleScheme"]){
+        NSString *functionString = [URL resourceSpecifier];if ([functionString hasPrefix:@"specialFunction"]){
+            UIWebView *webView = [self writeDataToView:[URL query]];
+            return NO;
+        }return YES;
+    }return YES;
+}
+```

@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential uninitialized variable read due to the memset operation clearing the exception structure but not initializing its fields with valid values.
+
+EXPLANATION:
+The memset operation at line 8 clears the exception structure with zeros, which may not be a valid initialization for its fields. Although this operation may prevent uninitialized kernel stack memory from being leaked into cr2 and the error code, it does not ensure that the exception structure's fields are properly initialized with valid values. This could lead to unexpected behavior or values being used later in the code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the fields of the exception structure should be explicitly initialized with valid values instead of relying solely on memset. This will ensure that all fields have valid and expected values. 
+
+Additionally, the callers of this function should be updated to handle the case where X86EMUL_IO_NEEDED is returned and handle_emulation_failure is called.
+
+ORIGINAL CODE:
+{
+	u32 access = (kvm_x86_ops->get_cpl(vcpu) == 3) ? PFERR_USER_MASK : 0;
+
+	/*
+	 * FIXME: this should call handle_emulation_failure if X86EMUL_IO_NEEDED
+	 * is returned, but our callers are not ready for that and they blindly
+	 * call kvm_inject_page_fault.  Ensure that they at least do not leak
+	 * uninitialized kernel stack memory into cr2 and error code.
+	 */
+	memset(exception, 0, sizeof(*exception));
+	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, access,
+					  exception);
+}
+EXPORT_SYMBOL_GPL(kvm_read_guest_virt);

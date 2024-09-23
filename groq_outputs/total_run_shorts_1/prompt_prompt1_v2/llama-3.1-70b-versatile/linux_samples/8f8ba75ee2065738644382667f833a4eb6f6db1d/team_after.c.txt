@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15, 20-21
+VULNERABILITY_DESCRIPTION:
+Potential double-free vulnerability.
+
+EXPLANATION:
+In the code snippet, there are two instances where a pointer is deallocated without checking if it has been previously deallocated. This can happen when an error occurs after `np` has been allocated and deallocated once.
+ 
+1. In the first instance (line 14-15), `__netpoll_setup` is called and it may return an error. If it does, `kzalloc` and `__netpoll_setup` both allocate memory which is then deallocated twice if an error occurs. This would lead to a double-free vulnerability, which is undefined behavior and can potentially crash the program.
+
+2. In the second instance (line 20-21), `team_port_enable_netpoll` is called from `team_netpoll_setup`. However, `team_netpoll_setup` calls `__team_netpoll_cleanup(team)` when `team_port_enable_netpoll` fails. It's unclear from the given code if `__team_netpoll_cleanup(team)` includes freeing resources which are later attempted to be freed when `team_port_enable_netpoll` is exited normally. Without more information, we must assume this is undefined behavior.
+
+RECOMMENDATIONS:
+- Always check if a pointer has been deallocated before attempting to deallocate it again.
+- Make sure to properly clean up resources in error paths and avoid freeing resources in cleanup functions that may already be freed in the error path.
+
+ORIGINAL CODE:
+}
+
+#ifdef CONFIG_NET_POLL_CONTROLLER
+static int team_port_enable_netpoll(struct team *team, struct team_port *port,
+				    gfp_t gfp)
+{
+	struct netpoll *np;
+	int err;
+
+	np = kzalloc(sizeof(*np), gfp);
+	if (!np)
+		return -ENOMEM;
+
+	err = __netpoll_setup(np, port->dev, gfp);
+	if (err) {
+		kfree(np);
+		return err;
+	}
+}
+
+#else
+static int team_port_enable_netpoll(struct team *team, struct team_port *port,
+				    gfp_t gfp)
+{
+	return 0;
+}
+static void team_port_disable_netpoll(struct team_port *port)
+	}
+
+	if (team_netpoll_info(team)) {
+		err = team_port_enable_netpoll(team, port, GFP_KERNEL);
+		if (err) {
+			netdev_err(dev, "Failed to enable netpoll on device %s\n",
+				   portname);
+			goto err_enable_netpoll;
+}
+
+static int team_netpoll_setup(struct net_device *dev,
+			      struct netpoll_info *npifo, gfp_t gfp)
+{
+	struct team *team = netdev_priv(dev);
+	struct team_port *port;
+	int err = 0;
+
+	mutex_lock(&team->lock);
+	list_for_each_entry(port, &team->port_list, list) {
+		err = team_port_enable_netpoll(team, port, gfp);
+		if (err) {
+			__team_netpoll_cleanup(team);
+			break;
+		}

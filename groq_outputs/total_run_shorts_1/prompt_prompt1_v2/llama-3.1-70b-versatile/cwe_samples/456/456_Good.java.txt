@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16
+VULNERABILITY_DESCRIPTION:
+The code uses a deprecated string comparison method to verify the user's password, which can lead to a denial-of-service (DoS) attack or vulnerabilities like timing and side-channel attacks.
+
+EXPLANATION:
+The code compares the password directly using the `equals()` method. This can lead to several security issues:
+
+- Direct string comparison: Using `equals()` to compare strings can be vulnerable to timing attacks. The comparison process can leak information about the contents of the strings based on the time it takes to perform the comparison.
+- Side-channel attacks: Using `equals()` for secret comparison can also be vulnerable to side-channel attacks. It's essential to ensure that the comparison is done securely and in constant time.
+
+The use of `System.out.println()` also poses a potential issue with user-enumeration-based attacks.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, use the following approaches:
+
+- Use a constant-time comparison algorithm for password comparison. Java provides libraries like `Guava` or `java.security.MessageDigest` for secure comparison of strings.
+- Wrap any error messages in the standard output in a way that prevents user-enumeration-based attacks. Alternatively, considering logging in a secure manner would be beneficial.
+
+Additionally, always validate user input and wrap the sensitive functionality with exception handling or assertion mechanisms to avoid denial-of-service (DoS) attacks.
+
+The updated code for `authenticateUser()` could look like this:
+
+```java
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.nio.charset.StandardCharsets;
+
+public boolean authenticateUser(String username, String password) {
+    boolean isPasswordValid = false;
+    // Ensure user is valid and obtain the hash value
+    if (user != null) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] passwordBytes = md.digest(password.getBytes(StandardCharsets.UTF_8));
+            byte[] storedPasswordBytes = md.digest(user.getPassword().getBytes(StandardCharsets.UTF_8));
+
+            if (passwordBytes.length != storedPasswordBytes.length) {
+                return false;
+            }
+
+            for (int i = 0; i < passwordBytes.length; i++) {
+                if (passwordBytes[i] != storedPasswordBytes[i]) {
+                    return false;
+                }
+            }
+            isPasswordValid = true;
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("Error: SHA-256 not supported.");
+        }
+    } else {
+        System.out.println("Cannot find user " + username);
+    }
+    return isPasswordValid;
+}
+```
+Note that in real-life scenarios, the original code should store the user's password as a hashed value rather than in plaintext.
+
+ORIGINAL CODE:
+```java
+public class BankManager {
+    // user allowed to perform bank manager tasks
+    private User user = null; private boolean isUserAuthentic = false;
+
+    // constructor for BankManager class
+    public BankManager(String username) { user = getUserFromUserDatabase(username); }
+
+    // retrieve user from database of users
+    public User getUserFromUserDatabase(String username) {...}
+
+    // authenticate user
+    public boolean authenticateUser(String username, String password) {
+        if (user == null) { System.out.println("Cannot find user " + username); } else { if (password.equals(user.getPassword())) { isUserAuthentic = true; } } return isUserAuthentic;
+    }
+}
+```

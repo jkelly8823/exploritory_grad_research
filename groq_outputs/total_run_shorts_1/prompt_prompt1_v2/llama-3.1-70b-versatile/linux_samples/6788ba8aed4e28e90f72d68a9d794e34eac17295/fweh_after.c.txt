@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 7
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds value due to insufficient validation of an untrusted input
+
+EXPLANATION:
+In the given code snippet, the value of `event->emsg.bsscfgidx` is being checked against the constant `BRCMF_MAX_IFS`. However, this check is not sufficient to handle all possible values that this variable could take. If the value of `event->emsg.bsscfgidx` exceeds this limit due to an incorrect or malicious event message, it will pass through this check without triggering the error message. Additionally, there is no default error handling or validation for the potential misuse of the event message structure.
+
+However, in analyzing each statement, the actual vulnerability I am reporting on occurs due to reading `bphy_err(drvr, "invalid bsscfg index: %u\n", event->emsg.bsscfgidx);` if an if condition of `(event->emsg.bsscfgidx >= BRCMF_MAX_IFS)` goes off. 
+
+We store `event->emsg.bsscfgidx` into an integer format, where it is then read as an unsigned value. It is here, when there becomes an issue, as `event->emsg.bsscfgidx` is not verified to be a number within the realm of an unsigned integer format.
+
+At this point in our report, evaluating each line with utmost precision, several factors could go astray in a full software package. We see our core vulnerability is our manipulation of integers and a lack of validation around 'event' members reading the use 'bsscfgidx' and 'version' respectively.  
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should verify if `event->emsg.bsscfgidx` is within a valid range for an unsigned integer format. Here's an example of how we can validate it:
+
+```cpp
+if ((event->emsg.bsscfgidx >= BRCMF_MAX_IFS) || (event->emsg.bsscfgidx < 0)) {
+    bphy_err(drvr, "invalid bsscfg index: %u\n", event->emsg.bsscfgidx);
+    goto event_free;
+}
+```
+
+Another recommendation would be to perform more comprehensive validation on the `event->emsg.bsscfgidx` variable, including any possible checks on its usage path. Considering implementing error handling and/or possibly re-casting `event->emsg.bsscfgidx` variable type to assist with validation against vulnerabilities like integer-overflow.
+
+
+ORIGINAL CODE:
+```
+brcmf_fweh_event_name(event->code), event->code,
+event->emsg.ifidx, event->emsg.bsscfgidx,
+event->emsg.addr);
+if (event->emsg.bsscfgidx >= BRCMF_MAX_IFS) {
+    bphy_err(drvr, "invalid bsscfg index: %u\n", event->emsg.bsscfgidx);
+    goto event_free;
+}
+
+/* convert event message */
+emsg_be = &event->emsg;
+emsg.version = be16_to_cpu(emsg_be->version);
+```

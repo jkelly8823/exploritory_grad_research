@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability lies in the fact that `total_size` is not checked for integer overflow before adding `EXT4_XATTR_LEN(last->e_name_len)` and `EXT4_XATTR_SIZE(le32_to_cpu(last->e_value_size))` together. This could lead to a situation where `total_size` wraps around, resulting in an incorrect value. If `total_size` is used later in the code to allocate memory or access an array, this could lead to a buffer overflow or out-of-bounds access.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to check `total_size` for overflow before adding new values to it. This can be done by checking if the sum of `total_size`, `EXT4_XATTR_LEN(last->e_name_len)`, and `EXT4_XATTR_SIZE(le32_to_cpu(last->e_value_size))` exceeds the maximum value that can be stored in `total_size`. If it does, an error should be returned to prevent the overflow.
+
+Additionally, using a larger data type for `total_size`, such as 64-bit integer, can also help prevent integer overflow.
+
+ORIGINAL CODE:
+```
+last = IFIRST(header);
+/* Find the entry best suited to be pushed into EA block */
+for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
+    total_size = EXT4_XATTR_LEN(last->e_name_len);
+    if (!last->e_value_inum)
+        total_size += EXT4_XATTR_SIZE(
+                       le32_to_cpu(last->e_value_size));
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION:
+The use of a truncated, unauthenticated, and potentially controlled value (`__boot_cpu_mode`) in a conditional statement could lead to a privilege escalation attack.
+
+EXPLANATION:
+The code checks the CPU mode of the boot CPU (`__boot_cpu_mode`) and uses this value to determine whether to start the secondary CPU in hypervisor mode or not. However, the variable `__boot_cpu_mode` is not validated or verified before being used in the conditional statement. If an attacker can control or manipulate this value, they could potentially trick the system into starting the secondary CPU in a different mode than intended.
+
+In particular, the use of the bitwise AND operator (`&`) to extract the mode from `__boot_cpu_mode` using the `MODE_MASK` constant could potentially lead to unexpected behavior if the value of `__boot_cpu_mode` is not as expected. Additionally, the use of a relaxed write to update the aux core boot address exposes the possibility of transient writes, and its usage should be scrutinized.
+
+RECOMMENDATIONS:
+1. Validate and verify the value of `__boot_cpu_mode` before using it in the conditional statement. This could include checking the value against a set of known-good values or using additional authentication mechanisms to ensure its integrity.
+2. Consider using a more secure write operation instead of `writel_relaxed` to prevent transient writes.
+3. Implement additional logging and error handling to detect and respond to unexpected values or behavior.
+
+ORIGINAL CODE:
+```c
+#include <linux/irqchip/arm-gic.h>
+
+#include <asm/smp_scu.h>
+#include <asm/virt.h>
+
+#include "omap-secure.h"
+#include "omap-wakeupgen.h"
+#include <asm/cputype.h>
+	if (omap_secure_apis_support())
+		omap_auxcoreboot_addr(virt_to_phys(startup_addr));
+	else
+		/*
+		 * If the boot CPU is in HYP mode then start secondary
+		 * CPU in HYP mode as well.
+		 */
+		if ((__boot_cpu_mode & MODE_MASK) == HYP_MODE)
+			writel_relaxed(virt_to_phys(omap5_secondary_hyp_startup),
+				       base + OMAP_AUX_CORE_BOOT_1);
+		else
+			writel_relaxed(virt_to_phys(omap5_secondary_startup),
+				       base + OMAP_AUX_CORE_BOOT_1);
+
+}
+
+struct smp_operations omap4_smp_ops __initdata = {
+```

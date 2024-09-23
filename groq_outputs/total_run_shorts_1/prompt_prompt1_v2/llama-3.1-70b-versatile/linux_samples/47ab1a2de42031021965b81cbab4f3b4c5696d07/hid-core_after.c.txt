@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-19, 23-28
+VULNERABILITY_DESCRIPTION:
+This code contains potential double-free vulnerabilities. In the `case` block, if an error occurs and -1 is returned, the `report` pointer is not freed, potentially causing a memory leak. In the `for` loop, the `report` pointer is freed, but if an error occurs in the outer loop before reaching the inner loop, the `report` pointer is not freed, potentially causing a double-free error.
+
+EXPLANATION:
+The code initializes a `struct hid_report *report` and allocates memory for it using `kzalloc`. However, in the `case` block, an error condition returns -1 without freeing the allocated memory. This can cause a memory leak. Additionally, in the `for` loop, the `report` pointer is freed, but if an error occurs in the outer loop before reaching the inner loop, the `report` pointer is not freed, potentially causing a double-free error.
+
+RECOMMENDATIONS:
+To fix these potential double-free vulnerabilities, ensure that the `report` pointer is freed in all exit paths. After the error condition in the `case` block returns -1, the allocated memory for the `report` pointer should be freed using `kfree(report)`. Additionally, in the `for` loop, it is recommended to check for errors before attempting to free the `report` pointer.
+
+ORIGINAL CODE:
+
+```c
+struct hid_report_enum *report_enum = device->report_enum + type;
+struct hid_report *report;
+
+if (id >= HID_MAX_IDS)
+	return NULL;
+if (report_enum->report_id_hash[id])
+	return report_enum->report_id_hash[id];
+
+report = kzalloc(sizeof(struct hid_report), GFP_KERNEL);
+
+case HID_GLOBAL_ITEM_TAG_REPORT_ID:
+	parser->global.report_id = item_udata(item);
+	if (parser->global.report_id == 0 ||
+	    parser->global.report_id >= HID_MAX_IDS) {
+		hid_err(parser->device, "report_id %u is invalid\n",
+			parser->global.report_id);
+		kfree(report); // FREE THE REPORT POINTER HERE
+		return -1;
+	}
+	return 0;
+
+for (i = 0; i < HID_REPORT_TYPES; i++) {
+	struct hid_report_enum *report_enum = device->report_enum + i;
+
+	for (j = 0; j < HID_MAX_IDS; j++) {
+		struct hid_report *report = report_enum->report_id_hash[j];
+		if (report) {
+			// CHECK FOR ERRORS BEFORE FREEING THE REPORT POINTER
+			if (hid_free_report(report) != 0) {
+				// HANDLE THE ERROR
+			}
+		}
+	}
+}

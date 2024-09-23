@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 167
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to a buffer overflow exploit. The vulnerability lies in the function em_ret_near_imm, which assigns the value eip to the rdx register before checking if it's a canonical address. This could potentially allow an attacker to overwrite the first 2 bytes of the stack frame pointer.
+EXPLANATION:
+The vulnerability arises because the code doesn't check whether the value stored in eip is a canonical address before assigning it to the rcx register. A canonical address is an address where the bits in the upper 16 bits (0x12345678.0x12345678.0x12345678.0x12345678) are identical, but they are signed extended by setting the upper bits in the register (i.e., 0x12345678.FFFFFFFF.0x12345678.FFFFFFFF). A non-canonical address could potentially overflow the stack or other sensitive memory regions. Additionally, the code uses cmp instructions that use flags set by previous operations but does not check the validity of the operands which could result in unpredictable behavior if the flags are not set as expected.
+
+RECOMMENDATIONS:
+1. Validate the address before assigning it to the rcx register. It's recommended to use the is_noncanonical_address function to check whether the address is canonical before assigning it to the rcx register.
+2. Change the statement ctx->_eip = rdx; to ctx->_eip = is_noncanonical_address(ctx->_eip) ? ctx->_eip & ~0ULL : ctx->_eip; This should help to prevent buffer overflow exploits.
+3. Always check the validity and canonicity of operands used in operations to ensure their correctness.
+
+ORIGINAL CODE:
+```cpp
+static int em_ret_near_imm(struct x86_emulate_ctxt *ctxt)
+{
+        int rc;
+        unsigned long eip;
+
+        rc = emulate_pop(ctxt, &eip, ctxt->op_bytes);
+        if (rc != X86EMUL_CONTINUE)
+                return rc;
+        rc = assign_eip_near(ctxt, eip);
+        if (rc != X86EMUL_CONTINUE)
+                return rc;
+        rsp_increment(ctxt, ctxt->src.val);
+        return X86EMUL_CONTINUE;
+}
+
+//Function which is supposed to find whether given address is non-canonical in real and protected modes.
+
+//Original code snippet
+static int em_ret_far(struct x86_emulate_ctxt *ctxt)
+{
+    ...
+    if (is_noncanonical_address(rcx) || is_noncanonical_address(rdx))
+        return emulate_gp(ctxt, 0);
+    ctx->_eip = rdx;
+    *reg_write(ctxt, VCPU_REGS_RSP) = rcx;
+    return X86EMUL_CONTINUE;
+}
+```
+
+```plain
+```
+There is also the possibility of another vulnerability but would require a more thorough analysis to determine whether this vulnerability can be exploited - VULNERABLE_LINES: 96
+A further potential vulnerability lies in the em_in function. It contains multiple cases where function test_cc is used to check if a condition code (cc) stored in ctxt->b matches to ctxt->eflags and performs the jump operations after verification. However, the potential problem arises when unexpected flags may be set by some preceding operation, which may lead to false positive jump verifications resulting in instructions at incorrect addresses being executed.
+
+```cpp
+static int em_in(struct x86_emulate_ctxt *ctxt)
+{
+
+    switch (ctxt->b) {
+    case 0x70 ... 0x7f: /* jcc (short) */
+        if (test_cc(ctxt->b, ctxt->eflags))
+            rc = jmp_rel(ctxt, ctxt->src.val);
+        break;
+```
+    Case 96 can also be identified with some other file as ```break;``` (return type would be different), hence "96" is stated " 96",

@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 7-8
+VULNERABILITY_DESCRIPTION:
+Unvalidated usage of potentially user-controlled data in the `blkdev_issue_discard` function.
+
+EXPLANATION:
+The `req->u.discard.sector_number` and `req->u.discard.nr_sectors` values are used to specify the range of sectors to be discarded. However, it seems that these values are not validated or sanitized before being passed to the `blkdev_issue_discard` function. This can potentially lead to a denial-of-service (DoS) or even arbitrary data destruction if an attacker can control the values of `sector_number` and `nr_sectors`. For example, if an attacker can cause `nr_sectors` to be set to a value greater than the total number of sectors on the disk, this could cause the function to crash or behave unexpectedly. Similarly, if an attacker can cause `sector_number` to be set to a value outside the valid range of the disk, this could also cause the function to behave unexpectedly.
+
+RECOMMENDATIONS:
+- Validate and sanitize the values of `req->u.discard.sector_number` and `req->u.discard.nr_sectors` before passing them to `blkdev_issue_discard`. Checks should be performed to ensure that these values are within valid ranges for the specific disk being operated on.
+- Consider implementing additional error checking and handling to prevent crashes or unexpected behavior if invalid values are encountered.
+- Use bounds checking to prevent potential out-of-bounds access to the disk.
+
+ORIGINAL CODE:
+```c
+int status = BLKIF_RSP_OKAY;
+struct block_device *bdev = blkif->vbd.bdev;
+unsigned long secure;
+
+blkif->st_ds_req++;
+
+xen_blkif_get(blkif);
+secure = (blkif->vbd.discard_secure &&
+err = blkdev_issue_discard(bdev, req->u.discard.sector_number,
+				   req->u.discard.nr_sectors,
+				   GFP_KERNEL, secure);
+
+if (err == -EOPNOTSUPP) {
+	pr_debug(DRV_PFX "discard op failed, not supported\n");
+	status = BLKIF_RSP_EOPNOTSUPP;
+} else if (err)
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+ Use of FIELD_GET with unchecked bitfields.
+EXPLANATION:
+The use of FIELD_GET macro (lines 2 and 6) may lead to a vulnerability when dealing with unchecked bitfields. In this snippet, the 'type' and 'ret_buf_mgr' variables are assigned values without being checked if they are within the valid range of the respective enums. This may lead to undefined behavior if the values are not within the valid range.
+
+However, a more critical issue is introduced at line 4, where the conditional statement checking 'rel_src' is incomplete. It only checks if 'rel_src' does not equal HAL_WBM_REL_SRC_MODULE_REO, but does not verify if 'rel_src' was successfully assigned a value using FIELD_GET. Furthermore, 'rel_src' is not assigned a value from any FIELD_GET. This introduces a vulnerability that can lead to undefined behavior when 'rel_src' is used without proper initialization.
+
+RECOMMENDATIONS:
+- Assign 'rel_src' a value from FIELD_GET macro. 
+- Check if the result of FIELD_GET macro falls within the valid range of the respective enum.
+- Ensure that all variables are properly initialized before they are used.
+
+ORIGINAL CODE:
+
+	struct hal_wbm_release_ring *wbm_desc = desc;
+	enum hal_wbm_rel_desc_type type;
+	enum hal_wbm_rel_src_module rel_src;
+	enum hal_rx_buf_return_buf_manager ret_buf_mgr;
+
+	type = FIELD_GET(HAL_WBM_RELEASE_INFO0_DESC_TYPE,
+			 wbm_desc->info0);
+	/* We expect only WBM_REL buffer type */
+	    rel_src != HAL_WBM_REL_SRC_MODULE_REO)
+		return -EINVAL;
+
+	ret_buf_mgr = FIELD_GET(BUFFER_ADDR_INFO1_RET_BUF_MGR,
+				wbm_desc->buf_addr_info.info1);
+	if (ret_buf_mgr != ab->hw_params.hal_params->rx_buf_rbm) {
+		ab->soc_stats.invalid_rbm++;
+		return -EINVAL;
+	}

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-16
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a duplicate code vulnerability, also known as "dead code," and a lack of error handling for the `irq_set_chip_and_handler_name()` function.
+
+EXPLANATION:
+This code snippet checks if `irq` is equal to -1 and if so, allocates a dynamic IRQ. However, it duplicates this logic twice without any conditional statement between. The second iteration is unreachable and will never be executed, resulting in dead code. Additionally, the code does not check the return value of the `irq_set_chip_and_handler_name()` function for errors. If this function returns an error, it can cause unexpected behavior or crashes.
+
+RECOMMENDATIONS:
+Remove the duplicate code, only keeping one iteration of the IRQ allocation. Also, add error checking for the `irq_set_chip_and_handler_name()` function to handle potential errors properly.
+
+```c
+if (irq == -1) {
+    irq = xen_allocate_irq_dynamic();
+    if (irq < 0)
+        goto out;
+
+    int ret = irq_set_chip_and_handler_name(irq, &xen_dynamic_chip, 
+                                            handle_edge_irq, "event");
+    if (ret < 0) {
+        // Handle the error, or unwind and return an error code
+        // Replace the comment below with the actual error handling code
+        // ERROR: irq_set_chip_and_handler_name failed
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+if (irq == -1) {
+    irq = xen_allocate_irq_dynamic();
+    if (irq < 0)
+        goto out;
+
+    irq_set_chip_and_handler_name(irq, &xen_dynamic_chip,
+                                  handle_edge_irq, "event");
+
+if (irq == -1) {
+    irq = xen_allocate_irq_dynamic();
+    if (irq < 0)
+        goto out;
+
+    irq_set_chip_and_handler_name(irq, &xen_percpu_chip,
+                                  handle_percpu_irq, "virq");
+```

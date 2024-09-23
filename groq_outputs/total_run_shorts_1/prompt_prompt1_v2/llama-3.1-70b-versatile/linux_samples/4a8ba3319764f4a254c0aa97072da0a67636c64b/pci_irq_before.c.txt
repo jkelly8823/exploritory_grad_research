@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Resource Leak/Unregistration (Potential kernel panic) due to use of an unInitialized or released resource.
+
+EXPLANATION:
+The given code snippet appears to be handling GSI (General Purpose Input/Output) interrupt-related operations. A vulnerability is observed in the `acpi_unregister_gsi(gsi)` function call. If `acpi_unregister_gsi()` fails and returns an error, the subsequent assignments (`dev->irq = 0; dev->irq_managed = 0;`) may still be executed. This can lead to an inconsistent state, where `dev->irq_managed` is set to 0, but `acpi_unregister_gsi()` did not actually unregister the GSI.
+
+RECOMMENDATIONS:
+To address this vulnerability, the function call to `acpi_unregister_gsi()` should be checked for potential errors. The recommended fix involves checking the return value of `acpi_unregister_gsi()` and handling any errors that might occur.
+
+Here's an example of the corrected code:
+
+```c
+if (gsi >= 0) {
+    if (acpi_unregister_gsi(gsi)) {
+        dev_err(&dev->dev, "Failed to unregister GSI %d\n", gsi);
+        // handler or roll-back code should be added here
+    } else {
+        dev->irq = 0;
+        dev->irq_managed = 0;
+    }
+}
+```
+
+ORIGINAL CODE:
+```
+dev_dbg(&dev->dev, "PCI INT %c disabled\n", pin_name(pin));
+if (gsi >= 0) {
+    acpi_unregister_gsi(gsi);
+    dev->irq = 0;
+    dev->irq_managed = 0;
+}
+}

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 11-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Unchecked Error Handling, Information Exposure Through PCI Configuration Space Reads, and Lack of Input Validation.
+
+EXPLANATION:
+The function `snbep_pci2phy_map_init` reads PCI configuration space using `pci_read_config_dword`. However, it does not validate the inputs `nodeid_loc` and `idmap_loc` to ensure they are valid PCI configuration space registers. 
+
+Additionally, if `pci_read_config_dword` fails, the function returns an error without checking if the error is due to a lack of access permissions (for example, trying to read a configuration register without the necessary permissions) or if it's due to another issue. This lack of error handling might lead to information exposure.
+
+Lastly, even though it checks for errors in `pci_read_config_dword`, there seems to be a missing error handling for `err` values. For example, the function should handle cases where `pci_read_config_dword` can't read the configuration register and provide proper error handling or fallback behavior.
+
+RECOMMENDATIONS:
+1. Validate the inputs `nodeid_loc` and `idmap_loc` to ensure they are valid PCI configuration space registers.
+2. Use paranoid error checking to determine whether the error is due to a lack of access permissions or if it's due to another issue.
+3. Provide proper error handling for error codes coming from `pci_read_config_dword`.
+4. Consider implementing fallback behavior when configuration register reads fail.
+
+ORIGINAL CODE:
+```
+.id_table	= snbep_uncore_pci_ids,
+};
+
+/*
+ * build pci bus to socket mapping
+ */
+static int snbep_pci2phy_map_init(int devid, int nodeid_loc, int idmap_loc, bool reverse)
+	err = pci_read_config_dword(ubox_dev, nodeid_loc, &config);
+	if (err)
+		break;
+	nodeid = config;
+	/* get the Node ID mapping */
+	err = pci_read_config_dword(ubox_dev, idmap_loc, &config);
+	if (err)
+		break;
+```

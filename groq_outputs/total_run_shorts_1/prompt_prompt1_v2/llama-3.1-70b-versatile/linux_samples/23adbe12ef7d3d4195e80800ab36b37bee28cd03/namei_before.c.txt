@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+The code has a potential vulnerability due to an inconsistent permission check for directory search capability. The check for CAP_DAC_READ_SEARCH capability is done only when the request mask is exactly MAY_READ, missing the case where the request mask includes read and other permissions.
+EXPLANATION:
+The code checks if the inode's capability is CAP_DAC_READ_SEARCH when the request mask is MAY_READ. However, it doesn't perform this check when the request mask includes MAY_READ along with other permissions (e.g., MAY_WRITE or MAY_EXEC). This can lead to an inconsistent permission check, allowing unauthorized access to the directory.
+RECOMMENDATIONS:
+The check for CAP_DAC_READ_SEARCH capability should be performed regardless of the other permissions present in the request mask. To fix the vulnerability, change the relevant lines to include read permission as part of the capability check:
+
+```c
+if (!(mask & MAY_WRITE) || mask & MAY_READ)
+    if (inode_capable(inode, CAP_DAC_READ_SEARCH))
+        return 0;
+```
+Alternatively, you can also consider checking for CAP_DAC_READ_SEARCH when the request mask includes MAY_READ:
+
+```c
+if (mask & MAY_READ)
+    if (inode_capable(inode, CAP_DAC_READ_SEARCH))
+        return 0;
+```
+However, this might need further refactoring to ensure that correct permissions are checked in various scenarios.
+ORIGINAL CODE:
+```c
+if (S_ISDIR(inode->i_mode)) {
+    /* DACs are overridable for directories */
+    if (inode_capable(inode, CAP_DAC_OVERRIDE))
+        return 0;
+    if (!(mask & MAY_WRITE))
+        if (inode_capable(inode, CAP_DAC_READ_SEARCH))
+            return 0;
+    return -EACCES;
+}
+/*
+ * at least one exec bit set.
+ */
+if (!(mask & MAY_EXEC) || (inode->i_mode & S_IXUGO))
+    if (inode_capable(inode, CAP_DAC_OVERRIDE))
+        return 0;
+
+/*
+ * Searching includes executable on directories, else just read.
+ */
+mask &= MAY_READ | MAY_WRITE | MAY_EXEC;
+if (mask == MAY_READ)
+    if (inode_capable(inode, CAP_DAC_READ_SEARCH))
+        return 0;
+
+return -EACCES;
+}
+    return 0;
+if (uid_eq(dir->i_uid, fsuid))
+    return 0;
+return !inode_capable(inode, CAP_FOWNER);
+}
+
+/*
+ *      Check whether we can remove a link victim from directory dir, check
+```

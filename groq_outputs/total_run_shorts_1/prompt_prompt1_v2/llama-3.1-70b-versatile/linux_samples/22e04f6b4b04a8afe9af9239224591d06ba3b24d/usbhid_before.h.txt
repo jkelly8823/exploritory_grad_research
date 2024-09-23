@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Potential NULL pointer dereference vulnerability.
+
+EXPLANATION:
+The `hid_to_usb_dev` macro uses the `container_of` function, which returns a pointer to the structure (in this case, `struct usb_device`) that the member pointer is embedded within. However, before using this macro, the code does not check if the `hid_dev->dev.parent->parent` is null. This means that if `hid_dev->dev.parent` or `hid_dev->dev.parent->parent` is null, dereferencing this pointer will result in a segmentation fault.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add null checks before using the `hid_to_usb_dev` macro to ensure that `hid_dev->dev.parent` and `hid_dev->dev.parent->parent` are not null. Here's how you can do this:
+
+```c
+struct usb_device *usb_dev = hid_to_usb_dev(hid_dev);
+if (usb_dev == NULL) {
+    // handle the error, e.g., return an error code
+}
+```
+
+Additionally, you should consider adding error checking code for the case where `hid_dev` itself is null:
+
+```c
+if (hid_dev == NULL || hid_dev->dev.parent == NULL || hid_dev->dev.parent->parent == NULL) {
+    // handle the error, e.g., return an error code
+} else {
+    struct usb_device *usb_dev = hid_to_usb_dev(hid_dev);
+    // execute the rest of your code using usb_dev
+}
+```
+
+ORIGINAL CODE:
+```c
+unsigned int retry_delay;                                       /* Delay length in ms */
+struct work_struct reset_work;                                  /* Task context for resets */
+wait_queue_head_t wait;						/* For sleeping */
+int ledcount;							/* counting the number of active leds */
+
+struct work_struct led_work;					/* Task context for setting LEDs */
+};
+
+#define	hid_to_usb_dev(hid_dev) \
+	container_of(hid_dev->dev.parent->parent, struct usb_device, dev)
+```

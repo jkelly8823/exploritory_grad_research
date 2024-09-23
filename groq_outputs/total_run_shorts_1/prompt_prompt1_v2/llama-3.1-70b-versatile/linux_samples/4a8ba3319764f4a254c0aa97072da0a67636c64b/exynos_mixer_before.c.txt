@@ -1,0 +1,96 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+This code contains a vulnerability related to the use of a mutex lock and unlock. The mutex lock is released twice, but in certain scenarios, it is possible that the lock might not be released, or it might be released too early.
+EXPLANATION:
+The mixer_mutex is locked before checking the powered status of mixer_ctx. However, if the powered status is false, the mutex is unlocked but then immediately locked again. This is potentially indicative of bad programming practice and can result in deadlocks depending on how and where the function is called.
+
+It's worth noting that the lock was actually released twice, first after checking the power status and once more without condition. There is code after those lines that rely on shared resources, this double unlock was potentially introduced to prevent deadlock or similar issues.
+
+However, this implementation has other implications like if the system went to a fail path for the power status test but the fail paths include more uses of resources that could be locked from potentially other paths within the system. There is potential here for use-after-free of shared resources and again potential for overall system stability issues related to invalid use semantics for mutexes.
+RECOMMENDATIONS:
+The code should not contain double unlock for a mutex. If the lock is not needed, then it should be removed entirely after checking the powered status. A better approach might be to structure the code so that the powered status check is performed without the lock being held.
+
+However, if the condition is such that lock should be maintained within the function scope even after failing powered status, there may be other means to get state information for those power checks that should be used, like atomic state declarations.
+
+Here is what the vulnerability might look like with some of the above suggestions implemented:
+
+```c
+static void mixer_wait_for_vblank(struct exynos_drm_manager *mgr)
+{
+	struct mixer_context *mixer_ctx = mgr_to_mixer(mgr);
+
+	mutex_lock(&mixer_ctx->mixer_mutex);
+	if (!mixer_ctx->powered) {
+		// Either immediately fail or get unlocked in another control path
+		if (!condition_to_retain_lock) {
+			mutex_unlock(&mixer_ctx->mixer_mutex);
+		} else {
+			err_action_here_or_set_goto_ret_after_failout_and_finish_unlock_outside_if;
+		}
+	}
+	drm_vblank_get(mgr->crtc->dev, mixer_ctx->pipe);
+
+	atomic_set(&mixer_ctx->wait_vsync_event, 1);
+
+	return ret;
+}
+
+OR 
+
+static void mixer_wait_for_vblank(struct exynos_drm_manager *mgr)
+{
+	if (!mixer_isPowered()) {
+		return some_error_code_indicating_partialfail_or_whatever;
+	}
+	struct mixer_context *mixer_ctx = mgr_to_mixer(mgr);
+	mutex_lock(&mixer_ctx->mixer_mutex);
+	
+	drm_vblank_get(mgr->crtc->dev, mixer_ctx->pipe);
+
+	atomic_set(&mixer_ctx->wait_vsync_event, 1);
+
+	mutex_unlock(&mixer_ctx->mixer_mutex);
+
+	return ret;
+}
+```
+
+These examples might change the function call and structure but they provide an additional reference and attempt to open up ideas to a correct alternative to handle such problem.
+ORIGINAL CODE:
+
+```c
+static void mixer_wait_for_vblank(struct exynos_drm_manager *mgr)
+{
+	struct mixer_context *mixer_ctx = mgr_to_mixer(mgr);
+
+	mutex_lock(&mixer_ctx->mixer_mutex);
+	if (!mixer_ctx->powered) {
+		mutex_unlock(&mixer_ctx->mixer_mutex);
+	}
+	mutex_unlock(&mixer_ctx->mixer_mutex);
+
+	drm_vblank_get(mgr->crtc->dev, mixer_ctx->pipe);
+
+	atomic_set(&mixer_ctx->wait_vsync_event, 1);
+
+	/*
+		return ret;
+	}
+
+	pm_runtime_enable(dev);
+
+	return 0;
+}
+
+static void mixer_unbind(struct device *dev, struct device *master, void *data)
+	struct mixer_context *ctx = dev_get_drvdata(dev);
+
+	mixer_mgr_remove(&ctx->manager);
+
+	pm_runtime_disable(dev);
+}
+
+static const struct component_ops mixer_component_ops = {
+	.bind	= mixer_bind,
+```

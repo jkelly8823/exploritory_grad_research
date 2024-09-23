@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 9, 11-12
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerabilities due to lack of bounds checking and potential off-by-one error.
+
+
+EXPLANATION:
+The given code snippet appears to be vulnerable to buffer overflow attacks due to a few issues:
+1. Lack of bounds checking: In the line `if (getMessage(socket, buffer, BUFFER_SIZE) > 0)`, there is an implicit assumption that the data read from the socket is within the bounds of the `BUFFER_SIZE`. However, this assumption is not validated, leading to a potential buffer overflow if more data is read than the buffer can hold.
+
+2. Off-by-one error: In the loop where the message body is copied into the `message` buffer, there is a potential off-by-one error due to the line `message[index] = '\0';`. The `message` buffer is declared to be of size `MESSAGE_SIZE`, but the loop iterates up to `msg->msgLength` which may not account for the extra character required for the null-terminator. This could lead to a buffer overflow if `msg->msgLength` is equal to `MESSAGE_SIZE`.
+
+Additionally, although the format string `message` is being null-terminated, it is being used as an argument to the `processMessage` function which might be vulnerable to injection attacks depending on how this function is implemented.
+
+
+RECOMMENDATIONS:
+1. Implement bounds checking on the data read from the socket to ensure it does not exceed the `BUFFER_SIZE`.
+
+2. Ensure that the `message` buffer has enough space to hold the null-terminator by reducing the maximum value of `msg->msgLength` to `MESSAGE_SIZE - 1`.
+
+3. Validate the data stored in `message` before passing it to `processMessage` to prevent potential injection attacks.
+
+
+ORIGINAL CODE:
+
+
+                  int processMessageFromSocket(int socket) {
+                        int success;
+                           char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+                           
+                           // get message from socket and store into buffer
+                           
+                           
+                           //Ignoring possibliity that buffer > BUFFER_SIZE
+                           if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+                              
+                                 
+                                 // place contents of the buffer into message structure
+                                 ExMessage *msg = recastBuffer(buffer);
+                                 
+                                 // copy message body into string for processing
+                                 int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+                                 
+                                 // process message
+                                 success = processMessage(message);
+                           }return success;
+                     }
+               
+               

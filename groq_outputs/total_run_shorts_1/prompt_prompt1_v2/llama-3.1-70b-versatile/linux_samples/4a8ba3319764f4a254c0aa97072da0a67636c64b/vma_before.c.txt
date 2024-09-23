@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+Information Exposure Through Variable Timing.
+
+EXPLANATION:
+The vulnerability lies in the use of `get_random_int()` function. This function is likely to be based on the operating system's random number generator, which is designed to produce highly unpredictable and random numbers. However, because it is based on a finite entropy pool, it is vulnerable to resource-constrained attacks, in which an attacker observes the time taken by the function to generate a number. Since the time taken by this function might correlate to the random number or seed it produces, an attacker might use this variation in time to infer information about the random numbers generated.
+
+RECOMMENDATIONS:
+To fix this vulnerability, instead of `get_random_int()`, consider using a high-entropy random number generator, such as `get_random_bytes()`. The `get_random_bytes()` function is designed to be less predictable and less vulnerable to timing attacks.
+
+Also, if performance is critical, you might consider caching a set of random values or offsets for later use, instead of generating them dynamically on every function call.
+
+Alternatively, consider adding a random delay to mask the timing side-channel. Be careful not to introduce additional vulnerabilities or performance issues in this approach.
+
+ORIGINAL CODE:
+```
+struct linux_binprm;
+
+/* Put the vdso above the (randomized) stack with another randomized offset.
+   This way there is no hole in the middle of address space.
+   To save memory make sure it is still in the same PTE as the stack top.
+   This doesn't give that many random bits.
+
+   Only used for the 64-bit and x32 vdsos. */
+static unsigned long vdso_addr(unsigned long start, unsigned len)
+{
+#ifdef CONFIG_X86_32
+	return 0;
+#else
+	unsigned long addr, end;
+	unsigned offset;
+	end = (start + PMD_SIZE - 1) & PMD_MASK;
+	if (end >= TASK_SIZE_MAX)
+		end = TASK_SIZE_MAX;
+	end -= len;
+	/* This loses some more bits than a modulo, but is cheaper */
+	offset = get_random_int() & (PTRS_PER_PTE - 1);
+	addr = start + (offset << PAGE_SHIFT);
+	if (addr >= end)
+		addr = end;
+
+	/*
+	 * page-align it here so that get_unmapped_area doesn't
+	 * align it wrongfully again to the next page. addr can come in 4K
+	 * unaligned here as a result of stack start randomization.
+	 */
+	addr = PAGE_ALIGN(addr);
+	addr = align_vdso_addr(addr);
+
+	return addr;
+#endif
+}
+```

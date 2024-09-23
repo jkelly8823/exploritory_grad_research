@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 9
+VULNERABILITY_DESCRIPTION:
+Inconsistent PCID Validation
+EXPLANATION:
+The code snippet contains a potential vulnerability in PCID validation. In line 5, it checks if the PCID of the current CPU (`pcid`) matches the active PCID `kvm_get_active_pcid(vcpu)` and if so, calls `mmu->invlpg(vcpu, gva, mmu->root.hpa)`. However, in line 9, it calls `mmu->invlpg(vcpu, gva, mmu->prev_roots[i].hpa)` without validating if the `pcid` matches. This inconsistency in PCID validation may allow for PCID-related attacks.
+
+RECOMMENDATIONS:
+To address this vulnerability, the code should consistently validate the PCID before performing `mmu->invlpg(vcpu, gva, mmu->prev_roots[i].hpa)`. The recommendation is to use `pcid == kvm_get_pcid(vcpu, mmu->invlpg_table_pcid)` before calling `mmu->invlpg(vcpu, gva, mmu->prev_roots[i].hpa)` in line 9.
+
+ORIGINAL CODE:
+
+	uint i;
+
+	if (pcid == kvm_get_active_pcid(vcpu)) {
+		mmu->invlpg(vcpu, gva, mmu->root.hpa);
+		tlb_flush = true;
+	}
+
+	for (i = 0; i < KVM_MMU_NUM_PREV_ROOTS; i++) {
+		if (VALID_PAGE(mmu->prev_roots[i].hpa) &&
+		    pcid == kvm_get_pcid(vcpu, mmu->prev_roots[i].pgd)) {
+			mmu->invlpg(vcpu, gva, mmu->prev_roots[i].hpa);
+			tlb_flush = true;
+		}
+	}

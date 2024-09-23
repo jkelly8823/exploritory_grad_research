@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Resource leak due to missing call to hid_hw_stop() when starting hid_hw_start() fails.
+
+EXPLANATION:
+Upon failure of `hid_hw_start(hdev, HID_CONNECT_DEFAULT)`, if the device is already in the started state from a previous call to `hid_hw_start()`, and `hid_hw_start()` is called again, it is unclear if any error occurred or what the proper state of the device is. In order to prevent resource leaks or unexpected behavior, the device should be explicitly stopped in case of failure to ensure a known state. Failure to explicitly stop the device may lead to memory or other system resource leaks.
+
+RECOMMENDATIONS:
+In order to correct this vulnerability, we recommend using `hid_hw_stop()` when `hid_hw_start()` fails, in order to ensure the device returns to a known state. It may look something like this:
+
+```
+	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+	if (ret) {
+		hid_err(hdev, "hw start failed\n");
+		hid_hw_stop(hdev, HID_DISCONNECT_DEFAULT);
+		goto err_free;
+	}
+```
+In this fixed code, when hid_hw_start() fails, `hid_hw_stop()` will be called to return the device to a disconnected state.
+
+ORIGINAL CODE:
+```
+.goto err_free;
+}
+
+ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+if (ret) {
+	hid_err(hdev, "hw start failed\n");
+	goto err_free;
+```

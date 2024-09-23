@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 11-15, 18-22
+VULNERABILITY_DESCRIPTION:
+Unintended Code Execution and Potential Use-After-Free Vulnerability
+EXPLANATION:
+I have found three areas of vulnerability. First, when hwrng_register() or virtio_find_single_vq() fails and returns an error, the memory allocated by virtio_find_single_vq() in the event of an error being returned is not freed in this function, even though the pointer to this memory is set to NULL. If other areas of the code that interact with this data do not properly check if the vq pointer is NULL before attempting to use it, this can result in a use-after-free vulnerability.
+
+Secondly, I have noticed that the error code returned when a VirtQueue device is busy is always -EBUSY. An attacker with control over this argument may be able to cause a denial-of-service by artificially producing -EBUSY errors.
+
+Lastly, I see multiple function calls that have return values of type int not being validated on lines 11-15 and 18-22. Although certain values are checked in the following lines of code, there is nothing to prevent the code execution of these blocks before return. The probe function does not return the error values, even though this function is declared as returning an integer. These facts, combined with the order of operations performed after these function calls indicate that an if error was reported in these error codes, it will be lost unless the function somehow modifies the contents of the variable "err" elsewhere.  This makes this error type difficult to notice as faulty. When a vulnerable code block's return is not properly assigned to the int variable "err" the function as such cannot warn consumers that there is an error state. 
+RECOMMENDATIONS:
+- Always free any objects managed by virtio_find_single_vq() in error paths to prevent memory leaks and potential use-after-free.
+
+- Always check return values of functions that return int like hwrng_unregister and always perform operations dependent on their successes.
+
+- All if statements that actually would continue into blocks should return an application level error code with which an immediate function call may return early and function calls continuing after should be allowed to proceed as if they are not being called in error context (eg, continue in the typical functioning paths, but do not set any kind of function error) while executing context and with no other function calls permitted that would add an execution additional status that this function simply should return with the called, unambivalent immediately found function returning error)
+
+- Check to make sure -EBUSY hasn't been called in every single line when attempting to simply instantiate VirtQueue for intended hwrng registration to deter service attacks by rogue actors.
+ 
+ORIGINAL CODE:
+{
+	int err;
+
+	if (vq) {
+		/* We only support one device for now */
+		return -EBUSY;
+	}
+	/* We expect a single virtqueue. */
+	vq = virtio_find_single_vq(vdev, random_recv_done, "input");
+	if (IS_ERR(vq)) {
+		err = PTR_ERR(vq);
+		vq = NULL;
+		return err;
+	}
+
+	err = hwrng_register(&virtio_hwrng);
+	if (err) {
+		vdev->config->del_vqs(vdev);
+		vq = NULL;
+		return err;
+	}
+
+	return 0;
+	busy = false;
+	hwrng_unregister(&virtio_hwrng);
+	vq = NULL;
+}
+
+static int virtrng_probe(struct virtio_device *vdev)

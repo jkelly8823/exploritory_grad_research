@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 15
+VULNERABILITY_DESCRIPTION:
+Command injection vulnerability and resource leak
+
+EXPLANATION:
+I detected a possible command injection vulnerability due to the function `iwl_mvm_ftm_responder_set_bw_v1` not being checked for. The lines `25-26` indicate that if `cmd_ver` is less than 7, `iwl_mvm_ftm_responder_set_bw_v1` is called, but its susceptibility to a potential vulnerability is unknown. This poses a threat as different versions could have different vulnerabilities. Also, in line `5`, if `iwl_mvm_get_ctrl_pos(chandef)` fails, an error is not checked which can lead to a resource leak.
+
+
+RECOMMENDATIONS:
+- Validation should be performed on `chandef` before it's used in a function.
+- Validate the return value of `iwl_mvm_ftm_responder_set_bw_v1` to prevent resource leak.
+- Validate the versions that are calling `iwl_mvm_ftm_responder_set_bw_v1` as older versions can have vulnerabilities.
+- It is crucial to handle potential error to prevent the system from being vulnerable.
+
+ORIGINAL CODE:
+
+}
+static int iwl_mvm_ftm_responder_set_bw_v2(struct cfg80211_chan_def *chandef,
+					   u8 *format_bw, u8 *ctrl_ch_position,
+					   u8 cmd_ver)
+{
+	switch (chandef->width) {
+	case NL80211_CHAN_WIDTH_20_NOHT:
+		*format_bw = IWL_LOCATION_FRAME_FORMAT_LEGACY;
+		*format_bw |= IWL_LOCATION_BW_80MHZ << LOCATION_BW_POS;
+		*ctrl_ch_position = iwl_mvm_get_ctrl_pos(chandef);
+		break;
+	case NL80211_CHAN_WIDTH_160:
+		if (cmd_ver >= 9) {
+			*format_bw = IWL_LOCATION_FRAME_FORMAT_HE;
+			*format_bw |= IWL_LOCATION_BW_160MHZ << LOCATION_BW_POS;
+			*ctrl_ch_position = iwl_mvm_get_ctrl_pos(chandef);
+			break;
+		}
+		fallthrough;
+	default:
+		return -ENOTSUPP;
+	}
+
+
+	if (cmd_ver >= 7)
+		err = iwl_mvm_ftm_responder_set_bw_v2(chandef, &cmd.format_bw,
+						      &cmd.ctrl_ch_position,
+						      cmd_ver);
+	else
+		err = iwl_mvm_ftm_responder_set_bw_v1(chandef, &cmd.format_bw,
+						      &cmd.ctrl_ch_position);

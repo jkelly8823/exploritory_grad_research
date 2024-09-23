@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-18
+VULNERABILITY_DESCRIPTION:
+This vulnerability is related to a resource leak issue. The usleep_range function call does not check if the requested delay can be accommodated by the underlying hardware. This could result in an indefinite delay or crash. Additionally, this code is within a context where interrupts are handled, making the usage of usleep_range even more problematic. However, the actual vulnerability in lines 17-18 is the lack of input validation on the sleep duration for usleep_range, and potential infinite recursion that could be introduced through trans object functionality calling this function that leads to a resource leak.
+
+EXPLANATION:
+This code is written in C and appears to be a part of a Linux kernel module. It is designed to perform an PCI Express (PCIe) software reset of a wireless network device. After the reset, it waits for a duration of 5-6 milliseconds before continuing.
+
+The usleep_range function is used to implement this delay. However, this function can be problematic in interrupt contexts, as it can cause the interrupt handler to sleep for an extended period of time, potentially blocking other interrupts from being handled. Furthermore, there is no validation performed on the input values passed to usleep_range, which could result in a very long sleep duration, leading to resource starvation. Although this is not shown in the snippet.
+
+Additionally, this code snippet appears to be a part of a larger codebase, as evidenced by the many function calls and struct accesses. Without more context, it is difficult to determine the full impact of this potential vulnerability.
+
+RECOMMENDATIONS:
+The usleep_range call should be replaced with a more suitable delay function that does not block interrupts, such as udelay or ndelay. Additionally, the input values passed to usleep_range should be validated to ensure they are within a reasonable range.
+
+The fix could be implemented like this:
+
+```c
+udelay(5000 + (rand() % 1000));
+```
+
+Alternatively, consider using kthread-safe delay functions like ktime_msleep or ktime_msleep_us.
+
+ORIGINAL CODE:
+
+```c
+static void iwl_trans_pcie_sw_reset(struct iwl_trans *trans)
+{
+    /* Reset entire device - do controller reset (results in SHRD_HW_RST) */
+    if (trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_BZ)
+        iwl_set_bit(trans, CSR_GP_CNTRL,
+                    CSR_GP_CNTRL_REG_FLAG_SW_RESET);
+    else
+        iwl_set_bit(trans, CSR_RESET,
+                    CSR_RESET_REG_FLAG_SW_RESET);
+    usleep_range(5000, 6000);
+}
+```

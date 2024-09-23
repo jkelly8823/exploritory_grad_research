@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION: 
+Resource leak due to exception not being properly handled.
+
+EXPLANATION:
+The code snippet does not check if the clock `gpmc_l3_clk` was successfully enabled before attempting to disable and put it. If `clk_disable_unprepare` fails, the call to `clk_put` could still occur. This can cause a resource leak if `clk_disable_unprepare` fails because `clk_put` will decrement the reference count, potentially allowing the clock to be released prematurely. Additionally, if `clk_disable_unprepare` returns an error, it is not handled or propagated.
+
+RECOMMENDATIONS:
+The code should check the return value of `clk_disable_unprepare` to ensure that the clock has been properly disabled and unprepared before calling `clk_put`. Additionally, the return value of `clk_disable_unprepare` should be handled to prevent a resource leak in case of error.
+
+Recommended fix:
+```c
+if (clk_disable_unprepare(gpmc_l3_clk)) {
+    /* Handle the error or return it to the caller */
+    dev_err(gpmc_dev, "Failed to disable and unprepare the clock");
+    return rc;
+}
+clk_put(gpmc_l3_clk);
+```
+ORIGINAL CODE:
+```
+            /* TODO: remove, see function definition */
+	gpmc_convert_ps_to_ns(gpmc_t);
+
+	return 0;
+}
+
+#ifdef CONFIG_OF
+	if (IS_ERR_VALUE(gpmc_setup_irq()))
+		dev_warn(gpmc_dev, "gpmc_setup_irq failed\n");
+
+	/* Now the GPMC is initialised, unreserve the chip-selects */
+	gpmc_cs_map = 0;
+
+	rc = gpmc_probe_dt(pdev);
+	if (rc < 0) {
+		clk_disable_unprepare(gpmc_l3_clk);
+		clk_put(gpmc_l3_clk);
+```

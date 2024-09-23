@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 13
+VULNERABILITY_DESCRIPTION:
+A potential vulnerability related to indirect function calls has been identified in the code snippet. This vulnerability is known as a "Use After Free" (UAF) or "Indirect Call of a Pointer" vulnerability.
+
+EXPLANATION:
+The potential vulnerability lies in the indirect calls to the `sys_call_table` through the following lines:
+```assembly
+call *sys_call_table(,%eax,4)  # line 3
+call *sys_call_table(,%eax,4)  # line 13
+```
+In these lines, the program jumps to the addresses stored in the `sys_call_table`, based on the value of `eax`. This type of call can be vulnerable if an attacker has a means to manipulate the values stored in `eax` or `sys_call_table`, thus controlling the flow of the program and executing arbitrary code.
+
+RECOMMENDATIONS:
+- Ensure that the values stored in `eax` and `sys_call_table` are properly validated and sanitized before indirect calls to prevent code injection.
+- Consider using a valid pointer validation mechanism before making indirect calls to prevent exploitation of potential vulnerabilities.
+- Refer to secure coding practices and guidelines for mitigating potential vulnerabilities related to indirect function calls.
+
+ORIGINAL CODE:
+```
+	cmpl $(NR_syscalls), %eax
+	jae sysenter_badsys
+	call *sys_call_table(,%eax,4)
+sysenter_after_call:
+	movl %eax,PT_EAX(%esp)
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
+	movl TI_flags(%ebp), %ecx
+	jae syscall_badsys
+syscall_call:
+	call *sys_call_table(,%eax,4)
+syscall_after_call:
+	movl %eax,PT_EAX(%esp)		# store the return value
+syscall_exit:
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don't miss an interrupt
+END(syscall_fault)
+
+syscall_badsys:
+	movl $-ENOSYS,%eax
+	jmp syscall_after_call
+END(syscall_badsys)
+
+sysenter_badsys:
+	movl $-ENOSYS,%eax
+	jmp sysenter_after_call
+END(syscall_badsys)
+	CFI_ENDPROC
+```

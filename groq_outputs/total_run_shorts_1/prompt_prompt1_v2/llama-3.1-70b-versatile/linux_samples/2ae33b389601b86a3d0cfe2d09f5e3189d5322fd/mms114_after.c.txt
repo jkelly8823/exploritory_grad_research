@@ -1,0 +1,96 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 44
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability due to late release of system resources and insufficient error handling.
+
+EXPLANATION:
+In the `mms114_stop` function, there is no check if the `disable_irq` function call is successful. This could potentially lead to a resource leak. Additionally, in case an error occurs while disabling regulators, the code continues executing which may lead to inconsistent state and potential resource leaks.
+
+RECOMMENDATIONS:
+1.  Check the return value of the `disable_irq` function and handle potential errors accordingly.
+
+2.  Consider adding checks for regulator_disable calls to re-try disabling regulators or handle potential errors more robustly to prevent resource leaks.
+
+For example:
+
+```c
+static void mms114_stop(struct mms114_data *data)
+{
+    struct i2c_client *client = data->client;
+    int error;
+
+    error = disable_irq(client->irq);
+    if (error)
+        dev_err(&client->dev, "Failed to disable irq: %d\n", error);
+
+    if (data->pdata->cfg_pin)
+        data->pdata->cfg_pin(false);
+
+    error = regulator_disable(data->io_reg);
+    if (error)
+    {
+        dev_err(&client->dev, "Failed to disable vdd: %d\n", error);
+        // Add code here to re-try or handle regulator_disable error
+    }
+
+    error = regulator_disable(data->core_reg);
+    if (error)
+    {
+        dev_err(&client->dev, "Failed to disable avdd: %d\n", error);
+        // Add code here to re-try or handle regulator_disable error
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+struct i2c_client *client = data->client;
+int error;
+
+error = regulator_enable(data->core_reg);
+if (error) {
+    dev_err(&client->dev, "Failed to enable avdd: %d\n", error);
+    return error;
+}
+
+error = regulator_enable(data->io_reg);
+if (error) {
+    dev_err(&client->dev, "Failed to enable vdd: %d\n", error);
+    regulator_disable(data->core_reg);
+    return error;
+}
+
+mdelay(MMS114_POWERON_DELAY);
+
+error = mms114_setup_regs(data);
+if (error < 0) {
+    regulator_disable(data->io_reg);
+    regulator_disable(data->core_reg);
+    return error;
+}
+
+if (data->pdata->cfg_pin)
+    data->pdata->cfg_pin(true);
+
+static void mms114_stop(struct mms114_data *data)
+{
+    struct i2c_client *client = data->client;
+    int error;
+
+    disable_irq(client->irq);
+
+    if (data->pdata->cfg_pin)
+        data->pdata->cfg_pin(false);
+
+    error = regulator_disable(data->io_reg);
+    if (error)
+        dev_warn(&client->dev, "Failed to disable vdd: %d\n", error);
+
+    error = regulator_disable(data->core_reg);
+    if (error)
+        dev_warn(&client->dev, "Failed to disable avdd: %d\n", error);
+}
+
+static int mms114_input_open(struct input_dev *dev)
+{
+```

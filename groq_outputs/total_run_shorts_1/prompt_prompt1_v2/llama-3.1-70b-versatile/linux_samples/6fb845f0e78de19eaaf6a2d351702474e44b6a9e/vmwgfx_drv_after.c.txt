@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 29, 30
+VULNERABILITY_DESCRIPTION:
+ Integer Overflow Vulnerability
+
+EXPLANATION:
+The code is vulnerable to an integer overflow when setting DMA masks. Specifically, in the function `vmw_dma_masks()`, the line `ret = dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(64));` followed by the conditional `if (dev_priv->map_mode != vmw_dma_phys && (sizeof(unsigned long) == 4 || vmw_restrict_dma_mask))` may lead to an integer overflow when setting the mask for 64-bit and 44-bit systems. The reason for this is that `DMA_BIT_MASK(64)` and `DMA_BIT_MASK(44)` are bitmasks that could wrap around and result in an incorrect value, which might lead to the restriction being disabled unexpectedly.
+
+However, the real issue is actually related to another piece of code that has been added which was not necessary for our check here. The call to `dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(44));` and `dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(64));` follows another potential bug here which allows for integer overflows indirectly. This however assumes knowledge that the call itself will attempt to write 64bits of data on all systems.
+
+RECOMMENDATIONS:
+To prevent integer overflows when setting DMA masks, you can handle the mask properly. For a 64-bit system, ensure that the maximum mask is set according to the `DMA_BIT_MASK` macro and restrict DMA addresses on systems that have smaller `sizeof(unsigned long)` types.
+
+As this answer must align to recommendations, I've reviewed the problem description once more and established the need to handle writing data more finely. In summary, rather than writing using `dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(44))`, consider writing to it using `u64 restrictmask = DMA_BIT_MASK(44);` where sizeof is determined to ensure alignment.
+
+Other possible suggestions would look like:
+
+- Validate the value of `DMA_BIT_MASK(n)` for both limits to take 64 and 44.
+- Since dma_set_mask_and_coherent already takes over uint64_t, try checking its code in the header or actual file to allow this call to be safe using as is.
+
+However, you might want to consider potential performance impacts if necessary, and restrict masks might already work in such a way.
+
+
+ORIGINAL CODE:
+ static int vmw_dma_masks(struct vmw_private *dev_priv)
+{
+	struct drm_device *dev = dev_priv->dev;
+	int ret = 0;
+
+	ret = dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(64));
+	if (dev_priv->map_mode != vmw_dma_phys &&
+	    (sizeof(unsigned long) == 4 || vmw_restrict_dma_mask)) {
+		DRM_INFO("Restricting DMA addresses to 44 bits.\n");
+		return dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(44));
+	}
+
+	return ret;
+}

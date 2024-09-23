@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 3-12
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free (UAF) and Uncontrolled Memory Access Vulnerability
+
+EXPLANATION:
+This vulnerability arises from a potential use-after-free (UAF) and uncontrolled memory access. The current function, enable_sacf_uaccess, modifies the current thread's mm_segment, which controls the memory access rights. It sets the mm_segment to allow access to kernel memory from userspace, which is done to enable the sacf_uaccess feature.
+
+However, there are a few issues in this code:
+
+1. Old_fs can be set to USER_DS after modifying current->thread.mm_segment. This is because there is no check if old_fs changed value or not.
+2. Before calling __ctl_store and __ctl_load functions, it checks if old_fs == USER_DS. If true, it sets several flags.
+3. Current->thread.mm_segment is permanently set to kernel_DS without taking any provision for restricting future user space access.
+4. Function directly returns the cached old_fs value, rather than re-checking the actual mm_segment at the time of return.
+This kind of permission modification and improper handling could lead to an uncontrolled memory access by any malicious task after setting sacf_uaccess feature in the system.
+
+RECOMMENDATIONS:
+1. Implement proper synchronization when changing thread's memory segment. Use atomic primitives like cmpxchg and spinlocks or mutex to prevent concurrent modification of mm_segment.
+2. Validate current->thread.mm_segment after modifying it and before proceeding further.
+3. Implement error-handling according to the return value of new set mm_segment value.
+4. Include a method to revert the mm_segment back to user space after performing required operations.
+
+ORIGINAL CODE:
+```c
+{
+	mm_segment_t old_fs;
+	unsigned long asce, cr;
+
+	old_fs = current->thread.mm_segment;
+	if (old_fs & 1)
+		return old_fs;
+	current->thread.mm_segment |= 1;
+	asce = S390_lowcore.kernel_asce;
+	if (likely(old_fs == USER_DS)) {
+		__ctl_store(cr, 1, 1);
+		__ctl_load(asce, 7, 7);
+		set_cpu_flag(CIF_ASCE_SECONDARY);
+	}
+	return old_fs;
+}
+EXPORT_SYMBOL(enable_sacf_uaccess);
+```

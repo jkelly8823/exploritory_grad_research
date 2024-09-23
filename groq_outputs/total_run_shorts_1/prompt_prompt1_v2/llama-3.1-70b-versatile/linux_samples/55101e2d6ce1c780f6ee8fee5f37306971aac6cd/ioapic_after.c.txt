@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 21-23
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to integer underflow and incorrect handling of concurrent access to the ioapic->rtc_status.pending_eoi variable.
+EXPLANATION:
+The integer underflow vulnerability is present because the code does not check for underflow when decrementing the ioapic->rtc_status.pending_eoi variable in the rtc_irq_eoi function. If an underflow occurs, the value of pending_eoi would wrap around to a large positive number, causing the rtc_status_pending_eoi_check_valid function to miss incorrect values.
+
+Additionally, the code does not manage concurrent access to the ioapic->rtc_status.pending_eoi variable, which could lead to incorrect results if multiple threads are accessing the variable simultaneously.
+
+However, the most significant issue arises from lines 21-23 in the rtc_irq_check_coalesced function where under specific circumstances if an error occurs, a silent failure occurs when assigning ret to ioapic->rtc_status.pending_eoi. The code cannot recover successfully in the event of such a failure.
+
+RECOMMENDATIONS:
+- Check for underflow in the decrement operation in the rtc_irq_eoi function and handle it accordingly.
+- Protect the ioapic->rtc_status.pending_eoi variable with a lock or use atomic operations to ensure concurrent access does not lead to incorrect results.
+- Modify the rtc_irq_check_coalesced function to properly handle any potential errors from the kvm_irq_delivery_to_apic function call and either retry or return an error state.
+
+ORIGINAL CODE:
+
+	
+	bitmap_zero(ioapic->rtc_status.dest_map, KVM_MAX_VCPUS);
+}
+
+static void kvm_rtc_eoi_tracking_restore_all(struct kvm_ioapic *ioapic);
+
+static void rtc_status_pending_eoi_check_valid(struct kvm_ioapic *ioapic)
+{
+	if (WARN_ON(ioapic->rtc_status.pending_eoi < 0))
+		kvm_rtc_eoi_tracking_restore_all(ioapic);
+}
+
+static void __rtc_irq_eoi_tracking_restore_one(struct kvm_vcpu *vcpu)
+{
+	bool new_val, old_val;
+	struct kvm_ioapic *ioapic = vcpu->kvm->arch.vioapic;
+	} else {
+		__clear_bit(vcpu->vcpu_id, ioapic->rtc_status.dest_map);
+		ioapic->rtc_status.pending_eoi--;
+		rtc_status_pending_eoi_check_valid(ioapic);
+	}
+}
+
+void kvm_rtc_eoi_tracking_restore_one(struct kvm_vcpu *vcpu)
+{
+
+static void rtc_irq_eoi(struct kvm_ioapic *ioapic, struct kvm_vcpu *vcpu)
+{
+	if (test_and_clear_bit(vcpu->vcpu_id, ioapic->rtc_status.dest_map)) {
+		--ioapic->rtc_status.pending_eoi;
+		rtc_status_pending_eoi_check_valid(ioapic);
+	}
+}
+
+static bool rtc_irq_check_coalesced(struct kvm_ioapic *ioapic)
+{
+		ioapic->irr &= ~(1 << irq);
+
+	if (irq == RTC_GSI && line_status) {
+		/*
+		 * pending_eoi cannot ever become negative (see
+		 * rtc_status_pending_eoi_check_valid) and the caller
+		 * ensures that it is only called if it is >= zero, namely
+		 * if rtc_irq_check_coalesced returns false).
+		 */
+		BUG_ON(ioapic->rtc_status.pending_eoi != 0);
+		ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe,
+				ioapic->rtc_status.dest_map);
+		ioapic->rtc_status.pending_eoi = (ret < 0 ? 0 : ret);
+	} else
+		ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe, NULL);
+
+	if (ret && irqe.trig_mode == IOAPIC_LEVEL_TRIG)

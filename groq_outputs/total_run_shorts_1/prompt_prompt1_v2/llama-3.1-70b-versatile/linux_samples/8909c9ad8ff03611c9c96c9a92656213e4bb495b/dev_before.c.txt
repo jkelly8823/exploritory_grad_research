@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Format String Vulnerability
+
+EXPLANATION:
+The `request_module` function is called with a format string argument. However, the `%s` placeholder is not properly sanitized, which could lead to a format string vulnerability. An attacker could potentially inject malicious data as part of the `name` parameter, allowing them to control the format string and execute arbitrary code.
+
+Although this vulnerability might not be exploitable in this specific case, depending on how `name` is validated and generated elsewhere, it's best to handle such potential issues to prevent unintended behavior.
+
+RECOMMENDATIONS:
+The vulnerability could be fixed by avoiding the untrusted data (`name`) in format strings. Instead, you could use the `%s` placeholder in conjunction with passing `name` as an argument:
+
+```c
+request_module("%s", (void *)name);
+```
+
+However, since `request_module` does expect a `%s` placeholder and a pointer to a string, then a safer option is to ensure the `name` pointer is validated elsewhere in the code. Alternatively, a more secure and flexible approach is to use `sysfs_emit_at` or a custom logging API provided by the Linux kernel if possible.
+
+ORIGINAL CODE:
+```c
+void dev_load(struct net *net, const char *name)
+{
+	struct net_device *dev;
+
+	rcu_read_lock();
+	dev = dev_get_by_name_rcu(net, name);
+	rcu_read_unlock();
+
+	if (!dev && capable(CAP_NET_ADMIN))
+		request_module("%s", name);
+}
+EXPORT_SYMBOL(dev_load);
+
+static int __dev_open(struct net_device *dev)
+```

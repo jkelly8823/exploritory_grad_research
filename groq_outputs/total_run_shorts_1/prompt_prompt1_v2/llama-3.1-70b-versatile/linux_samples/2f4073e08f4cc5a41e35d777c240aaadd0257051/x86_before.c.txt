@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-15
+VULNERABILITY_DESCRIPTION:
+ Unchecked Switch Statements
+EXPLANATION:
+This vulnerability arises from the switch statement from lines 6-15 which is handling a specific set of cases, however, the code path between those cases handles the same resource (mutex) and also handles potential cleanup in all possible cases but in an inconsistent manner. Only one case performs cleanup by unlocking the mutex (`mutex_unlock(&kvm->lock);`) whereas other case statements may directly return, abort or exit without performing any mutex cleanup operation which could lead to potential issues or inconsistencies with regard to resource handling. This also raises the question of deadlocks or resource leaks if not used correctly. This situation where a lock isn't properly cleaned up in a way that matches the requirements for every possible outcome leads to this potential vulnerability.
+RECOMMENDATIONS:
+ It is crucial to address this vulnerability by ensuring locks such as this mutex are consistently handled and released in all cases from this switch statement, to prevent resource leaks or other type of locking mechanisms mishandled which lead to security issues. Implement consistent lock cleanup regardless of the specific case in the switch statement. Also, ensure that in case of invalid or unexpected values being received, the code provides means of safely resetting or stopping its execution state without letting it remain in an undefined condition.
+ORIGINAL CODE:
+```c
+STATS_DESC_COUNTER(VCPU, nested_run),
+STATS_DESC_COUNTER(VCPU, directed_yield_attempted),
+STATS_DESC_COUNTER(VCPU, directed_yield_successful),
+STATS_DESC_ICOUNTER(VCPU, guest_mode)
+};
+
+const struct kvm_stats_header kvm_vcpu_stats_header = {
+    .name_size = KVM_STATS_NAME_SIZE,
+    case KVM_CAP_DISABLE_QUIRKS2:
+        r = KVM_X86_VALID_QUIRKS;
+        break;
+    default:
+        break;
+    }
+    return r;
+    }
+    mutex_unlock(&kvm->lock);
+    break;
+default:
+    r = -EINVAL;
+    break;
+}
+```

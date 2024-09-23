@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+Uninitialized variable use in static struct array initialization
+EXPLANATION:
+The code snippet initializes several static struct arrays (mmp2_clk_unit and mpmp_param_mux_clks), but does not ensure all struct members are initialized. The lack of initialization could lead to undefined behavior in certain cases, especially if these structs are used before all of their members are explicitly assigned values.
+
+However, in this case, the issue is mitigated because the applicable parts of the structs are being initialized.
+
+A second potential vulnerability was discovered with the line initialization for struct mmp2_clk_unit. This struct utilizes a C99/C11 'designated initializer' feature (unit.). In the original provided code snippet there is only one designated initializer for the struct ('.reg_info'). There may be implementation issues in certain environments.
+
+Yet, given the snippet we cannot confirm what the other members of struct mmp2_clk_unit and struct mmp_param_mux_clk look like, other than that pointed to by 'reg_info'.
+
+However, another potential vulnerability is  buffer overflow in an improper struct usage within the mpl_param_mux_clip array.
+
+The issue lies not in the struct array use itself but what the mpl_param_mux_clip array can hold as suggested by an out of place  '{' and a missing array identifier before it.
+
+
+
+An initialization vulnerability exists in this line. Even though the code contains mpl_param_mux_clip array in initialization format. It is not enclosed within a designated identifier.
+
+RECOMMENDATIONS:
+- Determine what other members are required to fully initialize the applicable structs (struct mmp2_clk_unit and struct mmp_param_mux_clk) so they can be initialized as part of the static initialization. 
+
+- Ensure when using C99/C11 'designated initializer' features that there is an enclosing struct and designated struct members where applicable for clarity and readability.
+
+- Make sure each value being assigned to mpl_param_mux_clip maintains designated and properly assigned values otherwise re-analyze to fit established code requirements and pre-conditions.
+
+
+
+ORIGINAL CODE:
+```cpp
+#define APMU_DISP1	0x110
+#define APMU_CCIC0	0x50
+#define APMU_CCIC1	0xf4
+#define MPMU_UART_PLL	0x14
+
+struct mmp2_clk_unit {
+	struct mmp_clk_unit unit;
+	.reg_info = DEFINE_MIX_REG_INFO(4, 16, 2, 6, 32),
+};
+
+static struct mmp_param_mux_clk apmu_mux_clks[] = {
+	{MMP2_CLK_DISP0_MUX, "disp0_mux", disp_parent_names, ARRAY_SIZE(disp_parent_names), CLK_SET_RATE_PARENT, APMU_DISP0, 6, 2, 0, &disp0_lock},
+	{MMP2_CLK_DISP1_MUX, "disp1_mux", disp_parent_names, ARRAY_SIZE(disp_parent_names), CLK_SET_RATE_PARENT, APMU_DISP1, 6, 2, 0, &disp1_lock},
+};
+	{MMP2_CLK_CCIC1, "ccic1_clk", "ccic1_mix_clk", CLK_SET_RATE_PARENT, APMU_CCIC1, 0x1b, 0x1b, 0x0, 0, &ccic1_lock},
+	{MMP2_CLK_CCIC1_PHY, "ccic1_phy_clk", "ccic1_mix_clk", CLK_SET_RATE_PARENT, APMU_CCIC1, 0x24, 0x24, 0x0, 0, &ccic1_lock},
+	{MMP2_CLK_CCIC1_SPHY, "ccic1_sphy_clk", "ccic1_sphy_div", CLK_SET_RATE_PARENT, APMU_CCIC1, 0x300, 0x300, 0x0, 0, &ccic1_lock},
+};
+
+static void mmp2_axi_periph_clk_init(struct mmp2_clk_unit *pxa_unit)
+{
+```

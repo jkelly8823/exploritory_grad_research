@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3, 5-6
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to a potential null pointer dereference and missing bounds checking. Specifically, the code uses the `data` variable without checking if it is NULL, which may cause a segmentation fault if `data` is NULL. Additionally, the `chip` and `offset` variables are not checked for valid values, which may lead to undefined behavior or buffer overflow.
+
+EXPLANATION:
+The code uses the `data` variable to set an interrupt handler without checking if `data` is NULL. If `data` is NULL, calling `irq_set_handler_locked` may result in a segmentation fault. Furthermore, the code assumes that `chip` and `offset` are valid, but there is no bounds checking or validation to ensure that these variables are within the expected range.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend adding null checks for the `data` variable and bounds checking for the `chip` and `offset` variables. Additionally, consider using `irq_set_handler` instead of `irq_set_handler_locked`, as it is a safer and more flexible API.
+
+Here is an example of how the code can be fixed:
+```c
+static int sprd_eic_direction_input(struct gpio_chip *chip, unsigned int offset)
+{
+    if (data == NULL) {
+        // handle error or return -EINVAL
+    }
+
+    if (chip == NULL || offset >= chip->ngpio) {
+        // handle error or return -EINVAL
+    }
+
+    switch (/* condition */) {
+        case IRQ_TYPE_EDGE_FALLING:
+        case IRQ_TYPE_EDGE_RISING:
+            irq_set_handler(data, handle_edge_irq);
+            break;
+        case IRQ_TYPE_EDGE_BOTH:
+            sprd_eic_update(chip, offset, SPRD_EIC_ASYNC_INTBOTH, 1);
+            irq_set_handler(data, handle_edge_irq);
+            break;
+        case IRQ_TYPE_LEVEL_HIGH:
+            // ...
+}
+```
+
+ORIGINAL CODE:
+```c
+static int sprd_eic_get(struct gpio_chip *chip, unsigned int offset)
+{
+	return sprd_eic_read(chip, offset, SPRD_EIC_DBNC_DATA);
+}
+
+static int sprd_eic_direction_input(struct gpio_chip *chip, unsigned int offset)
+{
+			irq_set_handler_locked(data, handle_edge_irq);
+			break;
+		case IRQ_TYPE_EDGE_BOTH:
+			sprd_eic_update(chip, offset, SPRD_EIC_ASYNC_INTBOTH, 1);
+			irq_set_handler_locked(data, handle_edge_irq);
+			break;
+		case IRQ_TYPE_LEVEL_HIGH:
+```

@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-10, 23-23
+VULNERABILITY_DESCRIPTION:
+This code contains two potential vulnerabilities: an uninitialized pointer dereference and a buffer overflow vulnerability.
+
+EXPLANATION:
+The code defines a char pointer called `buff` and then checks if it is null before attempting to use it. However, this check is unnecessary because `buff` is not initialized or allocated anywhere in this function. Attempting to dereference an uninitialized pointer will result in undefined behavior.
+
+Furthermore, the code contains a potential buffer overflow vulnerability in the `snprintf` functions. Although the buffer size is manually specified in each `snprintf` call, there is no way to ensure that the buffer size will be sufficient to hold the formatted string. If the buffer size is not sufficient, `snprintf` will write beyond the end of the buffer, causing undefined behavior.
+
+Additionally, there is an unhandled case where the program tries to use the memory of `buff` after it has already been freed with `kfree(buff)` at line 18, because another `snprintf` call is done on this freed memory location at line 23.
+
+RECOMMENDATIONS:
+To fix the uninitialized pointer vulnerability, allocate memory for `buff` using a function such as `kmalloc` or `kzalloc`. 
+
+```c
+char *buff = kzalloc(BUFF_SZ, GFP_KERNEL);
+if (!buff)
+    return;
+```
+
+To fix the potential buffer overflow vulnerability, use the `snprintf` function with its return value checked. `snprintf` returns the number of characters that would be written if the buffer was large enough. 
+
+```c
+int len = snprintf(buff, BUFF_SZ, "some string");
+if (len >= BUFF_SZ)
+    printk(KERN_INFO "Buffer overflow detected\n");
+```
+
+Additionally, a good practice is to always check the return value of `snprintf` to prevent other potential bugs.
+
+```c
+if (snprintf(buff, BUFF_SZ, "\nout report %d (size %d) =  ", report->id, raw_size) >= BUFF_SZ)
+    printk(KERN_INFO "Buffer overflow detected\n");
+```
+
+Also, you need to allocate the `buff` variable before trying to use it and need to prevent the situation where you could try to use this variable after you call `kfree(buff);`.
+
+ORIGINAL CODE:
+```c
+void picolcd_debug_out_report(struct picolcd_data *data,
+	struct hid_device *hdev, struct hid_report *report)
+{
+	u8 raw_data[70];
+	int raw_size = (report->size >> 3) + 1;
+	char *buff;
+#define BUFF_SZ 256
+
+	if (!buff)
+		return;
+
+	snprintf(buff, BUFF_SZ, "\nout report %d (size %d) =  ",
+			report->id, raw_size);
+	hid_debug_event(hdev, buff);
+	if (raw_size + 5 > sizeof(raw_data)) {
+		kfree(buff);
+		hid_debug_event(hdev, " TOO BIG\n");
+		return;
+	} else {
+		raw_data[0] = report->id;
+		hid_output_report(report, raw_data);
+		dump_buff_as_hex(buff, BUFF_SZ, raw_data, raw_size);
+		hid_debug_event(hdev, buff);
+	}
+
+	switch (report->id) {
+	case REPORT_LED_STATE:
+		/* 1 data byte with GPO state */
+	 snprintf(buff, BUFF_SZ, "out report %s (%d, size=%d)\n",
+		break;
+	}
+	wake_up_interruptible(&hdev->debug_wait);
+	kfree(buff);
+}
+
+void picolcd_debug_raw_event(struct picolcd_data *data,
+```

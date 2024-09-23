@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION:
+The code is susceptible to a potential buffer overflow attack when copying data from `pi_buff` to `next_partner_info->location_code` using `strncpy`. This is because `strncpy` uses `strlen((char *)&pi_buff[2]) + 1` as the source size, which does not ensure that the destination buffer `next_partner_info->location_code` is null-terminated or large enough to hold the copied string.
+
+EXPLANATION:
+The vulnerability lies in the fact that `strncpy` does not guarantee null-termination of the destination string if the source length is equal to or greater than the destination length. In this case, if `strlen((char *)&pi_buff[2]) + 1` is larger than the size of `next_partner_info->location_code`, it could lead to a buffer overflow. Additionally, using `strlen` on an untrusted input (`pi_buff`) can also lead to undefined behavior if `pi_buff` is not a valid null-terminated string.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to:
+
+1. Ensure that `next_partner_info->location_code` has sufficient space to hold the copied string, including the null-terminator.
+2. Use `snprintf` or `strncpy_safe` instead of `strncpy` to prevent buffer overflow and ensure null-termination.
+3. Validate the length of `pi_buff` before copying it to prevent undefined behavior.
+
+Example:
+```c
+#define MAX_LOCATION_CODE_SIZE 256
+char location_code[MAX_LOCATION_CODE_SIZE];
+
+// ...
+
+snprintf(&next_partner_info->location_code[0],
+    MAX_LOCATION_CODE_SIZE,
+    "%s", (char *)&pi_buff[2]);
+```
+Alternatively, you can use `strncpy_safe` which ensures that the destination string is null-terminated even if the source length exceeds the destination length.
+
+ORIGINAL CODE:
+```c
+#include <linux/list.h>
+#include <linux/module.h>
+#include <linux/slab.h>
+
+#include <asm/hvcall.h>
+#include <asm/hvcserver.h>
+#include <asm/io.h>
+			= (unsigned int)last_p_partition_ID;
+
+		/* copy the Null-term char too */
+		strncpy(&next_partner_info->location_code[0],
+			(char *)&pi_buff[2],
+			strlen((char *)&pi_buff[2]) + 1);
+
+		list_add_tail(&(next_partner_info->node), head);
+		next_partner_info = NULL;
+```

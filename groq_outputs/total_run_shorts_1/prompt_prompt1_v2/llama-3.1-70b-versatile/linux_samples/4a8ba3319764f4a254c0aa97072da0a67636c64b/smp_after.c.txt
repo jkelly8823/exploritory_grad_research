@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The notify_cpu_starting function is called without checking if the smp_ops->take_timebase function pointer is null before calling it, and also assumes that it is a valid function, which could potentially lead to a function pointer or null pointer dereference vulnerability.
+
+EXPLANATION:
+The code snippet calls the notify_cpu_starting function after checking if the smp_ops->take_timebase function pointer is present, but does not confirm if the operations are valid before calling it. If the setup of operations did not properly initialize this pointer, or if there are concurrency issues that could set it to NULL, then this will call an arbitrary function that was most recently called or dereference NULL.
+
+Additionally, without the full code it is unclear whether or not these function pointers can take multiple arguments; regardless calling functions that have a different number of arguments can potentially overflow or harm the stack if this operation succeeds, which compounds issues of exploitability.
+
+An attacker who has rights to any sort of local or network exploitation within the context of this local system call may have opportunities to reach a good foothold or exploit if other safeguards are not put in place.
+
+RECOMMENDATIONS:
+Check to ensure the validity and appropriateness of function pointers before calling them with function pointer checks before calling them.  However, if this is a reference counted pointer, ensure and declare then all counters, and make sure they can not be null as any program returning these pointers will inevitably crash if they cannot be null. With regards to usage pattern it is best that the required order begin checked relative to initialization and other constraints that are set within this manner.
+
+To protect against an unknown or nonzero value operation in function input, determine and also add or remove values if any zero-based values or null pointers occur, relative to the original implementation in requirements of minimum standard expected, so relative to stack control actions between actions.
+
+Given this and the presence of that data given there are additional guard action one can take to limit scope for example.
+	
+The main functions as a simple best case and not required that has to occur or would would happen for all users, or would not be likely to change.
+
+
+ORIGINAL CODE:
+
+    smp_store_cpu_info(cpu);
+    set_dec(tb_ticks_per_jiffy);
+    preempt_disable();
+    cpu_callin_map[cpu] = 1;
+
+    if (smp_ops->setup_cpu)
+        smp_ops->setup_cpu(cpu);
+    if (smp_ops->take_timebase)
+    notify_cpu_starting(cpu);
+    set_cpu_online(cpu, true);
+
+    local_irq_enable();
+
+    cpu_startup_entry(CPUHP_ONLINE);

@@ -1,0 +1,99 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 37-37
+VULNERABILITY_DESCRIPTION:
+A potential null pointer dereference vulnerability is present in this code.
+
+EXPLANATION:
+In the `kvm_set_msr` function, the `msr` pointer is dereferenced without checking if it is null. However, this check is being performed on certain MSR indices. But, there is no validation on line `return kvm_x86_ops->set_msr(vcpu, msr);` for `vcpu` and `kvm_x86_ops` as null before the call.
+
+However, there is also a large more easily identified vulnerability. The error condition for `kvm_x86_ops->set_msr(vcpu, msr)` (returned value) is not fully checked. Even though the function checks for MSRs being valid addresses, this new call does not seem to be properly validated - If the `kvm_x86_ops->set_msr(vcpu, msr)` call returns a failure, instead of a return value of `1`, it now returns whatever value `kvm_x86_ops->set_msr(vcpu, msr)` does on failure.
+
+While successful operation results may be fine for line 37 (`kvm_x86_ops->set_msr(vcpu, msr)`), failure is undefined.
+
+But there's one actual null pointer case here. In many cases `vcpu` and `msr` are carefully validated - But can `kvm_x86_ops` be null? Depending on other places of this "github" project, while almost guaranteed, this may be a null object.
+But that is not what initially seemed most obvious.
+
+RECOMMENDATIONS:
+Add null checks for `vcpu` and `msr` pointers. 
+
+You should add validation for `kvm_x86_ops` as well if this is actually able.
+
+Also fix: have an error handler for non-successful completion of  the `kvm_x86_ops->set_msr(vcpu, msr)` function - assuming it uses a non-zero or non-signed error type.
+
+Example of validation might include
+
+```c
+int kvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
+{
+...
+    if (!vcpu)
+        return -EINVAL;  //or some error
+    ...
+    if (!msr)
+        return -EINVAL;  //or some error
+    //Consider adding return of error handling in original function: now using some non-standard numbers
+...
+    int err = 0;
+    err = kvm_x86_ops->set_msr(vcpu, msr);  //assuming non-negative, or changing form, signed errors 
+    if (err != 0) {    //in this snippet since different "zero values"
+        //Do something or other with failure condition of non-validated error type: use "if", not "while" for that you don't expect to reach so little often.
+        return 1;
+    }
+    return 0;   //Do the same even if failed, for you may not reach this result; this forces you into reviewing what happens on actual return values with this change.
+    //After this function this code will change. Once error handling is changed there, re-introduce old return.  
+}
+
+int kvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
+{
+...
+    if (!kvm_x86_ops)
+        return -EINVAL;  //this will be called using an interposing library which uses relocations; similar else to what "valgrind" did.
+    //See validation error for vcpu
+...
+}
+```
+ORIGINAL CODE:
+```c
+}
+EXPORT_SYMBOL_GPL(kvm_enable_efer_bits);
+
+/*
+ * Writes msr value into into the appropriate "register".
+ * Returns 0 on success, non-0 otherwise.
+ * Assumes vcpu_load() was already called.
+ */
+int kvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
+{
+	switch (msr->index) {
+	case MSR_FS_BASE:
+	case MSR_GS_BASE:
+	case MSR_KERNEL_GS_BASE:
+	case MSR_CSTAR:
+	case MSR_LSTAR:
+		if (is_noncanonical_address(msr->data))
+			return 1;
+		break;
+	case MSR_IA32_SYSENTER_EIP:
+	case MSR_IA32_SYSENTER_ESP:
+		/*
+		 * IA32_SYSENTER_ESP and IA32_SYSENTER_EIP cause #GP if
+		 * non-canonical address is written on Intel but not on
+		 * AMD (which ignores the top 32-bits, because it does
+		 * not implement 64-bit SYSENTER).
+		 *
+		 * 64-bit code should hence be able to write a non-canonical
+		 * value on AMD.  Making the address canonical ensures that
+		 * vmentry does not fail on Intel after writing a non-canonical
+		 * value, and that something deterministic happens if the guest
+		 * invokes 64-bit SYSENTER.
+		 */
+		msr->data = get_canonical(msr->data);
+	}
+	return kvm_x86_ops->set_msr(vcpu, msr);
+}
+EXPORT_SYMBOL_GPL(kvm_set_msr);
+
+/*
+ * Adapt set_msr() to msr_io()'s calling convention
+ */
+```

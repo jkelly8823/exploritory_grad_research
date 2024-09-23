@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 25, 26
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential buffer overflow in the computation of the short_ssid value. The crc32_le function is not checked for integer overflow, which could result in a value that is larger than the buffer can hold.
+EXPLANATION:
+In the given code snippet, the variable short_ssid is set to the result of the expression `cpu_to_le32(~crc32_le(~0, vif->bss_conf.ssid, vif->bss_conf.ssid_len))`. The crc32_le function computes a 32-bit checksum of the given input buffer. If the length of the input buffer (vif->bss_conf.ssid_len) is less than 4 bytes, then ~crc32_le(~0, vif->bss_conf.ssid, vif->bss_conf.ssid_len) could produce a value larger than the maximum 32-bit value, resulting in an integer overflow. However, this is highly unlikely given the typical length of an SSID.
+ But it is also possible that crc32_le can cause undefined behavior if a negative value is passed as its third parameter. The warning here may actually result from further down the call chain and isn't necessarily a buffer overflow.
+Another potential issue here is with cpu_to_le32 function. Without knowing the specific architecture this code is being run on, it is unclear if this is an issue.
+RECOMMENDATIONS:
+To fix the potential vulnerability, we recommend adding bounds checking to ensure the length of the input buffer is at least 4 bytes before calling crc32_le. Here is a sample of how to fix the vulnerability:
+
+```c
+if (vif->bss_conf.ssid_len < 4) {
+    /* Handle error */
+} else {
+    beacon_cmd.short_ssid = cpu_to_le32(~crc32_le(~0, vif->bss_conf.ssid, vif->bss_conf.ssid_len));
+}
+```
+
+However, the crc32_le function will handle the case if vif->bss_conf.ssid_len is less than 4 bytes without any overflow issue and the real problem can be the input SSID is bigger than 4KB (the limit of CRC32 computation). It's better to handle that specifically. Without addition information about crc32_le and cpu_to_le32, it is hard to give a recommendation.
+
+ORIGINAL CODE:
+
+
+```c
+ctxt_sta->is_assoc = cpu_to_le32(1);
+
+/*
+ * allow multicast data frames only as long as the station is
+ * authorized, i.e., GTK keys are already installed (if needed)
+ */
+return rate;
+}
+
+static void iwl_mvm_mac_ctxt_set_tx(struct iwl_mvm *mvm,
+    struct ieee80211_vif *vif,
+    struct sk_buff *beacon,
+    struct iwl_tx_cmd *tx)
+
+rate = iwl_mvm_mac_ctxt_get_lowest_rate(info, vif);
+
+tx->rate_n_flags |= cpu_to_le32(iwl_mvm_mac80211_idx_to_hwrate(rate));
+if (rate == IWL_FIRST_CCK_RATE)
+    tx->rate_n_flags |= cpu_to_le32(RATE_MCS_CCK_MSK);
+
+}
+
+int iwl_mvm_mac_ctxt_send_beacon_cmd(struct iwl_mvm *mvm,
+u16 flags;
+struct ieee80211_chanctx_conf *ctx;
+int channel;
+
+flags = iwl_mvm_mac80211_idx_to_hwrate(rate);
+
+if (rate == IWL_FIRST_CCK_RATE)
+    flags |= IWL_MAC_BEACON_CCK;
+
+/* Enable FILS on PSC channels only */
+rcu_read_lock();
+ctx = rcu_dereference(vif->chanctx_conf);
+WARN_ON(channel == 0);
+if (cfg80211_channel_is_psc(ctx->def.chan) &&
+    !IWL_MVM_DISABLE_AP_FILS) {
+    flags |= IWL_MAC_BEACON_FILS;
+    beacon_cmd.short_ssid =
+        cpu_to_le32(~crc32_le(~0, vif->bss_conf.ssid,
+          vif->bss_conf.ssid_len));
+}
+        ieee80211_beacon_set_cntdwn(vif, notif->csa_counter);
+}
+
+void iwl_mvm_channel_switch_noa_notif(struct iwl_mvm *mvm,
+        struct iwl_rx_cmd_buffer *rxb)
+{
+    struct iwl_rx_packet *pkt = rxb_addr(rxb);
+    struct iwl_channel_switch_noa_notif *notif = (void *)pkt->data;
+    struct ieee80211_vif *csa_vif, *vif;
+    struct iwl_mvm_vif *mvmvif;
+    u32 id_n_color, csa_id, mac_id;
+```

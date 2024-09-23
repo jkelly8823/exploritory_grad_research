@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-10
+VULNERABILITY_DESCRIPTION:
+Potential Off-By-One Error or Integer Overflow in Fragmentation Header Length Calculation.
+
+EXPLANATION:
+The line `iph->ihl += opt->optlen>>2;` may introduce a potential vulnerability if not handled correctly. The `optlen` field represents the length of the IP options in words (32-bit units), which is then right-shifted by two bits to convert it to 32-bit words, and then added to the fragmentation header length (`iph->ihl`). This operation has a possibility to cause integer overflows, because `opt->optlen` might be very large or specially crafted to overflow when added to the current value of `iph->ihl`, thus overwriting adjacent fields in memory. Furthermore, this could also trigger an off-by-one error when a zero size options header length is determined due to incorrect overflow wrapping.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to sanity-check the `opt->optlen` value before performing the operation to prevent integer overflows. Here is a code suggestion:
+
+```c
+u8 new_ohl;
+new_ohl = (u8)iph->ihl + (opt->optlen >> 2);
+
+// Sanity check
+if (new_ohl <= iph->ihl) { // Overflow
+    // Handle potential overflow error or sanitize optlen
+    // Perform necessary actions here
+} else {
+    iph->ihl = new_ohl;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+iph->ihl = 5;
+iph->tos = inet->tos;
+iph->frag_off = df;
+ip_select_ident(iph, &rt->dst, sk);
+iph->ttl = ttl;
+iph->protocol = sk->sk_protocol;
+ip_copy_addrs(iph, fl4);
+
+if (opt) {
+    iph->ihl += opt->optlen>>2;
+    ip_options_build(skb, opt, cork->addr, rt, 0);
+}
+```

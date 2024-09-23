@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-14
+VULNERABILITY_DESCRIPTION: 
+The provided code snippet may be vulnerable to an out-of-bounds read from the `ioapic->redirtbl` array when `redir_index` is not within the bounds of `IOAPIC_NUM_PINS`. 
+
+EXPLANATION:
+The vulnerability arises from the fact that the `array_index_nospec` function does not perform bounds checking. It only prevents speculative execution from accessing an array out of bounds, but it does not stop the execution of an out-of-bounds access itself. 
+
+In the code snippet, `redir_index` is first checked to ensure it is less than `IOAPIC_NUM_PINS`, however this is not sufficient to guarantee safety. This is because `redir_index` is a result of a division operation `((ioapic->ioregsel - 0x10) >> 1)`, which could result in an invalid value if `ioapic->ioregsel` is close to the maximum value that can be represented by `u32`. 
+
+Furthermore, if the `nospec_hint()` hint was intended to prevent speculative out-of-bounds access, it may not be effective due to limitations in branch prediction and speculative execution mitigation mechanisms.
+
+RECOMMENDATIONS:
+- Perform additional bounds checking on `redir_index` to ensure it is within the valid range of `IOAPIC_NUM_PINS`.
+- Consider manually validating the input value `ioapic->ioregsel` to ensure it is within a valid range that cannot produce an out-of-bounds `redir_index`.
+- Review and refactor the code to make use of safer array access methods.
+
+ORIGINAL CODE:
+```
+#include <linux/io.h>
+#include <linux/slab.h>
+#include <linux/export.h>
+#include <linux/nospec.h>
+#include <asm/processor.h>
+#include <asm/page.h>
+#include <asm/current.h>
+#include <trace/events/kvm.h>
+
+default:
+	{
+		u32 redir_index = (ioapic->ioregsel - 0x10) >> 1;
+		u64 redir_content = ~0ULL;
+
+		if (redir_index < IOAPIC_NUM_PINS) {
+			u32 index = array_index_nospec(
+				redir_index, IOAPIC_NUM_PINS);
+
+			redir_content = ioapic->redirtbl[index].bits;
+		}
+
+		result = (ioapic->ioregsel & 0x1) ?
+		    (redir_content >> 32) & 0xffffffff :
+		    redir_content & 0xffffffff;
+```

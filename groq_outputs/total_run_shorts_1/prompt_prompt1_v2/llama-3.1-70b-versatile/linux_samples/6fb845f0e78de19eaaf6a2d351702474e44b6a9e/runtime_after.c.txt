@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-23
+VULNERABILITY_DESCRIPTION:
+Time-of-check to Time-of-use (TOCTOU) vulnerability in pm_schedule_suspend function.
+
+EXPLANATION:
+The pm_schedule_suspend function sets the dev->power.timer_expires to a calculated timeout and then schedules a timer with this timeout using hrtimer_start. However, between these two operations, the dev->power.timer_expires value can be overwritten by another thread, potentially causing the timer to not be started correctly. This is a classic example of a Time-of-check to Time-of-use (TOCTOU) vulnerability.
+
+Additionally, we see that dev->power.timer_autosuspends is set to 0 before starting the timer. However, it can be set to 1 after starting the timer in the rpm_suspend function that is called before hrtimer_start if the expires condition is met earlier. This might also cause an unexpected behavior.
+
+RECOMMENDATIONS:
+To avoid this TOCTOU vulnerability, it would be better to combine these operations into a single, atomic operation. 
+
+For example, the following order could be reversed and the check also adjusted:
+
+- Set dev->power.timer_autosuspends before calculating expires.
+- Start the hrtimer.
+- At the time-out, the function handling the time out can check whether dev->power.timer_autosuspends is still 0.
+
+For the second potential issue, consider adding some form of synchronization between rpm_suspend and hrtimer_start operations.
+
+ORIGINAL CODE:
+```
+{
+	int autosuspend_delay;
+	u64 last_busy, expires = 0;
+	u64 now = ktime_get_mono_fast_ns();
+
+	if (!dev->power.use_autosuspend)
+		goto out;
+
+	 * If 'expires' is after the current time, we've been called
+	 * too early.
+	 */
+	if (expires > 0 && expires < ktime_get_mono_fast_ns()) {
+		dev->power.timer_expires = 0;
+		rpm_suspend(dev, dev->power.timer_autosuspends ?
+		    (RPM_ASYNC | RPM_AUTO) : RPM_ASYNC);
+	}
+int pm_schedule_suspend(struct device *dev, unsigned int delay)
+{
+	unsigned long flags;
+	u64 expires;
+	int retval;
+
+	spin_lock_irqsave(&dev->power.lock, flags);
+
+	/* Other scheduled or pending requests need to be canceled. */
+	pm_runtime_cancel_pending(dev);
+
+	expires = ktime_get_mono_fast_ns() + (u64)delay * NSEC_PER_MSEC;
+	dev->power.timer_expires = expires;
+	dev->power.timer_autosuspends = 0;
+	hrtimer_start(&dev->power.suspend_timer, expires, HRTIMER_MODE_ABS);
+
+ out:
+```

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 13-15
+VULNERABILITY_DESCRIPTION:
+The provided code segments appear to have a potential TOCTOU (Time-of-check to time-of-use) vulnerability, specifically in the clear_pmd_presence and clear_pte_presence functions.
+
+EXPLANATION:
+The clear_pmd_presence and clear_pte_presence functions follow a similar pattern. They first check the 'clear' boolean, and depending on its value, they either clear or set the _PAGE_PRESENT bit of the pmd or pte. However, there's no synchronization or locking mechanism to prevent concurrent modifications to the pmd or pte values between the check and the operation.
+
+This can lead to a situation where, after the 'clear' check and before the actual operation, another thread could modify the pmd or pte value. As a result, the subsequent operation might be performed on an outdated value.
+
+In the context of MMIO (Memory-Mapped Input/Output) pages, this could potentially cause serious issues like incorrect memory access or corruption.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider implementing proper synchronization and locking mechanisms to ensure that the pmd and pte values remain unchanged between the check and the operation.
+
+One possible solution is to use a mutex or spinlock to lock the pmd or pte values during the operation. Alternatively, you can use atomic operations to update the pmd or pte values in a single step, eliminating the possibility of concurrent modifications.
+
+Additionally, consider adding checks to ensure that the 'clear' boolean value remains consistent across the function execution, potentially by passing it as a const parameter or ensuring it's not modified by other threads.
+
+ORIGINAL CODE:
+
+```cpp
+static void clear_pmd_presence(pmd_t *pmd, bool clear, pmdval_t *old)
+{
+	pmdval_t v = pmd_val(*pmd);
+	if (clear) {
+		*old = v & _PAGE_PRESENT;
+		v &= ~_PAGE_PRESENT;
+	} else	/* presume this has been called with clear==true previously */
+		v |= *old;
+	set_pmd(pmd, __pmd(v));
+}
+
+static void clear_pte_presence(pte_t *pte, bool clear, pteval_t *old)
+{
+	pteval_t v = pte_val(*pte);
+	if (clear) {
+		*old = v & _PAGE_PRESENT;
+		v &= ~_PAGE_PRESENT;
+	} else	/* presume this has been called with clear==true previously */
+		v |= *old;
+	set_pte_atomic(pte, __pte(v));
+}
+
+static int clear_page_presence(struct kmmio_fault_page *f, bool clear)
+```

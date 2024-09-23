@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-14
+VULNERABILITY_DESCRIPTION:
+ Potential Integer Overflow and Lack of Validation on User-Controlled Input.
+
+EXPLANATION:
+The code segment is vulnerable to potential integer overflow because the values assigned to `cmd->uapsd_max_sp`, `cmd->heavy_tx_thld_packets`, and `cmd->heavy_rx_thld_packets` are not validated. If an attacker can control the values of `mvm->hw->uapsd_max_sp_len` or `cmd->flags`, they may be able to cause an integer overflow by setting these values to large numbers.
+
+Moreover, the lack of input validation on user-controlled input, such as `mvm->hw->uapsd_max_sp_len`, poses a significant risk of potential integer overflow.
+
+RECOMMENDATIONS:
+1.  Add validation to ensure the values of `mvm->hw->uapsd_max_sp_len`, `cmd->heavy_tx_thld_packets`, and `cmd->heavy_rx_thld_packets` are within reasonable limits to prevent potential integer overflow.
+2.  Implement checks to ensure that user-controlled input, such as `mvm->hw->uapsd_max_sp_len`, is properly sanitized and validated before being used.
+3.  Consider using safer data types or functions that prevent integer overflow, such as unsigned integers or overflow-safe arithmetic functions.
+
+ORIGINAL CODE:
+```c
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Copyright (C) 2012-2014, 2018-2019, 2021 Intel Corporation
+ * Copyright (C) 2013-2014 Intel Mobile Communications GmbH
+ * Copyright (C) 2015-2017 Intel Deutschland GmbH
+ */
+#include <linux/kernel.h>
+	enum ieee80211_ac_numbers ac;
+	bool tid_found = false;
+
+	if (test_bit(IWL_MVM_STATUS_IN_D3, &mvm->status) ||
+	    cmd->flags & cpu_to_le16(POWER_FLAGS_SNOOZE_ENA_MSK)) {
+		cmd->rx_data_timeout_uapsd =
+			cpu_to_le32(IWL_MVM_WOWLAN_PS_RX_DATA_TIMEOUT);
+		cmd->tx_data_timeout_uapsd =
+			cpu_to_le32(IWL_MVM_WOWLAN_PS_TX_DATA_TIMEOUT);
+	} else {
+		cmd->rx_data_timeout_uapsd =
+			cpu_to_le32(IWL_MVM_UAPSD_RX_DATA_TIMEOUT);
+		cmd->tx_data_timeout_uapsd =
+			cpu_to_le32(IWL_MVM_UAPSD_TX_DATA_TIMEOUT);
+	}
+
+#ifdef CONFIG_IWLWIFI_DEBUGFS
+	/* set advanced pm flag with no uapsd ACs to enable ps-poll */
+	if (mvmvif->dbgfs_pm.use_ps_poll) {
+		cmd->flags |= cpu_to_le16(POWER_FLAGS_ADVANCE_PM_ENA_MSK);
+
+	cmd->uapsd_max_sp = mvm->hw->uapsd_max_sp_len;
+
+	if (cmd->flags & cpu_to_le16(POWER_FLAGS_SNOOZE_ENA_MSK)) {
+		cmd->heavy_tx_thld_packets =
+			IWL_MVM_PS_SNOOZE_HEAVY_TX_THLD_PACKETS;
+		cmd->heavy_rx_thld_packets =
+```

@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+A Use-After-Free vulnerability is present due to a null pointer dereference.
+
+EXPLANATION:
+The code breaks the loop when an error occurs, but it then proceeds to use the value of `fp[i]` regardless of whether an error occurred. This can lead to a null pointer dereference and potentially a Use-After-Free vulnerability. Specifically, if an error occurs, `fp[i]` may no longer be a valid pointer when `get_file(fp[i])` and `fd_install(new_fd, fp[i])` are called. 
+
+Additionally, the variable `new_fd` seems to be used without being assigned any value, which can lead to an unpredictable behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to either move `get_file(fp[i])` and `fd_install(new_fd, fp[i])` inside the loop and before the error checking, or maintain a separate tracking of the indices where the error occurred and avoid using the corresponding `fp[i]` values. 
+
+Moreover, `new_fd` should be assigned a value before being used.
+
+ORIGINAL CODE:
+```c
+for (i=0, cmfptr=(__force int __user *)CMSG_DATA(cm); i<fdmax;
+     i++, cmfptr++)
+{
+    int new_fd;
+    err = security_file_receive(fp[i]);
+    if (err)
+        break;
+    }
+    /* Bump the usage count and install the file. */
+    get_file(fp[i]);
+    fd_install(new_fd, fp[i]);
+}
+
+if (i > 0)
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION:
+Use of atomic operations with non-volatile data and incorrectly handling of capabilities.
+
+EXPLANATION:
+The code appears to be vulnerable to issues related to atomic operations and capability checks. Specifically, the variable `proc_event_num_listeners` is being modified using `atomic_inc`, but it is unclear if this variable is properly declared as volatile or atomic. This could potentially lead to issues due to optimization or multithreading.
+
+However, the primary concern lies in the capability check for `CAP_NET_ADMIN`. While the capability check itself is properly performed, there is a common mistake in the function, where `mc_op` is dereferenced without any null check. Also, `msg->data` should be validated before the cast.
+
+Another issue is that if the capability check fails and `err` is set to `EPERM`, the function still proceeds to increment the listener counter.
+
+Lastly, there is no validation on `mc_op` and `msg` before accessing their members. This could potentially lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+1. Check the types of `proc_event_num_listeners` and consider adding the `volatile` keyword or improving synchronization to avoid data corruption.
+2. Validate `msg->data` before casting to `enum proc_cn_mcast_op *` to prevent potential null pointer dereferences.
+3. Perform a null check for `mc_op` before dereferencing it.
+4. Return immediately after setting `err` to `EPERM` to prevent further execution and data corruption.
+
+ORIGINAL CODE:
+
+```
+	/* Can only change if privileged. */
+	if (!capable(CAP_NET_ADMIN)) {
+		err = EPERM;
+		goto out;
+	}
+
+	mc_op = (enum proc_cn_mcast_op *)msg->data;
+	switch (*mc_op) {
+	case PROC_CN_MCAST_LISTEN:
+		atomic_inc(&proc_event_num_listeners);
+		err = EINVAL;
+		break;
+	}
+
+out:
+	cn_proc_ack(err, msg->seq, msg->ack);
+}/*

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-17
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in the `pn` buffer.
+
+EXPLANATION:
+The vulnerability exists in the for loop where the `pn` buffer is incremented. If the initial value of `pn[IEEE80211_CCMP_PN_LEN - 1]` is 255 (the maximum value for an unsigned char), then incrementing it will cause a wraparound, and subsequent increments of the previous bytes will not stop the loop. However, this is not the main issue. The main issue is that if the `pn` buffer is not null-terminated or its size is not properly validated before this operation, it can lead to a buffer overflow when incremented.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the size of the `pn` buffer is validated and its initialization is checked before performing the increment operation. Additionally, consider using a safer way to handle the increment operation, such as by checking for the maximum value before incrementing. Consider also using a bounds check to prevent the overflow.
+
+ORIGINAL CODE:
+```
+            * next fragment has a sequential PN value.
+            */
+            entry->check_sequential_pn = true;
+            memcpy(entry->last_pn,
+                   rx->key->u.ccmp.rx_pn[queue],
+                   IEEE80211_CCMP_PN_LEN);
+            BUILD_BUG_ON(offsetof(struct ieee80211_key,
+
+            if (!requires_sequential_pn(rx, fc))
+                return RX_DROP_UNUSABLE;
+            memcpy(pn, entry->last_pn, IEEE80211_CCMP_PN_LEN);
+            for (i = IEEE80211_CCMP_PN_LEN - 1; i >= 0; i--) {
+                pn[i]++;
+                if (pn[i])
+```
+Note: The recommendation might be altered based on the actual context of the code snippet and how it fits into the larger project.

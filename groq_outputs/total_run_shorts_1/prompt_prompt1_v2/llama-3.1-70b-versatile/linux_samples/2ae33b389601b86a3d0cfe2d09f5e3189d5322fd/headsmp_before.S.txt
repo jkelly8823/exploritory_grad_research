@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+A write to a location based on an untrusted source.
+EXPLANATION:
+This vulnerability is caused by a write to a memory location based on the value stored in `r0`, which is in turn derived from the value stored at `phys_l2x0_saved_regs`. This `phys_l2x0_saved_regs` seems to contain memory locations of saved registers and is used as a base address to load and store other register values. It is declared as a global variable, which could allow for modifications from other parts of the code. 
+However, these modifications aren't checked to be within specific boundaries or range before being directly used as memory locations. Thus, if `phys_l2x0_saved_regs` were to be tampered with or contain garbage values, the program could write to arbitrary areas of memory.
+ 
+
+RECOMMENDATIONS:
+- Restrict access to `phys_l2x0_saved_regs` by making it non-modifiable (e.g., declaring it as `const` if it doesn't need to be changed), or ensuring that any modifications are thoroughly validated and sanitized.
+- Validate the value stored at `phys_l2x0_saved_regs` before using it as a base address. 
+- Verify the values of `r0`, `r1` and `r2` are in the desired range before performing operations using these registers.
+
+ORIGINAL CODE:
+
+```c
+#ifdef CONFIG_PM
+/*
+ * The following code is located into the .data section.  This is to
+ * allow phys_l2x0_saved_regs to be accessed with a relative load
+ * as we are running on physical address here.
+ */
+	.data
+	.align
+
+#ifdef CONFIG_CACHE_L2X0
+	.macro	pl310_resume
+	ldr	r2, phys_l2x0_saved_regs
+	ldr	r0, [r2, #L2X0_R_PHY_BASE]	@ get physical base of l2x0
+	ldr	r1, [r2, #L2X0_R_AUX_CTRL]	@ get aux_ctrl value
+	str	r1, [r0, #L2X0_AUX_CTRL]	@ restore aux_ctrl
+	mov	r1, #0x1
+	str	r1, [r0, #L2X0_CTRL]		@ re-enable L2
+	.endm
+
+	.globl	phys_l2x0_saved_regs
+phys_l2x0_saved_regs:
+        .long   0
+#else
+	.macro	pl310_resume
+	.endm
+#endif
+```

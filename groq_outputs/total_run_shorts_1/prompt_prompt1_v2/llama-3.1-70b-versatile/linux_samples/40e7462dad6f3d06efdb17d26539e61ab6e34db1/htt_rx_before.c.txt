@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+ Buffer Overflow Vulnerability
+EXPLANATION:
+ The vulnerability occurs on the line where the code accesses the `hdr` pointer. The `hdr` pointer is calculated by adding the `rx_hl->fw_desc.len` value to the `rx_desc` pointer. However, there is no validation to ensure that this addition does not exceed the bounds of the `skb->data` buffer. This lack of validation makes the code vulnerable to a buffer overflow attack, as an attacker could potentially manipulate the `rx_hl->fw_desc.len` value to cause the `hdr` pointer to point outside the buffer.
+
+RECOMMENDATIONS:
+ To fix this vulnerability, it is recommended to add a bounds check before accessing the `hdr` pointer. The code should verify that the addition of `rx_hl->fw_desc.len` to `rx_desc` does not exceed the length of the `skb->data` buffer.
+
+```c
+// Recommended fix:
+if ((u8 *)rx_desc + rx_hl->fw_desc.len > skb->data + skb->len) {
+    // Handle error or out-of-bounds access
+    return -EINVAL; // or some other error code
+}
+
+hdr = (struct ieee80211_hdr *)((u8 *)rx_desc + rx_hl->fw_desc.len);
+```
+
+ORIGINAL CODE:
+```c
+rx_desc = (struct htt_hl_rx_desc *)(skb->data + tot_hdr_len);
+rx_desc_info = __le32_to_cpu(rx_desc->info);
+
+if (!MS(rx_desc_info, HTT_RX_DESC_HL_INFO_ENCRYPTED)) {
+    spin_unlock_bh(&ar->data_lock);
+    return ath10k_htt_rx_proc_rx_ind_hl(htt, &resp->rx_ind_hl, skb,
+                                        HTT_RX_NON_PN_CHECK,
+                                        HTT_RX_NON_TKIP_MIC);
+}
+
+hdr = (struct ieee80211_hdr *)((u8 *)rx_desc + rx_hl->fw_desc.len);
+
+if (ieee80211_has_retry(hdr->frame_control))
+    goto err;
+
+hdr_space = ieee80211_hdrlen(hdr->frame_control);
+```

@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+A potential integer overflow vulnerability exists due to the lack of proper bounds checking on the value of `pat` being written to the `MSR_IA32_CR_PAT` model-specific register.
+
+EXPLANATION:
+The code does not perform any checks on the value of `pat` before writing it to the `MSR_IA32_CR_PAT` register. This could potentially allow an attacker to write an arbitrarily large value to the register, leading to an integer overflow. While the value of `pat` does seem to be generated from predefined constants (PAN, WB, WC, UC_MINUS, UC), the code does not explicitly validate that the resulting value is within a valid range for the register.
+
+RECOMMENDATIONS:
+Prior to writing to the `MSR_IA32_CR_PAT` register, validate that the value of `pat` is within a valid range. The exact range of valid values for the `MSR_IA32_CR_PAT` register can be found in the Intel software developer's manual. Additional checks on the `pat` value should also be performed when generating it from the predefined constants to prevent any possible integer overflow at that step.
+
+ORIGINAL CODE:
+      PAT(4, WB) | PAT(5, WC) | PAT(6, UC_MINUS) | PAT(7, UC);
+
+  /* Boot CPU check */
+  if (!boot_pat_state) {
+    rdmsrl(MSR_IA32_CR_PAT, boot_pat_state);
+    if (!boot_pat_state) {
+      pat_disable("PAT read returns always zero, disabled.");
+      return;
+    }
+  }
+
+  wrmsrl(MSR_IA32_CR_PAT, pat);
+
+  if (boot_cpu)

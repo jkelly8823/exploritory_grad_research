@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-25
+VULNERABILITY_DESCRIPTION:
+Use of Unvalidated User Input and Lack of Error Handling
+
+EXPLANATION:
+The code snippet shows several cases where potential vulnerabilities exist. 
+A lack of user input validation in the decision-making process (at lines 4-7) and lack of error checking in the use of memory functions (at lines 20-23). The 'memmove' function does not validate the data being moved nor the boundaries of the destination. The functions 'ext4_extent_block_csum_set' and 'ext4_idx_pblock'  also lack explicit error checking. 
+
+Furthermore, there are several function calls operating on variables defined externally without validation. 
+However, in particular to the current context of the given snippet one item sticks out as vulnerability - specifically 
+
+The issue at hand is around incomplete error checking around errors returned from file system calls, which in some cases do not handle null pointers properly and can lead to null pointer dereferences and crashes, as this is incomplete we move on and focus on a variable vulnerability that stands out:
+
+- The 'int m' in 'le16_add_cpu (&neh->eh_entries, m); ' - is not checked against a negative if m becomes a negative in between le16_add may lead to incorrect accounting even if defined with-in proper boundary but will exhibit issues when value goes over assigned limit on 'struct ext4_extent_header' or become potential vulnerability depending on how ext4_extent_block_csum_set and its subsequent code handles assigned numeric values from Neh or is Neh and rest of struct ext4_extent_header members used considering if m is still less but addition result wraps around.
+
+
+RECOMMENDATIONS:
+- Explicitly validate and check 'm' in the event that 'm' gets 'added' negatively and could wrap or act as negative, preventing or introducing code that could help limit and manage wrap or under-overflow when negative value assigned from ext4 block
+- Validate data within functions 'ext4_extent_block_csum_set' and 'ext4_idx_pblock',  also 'EXT-first_INDEX(ext_inode_hdr(inode)'
+- Review that address handling and pointer dereferences, use explicit null pointer or bounds checking or utilize functions which do
+- Check functions which return assigned number or assigned error codes so as not to allow addition or other operation on variables which are susceptible to changes (data race condition or if 'm' is altered and made invalid)
+
+ORIGINAL CODE:
+	__le32 border;
+	ext4_fsblk_t *ablocks = NULL; /* array of allocated blocks */
+	int err = 0;
+
+	/* make decision: where to split? */
+	/* FIXME: now decision is simplest: at current extent */
+
+		le16_add_cpu(&neh->eh_entries, m);
+	}
+
+	ext4_extent_block_csum_set(inode, neh);
+	set_buffer_uptodate(bh);
+	unlock_buffer(bh);
+
+				sizeof(struct ext4_extent_idx) * m);
+			le16_add_cpu(&neh->eh_entries, m);
+		}
+		ext4_extent_block_csum_set(inode, neh);
+		set_buffer_uptodate(bh);
+		unlock_buffer(bh);
+
+	ext4_fsblk_t newblock, goal = 0;
+	struct ext4_super_block *es = EXT4_SB(inode->i_sb)->s_es;
+	int err = 0;
+
+	/* Try to prepend new index to old one */
+	if (ext_depth(inode))
+		goal = ext4_idx_pblock(EXT_FIRST_INDEX(ext_inode_hdr(inode)));
+		goto out;
+	}
+
+	/* move top-level index/leaf into new block */
+	memmove(bh->b_data, EXT4_I(inode)->i_data,
+		sizeof(EXT4_I(inode)->i_data));
+
+	/* set size of new block */
+	neh = ext_block_hdr(bh);
+	/* old root could have indexes or leaves

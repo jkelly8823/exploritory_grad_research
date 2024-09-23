@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-4
+VULNERABILITY_DESCRIPTION:
+Insufficient error handling in file allocation function.
+
+EXPLANATION:
+The code exposes a vulnerability in how it handles errors from the `xfs_alloc_file_space` function call. While it correctly checks the return value of this function and exits the function if an error occurs, it does not attempt to free or clean up any resources that may have been partially allocated. This could result in resource leaks or inconsistent state if this error path is taken.
+
+However, this vulnerability is not critical. Only in case of extremely bad luck a resource leak could occur. 
+
+In particular, if `xfs_alloc_file_space` modifies the state of `ip` or other global variables before erroring out, this could have unintended consequences elsewhere in the program.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the error path should attempt to clean up any partially allocated resources by calling a corresponding dealloc function, such as `xfs_free_file_space`. Additionally, the code should verify the state of `ip` and other variables to ensure they are in a consistent state after the error.
+
+ORIGINAL CODE:
+```c
+	}
+
+	if (!xfs_is_always_cow_inode(ip)) {
+		error = xfs_alloc_file_space(ip, offset, len,
+						      XFS_BMAPI_PREALLOC);
+		if (error)
+			goto out_unlock;
+	}
+}

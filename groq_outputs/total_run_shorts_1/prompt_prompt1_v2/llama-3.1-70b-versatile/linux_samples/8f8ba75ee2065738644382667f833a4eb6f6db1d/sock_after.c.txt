@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION: Potential User-Space Data Corruption via `copy_to_user` Vulnerability
+EXPLANATION:
+The vulnerability is located at line 11, where the `copy_to_user` function is used to copy data from kernel space to user space. The issue lies in the potential for the user to pass an incorrect value for the `len` parameter, which could result in a buffer overflow or corruption of user-space data. 
+
+Additionally, the `copy_to_user` function will return the number of bytes that could not be copied, which is stored in the `err` variable, but this value is not being checked for non-zero values. 
+
+If `len` is larger than the actual size of the `sec` buffer, or if `optval` points to a location outside the user's address space, `copy_to_user` may attempt to access invalid memory, potentially resulting in a crash, or information disclosure.
+
+RECOMMENDATIONS:
+1. Ensure that the `len` value is within the bounds of the `sec` buffer to prevent buffer overflows.
+2. Verify that the `optval` pointer points to a valid location in user space before attempting to copy data to it.
+3. Check the return value of `copy_to_user` and propagate any errors that occur.
+
+ORIGINAL CODE:
+
+	BT_DBG("sock %p, sk %p", sock, sk);
+
+	memset(sa, 0, sizeof(*sa));
+	sa->rc_family  = AF_BLUETOOTH;
+	sa->rc_channel = rfcomm_pi(sk)->channel;
+	if (peer)
+		bacpy(&sa->rc_bdaddr, &bt_sk(sk)->dst);
+		}
+
+		sec.level = rfcomm_pi(sk)->sec_level;
+		sec.key_size = 0;
+
+		len = min_t(unsigned int, len, sizeof(sec));
+		if (copy_to_user(optval, (char *) &sec, len))
+			err = -EFAULT;

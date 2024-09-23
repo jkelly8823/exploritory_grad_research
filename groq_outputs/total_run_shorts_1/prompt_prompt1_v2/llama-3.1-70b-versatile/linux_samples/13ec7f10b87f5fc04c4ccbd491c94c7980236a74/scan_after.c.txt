@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The code is vulnerable to a buffer overflow when using the `memcpy` function. Specifically, the lines `memcpy(bss_entry->ssid.ssid, (current_ptr + 2), element_len);` and `memcpy(bss_entry->data_rates, current_ptr + 2, element_len);` and `memcpy(bss_entry->supported_rates, current_ptr + 2, element_len);` are not checking the bounds of the target buffers before copying data into them. 
+
+While the code does check if `element_len` exceeds `IEEE80211_MAX_SSID_LEN` and `MWIFIEX_SUPPORTED_RATES`, it does not account for the size of the target buffers or their available capacity. This can lead to a buffer overflow if the `element_len` is larger than the target buffers.
+
+Additionally, for the case of `WLAN_EID_SUPP_RATES`, it's unclear if both `bss_entry->data_rates` and `bss_entry->supported_rates` have the same capacity. Copying the same data into both without checking their respective capacities can also lead to a buffer overflow if their capacities differ.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to check the capacity of the target buffers before copying data into them. This can be achieved by:
+
+* Verifying that the target buffers are null-terminated and the `element_len` does not exceed their capacity.
+* Using safer copying functions like `strncpy` for strings or `memcpy_s` with the correct buffer sizes.
+* Verifying the capacities of `bss_entry->data_rates` and `bss_entry->supported_rates` and copying the data accordingly if they differ.
+
+ORIGINAL CODE:
+```
+}
+switch (element_id) {
+case WLAN_EID_SSID:
+	if (element_len > IEEE80211_MAX_SSID_LEN)
+		return -EINVAL;
+	bss_entry->ssid.ssid_len = element_len;
+	memcpy(bss_entry->ssid.ssid, (current_ptr + 2),
+	       element_len);
+	mwifiex_dbg(adapter, INFO,
+	break;
+
+case WLAN_EID_SUPP_RATES:
+	if (element_len > MWIFIEX_SUPPORTED_RATES)
+		return -EINVAL;
+	memcpy(bss_entry->data_rates, current_ptr + 2,
+	       element_len);
+	memcpy(bss_entry->supported_rates, current_ptr + 2,
+	       element_len);
+```

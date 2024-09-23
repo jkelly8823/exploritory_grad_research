@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+  Use after free vulnerability, where a dynamically allocated array is deleted prematurely.
+
+EXPLANATION:
+In this code snippet, a dynamically allocated array `p` is created when `heap` is true. However, the `delete[] p;` statement is unconditional, which means it will be executed regardless of whether `p` points to a dynamically allocated array or a stack-allocated array. This is problematic because deleting a stack-allocated array is undefined behavior. Moreover, even when `p` points to a dynamically allocated array, deleting it and not setting the pointer to `nullptr` can lead to a use after free scenario if the pointer is used later in the code. 
+
+However, it's worth noting that, as you are only evaluating a code snippet, there is no code later on to trigger the use after free. Therefore, the issue here is primarily the deletion of a stack-allocated object.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should only delete the array when it was dynamically allocated. We should also avoid deleting stack-allocated arrays. Here's the corrected code:
+
+```cpp
+void A::foo(bool heap) {
+    int localArray[2] = {11, 22};
+    int *p = localArray;
+    if (heap) {
+        p = new int[2];
+    }
+    if (heap) {
+        delete[] p;
+    }
+}
+```
+
+Alternatively, if the intention is to always use a dynamically allocated array when `heap` is true and a stack-allocated array otherwise, the code can be simplified to avoid deleting localArray:
+
+```cpp
+void A::foo(bool heap) {
+    int *p;
+    if (heap) {
+        p = new int[2];
+        delete[] p;
+    } else {
+        int localArray[2] = {11, 22};
+        p = localArray;
+    }
+}
+```
+
+
+ORIGINAL CODE:
+
+```cpp
+class A{void foo(bool);};void A::foo(bool heap) {int localArray[2] = {11,22};int *p = localArray;if (heap){p = new int[2];}delete[] p;}
+```

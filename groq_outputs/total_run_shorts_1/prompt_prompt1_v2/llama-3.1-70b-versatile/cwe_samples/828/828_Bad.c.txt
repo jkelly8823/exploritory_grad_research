@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 13
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability due to the signal handler function accessing the global variable `logMessage` which is freed in its previous iteration.
+
+EXPLANATION:
+The code snippet is vulnerable to a use after free vulnerability. In the signal handler function `handler`, the global variable `logMessage` is accessed and freed. However, signal handlers can be called asynchronously, meaning the handler function can be interrupted at any point during its execution. If the signal handler is interrupted after the `logMessage` is freed, the next time it is called, it will try to access the already freed memory. 
+
+In main function, the `logMessage` is copied from `argv[1]`, which can be a user-provided string, making it vulnerable to potential overflow attack. If the length of `argv[1]` exceeds the allocated memory for `logMessage`, it could lead to unexpected behavior.
+
+Moreover, using `signal` function for signal handling is also discouraged due to its unreliable behavior.
+
+RECOMMENDATIONS:
+1. Avoid using global variables which are accessed by signal handlers. Instead, pass data to signal handlers via a `sigaction` structure.
+2. Use `sigaction` instead of `signal` for reliable signal handling.
+3. Implement synchronization techniques such as mutexes to ensure exclusive access to shared variables.
+4. Always validate user-provided input (`argv[1]`) to prevent potential overflow attacks.
+5. Avoid freeing memory inside signal handlers.
+6. Implement proper error handling for memory allocation.
+
+ORIGINAL CODE:
+```c
+char *logMessage;
+void handler (int sigNum) {
+    syslog(LOG_NOTICE, "%s\n", logMessage); free(logMessage);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    sleep(10); exit(0);
+}
+int main (int argc, char* argv[]) {
+    logMessage = strdup(argv[1]);
+    /* Register signal handlers. */
+    signal(SIGHUP, handler); signal(SIGTERM, handler);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    sleep(10);
+}
+```

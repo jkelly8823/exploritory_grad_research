@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential denial-of-service (DoS) attack due to the lack of validation on user-controlled input.
+
+EXPLANATION:
+Although it appears that these are memory addresses, there is no validation to ensure that the written values do not cause an overflow or if they could be tampered with to cause unintended behavior. There is a possibility for a DoS if an attacker were to manipulate these addresses.
+
+However, considering the provided context that this is initialization code, the author might have had control over the addresses being mapped and is likely the intended behavior for the initialization. Another possible vulnerability is the lack of error handling when using ioremap_nocache. While an error is being checked for base, the potential errors for gic_dist_base and gic_cpu_base go unchecked. The BUG_ON macro will terminate the kernel if an error occurs.
+
+RECOMMENDATIONS:
+1. Add input validation for potential IO addresses to be mapped: It is good practice to check against null or if pointers resulting from these operations are valid.
+2. Error handling for other io mapped areas: if the base was checked for being null then also do the same check for other mapped areas.
+
+ORIGINAL CODE:
+```c
+void __init r8a7778_init_irq_dt(void)
+{
+	void __iomem *base = ioremap_nocache(0xfe700000, 0x00100000);
+#ifdef CONFIG_ARCH_SHMOBILE_LEGACY
+	void __iomem *gic_dist_base = ioremap_nocache(0xfe438000, 0x1000);
+	void __iomem *gic_cpu_base = ioremap_nocache(0xfe430000, 0x1000);
+#endif
+
+	BUG_ON(!base);
+
+#ifdef CONFIG_ARCH_SHMOBILE_LEGACY
+	gic_init(0, 29, gic_dist_base, gic_cpu_base);
+#else
+	irqchip_init();
+#endif
+	/* route all interrupts to ARM */
+	__raw_writel(0x73ffffff, base + INT2NTSR0);
+	__raw_writel(0xffffffff, base + INT2NTSR1);
+}
+```

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines containing `if (hmac_patch_en)` and `hmac_key_reg <= hmac_key_i;`
+VULNERABILITY_DESCRIPTION:
+Sensitive data exposure through unsecured update of HMAC key.
+
+EXPLANATION:
+The code snippet shows a digital circuit written in Verilog, specifically a Design Under Test (DUT) that utilizes an HMAC (Keyed-Hashing for Message Authentication) module. The HMAC key is updated through the `hmac_key_i` input signal when `hmac_patch_en` is set. However, this update mechanism is not properly secured. 
+
+The use of `hmac_patch_en` as a gating condition for the update operation can be problematic, as it does not provide any authentication or authorization mechanism. An attacker who gains control of the `hmac_patch_en` signal can push arbitrary values into the HMAC key register, effectively compromising the integrity of the HMAC operation. This could allow an attacker to forge HMAC tags, bypassing any message authentication or integrity checks that rely on the HMAC.
+
+Furthermore, there is no indication that the HMAC key is being updated securely, for example through a secure protocol like Key Exchange or Secure Boot. This suggests that the HMAC key update operation may not follow standard secure practices for cryptographic key management.
+
+RECOMMENDATIONS:
+1. Introduce an authentication mechanism to ensure that only trusted agents can trigger HMAC key updates.
+2. Implement a secure protocol for HMAC key management, such as using an authenticated key exchange or secure key storage mechanisms.
+3. Review the overall design and security requirements of the system to ensure that HMAC key updates are properly authenticated and authorized.
+
+ORIGINAL CODE:
+```
+					module dmi_jtag(...
+					) (
+						
+						input logic [255:0] hmac_key_i,
+						input logic         hmac_patch_en,
+						... 
+						reg [255:0] hmac_key_reg;
+						...
+						
+					);
+					...
+						
+						always_ff @(posedge tck_i or negedge trst_ni) begin
+						...
+						if (hmac_patch_en)
+							
+							hmac_key_reg <= hmac_key_i;
+							
+						...
+						end
+						
+					...
+						
+						hmac hmac(
+						...
+						.key_i(hmac_key_reg),
+						...
+						);
+						
+					...
+					endmodule
+```

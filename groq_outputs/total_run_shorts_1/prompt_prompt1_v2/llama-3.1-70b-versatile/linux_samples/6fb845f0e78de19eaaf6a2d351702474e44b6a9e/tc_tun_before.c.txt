@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3, 4-5, 2-3 (after block comment), and other potential uses not shown
+VULNERABILITY_DESCRIPTION:
+Unvalidated Copy Operation
+
+EXPLANATION:
+The provided code snippet exhibits an potential vulnerability in which sensitive data is copied to an unspecified location using `memcpy`. This function call is performed multiple times on lines 2-3 and 4-5, which might result in potential buffer overflow.
+
+Specifically, when `n->tbl->key_len` is greater than the size of `e->m_neigh.dst_ip`, the excess bytes will be written beyond the bounds of `e->m_neigh.dst_ip`, potentially causing data corruption or allowing an attacker to inject arbitrary code.
+
+Additionally, it appears the same values are being copied to the same destination, multiple times, which may lead to unnecessary and repeated operations.
+
+Furthermore, it can be seen that `mlx5e_tc_tun_parse_vxlan` and `mlx5e_tc_tun_parse_gretap` are being called depending on the `tunnel_type` with `spec`, `f`, `headers_c`, and `headers_v` as parameters. Without having the full definition of those parameters, we cannot assess the potential vulnerabilities of those functions.
+
+RECOMMENDATIONS:
+The following code adjustments should be considered to fix this issue:
+
+- Increase buffer size: Ensure that `e->m_neigh.dst_ip` is large enough to hold at least `n->tbl->key_len` bytes to prevent potential buffer overflow.
+
+- Validate input length: Always verify that `n->tbl->key_len` does not exceed the size of `e->m_neigh.dst_ip`.
+
+- Use memcpy safely: Use `memcpy_safe` or similar functionality provided by the operating system to prevent buffer overflows.
+
+- Use memset or memset_s to clear buffer contents: This function should not be used to zero or initialize data.
+
+ORIGINAL CODE:
+```c
+e->m_neigh.family = n->ops->family;
+memcpy(&e->m_neigh.dst_ip, n->primary_key, n->tbl->key_len);
+e->out_dev = out_dev;
+
+/* It's important to add the neigh to the hash table before checking
+ * the neigh validity state. So if we'll get a notification, in case the
+ * neigh changes it's validity state, we would find the relevant neigh
+e->m_neigh.family = n->ops->family;
+memcpy(&e->m_neigh.dst_ip, n->primary_key, n->tbl->key_len);
+e->out_dev = out_dev;
+
+/* It's importent to add the neigh to the hash table before checking
+ * the neigh validity state. So if we'll get a notification, in case the
+ * neigh changes it's validity state, we would find the relevant neigh
+       struct mlx5_flow_spec *spec,
+       struct tc_cls_flower_offload *f,
+       void *headers_c,
+       void *headers_v)
+{
+   int tunnel_type;
+   int err = 0;
+
+   tunnel_type = mlx5e_tc_tun_get_type(filter_dev);
+   if (tunnel_type == MLX5E_TC_TUNNEL_TYPE_VXLAN) {
+       err = mlx5e_tc_tun_parse_vxlan(priv, spec, f,
+                                      headers_c, headers_v);
+   } else if (tunnel_type == MLX5E_TC_TUNNEL_TYPE_GRETAP) {
+       err = mlx5e_tc_tun_parse_gretap(priv, spec, f,
+                                       headers_c, headers_v);
+   } else {
+       netdev_warn(priv->netdev,
+```
+Please review those additions or modifications in the code for clarity and usability.

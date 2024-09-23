@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 101-105, 115-118, 137-140, 143-146, 172-173, 185-186, 277-280, 315-316, 422-424, 454-455, 467-470, 494-496, 523-525, 629-630
+VULNERABILITY_DESCRIPTION:
+Use of Inadequate Randomness with the srand() and rand() functions in C, allowing an attacker to potentially predict the values generated.
+
+EXPLANATION:
+The srand() and rand() functions are used to generate a hash secret salt. However, these functions are not suitable for cryptographic purposes, as they are designed for general-purpose random number generation and do not produce cryptographically secure numbers. Moreover, the seed value used with srand() is the current time, which can be relatively easy to guess or predict, especially if an attacker can approximate the time at which the seed was generated.
+
+Additionally, the use of % with UINT_MAX to "sanitize" the time before passing it to srand() can potentially reduce the entropy in the seed value. The ideal approach is to use a cryptographically secure random number generator available on your platform (e.g., /dev/urandom on Linux).
+
+RECOMMENDATIONS:
+To address this vulnerability, consider using a cryptographically secure pseudo-random number generator like /dev/urandom to generate the hash secret salt. Alternatively, use the operating system's built-in secure random number generation functions, such as rand_s() on Windows or the random() function on Unix-based systems.
+
+Here's an example of how to use /dev/urandom to generate a cryptographically secure hash secret salt:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static unsigned long generate_hash_secret_salt(void) {
+  unsigned long hash_secret_salt;
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd == -1) {
+    // Handle error
+    return 0;
+  }
+  if (read(fd, &hash_secret_salt, sizeof(hash_secret_salt)) != sizeof(hash_secret_salt)) {
+    // Handle error
+    close(fd);
+    return 0;
+  }
+  close(fd);
+  return hash_secret_salt;
+}
+```
+
+ORIGINAL CODE:
+```c
+static unsigned long
+generate_hash_secret_salt(void)
+{
+  unsigned int seed = time(NULL) % UINT_MAX;
+  srand(seed);
+  return rand();
+}
+```

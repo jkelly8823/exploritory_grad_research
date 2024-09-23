@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 4-6
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+EXPLANATION:
+The code snippet provided appears to be setting the FIFO threshold for a SPI device. However, there is a potential integer overflow vulnerability in the uniphier_spi_set_fifo_threshold function.
+
+The FIELD_PREP macro is used to create a value with the specified mask. However, this macro does not check for integer overflows, and the mask is not a standard size that is guaranteed to be valid. The SSI_FIFO_DEPTH and threshold parameters are used as inputs to this macro, and an integer overflow can occur if these values exceed the maximum value representable by the u32 type. Specifically, if the result of SSI_FIFO_DEPTH - threshold or threshold exceeds 32 bits (0xFFFFFFFF), it will wrap around to a smaller value, causing undefined behavior.
+
+Additionally, the code assumes that the result of the division operation DIV_ROUND_UP(priv->rx_bytes, bpw) will fit within the type unsigned int. However, this assumption may not always be valid, as the result of this division could potentially exceed the maximum value representable by an unsigned int. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following:
+
+1.  Use a safe integer type that can handle the full range of possible values for SSI_FIFO_DEPTH and threshold. Consider using a larger type such as u64.
+2.  Check the result of the division operation to ensure that it does not overflow before assigning it to the variable fifo_threshold.
+3.  Validate the input values to the uniphier_spi_set_fifo_threshold function to ensure that they are within a valid range.
+4.  Use a bounds check to ensure that the result of FIELD_PREP does not exceed the maximum valid value for the SSI_FC_TXFTH_MASK or SSI_FC_RXFTH_MASK.
+
+ORIGINAL CODE:
+
+```c
+}
+}
+
+static void uniphier_spi_set_fifo_threshold(struct uniphier_spi_priv *priv,
+					    unsigned int threshold)
+{
+	u32 val;
+
+	val = readl(priv->base + SSI_FC);
+	val &= ~(SSI_FC_TXFTH_MASK | SSI_FC_RXFTH_MASK);
+	val |= FIELD_PREP(SSI_FC_TXFTH_MASK, SSI_FIFO_DEPTH - threshold);
+	val |= FIELD_PREP(SSI_FC_RXFTH_MASK, threshold);
+	writel(val, priv->base + SSI_FC);
+}
+
+static void uniphier_spi_fill_tx_fifo(struct uniphier_spi_priv *priv)
+{
+	unsigned int fifo_threshold, fill_words;
+	unsigned int bpw = bytes_per_word(priv->bits_per_word);
+
+	fifo_threshold = DIV_ROUND_UP(priv->rx_bytes, bpw);
+	fifo_threshold = min(fifo_threshold, SSI_FIFO_DEPTH);
+
+	uniphier_spi_set_fifo_threshold(priv, fifo_threshold);
+
+	fill_words = fifo_threshold -
+		DIV_ROUND_UP(priv->rx_bytes - priv->tx_bytes, bpw);
+
+	while (fill_words--)
+		uniphier_spi_send(priv);
+}
+
+static void uniphier_spi_set_cs(struct spi_device *spi, bool enable)
+```

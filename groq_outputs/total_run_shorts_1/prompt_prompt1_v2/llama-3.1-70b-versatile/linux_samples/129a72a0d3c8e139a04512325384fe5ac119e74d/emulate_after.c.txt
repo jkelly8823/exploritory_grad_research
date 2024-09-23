@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4 (segmented_write_std function, specifically the handling of data and size), 16-17 (em_sgdt function, specifically the handling of size)
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability in segmented_write_std function and Potential Arbitrary Write in em_sgdt function.
+
+EXPLANATION:
+The vulnerability exists in the `segmented_write_std` and `em_sgdt` functions. In the `segmented_write_std` function, the `size` parameter is not validated before passing it to `ctxt->ops->write_std`. This could lead to a buffer overflow if `size` exceeds the buffer capacity of `data`. 
+
+In the `em_sgdt` function, the `size` variable is calculated as `offsetof(struct fxregs_state, xmm_space[0])` in some cases, which could be a large value. This value is then used to write to memory without proper validation, potentially leading to arbitrary memory writes.
+
+Additionally, the `segmented_write_std` function is called with an unchecked `size` in the provided code snippet, which could also lead to a buffer overflow or arbitrary memory write.
+
+The `fxrstor_fixup` function also calls `segmented_write_std` with an unchecked `size` of 2 + `ctxt->op_bytes`. This could also lead to a buffer overflow.
+
+RECOMMENDATIONS:
+1. Validate the `size` parameter before calling `ctxt->ops->write_std` in the `segmented_write_std` function to prevent buffer overflows.
+2. Validate the `size` variable in the `em_sgdt` function before calling `segmented_write_std` to prevent arbitrary memory writes.
+3. Add bounds checking for the `data` parameter in the `segmented_write_std` function to prevent buffer overflows.
+
+ORIGINAL CODE:
+
+```c
+return ctxt->ops->read_std(ctxt, linear, data, size, &ctxt->exception);
+}
+
+static int segmented_write_std(struct x86_emulate_ctxt *ctxt,
+			       struct segmented_address addr,
+			       void *data,
+			       unsigned int size)
+{
+	int rc;
+	ulong linear;
+
+	rc = linearize(ctxt, addr, size, true, &linear);
+	if (rc != X86EMUL_CONTINUE)
+		return rc;
+	return ctxt->ops->write_std(ctxt, linear, data, size, &ctxt->exception);
+}
+
+/*
+ * Prefetch the remaining bytes of the instruction without crossing page
+ * boundary if they are not in fetch_cache yet.
+ */
+	}
+	/* Disable writeback. */
+	ctxt->dst.type = OP_NONE;
+	return segmented_write_std(ctxt, ctxt->dst.addr.mem,
+				   &desc_ptr, 2 + ctxt->op_bytes);
+}
+
+static int em_sgdt(struct x86_emulate_ctxt *ctxt)
+{
+	else
+		size = offsetof(struct fxregs_state, xmm_space[0]);
+
+	return segmented_write_std(ctxt, ctxt->memop.addr.mem, &fx_state, size);
+}
+
+static int fxrstor_fixup(struct x86_emulate_ctxt *ctxt,
+		struct fxregs_state *new)
+	if (rc != X86EMUL_CONTINUE)
+		return rc;
+
+	rc = segmented_read_std(ctxt, ctxt->memop.addr.mem, &fx_state, 512);
+	if (rc != X86EMUL_CONTINUE)
+		return rc;
+
+	if (fx_state.mxcsr >> 16)
+```

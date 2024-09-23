@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to buffer overflow and strict aliasing violations.
+
+EXPLANATION:
+In the function `get_tod_clock_ext`, an `addrtype` struct is used to enforce a size constraint on the `clk` array. However, in the `get_tod_clock` function, a pointer to `clk` is cast to an `unsigned long long` pointer, which is then dereferenced to read the entire value. This is a potential strict aliasing violation, as the `clk` array is not explicitly guaranteed to be aligned for `unsigned long long` access.
+
+Moreover, an `unsigned long long` type is 8 bytes long, and `clk[1]` offset starts at the second byte of the array. This might lead to incorrect results when reading an `unsigned long long` value from the array, depending on the actual contents stored by `get_tod_clock_ext`.
+
+Additionally, in some architectures or compilers, this code might access out-of-bounds memory for `clk`, which is declared as `unsigned char clk[16];`. If the `unsigned long long` type is not stored atomically, or if there are padding bytes in the `addrtype` struct used in `get_tod_clock_ext`, the code might access the 9th or later byte of `clk`, potentially causing a buffer overflow.
+
+RECOMMENDATIONS:
+1. To fix the potential strict aliasing issue, the code should cast the `clk` array to the correct type (`unsigned long long`) using a single, properly defined pointer. 
+
+   Example:
+   ```c
+static inline unsigned long long get_tod_clock(void)
+{
+	unsigned char clk[16];
+	get_tod_clock_ext(clk);
+	unsigned long long *p_clk = (unsigned long long *)&clk[0]; // Be cautious with the type and array indexing here, since in actual function, get_tod_clock_ext writes at address "clk" to make sure the array does not get offset from the start.
+	unsigned long long tod = *p_clk; 
+	return tod;
+}
+```
+Note: After above changes you would be better off checking the assembler output with `gcc -S` to ensure no unexpected instruction result to your modification
+
+2. Verify the correctness of this change with the underlying hardware documentation. Specifically, ensure that `stcke` stores data in the format expected by the assignment `return *p_clk`.

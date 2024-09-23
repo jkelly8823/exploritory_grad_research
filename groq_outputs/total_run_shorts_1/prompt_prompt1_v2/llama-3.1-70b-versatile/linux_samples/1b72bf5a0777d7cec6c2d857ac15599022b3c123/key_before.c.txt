@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+Use of potentially null pointer without checking.
+
+EXPLANATION:
+The code snippet references the `sta` pointer without properly checking for its existence before using it in an `if` statement. Furthermore, the code dereferences `sta` as well as `sdata` in several places, without verifying whether they are null or not. This could potentially result in a null pointer dereference, which can cause the program to crash or behave unexpectedly.
+
+Additionally, the code doesn't check the return value of the `mutex_lock` function. Although most modern implementations will unlock the mutex if the lock operation fails, some still call this an undefined behavior. Either way, there's a chance of deadlock if an error occurs.
+
+RECOMMENDATIONS:
+- Check for null pointers for `sta` before using it.
+- Check for null pointers for `sdata` before using it.
+- Check the return value of `mutex_lock` to prevent deadlocks if some lock error happens.
+
+However, some code lines aren't given in the segment code here (e.g. `key_mtx_dereference`), but from the point of the given lines we can for sure suggest adding such things as follows:
+```c
+if (sta == NULL || sdata == NULL)
+    return -EINVAL; // to be initialized in some place.
+
+// add some check before mutex lock & release:
+if (mutex_lock(&sdata->local->key_mtx))
+    return -EDEADLK;
+...
+mutex_unlock(&sdata->local->key_mtx);
+```
+
+ORIGINAL CODE:
+```c
+ * Copyright 2006-2007	Jiri Benc <jbenc@suse.cz>
+ * Copyright 2007-2008	Johannes Berg <johannes@sipsolutions.net>
+ * Copyright 2013-2014  Intel Mobile Communications GmbH
+ * Copyright 2015	Intel Deutschland GmbH
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+
+	pairwise = key->conf.flags & IEEE80211_KEY_FLAG_PAIRWISE;
+	idx = key->conf.keyidx;
+	key->local = sdata->local;
+	key->sdata = sdata;
+	key->sta = sta;
+
+	mutex_lock(&sdata->local->key_mtx);
+
+	if (sta && pairwise)
+	else
+		old_key = key_mtx_dereference(sdata->local, sdata->keys[idx]);
+
+	increment_tailroom_need_count(sdata);
+
+	ieee80211_key_replace(sdata, sta, pairwise, old_key, key);
+	ieee80211_key_destroy(old_key, true);
+		ret = 0;
+	}
+
+	mutex_unlock(&sdata->local->key_mtx);
+
+	return ret;
+}

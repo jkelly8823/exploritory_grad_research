@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20-21
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Use After Free vulnerability.
+
+EXPLANATION:
+The line `entry = tx_q->cur_tx;` retrieves a pointer to a struct representing the current transmit entry. Then, the line `first_entry = entry;` assigns the value of `entry` to `first_entry`. The code then uses `first_entry` as an index into the `tx_skbuff` array in the line `WARN_ON(tx_q->tx_skbuff[first_entry]);`. However, the value of `first_entry` may be stale if the `tx_q->cur_tx` pointer has changed between the two assignments, potentially causing a use after free vulnerability.
+
+The problem arises because the code does not ensure that the `tx_q->cur_tx` pointer remains valid throughout the execution of the code. If another thread or context changes the `tx_q->cur_tx` pointer after it is assigned to `entry`, but before `first_entry` is used, the `first_entry` pointer could point to memory that has already been freed, leading to a use after free vulnerability.
+
+RECOMMENDATIONS:
+To prevent the use after free vulnerability, consider the following changes:
+
+1. Ensure that the `tx_q->cur_tx` pointer is locked or synchronized to prevent concurrent access.
+2. Instead of storing the pointer in the `entry` variable, consider re-reading the value of `tx_q->cur_tx` just before using it to access the `tx_skbuff` array.
+
+ORIGINAL CODE:
+
+	tx_q = &priv->tx_queue[queue];
+
+	if (priv->tx_path_in_lpi_mode)
+		stmmac_disable_eee_mode(priv);
+
+	/* Manage oversized TCP frames for GMAC4 device */
+	if (skb_is_gso(skb) && priv->tso) {
+		if (skb_shinfo(skb)->gso_type & (SKB_GSO_TCPV4 | SKB_GSO_TCPV6)) {
+			/*
+			 * There is no way to determine the number of TSO
+			 * capable Queues. Let's use always the Queue 0
+			 * because if TSO is supported then at least this
+			 * one will be capable.
+			 */
+			skb_set_queue_mapping(skb, 0);
+
+			return stmmac_tso_xmit(skb, dev);
+		}
+	}
+
+	if (unlikely(stmmac_tx_avail(priv, queue) < nfrags + 1)) {
+		if (!netif_tx_queue_stopped(netdev_get_tx_queue(dev, queue))) {
+		return NETDEV_TX_BUSY;
+	}
+
+	entry = tx_q->cur_tx;
+	first_entry = entry;
+	WARN_ON(tx_q->tx_skbuff[first_entry]);

@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION: Unbounded Access to Unvalidated User Input
+EXPLANATION:
+This vulnerability occurs when the code accesses and uses the packet type from the skb->data without proper validation. Although the packet type is checked later in the code, it is still possible to trigger an unbounded memory access when retrieving the opcode from skb->data. The skb_pull(skb, 1) call can potentially leave skb->data pointing to an invalid location if skb->len is less than 1. This could allow an attacker to execute arbitrary code or crash the system.
+
+The use of unaligned and unchecked data access in get_unaligned_le16(skb->data) function also introduces a potential vulnerability. 
+
+The fact that skb_pull(skb, 1) is called before validating skb->len does not improve the safety of this code snippet.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate skb->len before accessing skb->data. This will prevent accessing invalid or unbounded memory.
+
+You should also check for packet length before pulling data from the skb and accessing its contents.
+
+Instead of accessing data directly from skb->data, consider using functions that perform safe and validated data access and do bounds checking.
+
+Validate the skb->len before accessing skb->data to prevent potential crashes or code execution.
+
+ORIGINAL CODE:
+
+	bt_cb(skb)->pkt_type = *((unsigned char *) skb->data);
+	skb_pull(skb, 1);
+
+	if (hci_pi(sk)->channel == HCI_CHANNEL_RAW &&
+	    bt_cb(skb)->pkt_type == HCI_COMMAND_PKT) {
+		u16 opcode = get_unaligned_le16(skb->data);
+		u16 ogf = hci_opcode_ogf(opcode);
+		u16 ocf = hci_opcode_ocf(opcode);
+
+			goto drop;
+		}
+
+		if (hci_pi(sk)->channel == HCI_CHANNEL_USER &&
+		    bt_cb(skb)->pkt_type != HCI_COMMAND_PKT &&
+		    bt_cb(skb)->pkt_type != HCI_ACLDATA_PKT &&
+		    bt_cb(skb)->pkt_type != HCI_SCODATA_PKT) {
+			err = -EINVAL;
+			goto drop;
+		}
+
+		skb_queue_tail(&hdev->raw_q, skb);
+		queue_work(hdev->workqueue, &hdev->tx_work);
+	}
+ 
+To write safer code, it should look like the following:
+
+	if(skb->len < 1)
+	{
+		// Handle error for inappropriate package length.
+	}
+	else{
+		bt_cb(skb)->pkt_type = *((unsigned char *) skb->data);
+		skb_pull(skb, 1);
+
+	if (skb->len < 2)
+	{
+		// Handle error for inappropriate package length.
+	}
+	else{
+		if (hci_pi(sk)->channel == HCI_CHANNEL_RAW &&
+	    bt_cb(skb)->pkt_type == HCI_COMMAND_PKT) {
+			u16 opcode = get_unaligned_le16(skb->data);
+			u16 ogf = hci_opcode_ogf(opcode);
+			u16 ocf = hci_opcode_ocf(opcode);
+
+			// Place missing code here.
+
+				goto drop;
+			}
+	
+			if (hci_pi(sk)->channel == HCI_CHANNEL_USER &&
+			    bt_cb(skb)->pkt_type != HCI_COMMAND_PKT &&
+			    bt_cb(skb)->pkt_type != HCI_ACLDATA_PKT &&
+			    bt_cb(skb)->pkt_type != HCI_SCODATA_PKT) {
+				err = -EINVAL;
+				goto drop;
+			}
+	
+			skb_queue_tail(&hdev->raw_q, skb);
+			queue_work(hdev->workqueue, &hdev->tx_work);
+		}
+	}
+}
+}

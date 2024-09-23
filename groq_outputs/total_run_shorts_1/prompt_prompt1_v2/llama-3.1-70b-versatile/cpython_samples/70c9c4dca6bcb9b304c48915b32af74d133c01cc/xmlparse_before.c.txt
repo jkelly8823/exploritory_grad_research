@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 261-275
+VULNERABILITY_DESCRIPTION:
+The `copyEntityTable` function has a potential vulnerability in its handling of string copying. It uses `poolCopyString` to copy strings from the old table to the new table, but it does not check for null bytes in the copied strings. This could lead to a buffer overflow if an attacker is able to manipulate the strings in the old table.
+
+EXPLANATION:
+The `copyEntityTable` function is responsible for copying entities from one hash table to another. It uses `poolCopyString` to copy the names and system IDs of entities from the old table to the new table. However, it does not check for null bytes in the copied strings. This could lead to a buffer overflow if an attacker is able to manipulate the strings in the old table. For example, if an attacker is able to insert a null byte into the name of an entity in the old table, the `poolCopyString` function may not copy the entire string, leading to a buffer overflow when the copied string is used later in the program.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `copyEntityTable` function should check for null bytes in the copied strings and handle them properly. One way to do this is to use `poolCopyString_len` instead of `poolCopyString`, which allows the caller to specify the length of the string to be copied. This can help prevent buffer overflows by ensuring that the entire string is copied, even if it contains null bytes.
+
+ORIGINAL CODE:
+```c
+static int
+copyEntityTable(HASH_TABLE *newTable,
+                STRING_POOL *newPool,
+                const HASH_TABLE *oldTable)
+{
+  HASH_TABLE_ITER iter;
+    name = poolCopyString(newPool, oldE->name);
+    if (!name)
+      return 0;
+    newE = (ENTITY *)lookup(newTable, name, sizeof(ENTITY));
+    if (!newE)
+      return 0;
+    if (oldE->systemId) {
+      const XML_Char *tem = poolCopyString(newPool, oldE->systemId);
+```
+
+PATCHED CODE:
+```c
+static int
+copyEntityTable(HASH_TABLE *newTable,
+                STRING_POOL *newPool,
+                const HASH_TABLE *oldTable)
+{
+  HASH_TABLE_ITER iter;
+    size_t len = strlen(oldE->name);
+    name = poolCopyString_len(newPool, oldE->name, len);
+    if (!name)
+      return 0;
+    newE = (ENTITY *)lookup(newTable, name, sizeof(ENTITY));
+    if (!newE)
+      return 0;
+    if (oldE->systemId) {
+      len = strlen(oldE->systemId);
+      const XML_Char *tem = poolCopyString_len(newPool, oldE->systemId, len);
+```

@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 8, 10
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability exists in the code, but more notably issues are related to unvalidated/trusted data being used, and the use of deprecated functions.
+
+EXPLANATION:
+Though it is unclear what the 'current' object is in the given code snippet, we can assume it has the potential to be a struct or object which is user-controlled or has data from an untrusted source. 
+It also calls functions (load_TR_desc(), load_LDT(), and fpu__resume_cpu()) without validating their parameters or return values. This can potentially lead to undefined behavior.
+
+Additionally, the function calls themselves (specifically ltr and lldt) have potential issues; 'ltr' can cause undefined behavior when invoked with a null descriptor pointer. It is also worth mentioning 'lldt' is being used here, 'lldt' loads the local descriptor table (LDT) with a given segment selector. This function relies on kernel privileges that could potentially be exploited.
+
+RECOMMENDATIONS:
+The parameters being passed to functions (load_TR_desc(), load_LDT(), and fpu__resume_cpu()) should be validated before calling them. Also, error checking should be performed after the function call to prevent undefined behavior when there is an error.
+Additionally, use more Robust APIs (eg., 'static inline int lldt(void)' etc) if possible and safer inline functions.
+
+It is essential to validate and 'current->active_mm->context's structure here to prevent any forms of overrun. Ensure all possible 'struct' and 'function' validation prior to handling.
+
+ORIGINAL CODE:
+#include <asm/fpu/internal.h>
+#include <asm/debugreg.h>
+#include <asm/cpu.h>
+
+#ifdef CONFIG_X86_32
+__visible unsigned long saved_context_ebx;
+__visible unsigned long saved_context_esp, saved_context_ebp;
+        syscall_init();                /* This sets MSR_*STAR and related */
+#endif
+        load_TR_desc();                /* This does ltr */
+        load_LDT(&current->active_mm->context);  /* This does lldt */
+
+        fpu__resume_cpu();
+}

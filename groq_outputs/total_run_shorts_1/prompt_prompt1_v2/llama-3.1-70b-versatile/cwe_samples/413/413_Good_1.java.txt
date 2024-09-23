@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-14, 26-32
+VULNERABILITY_DESCRIPTION:
+Uncaught InterruptedException and Lock Acquisition Order.
+
+EXPLANATION:
+In the provided code snippet, the `withdraw` method calls `sufficientFundsCondition.await()` which potentially throws an InterruptedException. This exception is caught by the catch-all Exception handler, but it is not handled properly. The InterruptedException is a checked exception that is typically used to indicate that the current thread has been interrupted while it was waiting, sleeping, or occupied, and interruption needs immediate attention.
+
+Furthermore, and possibly more critically, in multi-threaded access the locking order isn't explicitly maintained. Both `deposit` and `withdraw` methods are acquiring a lock on the `balanceChangeLock` but this by itself isn't sufficient to avoid deadlocks if multiple threads attempt to acquire multiple locks concurrently.
+
+Lastly, there's potential risk of starvation or deadlock with current usage of condition and lock if multiple threads get onto wait set of the condition or other threads in system currently retain locks like balanceChangeLock for sufficiently long time.
+
+Also, `balanceChangeLock.lock()` call with potential throws of checked RunTimeExceptions implies catching and if present swallow said RTEs due to how overly broad base catch is, impacting future diagnostic endeavours.
+
+
+RECOMMENDATIONS:
+1. Handle InterruptedException when calling `await()` or `wait()` by either restoring the interrupted status of the thread by calling `Thread.currentThread().interrupt()` or by properly terminating the current operation and exiting the loop.
+
+2. Maintain lock acquisition order. Always lock in same order to avoid potential deadlocks.
+
+3. Implement fairness in lock acquisition to reduce potential for starvation or deadlock.
+
+4. Review places where potential RTEs arise - and only catch RTEs where the cost of failing and re-trying that particular point significantly outweigh cost of any fallout from that action, otherwise throw new not RTE and ensure the new exception type handled higher up the call stack.
+
+5. Don't neglect making public your implementation to other co-developers.
+
+
+ORIGINAL CODE:
+
+             public class BankAccount {
+                   ...
+                       // lock object for thread access to methods
+                       private ReentrantLock balanceChangeLock;
+                       
+                       // condition object to temporarily release lock to other threads
+                       private Condition sufficientFundsCondition;
+                       
+                       // method to deposit amount into BankAccount
+                       public void deposit(double amount) {
+                          
+                           
+                           // set lock to block access to BankAccount from other threads
+                           balanceChangeLock.lock();try {
+                              double newBalance = balance + amount;balance = newBalance;
+                              
+                                 // inform other threads that funds are available
+                                 sufficientFundsCondition.signalAll();
+                              
+                           } catch (Exception e) {...}finally {// unlock lock objectbalanceChangeLock.unlock();}
+                       }
+                       
+                       // method to withdraw amount from bank account
+                       public void withdraw(double amount) {
+                          
+                           
+                           // set lock to block access to BankAccount from other threads
+                           balanceChangeLock.lock();try {
+                              while (balance < amount) {
+                                     
+                                      // temporarily unblock access
+                                      // until sufficient funds are available
+                                      sufficientFundsCondition.await();
+                                }double newBalance = balance - amount;balance = newBalance;
+                              
+                           } catch (Exception e) {...}finally {// unlock lock objectbalanceChangeLock.unlock();}
+                       }...
+                 }
+           
+      

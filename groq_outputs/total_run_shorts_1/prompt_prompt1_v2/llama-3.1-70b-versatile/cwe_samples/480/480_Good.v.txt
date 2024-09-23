@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-15
+VULNERABILITY_DESCRIPTION:
+Privilege escalation vulnerability in debug mode transition.
+
+EXPLANATION:
+In the provided code snippet, the transition to debug mode is based on the current privilege level and the debug mode register. However, the assignment of `priv_lvl_o` does not strictly follow the privilege levels defined in the RISC-V specification. Specifically, when transitioning to debug mode from user mode (`umode_i`), the privilege level is escalated to machine mode (`riscv::PRIV_LVL_M`) without proper checks or restrictions. This could potentially allow a user-mode program to access machine-mode resources or execute machine-mode instructions, leading to a privilege escalation vulnerability.
+
+RECOMMENDATIONS:
+1.  Restrict the escalation of privilege levels to only occur when necessary and safe. In this case, when transitioning to debug mode from user mode, ensure that the privilege level remains at or below the current level.
+2.  Implement proper checks and restrictions to prevent unauthorized access to higher-privilege resources.
+3.  Review the code for other potential instances of privilege escalation vulnerabilities.
+
+ORIGINAL CODE:
+```
+               module csr_regfile #( ... )
+                  
+                  // check that we actually want to enter debug depending on the privilege level we are currently in
+                  unique case (priv_lvl_o)
+                        
+                        riscv::PRIV_LVL_M: begin
+                           
+                           debug_mode_d = dcsr_q.ebreakm;
+                           
+                        
+                  
+               ...
+                  
+                        
+                        riscv::PRIV_LVL_U: begin
+                           
+                           debug_mode_d = dcsr_q.ebreaku;
+                           
+                        
+                  
+               ...
+                  
+                  assign priv_lvl_o = (debug_mode_q && umode_i) ? riscv::PRIV_LVL_M : priv_lvl_q;
+                  
+               ...
+                  
+                  debug_mode_q  <= debug_mode_d;
+                  
+               ...
+       
+```

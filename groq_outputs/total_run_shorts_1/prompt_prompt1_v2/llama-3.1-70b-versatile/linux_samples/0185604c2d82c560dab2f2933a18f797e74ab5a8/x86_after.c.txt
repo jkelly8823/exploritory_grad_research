@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 11-13
+VULNERABILITY_DESCRIPTION:
+The code contains a potential information leakage vulnerability through the mutex locking and unlocking mechanism.
+
+EXPLANATION:
+The functions `kvm_vm_ioctl_set_pit` and `kvm_vm_ioctl_set_pit2` use `mutex_lock` and `mutex_unlock` to protect access to `kvm->arch.vpit->pit_state`. However, within the locked sections, `memcpy` is used to copy data from user-provided structures (`ps` and `kvm_pit_state2` respectively) into kernel-internal structures. This practice can lead to a vulnerability where sensitive kernel data becomes exposed if the user-provided structures contain malicious data. Additionally, if `kvm_pit_load_count` performs any operations on the heap or stack, the `memcpy` operations could potentially overwrite sensitive data, leading to further security issues.
+
+RECOMMENDATIONS:
+1. **Inputs validation**: Validate the input from the user-provided structures before copying it into kernel-internal structures to prevent potential buffer overflows and data corruption.
+2. **Use safer copying functions**: Instead of using `memcpy`, consider using safer functions like `kmemdup` or `memset` when dealing with potentially untrusted data.
+3. **Use robust error handling**: Implement robust error handling to handle any potential errors during the execution of the locked sections.
+
+ORIGINAL CODE:
+```c
+static int kvm_vm_ioctl_set_pit(struct kvm *kvm, struct kvm_pit_state *ps)
+{
+	int i;
+	mutex_lock(&kvm->arch.vpit->pit_state.lock);
+	memcpy(&kvm->arch.vpit->pit_state, ps, sizeof(struct kvm_pit_state));
+	for (i = 0; i < 3; i++)
+		kvm_pit_load_count(kvm, i, ps->channels[i].count, 0);
+	mutex_unlock(&kvm->arch.vpit->pit_state.lock);
+	return 0;
+}
+
+static int kvm_vm_ioctl_set_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps)
+{
+	int start = 0;
+	int i;
+	u32 prev_legacy, cur_legacy;
+	mutex_lock(&kvm->arch.vpit->pit_state.lock);
+	prev_legacy = kvm->arch.vpit->pit_state.flags & KVM_PIT_FLAGS_HPET_LEGACY;
+	cur_legacy = ps->flags & KVM_PIT_FLAGS_HPET_LEGACY;
+	memcpy(&kvm->arch.vpit->pit_state.channels, &ps->channels,
+	       sizeof(kvm->arch.vpit->pit_state.channels));
+	kvm->arch.vpit->pit_state.flags = ps->flags;
+	for (i = 0; i < 3; i++)
+		kvm_pit_load_count(kvm, i, kvm->arch.vpit->pit_state.channels[i].count, start);
+ mutex_unlock(&kvm->arch.vpit->pit_state.lock);
+	return 0;
+}
+```

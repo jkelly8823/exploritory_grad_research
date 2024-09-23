@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+Unvalidated User Input: The `nfhd_get_capacity` function is called with user-controlled input `i` without any validation, which could lead to unexpected behavior or crashes.
+EXPLANATION:
+The `nfhd_get_capacity` function is called within a loop that iterates from `NFHD_DEV_OFFSET` to 24. The value of `i` is used directly as an argument to the function without any validation or sanitization. This could potentially allow an attacker to manipulate the behavior of the function by crafting an input that causes the function to access or write to an invalid location. Furthermore, the function's return value is not checked properly, as the code will continue to the next iteration if the function call fails.
+RECOMMENDATIONS:
+1. Validate the input `i` to ensure it is within a valid range before passing it to the `nfhd_get_capacity` function.
+2. Check the return value of `nfhd_get_capacity` and handle any errors that may occur.
+3. Consider using a more robust and secure way to handle user input, such as using bounds checking or whitelisting specific input values.
+
+ORIGINAL CODE:
+```c
+static int __init nfhd_init(void)
+{
+	u32 blocks, bsize;
+	int ret;
+	int i;
+
+	nfhd_id = nf_get_id("XHDI");
+	if (!nfhd_id)
+		return -ENODEV;
+
+	ret = register_blkdev(major_num, "nfhd");
+	if (ret < 0) {
+		pr_warn("nfhd: unable to get major number\n");
+		return ret;
+	}
+
+	if (!major_num)
+		major_num = ret;
+
+	for (i = NFHD_DEV_OFFSET; i < 24; i++) {
+		if (nfhd_get_capacity(i, 0, &blocks, &bsize))
+			continue;
+		nfhd_init_one(i, blocks, bsize);
+```

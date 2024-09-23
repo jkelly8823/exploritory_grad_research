@@ -1,0 +1,88 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 34-36
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) Vulnerability due to a potential kernel panic caused by the printk function without proper error handling.
+
+EXPLANATION:
+The vulnerability is found in the `unit_get` function, specifically in the `printk(KERN_ERR "PPP: No free memory for idr\n");` line. This printk function can potentially cause a kernel panic if the `idr_pre_get` function fails. The reason for this is that printk can allocate kernel memory, and if the `idr_pre_get` function has already failed due to out-of-memory condition, printk can cause a kernel panic by attempting to allocate memory again.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the printk function should be used with caution and only when absolutely necessary. In this case, it's better to return an error code directly instead of attempting to log an error message through printk. The recommended fix is to replace the printk function with a simple error return statement, as shown below:
+
+```c
+if (!idr_pre_get(p, GFP_KERNEL)) {
+    return -ENOMEM;
+}
+```
+
+ORIGINAL CODE:
+```c
+    */
+    dev_net_set(dev, net);
+
+    ret = -EEXIST;
+    mutex_lock(&pn->all_ppp_mutex);
+
+    if (unit < 0) {
+        unit = unit_get(&pn->units_idr, ppp);
+        if (unit < 0) {
+            *retp = unit;
+            goto out2;
+        }
+    } else {
+        if (unit_find(&pn->units_idr, unit))
+            goto out2; /* unit already exists */
+        /*
+         * if caller need a specified unit number
+        ppp->closing = 1;
+        ppp_unlock(ppp);
+        unregister_netdev(ppp->dev);
+    } else
+        ppp_unlock(ppp);
+
+    unit_put(&pn->units_idr, ppp->file.index);
+    ppp->file.dead = 1;
+    ppp->owner = NULL;
+    wake_up_interruptible(&ppp->file.rwait);
+
+ * by holding all_ppp_mutex
+ */
+
+    /* associate pointer with specified number */
+    static int unit_set(struct idr *p, void *ptr, int n)
+    {
+        int unit, err;
+
+    again:
+    }
+
+    err = idr_get_new_above(p, ptr, n, &unit);
+    if (err == -EAGAIN)
+        goto again;
+
+    if (unit != n) {
+        idr_remove(p, unit);
+        return -EINVAL;
+    }
+
+    /* get new free unit number and associate pointer with it */
+    static int unit_get(struct idr *p, void *ptr)
+    {
+        int unit, err;
+
+    again:
+        if (!idr_pre_get(p, GFP_KERNEL)) {
+            printk(KERN_ERR "PPP: No free memory for idr\n");
+            return -ENOMEM;
+        }
+
+        err = idr_get_new_above(p, ptr, 0, &unit);
+        if (err == -EAGAIN)
+            goto again;
+
+        return unit;
+    }
+
+    /* put unit number back to a pool */
+    static void unit_put(struct idr *p, int n)
+```

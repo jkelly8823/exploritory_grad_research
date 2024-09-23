@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 9-10
+VULNERABILITY_DESCRIPTION:
+Possible use-after-free vulnerability if chan_create fails and sk_free is called.
+Possible resource leak if chan_create fails and chan is not freed.
+
+EXPLANATION:
+The given code checks if the chan_create operation fails, and if it does, sk_free is called which frees the channel specific data and the memory allocated to the sk. However, before chan_create, peer is checked which would lead the code to execute channel create operation but after that, it holds the channel reference. The vulnerable condition may occur when the channel is created and then the channel hold operation fails. It would be more critical to keep in mind that, memory leaks or use-after-free scenarios are not generally visible to the naked eye because these require tools that track and identify them.
+
+RECOMMENDATIONS:
+It would be better to add proper error handling for chan_create and sk creation, also reviewing all usages of chan and sk in the same class to avoid such use-after-free or memory leak issues.
+
+Additionally, you might also check how is l2cap_chan_hold implemented given chan is allocated with create. We could even assume chan at initial state is created as an uninitialized variable potentially triggering other leak-related issues at chan.
+
+ORIGINAL CODE:
+
+
+    BT_DBG("sock %p, sk %p", sock, sk);
+
+    memset(la, 0, sizeof(struct sockaddr_l2));
+    addr->sa_family = AF_BLUETOOTH;
+    *len = sizeof(struct sockaddr_l2);
+
+    if (peer) {
+
+    chan = l2cap_chan_create();
+    if (!chan) {
+        sk_free(sk);
+        return NULL;
+    }
+
+    l2cap_chan_hold(chan);

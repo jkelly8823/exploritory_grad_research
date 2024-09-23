@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+ This code is vulnerable to a potential null pointer dereference due to a missing check before using the `crst_table_alloc` function.
+
+EXPLANATION: 
+The vulnerability lies in the fact that the function `crst_table_alloc` can potentially return a null pointer if an error occurs during the allocation process. The return value of this function is directly cast to a `pgd_t *` and returned from the `pgd_alloc` function. However, there is no check to ensure that the returned pointer is not null before it is used or returned. This could lead to a null pointer dereference and potentially cause the program to crash.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, it is recommended to add a null pointer check after the call to `crst_table_alloc`. If the returned pointer is null, an error should be handled accordingly, for example, by returning an error code from the `pgd_alloc` function.
+
+```
+static inline pgd_t *pgd_alloc(struct mm_struct *mm)
+{
+	spin_lock_init(&mm->context.list_lock);
+	INIT_LIST_HEAD(&mm->context.pgtable_list);
+	INIT_LIST_HEAD(&mm->context.gmap_list);
+	pgd_t *pgd = (pgd_t *) crst_table_alloc(mm);
+	if (pgd == NULL) {
+		// Handle allocation error, for example, return an error code
+		return NULL;
+	}
+	return pgd;
+}
+```
+
+ORIGINAL CODE:
+```c
+static inline pgd_t *pgd_alloc(struct mm_struct *mm)
+{
+	spin_lock_init(&mm->context.list_lock);
+	INIT_LIST_HEAD(&mm->context.pgtable_list);
+	INIT_LIST_HEAD(&mm->context.gmap_list);
+	return (pgd_t *) crst_table_alloc(mm);
+}
+#define pgd_free(mm, pgd) crst_table_free(mm, (unsigned long *) pgd)
+
+static inline void pmd_populate(struct mm_struct *mm,
+				pmd_t *pmd, pgtable_t pte)
+```

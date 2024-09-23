@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability when dereferencing ip_end.
+EXPLANATION:
+In the given code segment, the pointer `ip_end` is calculated by adding `info->func_size` to `ip`. However, the code does not check if the calculated `ip_end` is within the bounds of the allocated memory. This could lead to a buffer overflow when dereferencing `ip_end`, especially if `info->func_size` is larger than the actual size of the allocated memory. In lines 10 and 11, the code checks if `ip` is within the bounds of `ip_end`, but this check is not sufficient to prevent a buffer overflow, as the calculation of `ip_end` itself may be incorrect.
+
+RECOMMENDATIONS:
+1. Ensure that `info->func_size` is validated and within the expected range before calculating `ip_end`.
+2. Check if `info->func_size` is less than or equal to the actual size of the allocated memory for `ip`.
+3. Use a safer method of calculating `ip_end`, such as using `info->func_size` as a offset from the base of the allocated memory, rather than from `ip`.
+4. Consider using pointer arithmetic with bounds checking, such as by using the `ARRAY_SIZE` macro or a similar mechanism, to prevent buffer overflows.
+
+ORIGINAL CODE:
+```
+static int get_frame_info(struct mips_frame_info *info)
+{
+	bool is_mmips = IS_ENABLED(CONFIG_CPU_MICROMIPS);
+	union mips_instruction insn, *ip, *ip_end;
+	const unsigned int max_insns = 128;
+	unsigned int last_insn_size = 0;
+	unsigned int i;
+	bool saw_jump = false;
+	if (!ip)
+		goto err;
+
+	ip_end = (void *)ip + info->func_size;
+
+	for (i = 0; i < max_insns && ip < ip_end; i++) {
+		ip = (void *)ip + last_insn_size;
+		if (is_mmips && mm_insn_16bit(ip->halfword[0])) {
+			insn.word = ip->halfword[0] << 16;
+			last_insn_size = 2;
+		} else if (is_mmips) {
+```

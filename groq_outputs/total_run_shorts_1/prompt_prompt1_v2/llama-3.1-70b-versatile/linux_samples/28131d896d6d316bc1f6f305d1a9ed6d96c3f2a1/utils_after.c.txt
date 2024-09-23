@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 68
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow due to the misuse of BIT() macro.
+
+EXPLANATION:
+The BIT() macro is used to set a specific bit in an unsigned integer. However, if the argument to BIT() is larger than the number of bits in the target integer type (u8 in this case), it can lead to undefined behavior and potentially a buffer overflow.
+
+In the function iwl_mvm_mac80211_ac_to_ucode_ac, the expression ffs(mask) - 1 is passed to the BIT() macro. The ffs() function returns the position of the first non-zero bit in the word, and the result is then used as an index to a bit in the u8 type.
+
+However, there is no bounds checking on the value of mask before it is passed to ffs(), which means that if mask is 0 or has a very large value, ffs() may return a value that is larger than the number of bits in the u8 type. This could potentially cause a buffer overflow when the BIT() macro is used.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking on the value of mask before it is passed to ffs(). For example:
+
+```c
+u8 iwl_mvm_mac80211_ac_to_ucode_ac(enum ieee80211_ac_numbers ac)
+{
+    if (ffs(mask) - 1 >= 8)
+    {
+        // Handle error: Bit position out of range
+        return 0;
+    }
+    return BIT(ffs(mask) - 1);
+}
+```
+
+Alternatively, you could use a different method to convert the ac value to a u8 that does not involve using the BIT() macro.
+
+ORIGINAL CODE:
+```c
+u8 iwl_mvm_mac80211_ac_to_ucode_ac(enum ieee80211_ac_numbers ac)
+{
+    return BIT(ffs(mask) - 1);
+}
+```

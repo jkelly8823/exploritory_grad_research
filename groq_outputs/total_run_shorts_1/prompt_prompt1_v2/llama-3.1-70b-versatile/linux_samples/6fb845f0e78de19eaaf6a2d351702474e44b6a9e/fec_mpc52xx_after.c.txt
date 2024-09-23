@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability in network queue wake-up.
+EXPLANATION:
+The function dev_consume_skb_irq(skb) is used to consume and free a given skb (socket buffer). However, in the given code snippet, it is freed and then the function netif_wake_queue(dev) is called afterwards without any reference to theskb. This is a vulnerability if skb skb was the last reference to a given network queue as we don't have visibility to the rest of the code we assume this is the case. When freed skb references and skb queue references get out of sync. 
+RECOMMENDATIONS:
+To fix this vulnerability, netif_wake_queue(dev) should be called before freeing the skb skb using dev_consume_skb_irq(skb), ensuring all references are properly handled before freeing. Here is a corrected code snippet: 
+
+```c
+ dma_unmap_single(dev->dev.parent, bd->skb_pa, skb->len,
+                    DMA_TO_DEVICE);
+
+ netif_wake_queue(dev);
+ dev_consume_skb_irq(skb);
+}
+_spin_unlock(&priv->lock);
+```
+
+ORIGINAL CODE:
+```c
+ dma_unmap_single(dev->dev.parent, bd->skb_pa, skb->len,
+                    DMA_TO_DEVICE);
+
+ dev_consume_skb_irq(skb);
+}
+ spin_unlock(&priv->lock);
+
+ netif_wake_queue(dev);
+```

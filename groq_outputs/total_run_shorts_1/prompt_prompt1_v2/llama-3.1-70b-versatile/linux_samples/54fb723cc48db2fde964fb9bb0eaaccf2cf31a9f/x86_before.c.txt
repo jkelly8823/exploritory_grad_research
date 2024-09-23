@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-8 (around the `(case KVM_X86_SETUP_MCE: {`) and 15-16 (`srcu_read_lock(&vcpu->kvm->srcu);`), 24 (`srcu_read_lock(&kvm->srcu);`)
+VULNERABILITY_DESCRIPTION:
+Inadequate synchronization in critical sections.
+
+EXPLANATION:
+In this segment of code, there are critical sections that require synchronization, such as handling `srcu_read_lock` and `srcu_read_unlock`. 
+
+A potential vulnerability was discovered in this code. Specifically, I've identified potential incorrect usage of `srcu_read_lock`. `srcu_read_lock` should be paired with `srcu_read_unlock` to prevent deadlocks, but in some paths (e.g. in the `case KVM_X86_SETUP_MCE` block,  the lock may never get unlocked, as the method terminates early after evaluating `!kvm_event_needs_reinjection(vcpu)`).
+
+Additionally, there may be deadlocks as seen between the `srcu_read_lock` calls in `vapic_exit` and `update_cr8_intercept` functions, assuming `update_cr8_intercept` calls `vapic_exit` directly or indirectly.
+
+To fix this vulnerability, we need to refactor the synchronization mechanisms to ensure the proper acquisition and release of locks in every path.
+
+RECOMMENDATIONS:
+To fix the potential vulnerability:
+
+1. In the `case KVM_X86_SETUP_MCE:` block, ensure the `srcu_read_unlock` is reached in every path.
+
+2. Review the code for any indirect calls of `vapic_exit` from `update_cr8_intercept` that could lead to nested locks. If this is the case, refactor the functions to prevent the nested lock attempts.
+
+3. Ensure all usage of `srcu_read_lock` and `srcu_read_unlock` are paired correctly and handled within all exception paths to avoid potential deadlocks.
+
+ORIGINAL CODE:
+```
+r = -EFAULT;
+if (copy_from_user(&va, argp, sizeof va))
+	goto out;
+r = 0;
+kvm_lapic_set_vapic_addr(vcpu, va.vapic_addr);
+break;
+}
+case KVM_X86_SETUP_MCE: {
+	u64 mcg_cap;
+	!kvm_event_needs_reinjection(vcpu);
+}
+
+static int vapic_enter(struct kvm_vcpu *vcpu)
+{
+	struct kvm_lapic *apic = vcpu->arch.apic;
+	struct page *page;
+
+	if (!apic || !apic->vapic_addr)
+		return 0;
+
+	page = gfn_to_page(vcpu->kvm, apic->vapic_addr >> PAGE_SHIFT);
+	if (is_error_page(page))
+		return -EFAULT;
+
+	vcpu->arch.apic->vapic_page = page;
+	return 0;
+}
+
+static void vapic_exit(struct kvm_vcpu *vcpu)
+{
+	struct kvm_lapic *apic = vcpu->arch.apic;
+	int idx;
+
+	if (!apic || !apic->vapic_addr)
+		return;
+
+	idx = srcu_read_lock(&vcpu->kvm->srcu);
+	kvm_release_page_dirty(apic->vapic_page);
+	mark_page_dirty(vcpu->kvm, apic->vapic_addr >> PAGE_SHIFT);
+	srcu_read_unlock(&vcpu->kvm->srcu, idx);
+}
+
+static void update_cr8_intercept(struct kvm_vcpu *vcpu)
+{
+	int max_irr, tpr;
+
+	struct kvm *kvm = vcpu->kvm;
+
+	vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
+	r = vapic_enter(vcpu);
+	if (r) {
+		srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+		return r;
+	}
+
+	r = 1;
+	while (r > 0) {
+		if (vcpu->arch.mp_state == KVM_MP_STATE_RUNNABLE &&
+
+	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+
+	vapic_exit(vcpu);
+
+	return r;
+}
+
+static inline int complete_emulated_io(struct kvm_vcpu *vcpu)
+```

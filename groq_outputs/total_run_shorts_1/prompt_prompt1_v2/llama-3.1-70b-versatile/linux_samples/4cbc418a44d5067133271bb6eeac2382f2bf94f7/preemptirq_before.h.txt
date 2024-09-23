@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Format String Vulnerability
+
+EXPLANATION:
+The code provided appears to be a tracing point in a Linux kernel module. The vulnerability is located in the TP_printk function call at line 8-9. The format string provided does not use any of the format specifiers found in the "%pS" directive. The "%pS" format specifier expects a function name as a symbol address. However, the address is computed dynamically. 
+
+In order to print the correct caller and parent symbol names, they must first be converted to symbol names with kallsyms_lookup or another kallsyms interface. However, they are being passed to the "%pS" directive without that conversion, which can lead to an incorrect interpretation of the address and potentially incorrect function name. Moreover, an attacker with control over the address passed to "%pS" could cause the printing of text and codes that are not the expected function name.
+
+RECOMMENDATIONS:
+Use kallsyms_lookup to fetch the function name associated with the IP address before passing it to TP_printk and print it using "%s". Alternatively, avoid using "%pS" directive directly on dynamically computed addresses.
+
+```cpp
+#include <linux/kallsyms.h>
+
+struct kallsym_symbol *caller_sym = kallsyms_lookup((unsigned long)_stext + __entry->caller_offs, NULL);
+struct kallsym_symbol *parent_sym = kallsyms_lookup((unsigned long)_stext + __entry->parent_offs, NULL);
+
+TP_printk("caller=%s parent=%s",
+          caller_sym ? (void *)caller_sym->name : "unknown",
+          parent_sym ? (void *)parent_sym->name : "unknown");
+```
+
+ORIGINAL CODE:
+```c
+	TP_ARGS(ip, parent_ip),
+
+	TP_STRUCT__entry(
+		__field(u32, caller_offs)
+		__field(u32, parent_offs)
+	),
+
+	TP_fast_assign(
+		__entry->caller_offs = (u32)(ip - (unsigned long)_stext);
+		__entry->parent_offs = (u32)(parent_ip - (unsigned long)_stext);
+	),
+
+	TP_printk("caller=%pS parent=%pS",
+		  (void *)((unsigned long)(_stext) + __entry->caller_offs),
+```

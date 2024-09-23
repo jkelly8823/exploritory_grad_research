@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24
+VULNERABILITY_DESCRIPTION:
+Integer overflow and TOCTOU (Time-of-Check to Time-of-Use) vulnerability present.
+EXPLANATION:
+The code snippet given doesn't directly lead to a vulnerability but reviewing it we see use of non-checked methods in handling pdev_idx, from these findings, this snippet that doesn't allow integer overflow but calls ath11k_hw_get_mac_from_pdev_id() which uses hw->hw_hal_params->hal_ringmask-> mac_id[qca6390][get_real_pdev_id(pdev_id, ath11k_get_pdev_id(hw->pdev))].   Since this relies on a number that is dependent on pdev_idx it raises concerns about the potential for TOCTOU [Time-of-Check to Time-of-Use] in the methods.  This type of behavior makes a code segment rely on preexisting knowledge. ath11k_hw_get_mac_from_pdev_id requires pdev_idx for its parameter as well. TOCTOU errors are examples of race conditions which can be exploited. An attacker would have to be quick and probably have elevated privileges but since we don't evaluate a full file we wouldn't know if they should have access to this information.
+
+RECOMMENDATIONS:
+    - Before calling the function, verify that the value used for pdev_idx hasn't changed between time-of-check and time-of-use.
+    - Implement or provide a constant-like alternative instead of passing user data.
+    - For parameters in a function, limit values to reasonable values for their input parameters.
+    - In function parameters use some form of integer validation, to check for boundary values before potentially turning those numbers to bad integer values.
+
+ORIGINAL CODE:
+```c
+#ifndef ATH11K_HW_H
+#define ATH11K_HW_H
+
+#include "hal.h"
+#include "wmi.h"
+
+/* Target configuration defines */
+
+	u8 host2rxdma[ATH11K_EXT_IRQ_GRP_NUM_MAX];
+};
+
+struct ath11k_hw_hal_params {
+	enum hal_rx_buf_return_buf_manager rx_buf_rbm;
+};
+
+struct ath11k_hw_params {
+	const char *name;
+	u16 hw_rev;
+	u8 max_radios;
+	u32 hal_desc_sz;
+	bool fix_l1ss;
+	u8 max_tx_ring;
+	const struct ath11k_hw_hal_params *hal_params;
+};
+
+struct ath11k_hw_ops {
+	u8 (*get_hw_mac_from_pdev_id)(int pdev_id);
+extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qca6390;
+extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qcn9074;
+
+extern const struct ath11k_hw_hal_params ath11k_hw_hal_params_ipq8074;
+extern const struct ath11k_hw_hal_params ath11k_hw_hal_params_qca6390;
+
+static inline
+int ath11k_hw_get_mac_from_pdev_id(struct ath11k_hw_params *hw,
+				   int pdev_idx)
+{
+```

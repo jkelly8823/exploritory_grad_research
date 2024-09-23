@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a pointer address overwrite vulnerability. If the addition in the line `ctxt->memopp->addr.mem.ea = address_mask(ctxt, ctxt->memopp->addr.mem.ea + ctxt->_eip);` causes an integer overflow, it can result in a crafted memory address being written to the structure member `ctxt->memopp->addr.mem.ea`. This can lead to arbitrary memory access and potentially arbitrary code execution.
+
+EXPLANATION:
+The vulnerability lies in the addition `ctxt->memopp->addr.mem.ea + ctxt->_eip`. If `ctxt->_eip` is sufficiently large and the result of the addition overflows, the resulting value will be a very small number. Then, when this value is assigned to `ctxt->memopp->addr.mem.ea`, it may access memory locations that are not intended, including potentially sensitive or security-critical data.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, you should perform bounds checking on the result of the addition before assigning it to `ctxt->memopp->addr.mem.ea`. You can use overflow detection functions or manual overflow checks to ensure that the result does not overflow.
+
+For example:
+```c
+uint64_t new_ea = ctxt->memopp->addr.mem.ea + ctxt->_eip;
+if (new_ea < ctxt->memopp->addr.mem.ea) {
+    // Handle overflow
+} else {
+    ctxt->memopp->addr.mem.ea = address_mask(ctxt, new_ea);
+}
+```
+
+ORIGINAL CODE:
+```c
+/* Decode and fetch the destination operand: register or memory. */
+rc = decode_operand(ctxt, &ctxt->dst, (ctxt->d >> DstShift) & OpMask);
+
+if (ctxt->rip_relative && likely(ctxt->memopp))
+    ctxt->memopp->addr.mem.ea = address_mask(ctxt,
+        ctxt->memopp->addr.mem.ea + ctxt->_eip);
+
+done:
+```

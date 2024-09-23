@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+The code does not check for NULL pointer dereference after allocating memory using kmalloc.
+
+EXPLANATION:
+In the given code, kmalloc is used to dynamically allocate memory for a struct vhost_msg_node. However, if the allocation fails, kmalloc returns NULL. Although the code correctly checks if the allocation was successful and returns NULL in that case, it does not prevent the possibility of a NULL pointer dereference in other parts of the code that may be calling this function and not checking for the return value. Furthermore, kmalloc can fail, but the code does not attempt to release any previously allocated resources before returning. However, it's also worth noting that in this case, no previous resource has been allocated and no other resources need to be released.
+
+A more pressing issue is the fact that kmalloc with GFP_KERNEL flag can sleep. This means that calling kmalloc with this flag can cause unpredictable behavior if this function is called in an atomic context.
+
+RECOMMENDATIONS:
+- Check the context in which this function will be used. If it's used in an atomic context where sleeping is not allowed, consider using GFP_ATOMIC or GFP_NOWAIT flags with kmalloc. However, using GFP_ATOMIC or GFP_NOWAIT can lead to memory allocation failures.
+- Always check for NULL pointer dereference after allocation, but also ensure that if this function is used elsewhere in the code, it also checks for the returned pointer and handles it accordingly.
+
+ORIGINAL CODE:
+	struct vhost_msg_node *node = kmalloc(sizeof *node, GFP_KERNEL);
+	if (!node)
+		return NULL;
+
+	/* Make sure all padding within the structure is initialized. */
+	memset(&node->msg, 0, sizeof node->msg);
+	node->vq = vq;
+	node->msg.type = type;
+	return node;
+}

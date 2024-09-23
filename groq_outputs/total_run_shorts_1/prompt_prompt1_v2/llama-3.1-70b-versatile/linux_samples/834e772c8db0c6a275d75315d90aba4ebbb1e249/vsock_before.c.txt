@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 144-146
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability in the `vhost_vsock_free` function.
+EXPLANATION:
+In the `vhost_vsock_free` function, after freeing the `vhost_vsock` object, the `vsock_for_each_connected_socket` function is called to reset orphan connections. This can lead to a use-after-free vulnerability if any connections still hold a reference to the freed `vhost_vsock` object.
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to re-order the operations in the `vhost_vsock_free` function so that all connections are reset and disconnected before freeing the `vhost_vsock` object.
+
+```c
+void vhost_vsock_free(struct file *file) {
+    struct vhost_vsock *vsock = file->private_data;
+
+    /* Reset and disconnect all connections */
+    vsock_for_each_connected_socket(vhost_vsock_reset_orphans);
+
+    spin_lock_bh(&vhost_vsock_lock);
+    list_del(&vsock->list);
+    spin_unlock_bh(&vhost_vsock_lock);
+
+    /* Free the vhost_vsock object */
+    kfree(vsock);
+}
+```
+
+Note that it's also a good practice to add checks to ensure that all connections are properly reset and disconnected before freeing the `vhost_vsock` object.
+
+ORIGINAL CODE:
+Provided, but not included here due to its size.

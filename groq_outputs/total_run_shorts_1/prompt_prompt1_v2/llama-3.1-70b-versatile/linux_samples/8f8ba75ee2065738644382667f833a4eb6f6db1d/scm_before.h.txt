@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Insecure function call to `memset`.
+
+EXPLANATION:
+The `memset` function is used to zero out the memory occupied by the `scm` struct. However, if the size of the struct is larger than the size of the largest object that `memset` can handle (usually the size of a long), `memset` may not completely zero out the struct. This can lead to padding bytes not being zeroed out, which can potentially lead to information exposure or other security vulnerabilities. Additionally, `memset` can be optimized away by the compiler if the object being zeroed is not used after the call, which can also introduce vulnerabilities.
+
+In this case, the usage of `memset` to zero out the entire struct, followed immediately by another function call, could potentially be optimized away if the compiler decides that the `memset` call does not affect the behavior of the program. However, this is contingent on the compiler's behavior, and it is still generally safer to avoid using `memset` to zero out large objects in this manner.
+
+RECOMMENDATIONS:
+Instead of using `memset`, it would be safer to initialize the struct's members individually to ensure that the entire struct is properly zeroed out, or use a safer function like `calloc` to ensure that the struct is zeroed out. However, since `scm_cookie` is likely to be a struct containing various elements of different types, using `calloc` might not be feasible.
+
+To ensure proper initialization of the `scm_cookie` struct, we can assign zero to each member of the struct individually. Alternatively, we can use a designated initializer (if the struct's members are known) to initialize the struct with zeroes.
+
+ORIGINAL CODE:
+```
+static __inline__ int scm_send(struct socket *sock, struct msghdr *msg,
+			       struct scm_cookie *scm)
+{
+	memset(scm, 0, sizeof(*scm));
+	unix_get_peersec_dgram(sock, scm);
+	if (msg->msg_controllen <= 0)
+		return 0;
+	return __scm_send(sock, msg, scm);
+}
+```

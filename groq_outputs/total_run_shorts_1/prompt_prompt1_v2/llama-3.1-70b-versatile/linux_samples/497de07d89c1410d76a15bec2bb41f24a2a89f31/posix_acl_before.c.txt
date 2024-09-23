@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use After Free Vulnerability
+EXPLANATION:
+The code is vulnerable to a use-after-free vulnerability when `error` is `0`. In this scenario, the code sets `acl` to `NULL` on line 4. However, after this line, `acl` is still being used in the `set_cached_acl` function on line 7. If `acl` is free'd or reused after being set to `NULL`, this could result in undefined behavior, including crashes, data corruption, or even code injection.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should check for the null state of `acl` before passing it to `set_cached_acl`. This can be done by moving the second use of `acl` within the `if (error != 0)` condition or after verifying that `acl` is non-null.
+
+ORIGINAL CODE:
+	int error;
+
+	if (type == ACL_TYPE_ACCESS) {
+		error = posix_acl_equiv_mode(acl, &inode->i_mode);
+		if (error < 0)
+			return 0;
+		if (error == 0)
+			acl = NULL;
+	}
+
+	inode->i_ctime = current_time(inode);
+	set_cached_acl(inode, type, acl);

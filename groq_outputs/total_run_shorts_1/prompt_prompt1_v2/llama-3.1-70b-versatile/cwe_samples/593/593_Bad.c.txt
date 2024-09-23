@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to certificate validation and hardcoding of secret values. Additionally, there is an SSL context initialization issue.
+
+EXPLANATION:
+First, the code uses hardcoded file paths for certificates and private keys (CERT and CERT2), which is a security concern as it can be easily accessed and used maliciously. Furthermore, in the event an attacker is able to replace or manipulate these certificate files, it could allow them to impersonate the server.
+
+Second, even though the code is validating the loading of a certificate and private key, there is no validation of the certificate's chain of trust, version, serial number or the certificate's association with the server. An attacker could replace the certificate with their own, which might pass SSL_CTX_use_certificate_chain_file but still invalid.
+
+Third, on the SSL_CTX_new operation for SSLv23_method(). This function supports older, insecure versions of the SSL/TLS protocol. SSLv23 clients and servers use a compatibility mode to try to work with old servers which might not understand newer protocol versions.
+
+Fourth and last example,  there is an abnormal operation during 'SSL_CTX_set_default_passwd_cb'. When doing an assignment within a conditional, because in C assignment is evaluated to the value it's being assigned to.
+
+RECOMMENDATIONS:
+To address these security concerns, the following modifications can be made:
+- Dynamically provide certificate paths, do not hardcode them. This might be best done as environment variables or command-line parameters.
+- Use proper validation on certifcates such as full certificate chain verification.
+- When working with an SSL context, use TLS method or better preferably TLS_1_3_method (if available) or most recent versions available for this scenario.
+
+Here's an example for such:
+
+    char *cert_path_env = getenv('CERT_PATHEnvVarName ');
+[char *cert_env2]
+    if (cert_path_env) {
+        size_t len = strlen(cert_path_env) + 1;
+    char *certPath = malloc(len * sizeof(*cert_env2));
+        
+   [ strcpy(certPath, cert_path_env)... ]
+
+And:
+
+ SSL_CTX *ctx =  SSL_CTX_new(TLS_1_3_method();
+
+In addition, one must not depend on an assignment value in a conditional statement and should instead have both an assignment preceeding and evaluate "if( assignmnet_result ).", also you must not statically hardcode your 'callback function or password.'  
+Instead have this at runtime through a client environment.

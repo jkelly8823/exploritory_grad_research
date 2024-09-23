@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 419, 423, 427
+VULNERABILITYDESCRIPTION:
+A potential use-after-free vulnerability exists due to an incorrect modification of the 'lq_sta' structure in the rs_pretty_print_rate function.
+
+EXPLANATION:
+In the rs_pretty_print_rate function, the 'lq_sta' structure is modified without proper synchronization, leading to a use-after-free vulnerability. Specifically, the 'lq_sta->pers.dbg_fixed_rate' and 'lq_sta->pers.chain_signal' fields are modified without acquiring the necessary locks. This can cause undefined behavior if the 'lq_sta' structure is accessed concurrently by other threads.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add proper synchronization to the rs_pretty_print_rate function. This can be achieved by acquiring the necessary locks before modifying the 'lq_sta' structure. Additionally, you should ensure that the 'lq_sta' structure is not accessed concurrently by other threads while it is being modified.
+
+Here is an example of how the rs_pretty_print_rate function can be modified to add proper synchronization:
+
+```c
+int rs_pretty_print_rate(char *buf, int bufsz, const u32 rate)
+{
+    // ...
+
+    // Acquire the necessary locks
+    spin_lock(&mvm->drv_lock);
+
+    desc += scnprintf(buff + desc, bufsz - desc, "fixed rate 0x%X\n",
+                       lq_sta->pers.dbg_fixed_rate);
+    desc += scnprintf(buff + desc, bufsz - desc, "valid_tx_ant %s%s%s\n",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_A) ? "ANT_A," : "",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_B) ? "ANT_B," : "",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_C) ? "ANT_C" : "");
+    desc += scnprintf(buff + desc, bufsz - desc, "lq type %s\n",
+                       (is_legacy(rate)) ? "legacy" :
+                       is_vht(rate) ? "VHT" : "HT");
+
+    // Release the locks
+    spin_unlock(&mvm->drv_lock);
+
+    // ...
+}
+```
+
+ORIGINAL CODE:
+```c
+int rs_pretty_print_rate(char *buf, int bufsz, const u32 rate)
+{
+    // ...
+
+    desc += scnprintf(buff + desc, bufsz - desc, "fixed rate 0x%X\n",
+                       lq_sta->pers.dbg_fixed_rate);
+    desc += scnprintf(buff + desc, bufsz - desc, "valid_tx_ant %s%s%s\n",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_A) ? "ANT_A," : "",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_B) ? "ANT_B," : "",
+                       (iwl_mvm_get_valid_tx_ant(mvm) & ANT_C) ? "ANT_C" : "");
+    desc += scnprintf(buff + desc, bufsz - desc, "lq type %s\n",
+                       (is_legacy(rate)) ? "legacy" :
+                       is_vht(rate) ? "VHT" : "HT");
+
+    // ...
+}
+```

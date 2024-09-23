@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+ Uninitialized variable 'r' used as error return value, but its initial value is not explicitly validated before use in further computations. However, 'r' is set to '-E2BIG' before being used, which does validate the initial check but may indicate a different class of vulnerability, where non-checked error propagation from system calls, affects business logic decision making downstream, such as in 'do_cpuid_func'. In reality, our review of the function under consideration 'do_cpuid_func' would indicate it presents 2 concerns: values are used from system calls (or calls which could system call) in a conditional, without validation, in such cases when used explicitly in user data, application should check value prior to use.
+
+EXPLANATION:
+Since no validation of system call results was observed, the 'r' error is set for error validation checks but is likely not a vulnerability but an inconsistent coding practice. More concerning is the 'do_cpuid_func', which continues use of system calls, especially where input use could result in varying vectors of system call error handling, specifically error validation downstream from 'do_cpuid_func'.
+
+Without validating the error return value and other system call inputs from functions like 'do_host_cpuid', 'do_cpuid_func', there exists a potential vulnerability.
+The code uses values in conditional checks without performing validation. While these could potentially always set certain values that are not affected by user input in the local scope of the function that contains it - potentially in the context of the full file, being part of the scope or a valid initialization issue, input checks for system calls from inner functions when used, or conditional validation should exist.
+
+There is indirect concern here that variable is not checked, yet all functions are local scope or are otherwise always set as constants for non-write calls to 'do_cpuid_func'. However this in no way offers protection from vulnerability or incorrect code execution with user-supplied values when they are used to affect function operation. It's thus the obligation of both developers writing system-independent features code not to perform such untrusted actions during logical execution paths.
+
+Moreover, since the system calls used may have invalid values potentially returned for these error types; however, unless something would prevent or even enable them, or cause to process untrusted input system wide or using similar unchecked values then even logical errors can stem from these various unchecked calls from both function inputs and outputs that may happen if no actual prevention logic is used around handling invalid return codes. However the system 'do_cpuid_func'-value interaction logic of the sample presented likely not indicate anything necessarily security-bug like given an intended valid environment. Yet, as user-value interaction for low-value operations downstream are factored out - such operations seem deserving for treatment similar to that of error operations. Moreover a check is still necessary.
+
+
+RECOMMENDATIONS:
+To fix the potential vulnerability in 'do_cpuid_func', it's recommended to validate the system call return values to handle any errors before executing conditional logic operations with untrusted or partially-trusted values downstream. Since that is not an issue within the bounds of this analysis check use-cases interacting with a class using system calls where invalid values may be returned downstream not accounting for the potential of user to factor these values from otherwise non user-influenced scope in the system calls called - may not have to rely on system call values to perform error logic control decisions, yet here exists a corresponding opportunity with different function parameters potentially introducing or containing possible security concerns via potentially invalid operation function calls instead.
+
+
+Here's an example of how to validate error return values:
+
+```c
+int error = do_host_cpuid(entry, function, 0);
+if (error != 0) {
+    // Handle the error
+}
+++*nent;
+```
+
+Also check if '*nent' is a pointer that if it's null before dereferencing it:
+
+```c
+if (nent != NULL && *nent >= maxnent) {
+    goto out;
+}
+```
+
+ORIGINAL CODE:
+```c
+r = -E2BIG;
+
+if (*nent >= maxnent)
+    goto out;
+
+do_host_cpuid(entry, function, 0);
+++*nent;
+static int do_cpuid_func(struct kvm_cpuid_entry2 *entry, u32 func,
+                int *nent, int maxnent, unsigned int type)
+{
+    if (type == KVM_GET_EMULATED_CPUID)
+        return __do_cpuid_func_emulated(entry, func, nent, maxnent);
+
+    return __do_cpuid_func(entry, func, nent, maxnent);
+}
+```

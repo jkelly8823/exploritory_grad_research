@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability lies in the line where `procname` is being populated using `sprintf`. The buffer size of `procname` is 32 characters. However, the maximum possible value of `sock_i_ino(sk)` is not limited to 31 characters or less (assuming `sock_i_ino(sk)` returns an unsigned long int in decimal). 
+
+This can potentially lead to a buffer overflow when the length of `sock_i_ino(sk)` exceeds 31 characters. The `sprintf` function does not perform any bounds checking on its output and continues to write data to the buffer until the null-terminator is encountered, resulting in undefined behavior. 
+
+The buffer overflow vulnerability can lead to arbitrary code execution, in the context of the current process.
+
+RECOMMENDATIONS:
+Use `snprintf` instead of `sprintf` to prevent buffer overflow. `snprintf` limits the number of characters that can be written to the buffer.
+
+```c
+snprintf(bo->procname, sizeof(bo->procname), "%lu", sock_i_ino(sk));
+```
+
+Alternatively, use `uint32_t` or other appropriate data type for `sock_i_ino(sk)` and limit the value to a safe range.
+
+ORIGINAL CODE:
+```c
+struct list_head tx_ops;
+unsigned long dropped_usr_msgs;
+struct proc_dir_entry *bcm_proc_read;
+char procname [32]; /* inode number in decimal with \0 */
+};
+
+static inline struct bcm_sock *bcm_sk(const struct sock *sk)
+{
+
+	if (proc_dir) {
+		/* unique socket address as filename */
+		sprintf(bo->procname, "%lu", sock_i_ino(sk));
+		bo->bcm_proc_read = proc_create_data(bo->procname, 0644,
+						     proc_dir,
+						     &bcm_proc_fops, sk);
+	}
+```

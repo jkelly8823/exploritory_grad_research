@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-3, 5, 5
+VULNERABILITY_DESCRIPTION:
+Unvalidated Redirect with Possible SSRF Vulnerability
+
+EXPLANATION:
+The code snippet is vulnerable to an Unvalidated Redirect with possible Server-Side Request Forgery (SSRF) vulnerability. This vulnerability arises when the application does not validate the URL that the request parameter "url" is set to, before redirecting the user to that URL. 
+
+The vulnerable lines are: 
+
+- Lines 3: If the query string contains "url", then the application proceeds with getting the URL from this query string and redirecting the user to it.
+- Lines 5: Here the application is directly getting the URL from the "url" parameter without performing any validation of the URL.
+
+The redirect is performed with `response.sendRedirect(url)`. This will perform an HTTP 302 redirect, which could lead to the client performing an HTTP request on the malicious URL, potentially leading to SSRF if the input URL contains internal addresses the user should not have access to.
+
+RECOMMENDATIONS:
+To fix this vulnerability, validate and sanitize the URL parameter. If the application requires that the redirect be to a specific set of URLs or domains, add a whitelist. A good idea would be to convert the URL to its canonical form and then check if it starts with a trusted base URL.
+
+Here's an example of how this can be done:
+
+```java
+// Define a whitelist of trusted base URLs
+String[] trustedBaseUrls = {"http://example.com/"};
+
+// Convert URL to its canonical form and get the base URL
+String baseUrl = new URL(url).getProtocol() + "://" + new URL(url).getAuthority();
+
+// Check if the base URL is trusted before redirection
+if(Arrays.asList(trustedBaseUrls).contains(baseUrl)) {
+    response.sendRedirect(url);
+} else {
+    // Either log the issue and deny the request, or redirect to a safe default URL
+    // Do not redirect to the original URL
+}
+```
+ORIGINAL CODE:
+```java
+public class RedirectServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String query = request.getQueryString();if (query.contains("url")) {String url = request.getParameter("url");response.sendRedirect(url);}
+    }
+}
+```

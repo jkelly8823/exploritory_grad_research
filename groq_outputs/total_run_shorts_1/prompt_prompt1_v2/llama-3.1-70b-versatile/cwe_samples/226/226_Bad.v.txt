@@ -1,0 +1,91 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-30
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a vulnerability related to insecure handling of register updates. Specifically, it appears to be updating sensitive registers like `p_c` directly with user-provided data (`wdata`) without performing any validation or sanitization.
+
+EXPLANATION:
+The code updates the `p_c` registers based on the `address` of the write operation. If the `address` falls within a certain range, it allows the `p_c` registers to be updated directly with `wdata`. However, there is no validation or sanitization performed on the `wdata` before updating the `p_c` registers. This could potentially allow an attacker to write arbitrary data to sensitive registers, leading to vulnerabilities such as data tampering or privilege escalation.
+
+Furthermore, the `reglk_ctrl_i` value is used to conditionally update the `p_c` registers. However, the control flow logic is complex and might lead to unpredictable behavior if `reglk_ctrl_i` is not properly validated.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to perform validation and sanitization on the `wdata` before updating the `p_c` registers. This could involve checking the integrity of the data, ensuring it is within expected bounds, and verifying its authenticity.
+
+Additionally, the code should ensure that the `reglk_ctrl_i` value is properly validated and its control flow logic is simplified to avoid unpredictable behavior.
+
+Here's an example of how the code could be modified to address this vulnerability:
+```verilog
+always @(posedge clk_i)
+begin
+    ...
+    else if(en && we)
+    begin
+        case(address[8:3])
+            0:
+                if (wdata[0] == 0 || wdata[0] == 1) // Example validation
+                    start <= reglk_ctrl_i[1] ? start : wdata[0];
+                else
+                    wdata[0] <= 0; // Default value
+            1:
+                if (wdata[31:0] == 0 || wdata[31:0] == 0xFFFFFFFF) // Example validation
+                    p_c[3] <= reglk_ctrl_i[3] ? p_c[3] : wdata[31:0];
+                else
+                    wdata[31:0] <= 0; // Default value
+            ...
+        endcase
+    end
+end
+```
+ORIGINAL CODE:
+
+
+            module aes0_wrapper #(...)(...);
+            ...
+            always @(posedge clk_i)
+            
+              begin
+              
+                if(~(rst_ni && ~rst_1)) //clear p_c[i] at reset
+                
+                    begin
+                   
+                      start <= 0;
+                      p_c[0] <= 0;
+                      p_c[1] <= 0;
+                      p_c[2] <= 0;
+                      p_c[3] <= 0;
+                      ...
+                    
+                    end
+                
+                else if(en && we)
+                
+                    case(address[8:3])
+                
+                        0:
+                        
+                          start  <= reglk_ctrl_i[1] ? start  : wdata[0];
+                        
+                        1:
+                        
+                          p_c[3] <= reglk_ctrl_i[3] ? p_c[3] : wdata[31:0];
+                        
+                        2:
+                        
+                          p_c[2] <= reglk_ctrl_i[3] ? p_c[2] : wdata[31:0];
+                        
+                        3:
+                        
+                          p_c[1] <= reglk_ctrl_i[3] ? p_c[1] : wdata[31:0];
+                        
+                        4:
+                        
+                          p_c[0] <= reglk_ctrl_i[3] ? p_c[0] : wdata[31:0];
+                        
+                        ...
+                
+                        endcase
+                
+                end // always @ (posedge wb_clk_i)
+            
+            endmodule

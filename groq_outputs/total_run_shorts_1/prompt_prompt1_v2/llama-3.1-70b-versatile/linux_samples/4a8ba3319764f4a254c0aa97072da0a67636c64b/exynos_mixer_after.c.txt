@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 6-8
+VULNERABILITY_DESCRIPTION:
+The code contains a double unlock of a mutex.
+
+EXPLANATION:
+In the `mixer_wait_for_vblank` function, the mutex `mixer_ctx->mixer_mutex` is locked and then immediately unlocked when the `mixer_ctx->powered` condition is not met. However, the mutex is locked again before the initial unlock, which leads to an additional call to `mutex_unlock` after the initial unlock. This double unlock can cause undefined behavior and potentially crash the system.
+
+RECOMMENDATIONS:
+To fix this vulnerability, remove the second call to `mutex_unlock` when `mixer_ctx->powered` is not set. The corrected code should look like this:
+
+```c
+mutex_lock(&mixer_ctx->mixer_mutex);
+if (!mixer_ctx->powered) {
+    mutex_unlock(&mixer_ctx->mixer_mutex);
+    // Add a return statement here to avoid accessing mixer_ctx->mixer_mutex again
+    return;
+}
+```
+Additionally, it is recommended to handle the use-after-free condition that could potentially occur if `mixer_ctx->mixer_mutex` is accessed after the `return` statement.
+
+ORIGINAL CODE:
+```c
+static void mixer_wait_for_vblank(struct exynos_drm_manager *mgr)
+{
+    struct mixer_context *mixer_ctx = mgr_to_mixer(mgr);
+    int err;
+
+    mutex_lock(&mixer_ctx->mixer_mutex);
+    if (!mixer_ctx->powered) {
+        mutex_unlock(&mixer_ctx->mixer_mutex);
+    }
+    mutex_unlock(&mixer_ctx->mixer_mutex);
+
+    err = drm_vblank_get(mgr->crtc->dev, mixer_ctx->pipe);
+    if (err < 0) {
+        DRM_DEBUG_KMS("failed to acquire vblank counter\n");
+        return;
+    }
+
+    atomic_set(&mixer_ctx->wait_vsync_event, 1);
+
+    /*
+    return ret;
+}
+
+return 0;
+}
+
+static void mixer_unbind(struct device *dev, struct device *master, void *data)
+    struct mixer_context *ctx = dev_get_drvdata(dev);
+
+    mixer_mgr_remove(&ctx->manager);
+}
+
+static const struct component_ops mixer_component_ops = {
+    .bind    = mixer_bind,
+```

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-33
+VULNERABILITY_DESCRIPTION:
+The code does not properly handle potential concurrent access to the `st->preempted` variable.
+
+EXPLANATION:
+In the provided code, multiple functions (`record_steal_time`, `kvm_steal_time_set_preempted`) access and modify the `st->preempted` variable. However, this variable is not properly protected against concurrent access. 
+
+Specifically, in `record_steal_time`, `st->preempted` is accessed and cleared using `xchg(&st->preempted, 0)`. However, another function (`kvm_steal_time_set_preempted`) can set `st->preempted` to `KVM_VCPU_PREEMPTED` without acquiring any locks. This can result in a data race between the two functions.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can use a lock or atomic operations to protect the `st->preempted` variable. Here's an example of how you can modify the `kvm_steal_time_set_preempted` function to use atomic operations:
+
+```c
+static void kvm_steal_time_set_preempted(struct kvm_vcpu *vcpu)
+{
+    struct kvm_host_map map;
+    struct kvm_steal_time *st;
+    int preempted;
+
+    // ...
+
+    preempted = atomic_exchange(&st->preempted, KVM_VCPU_PREEMPTED);
+    // ...
+}
+```
+
+You should also use atomic operations when accessing and modifying `st->preempted` in the `record_steal_time` function.
+
+```c
+if (atomic_exchange(&st->preempted, 0) & KVM_VCPU_FLUSH_TLB)
+    kvm_vcpu_flush_tlb(vcpu, false);
+```
+
+ORIGINAL CODE:
+```c
+static void record_steal_time(struct kvm_vcpu *vcpu)
+{
+    // ...
+
+    if (xchg(&st->preempted, 0) & KVM_VCPU_FLUSH_TLB)
+        kvm_vcpu_flush_tlb(vcpu, false);
+
+    // ...
+}
+
+static void kvm_steal_time_set_preempted(struct kvm_vcpu *vcpu)
+{
+    struct kvm_host_map map;
+    struct kvm_steal_time *st;
+    // ...
+
+    st->preempted = vcpu->arch.st.preempted = KVM_VCPU_PREEMPTED;
+
+    // ...
+}
+```

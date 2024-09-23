@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-14
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) vulnerability through missing permission checks.
+
+EXPLANATION:
+The provided code snippet demonstrates potential insecure data access. The functions `crst_table_init` and `crst_table_downgrade` are called without checking if the input parameters (`mm->pgd` and `oldmm->context.asce_limit`) are valid or have appropriate permissions. Additionally, the assignments of `mm->context.alloc_pgste`, `mm->context.has_pgste`, and `mm->context.use_skey` are not validated for their correctness.
+
+However, the primary concern here is not about buffer overflows or injection vulnerabilities; it's related to data access without proper checks. The `crst_table_downgrade` function might potentially change data that should be protected or read-only.
+
+RECOMMENDATIONS:
+Add secure data access validation:
+- Validate the input parameters (`mm->pgd` and `oldmm->context.asce_limit`) before calling `crst_table_init` and `crst_table_downgrade`, ensuring they are not NULL or unset.
+- Ensure all data operations on `mm->context.alloc_pgste`, `mm->context.has_pgste`, `mm->context.use_skey` are properly configured or validated before assigning values.
+
+However, the true extend of the problem will rely on the full code as we don't know what exactly `crst_table_downgrade` does and what else might be affected by access with missing permission checks.
+
+ORIGINAL CODE:
+```c
+static inline int init_new_context(struct task_struct *tsk,
+                                   struct mm_struct *mm)
+{
+    cpumask_clear(&mm->context.cpu_attach_mask);
+    atomic_set(&mm->context.attach_count, 0);
+    mm->context.flush_mm = 0;
+    mm->context.asce_bits = _ASCE_TABLE_LENGTH | _ASCE_USER_BITS;
+    mm->context.asce_bits |= _ASCE_TYPE_REGION3;
+#ifdef CONFIG_PGSTE
+    mm->context.alloc_pgste = page_table_allocate_pgste;
+    mm->context.has_pgste = 0;
+    mm->context.use_skey = 0;
+#endif
+    mm->context.asce_limit = STACK_TOP_MAX;
+    crst_table_init((unsigned long *) mm->pgd, pgd_entry_type(mm));
+    return 0;
+}
+
+static inline void arch_dup_mmap(struct mm_struct *oldmm,
+                                 struct mm_struct *mm)
+{
+    if (oldmm->context.asce_limit < mm->context.asce_limit)
+        crst_table_downgrade(mm, oldmm->context.asce_limit);
+}
+
+static inline void arch_exit_mmap(struct mm_struct *mm)
+{
+```

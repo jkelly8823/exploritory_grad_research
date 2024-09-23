@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION: 
+Use After Free Vulnerability
+
+EXPLANATION:
+The code snippet presents a use after free vulnerability. At line 2, `llcp_sock->service_name` is freed using `kfree()`, and immediately set to `NULL`. However, there is no guarantee that `llcp_sock` and its contents are still valid after the `sock_llcp_release` function is called, which occurs later. This could potentially lead to a use after free vulnerability if `llcp_sock` is accessed after the `sock_llcp_release` function is called.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the `sock_llcp_release` function should be called before freeing any part of `llcp_sock`. Additionally, `llcp_sock` should be checked for `NULL` before attempting to access its members after the `sock_llcp_release` function has been called. 
+
+```c
+sock_unlink:
+	nfc_llcp_sock_unlink(&local->connecting_sockets, sk);
+	sock_llcp_release:
+		nfc_llcp_put_ssap(local, llcp_sock->ssap);
+		nfc_llcp_local_put(llcp_sock->local);
+	kfree(llcp_sock->service_name);
+	llcp_sock->service_name = NULL;
+```
+
+ORIGINAL CODE:
+```
+sock_unlink:
+	nfc_llcp_sock_unlink(&local->connecting_sockets, sk);
+	kfree(llcp_sock->service_name);
+	llcp_sock->service_name = NULL;
+
+sock_llcp_release:
+	nfc_llcp_put_ssap(local, llcp_sock->ssap);
+	nfc_llcp_local_put(llcp_sock->local);
+```

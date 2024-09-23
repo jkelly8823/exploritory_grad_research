@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Privilege Escalation Vulnerability due to inadequate capability checks.
+
+EXPLANATION:
+The code checks for the CAP_NET_ADMIN capability before executing a conditional statement. However, this check seems incomplete as it only verifies the CAP_NET_ADMIN capability but does not consider any other possible operations that might be executed without proper permissions.
+
+Moreover, the code is using a bitwise AND operation with 0xC000, which appears to check for specific command flags. However, this operation might not cover all possible scenarios.
+
+The primary concern is that the code uses the unverified `req_userhdr->cmd` value when CAP_NET_ADMIN capability is present, potentially leading to unauthorized execution of system commands.
+
+RECOMMENDATIONS:
+1. Verify that all possible operations executed within the conditional statement are indeed authorized and require the CAP_NET_ADMIN capability.
+2. Extend the capability check to cover all possible commands and scenarios.
+3. Validate the user data stored in `req_userhdr->cmd` to prevent arbitrary commands from being executed.
+
+ORIGINAL CODE:
+```c
+int hdr_space = nlmsg_total_size(GENL_HDRLEN + TIPC_GENL_HDRLEN);
+u16 cmd;
+
+if ((req_userhdr->cmd & 0xC000) && (!capable(CAP_NET_ADMIN)))
+    cmd = TIPC_CMD_NOT_NET_ADMIN;
+else
+    cmd = req_userhdr->cmd;
+```

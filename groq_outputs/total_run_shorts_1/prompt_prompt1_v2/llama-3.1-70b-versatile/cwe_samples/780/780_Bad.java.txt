@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION:
+Insecure error handling and exception masking.
+
+EXPLANATION:
+The provided code snippet has two main issues. The error handling in the `getRSACipher` method catches exceptions that are then simply logged with a message stating that they should never happen. This is misleading and could potentially hide real issues. If an exception occurs, the method will continue to return `null`, which is not properly handled. Furthermore, the method returns `null` when an exception occurs, which is not clearly indicated to the caller.
+
+The `RSA/NONE/NoPadding` encryption padding scheme is also used. While RSA is a secure encryption algorithm, the use of `NoPadding` makes the encryption vulnerable to Chosen-Ciphertext Attacks (CCAs) and Bleichenbacher attacks (also known as Million Message Attack). Vulnerable RSA encryption with no padding can be exploited if an attacker controls the ciphertexts being decrypted.
+
+RECOMMENDATIONS:
+1. Remove the unnecessary try-catch blocks and allow the exceptions to propagate, so they can be properly handled by the caller.
+2. Implement secure RSA encryption padding, such as OAEP (Optimal Asymmetric Encryption Padding) or PKCS#1 version 2 padding.
+3. Return an Optional or a defaultValue when an exception occurs.
+
+4. Preferably handle an exception in the caller method instead of returning `null` from this method. A caller can then decide whether to try to recover, communicate an error message to the user, or propagate the exception further.
+
+5. Do consider using more modern algorithms and techniques that offer both encryption and authentication.
+
+ORIGINAL CODE:
+```java
+public Cipher getRSACipher() {
+    Cipher rsa = null;
+    try {
+        rsa = javax.crypto.Cipher.getInstance("RSA/NONE/NoPadding");
+    } catch (java.security.NoSuchAlgorithmException e) {
+        log("this should never happen", e);
+    } catch (javax.crypto.NoSuchPaddingException e) {
+        log("this should never happen", e);
+    }
+    return rsa;
+}
+```

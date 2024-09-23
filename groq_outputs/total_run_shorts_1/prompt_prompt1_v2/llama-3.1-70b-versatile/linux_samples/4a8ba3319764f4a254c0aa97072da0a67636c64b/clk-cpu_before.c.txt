@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 24-31
+VULNERABILITY_DESCRIPTION:
+Use of insecure and deprecated synchronization function, potential deadlock due to lock acquired and released from different paths, potential resource leak if `spin_lock` is not properly paired with `spin_unlock` in case of an exception,  and also missing error checking on the unlock function.
+
+EXPLANATION:
+The code provided uses `spin_lock` and `spin_unlock` functions for synchronization. However, in this snippet, it seems that locks are acquired and released in different paths. In general, a lock should always be released in the same path where it was acquired to prevent deadlocks. Furthermore, it is a good practice to handle potential exceptions between the lock and unlock calls to ensure that locks are always released even when an error occurs. Lastly, it would be beneficial to have a try-catch block or error handling to prevent resource leaks in case exceptions occur.
+
+Additionally, the same function `rockchip_cpuclk_set_dividers(cpuclk, rate)` is being called in both if and else if blocks without any substantial difference in the logic. The `rates` object holds the settings for new rates that could potentially differ from old rates at that point. Nonetheless, `rockchip_cpuclk_set_dividers` function still looks called regardless.
+
+RECOMMENDATIONS:
+- Make sure the locks are always released in the same path where they were acquired to avoid deadlocks.
+- Implement a try-catch block to release the lock in case of an exception and prevent resource leaks.
+- Review the usage of `rockchip_cpuclk_set_dividers` function to make sure it's necessary to call it for both conditions.
+
+ORIGINAL CODE:
+{
+	const struct rockchip_cpuclk_reg_data *reg_data = cpuclk->reg_data;
+	unsigned long alt_prate, alt_div;
+
+	alt_prate = clk_get_rate(cpuclk->alt_parent);
+
+ spin_lock(cpuclk->lock);
+
+/* 
+ * If the old parent clock speed is less than the clock speed
+ * of the alternate parent, then it should be ensured that at no point
+(cpuclk->reg_base + reg_data->core_reg);
+}
+
+spin_unlock(cpuclk->lock);
+return 0;
+}
+
+static int rockchip_cpuclk_post_rate_change(struct rockchip_cpuclk *cpuclk,
+{
+	const struct rockchip_cpuclk_reg_data *reg_data = cpuclk->reg_data;
+    const struct rockchip_cpuclk_rate_table *rate;
+
+rate = rockchip_get_cpuclk_settings(cpuclk, ndata->new_rate);
+	if (!rate) {
+		pr_err("%s: Invalid rate : %lu for cpuclk\n",
+		return -EINVAL;
+}
+
+spin_lock(cpuclk->lock);
+
+	if (ndata->old_rate < ndata->new_rate)
+		rockchip_cpuclk_set_dividers(cpuclk, rate);
+
+if (ndata->old_rate > ndata->new_rate)
+		rockchip_cpuclk_set_dividers(cpuclk, rate);
+
+	spin_unlock(cpuclk->lock);
+return 0;
+}
+
+/*

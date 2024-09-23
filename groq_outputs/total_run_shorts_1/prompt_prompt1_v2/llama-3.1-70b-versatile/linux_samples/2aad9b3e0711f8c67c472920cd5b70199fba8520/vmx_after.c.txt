@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 11
+VULNERABILITY_DESCRIPTION:
+Missing or Inadequate Input Validation and Improper Mitigation of Cache-Related Information Disclosure.
+
+EXPLANATION:
+The code contains potential security vulnerabilities. 
+
+1. At line 7, the call to `asm("lfence");` is intended as a mitigation for CVE-2017-5753 (Spectre variant 1). However, a "lfence" instruction may not completely prevent speculative execution attacks. A more robust solution, such as the usage of "mfence" or "sfence" instructions in conjunction with "lfence", or using a fence instruction specific to the CPU architecture ("lfence" does not work on all platforms), would be recommended.
+
+2. At line 11, the function returns `vmcs_field_to_offset_table[field]` without checking its range or values. Although there's a check for the array bounds at the beginning (line 4), there's no validation or filtering of the value itself, which can lead to potential issues or vulnerabilities. This may allow malicious input or unexpected behavior.
+
+RECOMMENDATIONS:
+1. Replace `asm("lfence");` with `asm volatile ("mfence" ::: "memory");` for a stronger fence that prevents speculative execution attacks, considering the specific CPU architecture being targeted. However, be aware that a more thorough mitigation should include patches at the compiler level.
+
+2. Implement a more robust validation mechanism for `vmcs_field_to_offset_table[field]`, ensuring that it adheres to the expected range and format, to avoid any potential vulnerabilities related to its return.
+
+ORIGINAL CODE:
+{
+	BUILD_BUG_ON(ARRAY_SIZE(vmcs_field_to_offset_table) > SHRT_MAX);
+
+	if (field >= ARRAY_SIZE(vmcs_field_to_offset_table))
+		return -ENOENT;
+
+	/*
+	 * FIXME: Mitigation for CVE-2017-5753.  To be replaced with a
+	 * generic mechanism.
+	 */
+	asm("lfence");
+
+	if (vmcs_field_to_offset_table[field] == 0)
+		return -ENOENT;
+
+	return vmcs_field_to_offset_table[field];
+}

@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+ Potential privilege escalation due to incorrect handling of file permissions.
+
+EXPLANATION:
+The given code checks if the current process has the capability to change file ownership and permissions. However, it only removes the S_ISUID and S_ISGID flags if the process is not capable of setting the file's ownership to match its own UID or GID. This could potentially lead to an insecure situation where the file's ownership is modified but its permissions remain unchanged.
+
+In an insecure setup, an attacker with execute permissions on the file could potentially exploit this vulnerability to gain elevated privileges by modifying the file's ownership to match their own UID/GID and set the SUID or SGID flag to TRUE, thus executing the file with the elevated privileges.
+
+RECOMMENDATIONS:
+- The code should be modified to ensure that it correctly handles the file's permissions when changing ownership. One recommended approach is to clear the SUID and SGID bits explicitly if the process does not have the CAP_FSETID capability.
+- The code should also verify the return value of the chown() function call to ensure that the ownership change was successful before modifying the file's permissions.
+
+ORIGINAL CODE:
+		 * cleared upon successful return from chown()
+		 */
+		if ((ip->i_d.di_mode & (S_ISUID|S_ISGID)) &&
+		    !capable_wrt_inode_uidgid(VFS_I(ip), CAP_FSETID))
+			ip->i_d.di_mode &= ~(S_ISUID|S_ISGID);
+
+		/*
+		 * Change the ownerships and register quota modifications

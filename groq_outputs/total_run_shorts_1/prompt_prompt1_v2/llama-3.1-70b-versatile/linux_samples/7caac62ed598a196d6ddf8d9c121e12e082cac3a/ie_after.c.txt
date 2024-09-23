@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to potential integer overflow in memcpy length calculation.
+
+EXPLANATION:
+The vulnerability is present in the line `memcpy(ie->ie_buffer + le16_to_cpu(ie->ie_length), vs_ie, vs_ie->len + 2);`. 
+Here, the length parameter passed to memcpy is `vs_ie->len + 2`. Although the code checks for a buffer overflow by comparing `le16_to_cpu(ie->ie_length) + vs_ie->len + 2` with `IEEE_MAX_IE_SIZE`, there is still a possibility of an overflow.
+This is because `vs_ie->len` and `2` are not being checked for overflow before being added to `le16_to_cpu(ie->ie_length)`. 
+This can result in a situation where the check passes for `le16_to_cpu(ie->ie_length) + vs_ie->len + 2` being less than `IEEE_MAX_IE_SIZE`, but `vs_ie->len + 2` overflows and results in a smaller value, leading to an incorrect memcpy length calculation.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should also check for an overflow when adding `vs_ie->len` and `2`. 
+Here is a possible fix:
+```c
+// Check for potential integer overflow
+size_t memcpy_length = vs_ie->len + 2;
+if (memcpy_length < vs_ie->len) {  // check for overflow
+    return -EINVAL;
+}
+
+// Check for buffer overflow
+if (le16_to_cpu(ie->ie_length) + memcpy_length > IEEE_MAX_IE_SIZE) {
+    return -EINVAL;
+}
+
+memcpy(ie->ie_buffer + le16_to_cpu(ie->ie_length), vs_ie, memcpy_length);
+```
+
+ORIGINAL CODE:
+```
+    }
+
+    vs_ie = (struct ieee_types_header *)vendor_ie;
+    if (le16_to_cpu(ie->ie_length) + vs_ie->len + 2 >
+        IEEE_MAX_IE_SIZE)
+        return -EINVAL;
+    memcpy(ie->ie_buffer + le16_to_cpu(ie->ie_length),
+           vs_ie, vs_ie->len + 2);
+    le16_unaligned_add_cpu(&ie->ie_length, vs_ie->len + 2);
+    ie->mgmt_subtype_mask = cpu_to_le16(mask);
+```

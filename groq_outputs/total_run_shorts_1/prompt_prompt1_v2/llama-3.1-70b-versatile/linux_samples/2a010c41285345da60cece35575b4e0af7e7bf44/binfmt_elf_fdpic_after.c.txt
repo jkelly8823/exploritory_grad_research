@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 15
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in the given code snippet is a potential double-free error. 
+
+EXPLANATION:
+A double-free error occurs when the same memory block is attempted to be freed twice. This can cause the program to crash or produce unexpected results. In the given code snippet, the 'interpreter' pointer is freed twice if the function encounters an error after the 'fput(interpreter);' statement is executed. 
+
+The 'fput(interpreter);' statement is executed if no error occurs (retval = 0) and also in the 'error:' label. If 'error' occurs, 'fput(interpreter)' is executed and then 'interpreter' is checked if it is not NULL and 'fput(interpreter)' is executed again.
+
+Additionally, another potential double-free is observed in 'exec_params.phdrs' and 'interp_params.phdrs' if both 'exec_params' and 'interp_params' point to the same memory block.
+
+RECOMMENDATIONS:
+1. Use a flag to track if a pointer has been freed and before freeing it, check if it has already been freed. 
+   However, a better solution in this scenario is to make changes so that 'interpreter' is freed only once.
+
+   Replace 'fput(interpreter);' with 'if(interpreter) free_interpreter();' and at 'error:' label, keep only 'if(interpreter) free_interpreter();'
+
+   free_interpreter() can be a separate function that contains 'fput(interpreter)'.
+
+   It is assumed that 'fput(interpreter)' and 'fput' in 'exec_params.phdrs', 'exec_params.loadmap' and 'interp_params.phdrs' actually frees the memory blocks, which is not clear without the definition of these functions.
+
+2. Make sure that 'exec_params.phdrs' and 'interp_params.phdrs' don't point to the same memory block to avoid double-free.
+
+ORIGINAL CODE:
+
+			goto error;
+		}
+
+		fput(interpreter);
+		interpreter = NULL;
+	}
+
+	retval = 0;
+
+error:
+	if (interpreter)
+		fput(interpreter);
+	kfree(exec_params.phdrs);
+	kfree(exec_params.loadmap);
+	kfree(interp_params.phdrs);

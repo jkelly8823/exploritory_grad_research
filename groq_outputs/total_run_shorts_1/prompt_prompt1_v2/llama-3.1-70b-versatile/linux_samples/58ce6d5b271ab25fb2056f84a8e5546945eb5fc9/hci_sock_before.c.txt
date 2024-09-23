@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 22, 23, 24
+VULNERABILITY_DESCRIPTION:
+Use of a socket that is already locked, and double locking a socket.
+
+EXPLANATION:
+The code snippet contains a locking issue. In the given code, the lock_sock(sk) function is called twice: once in the original loop (lock_sock(sk)) and once again after the loop (lock_sock(sk)). However, there is a corresponding release_sock(sk) in the loop but not for the second lock_sock(sk) call. This indicates that the second lock_sock(sk) call could potentially cause the socket to be locked indefinitely. Additionally, using a socket that is already locked may cause a deadlock situation.
+
+Furthermore, the second lock_sock(sk) call may try to acquire the lock on a socket that is already locked in the preceding loop. This can result in a deadlock if another thread or the same thread attempts to acquire the lock again. This is a time-of-check-to-time-of-use (TOCTOU) error because the state of the lock is checked at one time but the lock acquisition is attempted at a different time.
+
+RECOMMENDATIONS:
+1. Remove the redundant lock_sock(sk) call.
+2. Ensure that every lock_sock(sk) call has a corresponding release_sock(sk) call to prevent deadlock situations.
+
+ORIGINAL CODE:
+```c
+if (event == HCI_DEV_UNREG) {
+	struct sock *sk;
+
+	/* Detach sockets from device */
+	read_lock(&hci_sk_list.lock);
+	sk_for_each(sk, &hci_sk_list.head) {
+		lock_sock(sk);
+		if (hci_pi(sk)->hdev == hdev) {
+			hci_pi(sk)->hdev = NULL;
+			sk->sk_err = EPIPE;
+			sk->sk_state = BT_OPEN;
+			sk->sk_state_change(sk);
+
+			hci_dev_put(hdev);
+		}
+		release_sock(sk);
+	}
+	read_unlock(&hci_sk_list.lock);
+}
+
+lock_sock(sk);
+
+if (sk->sk_state == BT_BOUND) {
+	err = -EALREADY;
+	goto done;
+}
+```

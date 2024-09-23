@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 9-10
+VULNERABILITY_DESCRIPTION:
+This code contains a vulnerability related to error handling. Specifically, there is a repeated call to `gpmi_reset_block` with the same parameters. If the function fails, the error is not properly handled before the function is called again.
+
+EXPLANATION:
+The `gpmi_reset_block` function is called twice with the same parameters. If the function fails on the first call (i.e., `ret` is non-zero), the code jumps to `err_out` via a `goto` statement. However, if the function succeeds on the first call, its return value is overwritten by the second call. If the second call fails, the error is then handled. This means that any errors that occur during the first call are ignored, and any subsequent uses of `r->bch_regs` may be operating on invalid data. This could potentially lead to crashes or unexpected behavior.
+
+RECOMMENDATIONS:
+1. Remove the repeated call to `gpmi_reset_block`. Instead, handle the error properly after the first call and do not attempt to reset the block again.
+2. Merge the two calls to `gpmi_reset_block` into a single call with proper error handling.
+
+ORIGINAL CODE:
+```c
+/*
+ * Reset BCH here, too. We got failures otherwise :(
+ * See later BCH reset for explanation of MX23 handling
+ */
+ret = gpmi_reset_block(r->bch_regs, GPMI_IS_MX23(this));
+if (ret)
+	goto err_out;
+
+/* Choose NAND mode. */
+/*
+* Due to erratum #2847 of the MX23, the BCH cannot be soft reset on this
+* chip, otherwise it will lock up. So we skip resetting BCH on the MX23.
+* On the other hand, the MX28 needs the reset, because one case has been
+* seen where the BCH produced ECC errors constantly after 10000
+* consecutive reboots. The latter case has not been seen on the MX23
+* yet, still we don't know if it could happen there as well.
+*/
+ret = gpmi_reset_block(r->bch_regs, GPMI_IS_MX23(this));
+if (ret)
+	goto err_out;
+
+/* Configure layout 0. */
+```

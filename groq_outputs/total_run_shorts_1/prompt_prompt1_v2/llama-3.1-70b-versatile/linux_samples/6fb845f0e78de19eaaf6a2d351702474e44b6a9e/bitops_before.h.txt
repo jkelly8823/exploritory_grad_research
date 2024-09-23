@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 14, 20
+VULNERABILITY_DESCRIPTION:
+The given code contains a potential vulnerability due to the use of inline assembly that accesses user-provided data without proper sanitization.
+EXPLANATION:
+This code appears to be manipulating bits in memory using inline assembly. However, the assembly operations are directly accessing user-provided data (`addr`, `nr`, and `bit`) without proper input validation or sanitization. This can potentially lead to a buffer overflow or allow an attacker to execute arbitrary code.
+
+The use of `__builtin_constant_p(bit)` suggests that the code is attempting to optimize for constant bit values, but this optimization does not address the underlying vulnerability.
+
+Additionally, the code is missing necessary synchronization or locking mechanisms to protect against concurrent access, which can lead to unpredictable behavior or data corruption.
+
+RECOMMENDATIONS:
+1. Add input validation and sanitization for user-provided data (`addr`, `nr`, and `bit`). Ensure that the input values are within expected ranges and that the pointers are valid.
+2. Consider using a safer alternative to inline assembly, such as intrinsic functions or compiler-generated assembly.
+3. Implement proper synchronization or locking mechanisms to protect against concurrent access.
+
+ORIGINAL CODE:
+
+```
+: "ir" (1UL << bit), GCC_OFF_SMALL_ASM() (*m));
+#if defined(CONFIG_CPU_MIPSR2) || defined(CONFIG_CPU_MIPSR6)
+} else if (kernel_uses_llsc && __builtin_constant_p(bit)) {
+    do {
+        __asm__ __volatile__(
+        "    " __LL "%0, %1      # set_bit \n"
+        "    " __INS "%0, %3, %2, 1            \n"
+    } while (unlikely(!temp));
+#endif /* CONFIG_CPU_MIPSR2 || CONFIG_CPU_MIPSR6 */
+} else if (kernel_uses_llsc) {
+    do {
+        __asm__ __volatile__(
+        "    .set    push                 \n"
+        "    .set    "MIPS_ISA_ARCH_LEVEL"   \n"
+    : "ir" (~(1UL << bit)));
+#if defined(CONFIG_CPU_MIPSR2) || defined(CONFIG_CPU_MIPSR6)
+} else if (kernel_uses_llsc && __builtin_constant_p(bit)) {
+    do {
+        __asm__ __volatile__(
+        "    " __LL "%0, %1      # clear_bit \n"
+        "    " __INS "%0, $0, %2, 1            \n"
+    } while (unlikely(!temp));
+#endif /* CONFIG_CPU_MIPSR2 || CONFIG_CPU_MIPSR6 */
+} else if (kernel_uses_llsc) {
+    do {
+        __asm__ __volatile__(
+        "    .set    push                 \n"
+        "    .set    "MIPS_ISA_ARCH_LEVEL"   \n"
+        unsigned long *m = ((unsigned long *) addr) + (nr >> SZLONG_LOG);
+        unsigned long temp;
+
+        do {
+            __asm__ __volatile__(
+            "    .set    push                 \n"
+            "    .set    "MIPS_ISA_ARCH_LEVEL"   \n"
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The code does not check for the integrity of the data before processing it.
+
+EXPLANATION:
+The code processes the data in the Rx descriptor without validating its integrity. This can be a vulnerability, specifically a Format String Vulnerability or Input Validation Vulnerability. It can also be an indication of a logic error or a configuration error.
+
+However, a more distinct issue can be identified. The `skb->data` pointer and `rx_desc` and `hdr` derived from it, may not be validated to be within the bounds of the `skb` structure's `data` buffer, and `rx_hl->fw_desc.len` may not have been checked for being within the expected limits. However, a potential format string or input validation vulnerability can lead to a buffer over-read.
+
+Another potential issue is the unbounded read from `skb` buffer using `rx_hl->fw_desc.len`. In order to fully mitigate this issue, a bound check should be performed to ensure `rx_hl->fw_desc.len` does not exceed the length of `skb`.
+
+RECOMMENDATIONS:
+Perform a bound check on `rx_hl->fw_desc.len` before using it to access `skb->data`.
+	* Ensure that `rx_hl->fw_desc.len` is within the expected limits.
+Validate the Rx descriptor to ensure it has been received correctly.
+Check for any integrity errors in the descriptor.
+Use proper error handling when processing errors, instead of simply jumping to the `err` label.
+
+ORIGINAL CODE:
+```c
+rx_desc = (struct htt_hl_rx_desc *)(skb->data + tot_hdr_len);
+rx_desc_info = __le32_to_cpu(rx_desc->info);
+
+hdr = (struct ieee80211_hdr *)((u8 *)rx_desc + rx_hl->fw_desc.len);
+
+if (is_multicast_ether_addr(hdr->addr1)) {
+    /* Discard the fragment with multicast DA */
+    goto err;
+}
+
+if (!MS(rx_desc_info, HTT_RX_DESC_HL_INFO_ENCRYPTED)) {
+    spin_unlock_bh(&ar->data_lock);
+    return ath10k_htt_rx_proc_rx_ind_hl(htt, &resp->rx_ind_hl, skb,
+                        HTT_RX_NON_PN_CHECK,
+                        HTT_RX_NON_TKIP_MIC);
+}
+
+if (ieee80211_has_retry(hdr->frame_control))
+    goto err;
+
+hdr_space = ieee80211_hdrlen(hdr->frame_control);
+```

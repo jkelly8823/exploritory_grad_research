@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-5
+VULNERABILITY_DESCRIPTION: 
+List corruption due to missing lock protection in the wake_up_interruptible call.
+
+EXPLANATION:
+The wake_up_interruptible call on line 5 is outside the critical section protected by the spin_lock_irqsave and spin_unlock_irqrestore calls on lines 1 and 4, respectively. This is potentially problematic because the list_operation on line 2 (list_move_tail) and the wake_up_interruptible on line 5 both operate on data structures that should be protected by the lock.
+
+If concurrent access to the timer->dev->wait and timer->dev->expired list occurs, it could lead to potential list corruption, unexpected wake-ups, or other concurrency issues.
+
+RECOMMENDATIONS:
+To resolve this issue, ensure that the wake_up_interruptible call is within the critical section protected by the lock. Move the spin_unlock_irqrestore call on line 4 after the wake_up_interruptible call on line 5.
+
+ORIGINAL CODE:
+```c
+spin_lock_irqsave(&timer->dev->lock, flags);
+if (timer->id >= 0)
+        list_move_tail(&timer->list, &timer->dev->expired);
+wake_up_interruptible(&timer->dev->wait);
+spin_unlock_irqrestore(&timer->dev->lock, flags);
+}
+
+static int
+misdn_add_timer(struct mISDNtimerdev *dev, int timeout)
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a potential error handling vulnerability. The error code 'ret' is printed, but there is no validation of the error code to prevent a negative number being used as a format specifier in the dev_err function. However, more concerning is that the pm_runtime_put function is called without checking the result of the function.
+
+EXPLANATION:
+In the provided code, when an error occurs (ret < 0), pm_runtime_put(map->dev) is called without checking its result. This could lead to unreported errors if pm_runtime_put fails, potentially causing resource leaks or other issues. 
+
+The use of dev_err and the printing of the error code is helpful for debugging, but without ensuring that pm_runtime_put is successful, the function call becomes virtually meaningless as its potential error isn't checked.
+
+RECOMMENDATIONS:
+Check the return value of pm_runtime_put function and handle errors accordingly. Here is an example:
+
+```c
+if (ret < 0) {
+    dev_err(map->dev, "IRQ thread failed to resume: %d\n", ret);
+    int pm_result = pm_runtime_put(map->dev);
+    if (pm_result < 0) {
+        dev_err(map->dev, "pm_runtime_put failed: %d\n", pm_result);
+    }
+    return IRQ_NONE;
+}
+```
+Additionally, ensure that any resource allocated is freed when there is an error.
+
+ORIGINAL CODE:
+```c
+if (ret < 0) {
+    dev_err(map->dev, "IRQ thread failed to resume: %d\n", ret);
+    pm_runtime_put(map->dev);
+    return IRQ_NONE;
+}
+```

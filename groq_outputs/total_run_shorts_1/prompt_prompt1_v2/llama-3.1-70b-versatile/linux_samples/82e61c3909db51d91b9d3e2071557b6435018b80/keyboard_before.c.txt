@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The code contains a vulnerability related to undefined behavior due to the evaluation of the ternary operator on a structure pointer that is not guaranteed to be NULL.
+
+EXPLANATION:
+The code uses a ternary operator to evaluate the value of `func_table[i]`. If `func_table[i]` is not NULL, it assigns the value of `func_table[i]` to the pointer `from`, otherwise it assigns an empty string to `from`. However, there is no validation on the value of `i` before accessing `func_table[i]`. This could lead to an invalid or out-of-bounds access to the `func_table` array, causing undefined behavior.
+
+Moreover, the ternary operator tries to use the `?:` syntax on a structure pointer (`func_table[i]`) which is not a boolean value and can cause undefined behavior when evaluating it as a condition. This may also lead to incorrect assignments to the `from` pointer.
+
+Lastly, there is an apparent mismatch in variable types as `func_table` (unseen here) is likely to be a static array with certain indexing on `i`, but in this snippet, it is referenced by `i` as the array's subscript, however the provided snippet references a condition on `func_table[value]`, indicating type misalignment.
+
+RECOMMENDATIONS:
+1. Perform bounds checking on the `i` variable before accessing `func_table[i]`.
+2. Ensure that `func_table[i]` is correctly representing a conditional within `func_table`.
+3. Ensure the use of `(void*)` as we are handling an array of pointers and should avoid false positives:
+```c
+ret = copy_to_user(user_kdgkb->kb_string, (void*)func_table[i], strlen((char*)func_table[i]) + 1) ? -EFAULT : 0;
+```
+
+ORIGINAL CODE:
+
+```c
+return;
+
+if ((unsigned)value < ARRAY_SIZE(func_table)) {
+	if (func_table[value])
+		puts_queue(vc, func_table[value]);
+} else
+	pr_err("k_fn called with value=%d\n", value);
+}
+#undef s
+#undef v
+
+/* FIXME: This one needs untangling and locking */
+int vt_do_kdgkb_ioctl(int cmd, struct kbsentry __user *user_kdgkb, int perm)
+{
+	struct kbsentry *kbs;
+	u_char *q;
+	switch (cmd) {
+	case KDGKBSENT: {
+		/* size should have been a struct member */
+		unsigned char *from = func_table[i] ? : "";
+
+		ret = copy_to_user(user_kdgkb->kb_string, from,
+				strlen(from) + 1) ? -EFAULT : 0;
+
+		goto reterr;
+	}
+	case KDSKBSENT:
+```

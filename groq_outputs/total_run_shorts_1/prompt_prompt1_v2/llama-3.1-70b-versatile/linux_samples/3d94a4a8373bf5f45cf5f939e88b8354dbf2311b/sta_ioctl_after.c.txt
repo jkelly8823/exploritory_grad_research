@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 17
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential null pointer dereference and a possible lack of validation of the return value of `kzalloc`.
+
+EXPLANATION:
+The `kzalloc` function can return a null pointer if the memory allocation fails. However, there is no check for this scenario in the provided code snippet. If `kzalloc` fails, the `bss_desc` pointer will be null, and any subsequent dereferences will result in a null pointer dereference. This can lead to a kernel crash or other unpredictable behavior.
+
+Additionally, in line 13, `adapter->region_code` is checked, but if `adapter` is null, this will also result in a null pointer dereference.
+
+RECOMMENDATIONS:
+1. Check the return value of `kzalloc` to ensure that the memory allocation was successful. If the allocation fails, handle the error and provide a meaningful error message.
+2. Validate the `adapter` pointer before accessing its members.
+
+EXAMPLE SOLUTION:
+```c
+bss_desc = kzalloc(sizeof(struct mwifiex_bssdescriptor), GFP_KERNEL);
+if (!bss_desc) {
+    mwifiex_dbg(priv->adapter, ERROR, "Memory allocation failed\n");
+    return -ENOMEM;
+}
+
+if (bss) {
+    if (adapter && adapter->region_code == 0x00 && mwifiex_process_country_ie(priv, bss))
+        return -EINVAL;
+    ...
+}
+```
+ORIGINAL CODE:
+```
+            "11D: skip setting domain info in FW\n");
+    return 0;
+}
+
+if (country_ie_len > 
+    (IEEE80211_COUNTRY_STRING_LEN + MWIFIEX_MAX_TRIPLET_802_11D)) {
+    mwifiex_dbg(priv->adapter, ERROR,
+            "11D: country_ie_len overflow!, deauth AP\n");
+    return -EINVAL;
+}
+
+memcpy(priv->adapter->country_code, &country_ie[2], 2);
+
+domain_info->country_code[0] = country_ie[2];
+domain_info->country_code[1] = country_ie[3];
+priv->scan_block = false;
+
+if (bss) {
+    if (adapter->region_code == 0x00 && 
+        mwifiex_process_country_ie(priv, bss))
+        return -EINVAL;
+
+    /* Allocate and fill new bss descriptor */
+    bss_desc = kzalloc(sizeof(struct mwifiex_bssdescriptor), 
+               GFP_KERNEL);
+```

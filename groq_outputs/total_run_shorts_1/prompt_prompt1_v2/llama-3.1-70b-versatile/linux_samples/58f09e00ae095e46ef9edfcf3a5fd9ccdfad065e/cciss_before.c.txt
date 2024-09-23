@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a potential buffer overflow vulnerability due to the use of `copy_from_user` function without proper validation of the buffer size.
+
+EXPLANATION:
+The `copy_from_user` function is used to copy data from user space to kernel space. In this code snippet, it is used to copy data from `&arg32->LUN_info` to `&arg64.LUN_info`. However, the code does not validate whether the buffer `arg64.LUN_info` is large enough to hold the data being copied from `arg32->LUN_info`. If `arg32->LUN_info` is larger than `arg64.LUN_info`, this will result in a buffer overflow.
+
+However, upon closer inspection of the code provided, it seems that the buffer size is properly validated via the `sizeof(arg64.LUN_info)` check. But the problem arises because the code doesn't actually check if the copy operation succeeded. It simply sets the error to 0 beforehand and then conditionally overwrites it with the result of the copy operation. If the copy operation does not succeed, then the `err` value should be greater than 0. In general though, `copy_from_user` can return a negative error code when the operation fails. The absolute value of this return value is the number of bytes that could not be copied (which will likely be less than the request size). This was the main reason for the "yes" in this vulnerability check.
+
+
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to validate the return value of `copy_from_user` properly. The return value of `copy_from_user` should be checked to determine whether the copy operation was successful. Additionally, the return value should also be checked to determine the number of bytes that were actually copied.
+
+```
+int bytes_copied = copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
+               sizeof(arg64.LUN_info));
+if (bytes_copied != 0) {
+    // Handle the error, bytes_copied is negative on error
+    err = bytes_copied;
+    // this was the case here originally, the |= has been replaced with just "=" because if |= is used with err starting at 0, the err could potentially be changed on an "okay" return value.
+} else {
+    err = 0;
+}
+```
+ORIGINAL CODE:
+```
+int err;
+u32 cp;
+
+err = 0;
+err |=
+    copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
+           sizeof(arg64.LUN_info));
+```

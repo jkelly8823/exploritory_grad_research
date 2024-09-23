@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 11
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability and Use-After-Free Vulnerability
+
+EXPLANATION:
+In the given code, when the `client->type` is `USER_CLIENT` and `info->kernel` is true, the code deletes a port using `snd_seq_delete_port(client, port_idx)`. However, the code does not check if the port has already been deleted before calling `snd_seq_port_unlock(port)`. This can lead to a use-after-free vulnerability. 
+
+Moreover, there is another potential double-free vulnerability in the code. If an error occurs after `snd_seq_set_port_info(port, info)` is called and before `snd_seq_port_unlock(port)` is called, the port information might be freed twice, once in the error path and once in the non-error path.
+
+Additionally, there is a logical error in the code. The lines `if (info->addr.client != client->number) return -EPERM; return -ENOMEM;` will always return -ENOMEM, indicating that memory allocation failed, regardless of the actual status of the memory allocation.
+
+RECOMMENDATIONS:
+1. To fix the use-after-free vulnerability, add a check to ensure that the port has not been deleted before calling `snd_seq_port_unlock(port)`.
+2. To prevent the double-free vulnerability, ensure that the port information is not freed twice.
+3. To fix the logical error, remove the unnecessary return statement `return -ENOMEM;`
+
+ORIGINAL CODE:
+```
+struct snd_seq_port_info *info = arg;
+struct snd_seq_client_port *port;
+struct snd_seq_port_callback *callback;
+int port_idx;
+
+/* it is not allowed to create the port for an another client */
+if (info->addr.client != client->number)
+	return -EPERM;
+	return -ENOMEM;
+
+if (client->type == USER_CLIENT && info->kernel) {
+	port_idx = port->addr.port;
+	snd_seq_port_unlock(port);
+	snd_seq_delete_port(client, port_idx);
+	return -EINVAL;
+}
+if (client->type == KERNEL_CLIENT) {
+	if ((callback = info->kernel) != NULL) {
+
+	snd_seq_set_port_info(port, info);
+	snd_seq_system_client_ev_port_start(port->addr.client, port->addr.port);
+	snd_seq_port_unlock(port);
+
+	return 0;
+}
+```

@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2, 4-5
+VULNERABILITY_DESCRIPTION:
+The given code snippet is vulnerable to a struct pointer dereference issue, as well as a potential buffer overflow. The macros `validate_next` and `__get_next` do not properly validate the size of the pointer and the size of the data that will be read.
+
+EXPLANATION:
+The `validate_next` macro inspects if the given memory address range contains at least `sizeof(t)` bytes plus an additional `n` bytes, but it does not ensure that the remaining bytes are accessible or properly initialized. The macro also uses the `insn->next_byte` address, which might be pointing to a memory region outside of the intended structure, potentially causing an invalid pointer dereference.
+
+The `__get_next` macro is also reading data from `insn->next_byte` without checking if the address points to the memory that is still valid within a given structure's size. The code could access an address that falls outside of the assigned block of memory, causing a buffer overflow or a segmentation fault.
+
+Additionally, there is no visible error handling mechanism to detect failures such as alignment exceptions, page faults, or other problems when dereferencing or accessing `insn->next_byte`.
+
+RECOMMENDATIONS:
+- Provide bounds checking to ensure that `insn->next_byte` points to accessible memory within the bounds of an allocated block of memory.
+- Implement checks for pointer alignment before performing the pointer dereference. This can be particularly important if dealing with architectures where data that is not properly aligned will generate an exception when accessed.
+- Consider utilizing functions that properly handle data structure introspection, deserialization or other situations similar to the `__get_next` macro, like deserialization of data items in structures.
+- Change `x->next_byte += sizeof(t)` in `__get_next` to check that `next_byte` will still be inside an assigned block memory.
+
+ORIGINAL CODE:
+```c
+/* Verify next sizeof(t) bytes can be on the same instruction */
+#define validate_next(t, insn, n)	\
+	((insn)->next_byte + sizeof(t) + n <= (insn)->end_kaddr)
+
+#define __get_next(t, insn)	\
+	({ t r = *(t*)insn->next_byte; insn->next_byte += sizeof(t); r; })
+```

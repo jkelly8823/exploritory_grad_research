@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 30-31
+VULNERABILITY_DESCRIPTION: 
+Memory Copy Vulnerability.
+
+EXPLANATION:
+The vulnerability is located in the given code snippet at line 30 where it performs a memory copy operation from msg->msg_iov to skb_put(skb, len) using the memcpy_fromiovec function. This could potentially result in a memory overflow or corruption, depending on the inputs to the function. However, the full nature of the vulnerability will depend on a more thorough analysis of the system that this code snippet serves as part of. If user input is involved in constructing msg->msg_iov or len, this may potentially be exploitable. Furthermore, an error in the memcpy_fromiovec function will immediately result in the destruction of the skb regardless of the cause of the error. Removing the skb resource must be a safety procedure in the case of failure that leads to resource handling leaks.
+
+RECOMMENDATIONS:
+1. Ensure that the buffers involved in the memcpy_fromiovec operation (skb_put(skb, len) and msg->msg_iov) have sufficient capacity to hold the data being copied. This would prevent potential memory overflows or corruption.
+2. Validate and sanitize user input data (in this case msg->msg_iov and len) before passing it to the memcpy_fromiovec function to prevent potential attacks.
+3. In case of memcpy_fromiovec operation failure or error in skb resource management, add better error management and possibly prevent resource handling leaks by the involved function(s).
+4. A general preventative procedure could be to restrict the possible values for len to prevent a malicious user from allocating excessive amounts of memory.
+
+ORIGINAL CODE:
+(bool __netlink_ns_capable(const struct netlink_skb_parms *nsp,
+			struct user_namespace *user_ns, int cap)
+{
+	return ((nsp->flags & NETLINK_SKB_DST) ||
+		file_ns_capable(nsp->sk->sk_socket->file, user_ns, cap)) &&
+		ns_capable(user_ns, cap);
+}
+EXPORT_SYMBOL(__netlink_ns_capable);
+
+/**
+	struct sk_buff *skb;
+	int err;
+	struct scm_cookie scm;
+	u32 netlink_skb_flags = 0;
+
+	if (msg->msg_flags&MSG_OOB)
+		return -EOPNOTSUPP;
+
+		if ((dst_group || dst_portid) &&
+		    !netlink_allowed(sock, NL_CFG_F_NONROOT_SEND))
+			goto out;
+		netlink_skb_flags |= NETLINK_SKB_DST;
+	} else {
+		dst_portid = nlk->dst_portid;
+		dst_group = nlk->dst_group;
+	}
+	NETLINK_CB(skb).portid	= nlk->portid;
+	NETLINK_CB(skb).dst_group = dst_group;
+	NETLINK_CB(skb).creds	= siocb->scm->creds;
+	NETLINK_CB(skb).flags	= netlink_skb_flags;
+
+	err = -EFAULT;
+	if (memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len)) {
+		kfree_skb(skb);

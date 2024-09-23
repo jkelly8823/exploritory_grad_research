@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 131, 143
+VULNERABILITY_DESCRIPTION:
+Insecure use of sprintf() function's counterpart write_debugfs_file() without any bounds checking on the input size.
+
+EXPLANATION:
+On lines 131 and 143, the `write_debugfs_file()` function is used to write to the "powerpc/rfi_flush" debugfs file. However, similar to `sprintf()`, if the string length of `rfi_flush` is larger than the buffer, it can cause a buffer overflow. Since the size of `rfi_flush` is not explicitly checked, it may be vulnerable to an integer overflow if `rfi_flush` is an integer value that is close to the maximum value for its type. Also, there seems to be no validation for invalid or malformed data being written to the debugfs file.
+
+RECOMMENDATIONS:
+Before writing to the debugfs file, ensure the data size is within the valid range for the expected integer type. Implement a check to ensure that the size of `rfi_flush` is within a valid range to prevent a potential integer overflow.
+
+As an additional precaution, error checking should be implemented for the `write_debugfs_file()` function. This function may return an error code if the write operation fails, and the error should be handled accordingly.
+
+It is also worth considering using safer APIs that provide size parameters to prevent potential overflows, similar to `snprintf()`.
+
+ORIGINAL CODE:
+Please note that the original code is very large, but the vulnerable part has been previously mentioned.
+
+```c
+// ...
+
+if (rfi_flush == rfi_flush_org) {
+    rfi_flush = !rfi_flush_org;
+    if (write_debugfs_file("powerpc/rfi_flush", rfi_flush) < 0) {
+        perror("error writing to powerpc/rfi_flush debugfs file");
+        return 1;
+    }
+
+// ...
+
+if (write_debugfs_file("powerpc/rfi_flush", rfi_flush_org) < 0) {
+    perror("unable to restore original value of powerpc/rfi_flush debugfs file");
+    return 1;
+}
+
+// ...
+```

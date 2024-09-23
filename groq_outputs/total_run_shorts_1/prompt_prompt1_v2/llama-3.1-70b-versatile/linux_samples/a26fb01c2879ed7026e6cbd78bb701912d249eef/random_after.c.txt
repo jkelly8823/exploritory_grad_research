@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled data copying from user space to kernel space.
+
+EXPLANATION:
+The vulnerability is in the `copy_from_user` function call on line 7. This function is used to copy data from user space to kernel space, but it does not perform any bounds checking on the source address. An attacker can potentially provide a large value for the `count` parameter, which can cause a buffer overflow in the kernel space. Additionally, the `copy_from_user` function call can also fail, but the return value is checked for an exact value of -EFAULT, which might not be the only possible error value.
+
+RECOMMENDATIONS:
+1. Use the `copy_from_user_ex` function instead of `copy_from_user` to get a more detailed error code. Check the return value for any negative value, not just -EFAULT.
+2. Validate the user input `count` value before passing it to the `copy_from_user` function call to prevent potential buffer overflow.
+
+ORIGINAL CODE:
+```c
+write_pool(struct entropy_store *r, const char __user *buffer, size_t count)
+{
+	size_t bytes;
+	__u32 t, buf[16];
+	const char __user *p = buffer;
+
+	while (count > 0) {
+		int b, i = 0;
+
+		bytes = min(count, sizeof(buf));
+		if (copy_from_user(&buf, p, bytes))
+			return -EFAULT;
+
+		for (b = bytes ; b > 0 ; b -= sizeof(__u32), i++) {
+			if (!arch_get_random_int(&t))
+				break;
+			buf[i] ^= t;
+		}
+
+		count -= bytes;
+		p += bytes;
+
+		mix_pool_bytes(r, buf, bytes);
+```

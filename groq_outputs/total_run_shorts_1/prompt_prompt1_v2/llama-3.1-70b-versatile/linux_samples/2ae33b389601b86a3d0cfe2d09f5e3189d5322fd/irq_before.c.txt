@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 11-13, 19-21, 27-29
+VULNERABILITY_DESCRIPTION:
+Possible buffer overflow vulnerability due to unchecked bit shifting operations.
+
+
+EXPLANATION:
+The code snippet includes multiple instances of bit shifting operations on `bit` with `AT91_AIC5_INTSEL_MSK` (Lines 3-5, 11-13, 19-21, and 27-29). Without knowing the type of `AT91_AIC5_INTSEL_MSK` or `bit`, it is hard to confirm that the shifting operation does not exceed the maximum allowed integer limit or induces integer overflow by signed/unsigned bit shifting, which in turn might lead to incorrect results and vulnerability.
+
+Additionally, the use of `1` as a bit pattern for clearing or setting an interrupt (Lines 4, 12, 20, and 28) indicates possible incorrect assumption on interrupt line configuration or reliance on implicit zero initialization.
+
+Lastly, there might be an integer overflow if `n_irqs` is larger than the allowed `find_next_bit()` function supports, making the return value unreliable.
+
+RECOMMENDATIONS:
+
+* Ensure proper casting and usage of the `bit` variable in bit shifting operations.
+* Consider checking the data type, limits, and valid range for `AT91_AIC5_INTSEL_MSK` before performing any shift operation.
+* Validate that `bit` value does not exceed allowed MSK value.
+* Consider validating that the code does not rely on signed/unsigned bit shifting and use explicit unsigned integer for all operations.
+* Sanitize the use of interrupts before performing clearing or setting them.
+
+ORIGINAL CODE:
+
+
+void at91_irq_suspend(void)
+{
+	int i = 0, bit;
+
+	if (has_aic5()) {
+		/* disable enabled irqs */
+		while ((bit = find_next_bit(backups, n_irqs, i)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IDCR, 1);
+			i = bit;
+		}
+		/* enable wakeup irqs */
+		i = 0;
+		while ((bit = find_next_bit(wakeups, n_irqs, i)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IECR, 1);
+			i = bit;
+		}
+	} else {
+		at91_aic_write(AT91_AIC_IDCR, *backups);
+		at91_aic_write(AT91_AIC_IECR, *wakeups);
+
+void at91_irq_resume(void)
+{
+	int i = 0, bit;
+
+	if (has_aic5()) {
+		/* disable wakeup irqs */
+		while ((bit = find_next_bit(wakeups, n_irqs, i)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IDCR, 1);
+			i = bit;
+		}
+		/* enable irqs disabled for suspend */
+		i = 0;
+		while ((bit = find_next_bit(backups, n_irqs, i)) < n_irqs) {
+			at91_aic_write(AT91_AIC5_SSR,
+				       bit & AT91_AIC5_INTSEL_MSK);
+			at91_aic_write(AT91_AIC5_IECR, 1);
+			i = bit;
+		}
+	} else {
+		at91_aic_write(AT91_AIC_IDCR, *wakeups);
+		at91_aic_write(AT91_AIC_IECR, *backups);

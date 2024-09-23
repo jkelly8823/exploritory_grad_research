@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-24
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds access due to missing bounds check.
+
+EXPLANATION:
+In the `parse_ipv6` function, there is no bounds check on the `nhoff` value before accessing the `skb` buffer using `load_byte`. This can lead to an out-of-bounds access if `nhoff` is greater than or equal to the size of the `skb` buffer. Additionally, in the `flow_dissector` function, the `load_half` function accesses `skb` at offset 12, but does not check if the `skb` buffer is large enough to accommodate this access.
+
+In the `bpf_prog2` function, the `flow_dissector` function is called with the `skb` buffer, but does not check the return value. If the `flow_dissector` function fails to parse the flow, it will return `false`, but this value is not checked, allowing the program to continue executing with potentially invalid data.
+
+RECOMMENDATIONS:
+1. Add bounds checks to ensure that `nhoff` is within the valid range of the `skb` buffer in the `parse_ipv6` function.
+2. Add a bounds check to ensure that the `skb` buffer is large enough to accommodate the access at offset 12 in the `flow_dissector` function.
+3. Check the return value of the `flow_dissector` function in the `bpf_prog2` function and handle any errors accordingly.
+
+ORIGINAL CODE:
+```c
+__be16 h_vlan_encapsulated_proto;
+};
+
+struct bpf_flow_keys {
+	__be32 src;
+	__be32 dst;
+	union {
+		__be32 ports;
+}
+
+static inline __u64 parse_ip(struct __sk_buff *skb, __u64 nhoff, __u64 *ip_proto,
+			     struct bpf_flow_keys *flow)
+{
+	__u64 verlen;
+
+	if (unlikely(ip_is_fragment(skb, nhoff)))
+}
+
+static inline __u64 parse_ipv6(struct __sk_buff *skb, __u64 nhoff, __u64 *ip_proto,
+			       struct bpf_flow_keys *flow)
+{
+	*ip_proto = load_byte(skb,
+			      nhoff + offsetof(struct ipv6hdr, nexthdr));
+	flow->src = ipv6_addr_hash(skb,
+	return nhoff;
+}
+
+static inline bool flow_dissector(struct __sk_buff *skb, struct bpf_flow_keys *flow)
+{
+	__u64 nhoff = ETH_HLEN;
+	__u64 ip_proto;
+	__u64 proto = load_half(skb, 12);
+SEC("socket2")
+int bpf_prog2(struct __sk_buff *skb)
+{
+	struct bpf_flow_keys flow = {};
+	struct pair *value;
+	u32 key;
+
+	if (!flow_dissector(skb, &flow))
+```

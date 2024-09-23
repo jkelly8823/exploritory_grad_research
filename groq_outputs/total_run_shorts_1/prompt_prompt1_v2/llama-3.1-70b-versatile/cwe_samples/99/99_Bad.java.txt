@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Path Traversal vulnerability, which is a type of security vulnerability where an attacker can manipulate the server to store or access unauthorized files on the server.
+
+EXPLANATION:
+The variable `rName` is directly taken from a user's request using `request.getParameter("reportName")`. This value is then used to construct a file path `/usr/local/apfr/reports/" + rName` which can lead to a Path Traversal vulnerability. An attacker could manipulate the `rName` to navigate to directories outside of the intended `/usr/local/apfr/reports/` directory by using dot-dot-slash sequences (`../`) or absolute paths. For example, if the attacker passed `../settings.txt` in the `reportName` parameter, the application would delete the file `/usr/local/apfr/settings.txt`, potentially exposing sensitive configuration data.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to validate and sanitize user input to ensure it does not contain any malicious file path traversal sequences. Here are some steps to follow:
+
+1.  Use a whitelisting approach to restrict the file names to a specific set of allowed characters, such as alphanumeric characters and underscores.
+2.  Use a file path canonicalization library to normalize and check if the constructed file path is within the allowed directory.
+3.  Implement additional validation to ensure the `rName` does not start with a slash (`/`) or contains dot-dot-slash (`../`) sequences.
+4.  Consider using a secure file upload and storage mechanism that isolates files from the rest of the system.
+
+Here is an example of how the updated code could look like:
+
+```java
+String rName = request.getParameter("reportName");
+// Validate and sanitize the rName
+if (!rName.matches("[a-zA-Z0-9_]+")) {
+    // Handle invalid input
+    throw new Exception("Invalid report name");
+}
+
+File rFile = new File("/usr/local/apfr/reports/" + rName);
+if (!rFile.getParent().equals("/usr/local/apfr/reports/")) {
+    // Handle invalid file path
+    throw new Exception("Invalid file path");
+}
+...rFile.delete();
+```
+
+ORIGINAL CODE:
+```java
+String rName = request.getParameter("reportName");File rFile = new File("/usr/local/apfr/reports/" + rName);...rFile.delete();
+```

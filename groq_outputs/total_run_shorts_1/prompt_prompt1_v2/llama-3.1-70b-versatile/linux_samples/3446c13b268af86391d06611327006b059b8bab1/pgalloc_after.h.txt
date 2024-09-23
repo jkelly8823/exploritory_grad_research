@@ -1,0 +1,42 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION: 
+No vulnerabilities were found in the provided code snippet.
+
+EXPLANATION:
+The provided code snippet appears to be a part of a memory management system, specifically handling page directory allocation and deallocation. It checks for compatibility mode and initializes/deinitializes page tables accordingly. The code uses functions like `pgtable_pmd_page_ctor`, `pgtable_pmd_page_dtor`, `crst_table_free`, and `crst_table_alloc`, which seem to be well-defined memory management helpers.
+
+No potential vulnerabilities like buffer overflows, null pointer dereferences, or use-after-frees were detected in this code snippet. The memory management appears to be correct and there is no indication of insecure practices.
+
+RECOMMENDATIONS:
+Since no vulnerabilities were found, no specific recommendations can be provided. However, as a general practice, consider verifying the implementation of functions like `pgtable_pmd_page_ctor`, `pgtable_pmd_page_dtor`, `crst_table_free`, and `crst_table_alloc` to ensure they handle memory correctly. Additionally, it's always a good practice to handle errors and exceptions robustly.
+
+ORIGINAL CODE:
+```c
+static inline pgd_t *pgd_alloc(struct mm_struct *mm)
+{
+	unsigned long *table = crst_table_alloc(mm);
+
+	if (!table)
+		return NULL;
+	if (mm->context.asce_limit == (1UL << 31)) {
+		/* Forking a compat process with 2 page table levels */
+		if (!pgtable_pmd_page_ctor(virt_to_page(table))) {
+			crst_table_free(mm, table);
+			return NULL;
+		}
+	}
+	return (pgd_t *) table;
+}
+
+static inline void pgd_free(struct mm_struct *mm, pgd_t *pgd)
+{
+	if (mm->context.asce_limit == (1UL << 31))
+		pgtable_pmd_page_dtor(virt_to_page(pgd));
+	crst_table_free(mm, (unsigned long *) pgd);
+}
+
+static inline void pmd_populate(struct mm_struct *mm,
+				pmd_t *pmd, pgtable_t pte)
+{
+```

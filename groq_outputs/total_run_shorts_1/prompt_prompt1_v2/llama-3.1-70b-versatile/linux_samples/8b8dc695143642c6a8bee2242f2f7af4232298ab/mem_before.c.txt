@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The potential vulnerability in this code snippet is at line 5, where the value of 'max_low_pfn' is being assigned to 'max_zone_pfns[ZONE_NORMAL]'. However, there is another line with higher risk, which is when calculating 'max_zone_pfns[ZONE_HIGHMEM]' where 'max_pfn' is assigned directly.
+
+In both cases, potential integer overflow risks exist because there is no bounds checking performed on 'max_low_pfn' and 'max_pfn'. The lack of validation on the values being assigned may lead to an integer overflow in 'max_zone_pfns', which can cause unintended behavior.
+
+However, the more critical issue at hand involves potential integer overflow during the right shift operation ((0x7fffffffUL >> PAGE_SHIFT)), but even that may be prevented as it is compared and compared value is set as result to 'max_zone_pfns[ZONE_DMA]'
+
+
+But The critical number integer overflow issue is left unchecked on line 5 for  'max_zone_pfns[ZONE_NORMAL]' and especially no check performed when assigning 'max_pfn' .
+
+
+RECOMMENDATIONS:
+To fix the potential integer overflow vulnerability, we can add bounds checking to 'max_low_pfn' and 'max_pfn' before assigning them to 'max_zone_pfns[ZONE_NORMAL]' and 'max_zone_pfns[ZONE_HIGHMEM]' respectively.
+
+Here is the modified code:
+
+```cpp
+max_zone_pfns[ZONE_NORMAL] = (max_low_pfn < ULONG_MAX) ? max_low_pfn : ULONG_MAX;
+#ifdef CONFIG_HIGHMEM
+max_zone_pfns[ZONE_HIGHMEM] = (max_pfn < ULONG_MAX) ? max_pfn : ULONG_MAX;
+#endif
+```
+If 'max_low_pfn' and 'max_pfn' can indeed exceed ULONG_MAX, more specific checks should be applied based on the requirements of the application.
+
+ORIGINAL CODE:
+```cpp
+(long int)((top_of_ram - total_ram) >> 20));
+
+#ifdef CONFIG_ZONE_DMA
+	max_zone_pfns[ZONE_DMA]	= min(max_low_pfn, 0x7fffffffUL >> PAGE_SHIFT);
+#endif
+	max_zone_pfns[ZONE_NORMAL] = max_low_pfn;
+#ifdef CONFIG_HIGHMEM
+	max_zone_pfns[ZONE_HIGHMEM] = max_pfn;
+```

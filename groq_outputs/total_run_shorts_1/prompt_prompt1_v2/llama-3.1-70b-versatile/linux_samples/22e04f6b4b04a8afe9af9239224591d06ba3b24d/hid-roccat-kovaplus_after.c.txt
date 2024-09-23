@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to user-controlled input leading to an overflows condition.
+
+EXPLANATION:
+The code is using `kstrtoul` to parse a string to an unsigned long integer, which is then stored in the `profile` variable. However, there is no bounds checking or validation to ensure that the integer does not exceed a maximum allowed value before the comparison. While the existing code checks if `profile` is greater than or equal to 5, it does not prevent integer overflows. A careful attacker could use this code segment to potentially crash the system or execute arbitrary code.
+
+However, based on the existing check (`profile >= 5`) it seems that the code intended to treat values greater than 5 as unknown and would prevent further execution of the function. So we can't just disregard what will happen if profile get a value greater than than specified. But since there is not enough information about the usage of `profile` in other segments of the code. For large number which may exceed to size of a integer it will simply cause on undefined behavior which on its turn yield on BUG.
+
+
+RECOMMENDATIONS:
+In order to fix the vulnerability, we recommend adding input validation and bounds checking to ensure that the `profile` value is within an expected and safe range. Additionally, when using `kstrtoul`, specify a maximum value to prevent overflows.
+
+```c
+if (kstrtoul(buf, 10, &profile) != 0)
+    return -EINVAL;
+
+if (profile > 0 && profile < MAX_SAFE_PROFILE_VALUE) {
+    // In range, proceed with operation
+} else {
+    // Handle out-of-range values
+}
+
+// Replace MAX_SAFE_PROFILE_VALUE with an appropriate maximum value.
+```
+
+ORIGINAL CODE:
+
+```c
+kovaplus = hid_get_drvdata(dev_get_drvdata(dev));
+usb_dev = interface_to_usbdev(to_usb_interface(dev));
+
+retval = kstrtoul(buf, 10, &profile);
+if (retval)
+    return retval;
+
+if (profile >= 5)
+```

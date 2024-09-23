@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: 
+Potential Use-After-Free Vulnerability 
+
+EXPLANATION:
+The vulnerability arises from the incorrect handling of the memory allocated using kzalloc. If kzalloc fails to allocate memory, it returns NULL, which is correctly checked in the provided code. However, if kzalloc is successful and then an error occurs later in the code, the program jumps to the out_free_opp label. This label is missing the crucial operation of freeing the memory allocated by kzalloc. As a result, the allocated memory is left dangling and might be used later, potentially leading to undefined behavior or even a use-after-free error if the memory is accessed after being freed elsewhere.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should add a call to kfree to free the allocated memory for the priv variable when an error occurs and the program jumps to the out_free_opp label. Here is the corrected code snippet:
+
+	/* OPPs might be populated at runtime, don't check for error here */
+	of_init_opp_table(cpu_dev);
+
+	/*
+	 * But we need OPP table to function so if it is not there let's
+	 * give platform code chance to provide it for us.
+	 */
+	ret = dev_pm_opp_get_opp_count(cpu_dev);
+	if (ret <= 0) {
+		pr_debug("OPP table is not ready, deferring probe\n");
+		ret = -EPROBE_DEFER;
+		goto out_free_opp;
+	}
+
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv) {
+		ret = -ENOMEM;
+		goto out_free_opp;
+	}
+
+	[... other code ...]
+
+out_free_opp:
+	kfree(priv); /* Added this line to free the allocated memory */
+	return ret;
+
+ORIGINAL CODE:
+/* OPPs might be populated at runtime, don't check for error here */
+of_init_opp_table(cpu_dev);
+
+/*
+* But we need OPP table to function so if it is not there let's
+* give platform code chance to provide it for us.
+*/
+ret = dev_pm_opp_get_opp_count(cpu_dev);
+if (ret <= 0) {
+pr_debug("OPP table is not ready, deferring probe\n");
+ret = -EPROBE_DEFER;
+goto out_free_opp;
+}
+
+priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+if (!priv) {
+ret = -ENOMEM;
+goto out_free_opp;

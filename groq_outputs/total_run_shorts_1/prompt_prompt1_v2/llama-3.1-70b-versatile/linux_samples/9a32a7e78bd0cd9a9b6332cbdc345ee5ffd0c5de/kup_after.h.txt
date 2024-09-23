@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5-15
+VULNERABILITY_DESCRIPTION:
+The function 'bad_kuap_fault' returns 'false' regardless of the input parameters, potentially ignoring critical errors or faults in the system.
+EXPLANATION:
+The 'bad_kuap_fault' function seems to be responsible for detecting and handling faults in the KUAP (Keyless User Address Protection) system. However, it always returns 'false', indicating that no faults are detected, regardless of the input parameters (regs, address, and is_write). This could potentially mask or ignore critical errors or faults in the system, leading to unstable or insecure behavior. Additionally, the 'allow_user_access' and 'prevent_user_access' functions seem to be related to memory access control, but their implementations are empty, potentially allowing unauthorized access to sensitive data.
+ Furthermore, the 'allow_read_from_user' function seems to be responsible for allowing reads from user-controlled memory. However, it does not check for null pointer dereferences or validate the input parameters, potentially leading to crashes or data corruption.
+
+RECOMMENDATIONS:
+1. Properly implement the 'bad_kuap_fault' function to accurately detect and handle faults in the KUAP system.
+2. Implement proper error checking and validation for the input parameters in the 'allow_read_from_user' function.
+3. Complete the implementations of the 'allow_user_access' and 'prevent_user_access' functions to ensure proper memory access control.
+4. Review the overall KUAP implementation to ensure it is correctly handling faults and access control.
+
+ORIGINAL CODE:
+```c
+void setup_kuap(bool disabled);
+#else
+static inline void setup_kuap(bool disabled) { }
+
+static inline bool
+bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
+{
+	return false;
+}
+
+/*
+ * book3s/64/kup-radix.h defines these functions for the !KUAP case to flush
+ * the L1D cache after user accesses. Only include the empty stubs for other
+ * platforms.
+ */
+#ifndef CONFIG_PPC64
+static inline void allow_user_access(void __user *to, const void __user *from,
+				     unsigned long size, unsigned long dir) { }
+static inline void prevent_user_access(void __user *to, const void __user *from,
+				       unsigned long size, unsigned long dir) { }
+static inline unsigned long prevent_user_access_return(void) { return 0UL; }
+static inline void restore_user_access(unsigned long flags) { }
+#endif /* CONFIG_PPC64 */
+#endif /* CONFIG_PPC_KUAP */
+
+static inline void allow_read_from_user(const void __user *from, unsigned long size)
+{
+```

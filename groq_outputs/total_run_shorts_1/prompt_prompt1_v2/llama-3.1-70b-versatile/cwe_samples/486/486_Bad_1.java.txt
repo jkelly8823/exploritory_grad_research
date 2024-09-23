@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+Insecure Calling of getClass()
+
+EXPLANATION:
+The code snippet is vulnerable to an Insecure Direct Object Reference (IDOR) issue. It directly uses the getClass() method on the 'obj' object without validating if it is null or not. Additionally, the equals() method is not override correctly as per the contract that is specified for equals() and hashCode() method. Even though not complete, the snippet seems to override equals without the proper condition (i.e. equals and hashCode should be override in a class whenever a class uses it. )
+
+Moreover, directly comparing getClass().getName() from input objet object might lead to ClassPath or Class Loading or Class file structure disclosure. 
+ 
+
+RECOMMENDATIONS:
+ 
+In order to fix the Insecure Direct Object Reference, use:
+ obj instanceof TrustedClass 
+instead of 
+ obj.getClass().getName().equals(this.getClass().getName())
+
+This way you check whether the object is instance of correct class before further processing.
+
+Original equals method 
+```java
+@Beanoverride public boolean equals(Object obj) {
+    return this == obj || obj instanceof TrustedClass;
+}
+```
+
+It's also very important to always override the hashCode() method when you override the equals() method in a class.
+
+Make sure to consider equals null check when overriding equals() method.
+
+```java
+@Beanoverride public boolean equals(Object obj) {
+    if (this == obj) return true;
+
+    if (obj == null)  return false; // equals zero-null check
+
+    return obj instanceof TrustedClass && getClass().equals(obj.getClass());
+}
+```
+Avoid using Reflection-based implementations when comparing if classe objects are matching each other
+
+ORIGINAL CODE:
+```
+                  public class TrustedClass {
+                        ...
+                           @Overridepublic boolean equals(Object obj) {
+                              boolean isEquals = false;
+                                 
+                                 // first check to see if the object is of the same class
+                                 if (obj.getClass().getName().equals(this.getClass().getName())) {
+                                    
+                                       
+                                       // then compare object fields
+                                       ...if (...) {isEquals = true;}
+                                 }
+                                 return isEquals;
+                           }
+                           ...
+                     }
+               
+                ```

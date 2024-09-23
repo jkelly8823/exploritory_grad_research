@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 3-12
+VULNERABILITY_DESCRIPTION:
+Inconsistent Locking
+EXPLANATION:
+The code uses both `mutex_lock` and `spin_lock_bh` to protect access to the `ah` struct. However, these locks are not used consistently throughout the code. Specifically, the `mutex_lock` is held for the entire duration of the code, while the `spin_lock_bh` is only used for a specific block. This inconsistency in locking can lead to potential deadlock or starvation issues. Additionally, the `mutex_unlock` is missing to release the `ah->lock` which will cause a deadlock.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the locking strategy should be made consistent throughout the code. If a `mutex_lock` is used to protect access to the `ah` struct, then it should be used consistently and released properly. Alternatively, the `spin_lock_bh` can be used throughout the code if it provides the necessary concurrency guarantees. Additionally, the `mutex_unlock` should be added to release the `ah->lock`.
+
+ORIGINAL CODE:
+```c
+struct ath5k_vif *avf = (void *)vif->drv_priv;
+struct ath5k_hw *ah = hw->priv;
+struct ath_common *common = ath5k_hw_common(ah);
+
+mutex_lock(&ah->lock);
+
+if (changes & BSS_CHANGED_BSSID) {
+}
+
+if (changes & BSS_CHANGED_BEACON) {
+        spin_lock_bh(&ah->block);
+        ath5k_beacon_update(hw, vif);
+        spin_unlock_bh(&ah->block);
+}
+
+if (changes & BSS_CHANGED_BEACON_ENABLED)
+        ah->enable_beacon = bss_conf->enable_beacon;
+```

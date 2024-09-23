@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 49-53
+VULNERABILITY_DESCRIPTION:
+Array Index Out of Bounds
+EXPLANATION:
+In the function `l2cap_connect_create_rsp`, an array index out of bounds vulnerability is present. Specifically, the variable `chan->conf_len` is not checked against the bounds of the `chan->conf_req` array before adding `len` to it. This could result in a buffer overflow, potentially leading to a DOS (Denial of Service) or arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking to ensure that `chan->conf_len + len` does not exceed the size of the `chan->conf_req` array. Here is an example of how this could be done:
+```c
+if (chan->conf_len + len > sizeof(chan->conf_req)) {
+    /* handle error */
+    BT_ERR("conf_req buffer overflow");
+    return -EFAULT;
+}
+```
+Additionally, you should consider using `memcpy` or a similar function to avoid potential buffer overflow vulnerabilities in the future.
+
+ORIGINAL CODE:
+```c
+static int l2cap_connect_create_rsp(struct l2cap_conn *conn,
+				    struct l2cap_cmd_hdr *cmd, u16 cmd_len,
+				    u8 *data)
+{
+	struct l2cap_conn_rsp *rsp = (struct l2cap_conn_rsp *) data;
+	u16 scid, dcid, result, status;
+	struct l2cap_chan *chan;
+	u8 req[128];
+	int err;
+
+	if (cmd_len < sizeof(*rsp))
+		return -EPROTO;
+
+	scid   = __le16_to_cpu(rsp->scid);
+	dcid   = __le16_to_cpu(rsp->dcid);
+	result = __le16_to_cpu(rsp->result);
+	status = __le16_to_cpu(rsp->status);
+	struct l2cap_chan *chan;
+	int len, err = 0;
+
+	if (cmd_len < sizeof(*req))
+		return -EPROTO;
+
+	dcid  = __le16_to_cpu(req->dcid);
+	flags = __le16_to_cpu(req->flags);
+
+	BT_DBG("dcid 0x%4.4x flags 0x%2.2x", dcid, flags);
+
+	/* Reject if config buffer is too small. */
+	len = cmd_len - sizeof(*req);
+	if (chan->conf_len + len > sizeof(chan->conf_req)) {
+		l2cap_send_cmd(conn, cmd->ident, L2CAP_CONF_RSP,
+			       l2cap_build_conf_rsp(chan, rsp,
+			       L2CAP_CONF_REJECT, flags), rsp);
+		goto unlock;
+}
+```

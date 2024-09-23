@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) Vulnerability due to Unhandled Connection Closure
+
+EXPLANATION:
+The provided code snippet includes a class `NNTPError` that defines a behavior when reading a line from a file. If the connection is closed, it raises an `EOFError`. However, this behavior may be exploited to crash the application or cause a Denial of Service (DoS). If a malicious server closes the connection, the application will raise an `EOFError` and terminate, causing a DoS.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should handle the `EOFError` exception and decide what action to take. If the connection closure is valid, consider catching the `EOFError` exception and terminating the method gracefully. You should also log or alert the event. 
+
+```python
+try:
+    if not line: raise EOFError
+except EOFError as e:
+    # Decide what action to take. For example:
+    # Log the event
+    logging.error("Connection closed unexpectedly", e)
+    # Terminate the method gracefully
+    return None
+```
+
+Additionally, it is worth considering validating user input, such as checking the length of the received line.
+
+ORIGINAL CODE:
+           "decode_header",
+           ]
+
+# maximal line length when calling readline(). This is to prevent
+# reading arbitrary lenght lines. RFC 3977 limits NNTP line length to
+# 512 characters, including CRLF. We have selected 2048 just to be on
+# the safe side.
+_MAXLINE = 2048
+
+
+# Exceptions raised when an error or invalid response is received
+class NNTPError(Exception):
+    """Base class for all nntplib exceptions"""
+    def __init__(self, *args):
+        """Internal: return one line from the server, stripping _CRLF.
+        Raise EOFError if the connection is closed.
+        Returns a bytes object."""
+        line = self.file.readline(_MAXLINE +1)
+        if len(line) > _MAXLINE:
+            raise NNTPDataError('line too long')
+        if self.debugging > 1:
+            print('*get*', repr(line))
+        if not line: raise EOFError
+        if strip_crlf:

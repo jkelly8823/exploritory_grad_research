@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Prototype Pollution vulnerability, potentially allowing an attacker to manipulate the prototype chain of an object.
+
+EXPLANATION:
+The vulnerability lies in the lines of code that check if an attribute is equal to certain specific strings, such as "__proto__" or "constructor". However, there is no check to restrict access to the prototype chain for arbitrary attributes. If the input 'path' contains a string that starts with "__proto__", an attacker may be able to manipulate the prototype chain of the 'object' parameter. This could potentially lead to Denial of Service or Remote Code Execution vulnerabilities in certain situatons.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, the code should add additional checks to restrict access to the prototype chain. This can be achieved by ensuring that none of the parts of the 'path' can start with "__proto__" or other specific string that could be used to access the prototype chain. One additional solution is to handle any type of exception that could occur during this operation.
+
+Here's an updated version of the function that includes these recommendations:
+
+function setValueByPath(object, path, value) {
+  const pathArray = path.split(".");
+  for (let i = 0; i < pathArray.length; i += 1) {
+    if (pathArray[i].startsWith("__proto__") || pathArray[i] === "constructor" || pathArray[i] === "prototype") {
+      throw new Error("Cannot set values on prototype chain");
+    }
+  }
+
+  const attributeToSet = pathArray.pop();
+  let objectToModify = object;
+  for (const attr of pathArray) {
+    if (typeof objectToModify[attr] !== "object") {
+      objectToModify[attr] = {};
+    }
+    objectToModify = objectToModify[attr];
+  }
+
+  objectToModify[attributeToSet] = value;
+  return object;
+}
+
+ORIGINAL CODE:
+```javascript
+function setValueByPath(object, path, value) {
+  const pathArray = path.split(".");
+  const attributeToSet = pathArray.pop();
+  let objectToModify = object;
+  for (const attr of pathArray) {
+    if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+      continue;
+    }
+    if (typeof objectToModify[attr] !== "object") {
+      objectToModify[attr] = {};
+    }
+    objectToModify = objectToModify[attr];
+  }
+
+  objectToModify[attributeToSet] = value;
+  return object;
+}
+```

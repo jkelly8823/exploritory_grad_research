@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION:
+Insecure use of user-provided data from iov_iter_copy_from_user() without proper error checking.
+
+EXPLANATION:
+The `iov_iter_copy_from_user()` function returns the number of bytes successfully copied from user space, but it can also return a negative value in case of an error. However, in the provided code, the return value of `iov_iter_copy_from_user()` is not checked for errors. This can lead to undefined behavior or incorrect data being processed if an error occurs. Additionally, the code uses the `min_t()` function to limit `copied` to `cur_len`, but it does not check if `copied` is 0 or negative, which could also indicate an error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should check the return value of `iov_iter_copy_from_user()` and handle any errors that occur. This can be done by checking if the return value is less than 0, and if so, handling the error accordingly.
+
+```c
+copied = iov_iter_copy_from_user(wdata->pages[i], &it, 0, copied);
+if (copied < 0) {
+    /* Handle the error, for example, by returning an error code
+     * or by logging the error and continuing with a default value.
+     */
+}
+```
+You should also consider checking if `copied` is 0 or negative, and if so, handling it accordingly.
+
+ORIGINAL CODE:
+```
+for (i = 0; i < nr_pages; i++) {
+    copied = min_t(const size_t, cur_len, PAGE_SIZE);
+    copied = iov_iter_copy_from_user(wdata->pages[i], &it,
+                     0, copied);
+    cur_len -= copied;
+    iov_iter_advance(&it, copied);
+}
+cur_len = save_len - cur_len;
+```

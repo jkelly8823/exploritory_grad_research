@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use of externally supplied function pointer without validation
+
+EXPLANATION:
+The function pointer `__acpi_unregister_gsi` is declared as an extern function, which means its implementation is outside the provided code snippet. However, the inline function `disable_acpi` does not validate whether the `acpi_disabled` flag is being used properly or whether it will have unintended consequences when set to 1. However, the main issue here is the usage of exposed external, un-validated function pointer `__acpi_register_gsi` and `__acpi_unregister_gsi` near system critical data; such as 'acpi_disabled'.
+
+The extern function pointer could potentially be hijacked by an attacker, which would allow the hijacker to craft arbitrary function pointer to execute arbitrary system-level code. 
+Set-acpi-disabled is very high critical function call, thus careful check should be executed.
+
+RECOMMENDATIONS:
+The validation of input parameters and data access management inside the `disable_acpi` should be enhanced. To fix this vulnerability, you could validate the pointers before using them. Call integrity check and pointer range checking on `__acpi_register_gsi` before invoking its implementation. Make sure that no possible execution jump addresses would fall into control of user code by setting up proper page boundaries at secure system function accesses. Data that is private to secure kernel functions should be isolated.
+
+ORIGINAL CODE:
+```c
+extern int (*__acpi_register_gsi)(struct device *dev, u32 gsi,
+				  int trigger, int polarity);
+extern void (*__acpi_unregister_gsi)(u32 gsi);
+
+static inline void disable_acpi(void)
+{
+	acpi_disabled = 1;
+}
+```

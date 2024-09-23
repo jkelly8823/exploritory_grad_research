@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 106-115
+VULNERABILITY_DESCRIPTION:
+Potential Deadlock condition due to nesting of locks.
+
+EXPLANATION:
+The vulnerability exists because the code nests different types of locks. The `mutex_lock` call is used to acquire the `dev_alloc_lock` mutex, and within the critical section of this lock, the `raw_spin_lock_init` function is called to initialize a spinlock, and `raw_spinlock_t` is used. However, the initialization function is called without holding the lock. In some cases, a deadlock can occur if a thread is preempted while holding a lock and the lock is nested with another lock that is also held by another thread.
+
+Additionally, `raw_spinlock_t` is not designed to be used as a per-CPU lock and should be protected by the `dev_alloc_lock` mutex in all cases. In this code snippet, the `raw_spinlock_t` is used as a global lock to protect shared data, and it's not safe to use it as a per-CPU lock. 
+
+In line 104-114 there is, in addition, a call to its_vpe_deschedule and within this call its_clear_vpend_valid is called. Within its_clear_vpend_valid() many while loops exist and system calls such as udelay. These system calls are blocking calls and holding system resources while this block of system calls happens, as previously explained, a different thread may take a significant amount of time before progress can continue in that context. Furthermore these while loops, in particular and specifically the first while loop in its_clear_vpend_valid(), in addition to those shown in other functions, introduce conditions in which race conditions are also unavoidable.
+
+To prevent the vulnerability from occurring, we should refactor the code such that the locks are not nested, the usage of raw_spinlock_t is reevaluated and proper synchronization is done among multiple threads accessing shared resources.
+
+RECOMMENDATIONS:
+1. Avoid using nested locks to prevent deadlocks. If a lock must be nested, use a well-tested and safe locking mechanism that can handle nested locks.
+2. Only use `raw_spinlock_t` when it's safe to do so and ensure that the critical section is as short as possible.
+3. Review and refactor the code to prevent race conditions.
+4. Avoid using blocking system calls like udelay while holding locks or critical sections of code.
+
+ORIGINAL CODE:
+ The complete code was given and has been evaluated and summarized above.

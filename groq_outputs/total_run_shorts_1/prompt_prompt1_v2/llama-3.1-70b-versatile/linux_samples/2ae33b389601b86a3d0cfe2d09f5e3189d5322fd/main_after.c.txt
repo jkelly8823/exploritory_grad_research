@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: Unlocked use of a non-atomic list.
+EXPLANATION:
+I identified a potential vulnerability in the provided code snippet. The 'list_del_init' function and the 'list_add_tail' function are used to manipulate elements in a linked list ('dpm_list') while it's unlocked ('mutex_unlock(&dpm_list_mtx)') on line 4.
+
+It appears that this code snippet may be intended to operate concurrently with other parts of the program. Since these functions are non-atomic and not taking a lock on the 'dpm_list', they might cause issues like data corruption, segmentation faults, or wrong removal/insertion of elements from the list if another thread or context tries to access or modify the list simultaneously.
+
+RECOMMENDATIONS:
+It seems like the mutex lock or other synchronization primitives were intended to protect the 'dpm_list' but are not properly used in the given snippet.
+If 'list_add_tail' and 'list_del_init' should be executed atomically, they should be enclosed within the mutex lock.
+
+ORIGINAL CODE:
+	if (dev_warn(dev, "parent %s should not be sleeping\n",
+			dev_name(dev->parent));
+	list_add_tail(&dev->power.entry, &dpm_list);
+	mutex_unlock(&dpm_list_mtx);
+}
+
+/**
+		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
+	complete_all(&dev->power.completion);
+	mutex_lock(&dpm_list_mtx);
+	list_del_init(&dev->power.entry);
+	mutex_unlock(&dpm_list_mtx);
+	device_wakeup_disable(dev);
+	pm_runtime_remove(dev);

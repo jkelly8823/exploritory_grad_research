@@ -1,0 +1,84 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-17
+VULNERABILITY_DESCRIPTION:
+Use-after-free vulnerability in mmu_context_ida.
+EXPLANATION:
+The code seems to check if `index` is greater than `MAX_CONTEXT`, which should ideally prevent out-of-bounds access. However, there is an issue in the `else if` statement preceding this block. If `err` is set to 0 or not previously initialized (no value assigned), it will cause the `if (index > MAX_CONTEXT)` to execute directly after the `else if (err)` condition, leading to the usage of `index` before it is initialized. 
+Additionally, even if we assume `index` was initialized with a valid context index in the missing part of the function prior to this snippet, there's still a potential issue when calling `ida_remove` on it. This call deletes a previously assigned ID without assigning a new ID, which could likely leave the newly created context with a stale or dangling IDA entry.
+
+
+
+RECOMMENDATIONS:
+First, `index` should be initialized with a valid context index before executing this block. Next, add null or zero checks for `index` to handle potential IDA entry removal for valid context indices or use-after-free issues with unassigned context indices. 
+
+```cpp
+int __init_new_context(void)
+{
+	int index;
+	int err;
+	
+	if (err)
+		return err;
+
+	if (index > MAX_CONTEXT) {
+		if (index > 0) {
+			spin_lock(&mmu_context_lock);
+			ida_remove(&mmu_context_ida, index);
+			spin_unlock(&mmu_context_lock);
+		} else {
+			return -EINVAL; // invalid context index
+		}
+		return -ENOMEM;
+	}
+
+	// missing context initialization logic
+
+	return 0; // context created successfully
+}
+
+// another approach using previously created index before switching to a different valid index
+else if (err)
+	return err;
+
+int valid_context_index = ... // define valid index or ID association, initialization before entering this logic.
+
+if (valid_context_index >= MAX_CONTEXT) {
+		return -EINVAL; 
+} else if (valid_context_index != -1) {
+	// assign it prior lock checks
+	index = valid_context_index;
+}
+
+spin_lock(&mmu_context_lock);
+ida_remove(&mmu_context_ida, valid_context_index); // assuming valid_index logic check succeeded to pass here.
+spin_unlock(&mmu_context_lock);
+// assign the ID to the newly created context else use a current assigned context index 
+// and always verify it before association
+
+// recommended modifications including index assignment validation checks may prevent this error
+ORGINAL CODE:
+static DEFINE_SPINLOCK(mmu_context_lock);
+static DEFINE_IDA(mmu_context_ida);
+
+/*
+ * 256MB segment
+ * The proto-VSID space has 2^(CONTEX_BITS + USER_ESID_BITS) - 1 segments
+ * available for user mappings. Each segment contains 2^28 bytes. Each
+ * context maps 2^46 bytes (64TB) so we can support 2^19-1 contexts
+ * (19 == 37 + 28 - 46).
+ */
+#define MAX_CONTEXT	((1UL << CONTEXT_BITS) - 1)
+
+int __init_new_context(void)
+{
+	int index;
+	int err;
+	else if (err)
+		return err;
+
+	if (index > MAX_CONTEXT) {
+		spin_lock(&mmu_context_lock);
+		ida_remove(&mmu_context_ida, index);
+		spin_unlock(&mmu_context_lock);
+		return -ENOMEM;
+```

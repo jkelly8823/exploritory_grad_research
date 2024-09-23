@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Memory leak due to missing resource deallocation on error path
+
+EXPLANATION:
+The provided code snippet allocates memory for `lg2ff_device` using `kmalloc`. However, if the allocation fails, an error is returned but the previously allocated memory (`report`) is not deallocated. This can lead to a memory leak in the case of repeated failed allocations.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a `kfree` call to deallocate the `report` memory before returning an error. Here's how the corrected code could look like:
+```c
+struct hid_report *report;
+struct hid_input *hidinput = list_entry(hid->inputs.next,
+						struct hid_input, list);
+struct input_dev *dev = hidinput->input;
+int error;
+
+	/* Check that the report looks ok */
+	report = hid_validate_values(hid, HID_OUTPUT_REPORT, 0, 0, 7);
+	if (!report)
+		return -ENODEV;
+
+	lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+	if (!lg2ff) {
+		kfree(report);  // Deallocate report memory on error
+		return -ENOMEM;
+	}
+```
+
+ORIGINAL CODE:
+(struct hid_report *report;
+struct hid_input *hidinput = list_entry(hid->inputs.next,
+						struct hid_input, list);
+struct input_dev *dev = hidinput->input;
+int error;
+
+	/* Check that the report looks ok */
+report = hid_validate_values(hid, HID_OUTPUT_REPORT, 0, 0, 7);
+if (!report)
+	return -ENODEV;
+
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+	return -ENOMEM;)

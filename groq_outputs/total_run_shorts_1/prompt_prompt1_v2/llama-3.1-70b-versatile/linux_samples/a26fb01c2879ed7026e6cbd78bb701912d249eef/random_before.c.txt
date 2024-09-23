@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 14
+VULNERABILITY_DESCRIPTION: 
+Potential Information Disclosure via Unsanitized Data
+
+EXPLANATION:
+In the given code snippet, the function `write_pool` does not perform adequate checks on the user-provided buffer before passing it to the `mix_pool_bytes` function. The `copy_from_user` function is used to copy data from the user space to kernel space, and it returns the number of bytes that could not be copied, which is a potential error that is checked but not specifically addressing a buffer overflow vulnerability. However, there is an implicit risk that `mix_pool_bytes` may handle user-supplied data insecurely, thus potentially leaking sensitive information.
+
+However, it is worth noting that the potential vulnerability here is the indirect modification of kernel state from user space (a common feature of most pools, including entropy pools), where the sensitive operation (or sensitive code, or mixing function) is left to a callee. Assuming that the function `mix_pool_bytes` is documented and intended to 'mix pool bytes,' then we would indeed focus on the potential buffer overflow from `copy_from_user` at line 10 that directly flows to an operation impacting kernel state. The count from `copy_from_user` and passed directly to and received by `mix_pool_bytes` (along with the buffer) also means there are limited bounds protections used at the targeted destination (specifically, data mixed into kernel entropy pool), giving elevated concern over the unchecked source size.
+
+
+
+RECOMMENDATIONS: 
+- Carefully review the implementation of the `mix_pool_bytes` function to ensure it does not introduce any information disclosure vulnerabilities.
+- Validate the user-provided count and buffer ensuring that the counts do not get miscalculated and cause an offset causing unexpected kernel buffer overflow.
+- Confirm the error code returned from `copy_from_user` reflects correct operation and that return of any value from `copy_from_user` will correctly indicate error - then handle correctly.
+- If need be, do validation on parameters and error checks as necessary for protecting the local entropy store.
+
+ORIGINAL CODE:
+```c
+write_pool(struct entropy_store *r, const char __user *buffer, size_t count)
+{
+	size_t bytes;
+	__u32 buf[16];
+	const char __user *p = buffer;
+
+	while (count > 0) {
+		bytes = min(count, sizeof(buf));
+		if (copy_from_user(&buf, p, bytes))
+			return -EFAULT;
+
+		count -= bytes;
+		p += bytes;
+
+		mix_pool_bytes(r, buf, bytes);
+```

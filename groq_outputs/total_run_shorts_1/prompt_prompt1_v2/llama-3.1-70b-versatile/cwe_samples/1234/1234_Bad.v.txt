@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 35-36
+VULNERABILITY_DESCRIPTION:
+ The code is vulnerable to a register tampering issue through the scan_mode or debug_unlocked bypass, which allows an attacker to modify the Data_out register even when the Lock bit is set.
+EXPLANATION:
+ The vulnerability arises because the conditions for writing to Data_out are not strictly restricted to when the write signal is asserted and the Lock bit is clear. The presence of the scan_mode and debug_unlocked conditions essentially bypass the intended protection provided by the Lock bit. This allows for registers to be modified in a way that was not intended by the system designer.
+RECOMMENDATIONS:
+1.  Review the logic surrounding the usage of scan_mode and debug_unlocked signals.
+2.  Ensure that the scan_mode and debug_unlocked signals are properly secured and not directly externally controllable.
+3.  Consider the impact of overriding the lock bit for these modes, and implement further checks or control logic to restrict access to Data_out.
+
+ORIGINAL CODE:
+```
+module Locked_register_example
+(
+    input [15:0] Data_in,
+    input Clk,
+    input resetn,
+    input write,
+    input Lock,
+    input scan_mode,
+    input debug_unlocked,
+    output reg [15:0] Data_out
+);
+
+    reg lock_status;
+    
+    always @(posedge Clk or negedge resetn)
+    
+        if (~resetn) // Register is reset resetn
+        begin
+        
+            lock_status <= 1'b0;
+        
+        end
+        else if (Lock)
+        begin
+        
+            lock_status <= 1'b1;
+        
+        end
+        else if (~Lock)
+        begin
+        
+            lock_status <= lock_status;
+        
+        end
+      
+        always @(posedge Clk or negedge resetn)
+        
+        if (~resetn) // Register is reset resetn
+        begin
+        
+            Data_out <= 16'h0000;
+        
+        end
+        else if (write & (~lock_status | scan_mode | debug_unlocked) ) // Register protected by Lock bit input, overrides supported for scan_mode & debug_unlocked
+        begin
+        
+            Data_out <= Data_in;
+        
+        end
+        else if (~write)
+        begin
+        
+            Data_out <= Data_out;
+        
+        end
+  
+        endmodule
+```
+
+Note:  Given the circumstances and based on what we're presented with here, you may want to rethink the security model tied into data_in and scan_mode to avoid direct register manipulation, however an exact solution to this issue is beyond this evaluation, and depends on system-level details.

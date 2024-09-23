@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-15, 18-23
+VULNERABILITY_DESCRIPTION:
+Unprotected concurrent access to shared memory locations.
+
+EXPLANATION:
+The code snippet appears to be a critical section of code that accesses shared memory locations. The presence of memory barriers (memw) and synchronization instructions suggests that this code is intended to be thread-safe. However, the code does not use any synchronization primitives such as locks or atomic operations to protect access to the shared memory locations.
+
+ Specifically, lines 7-15 and 18-23 access and modify shared memory locations using load (l32i) and store (s32i) instructions without proper synchronization. This could lead to data corruption or inconsistencies if multiple threads or CPUs access the same shared memory locations simultaneously.
+
+Furthermore, the code uses busy-waiting loops to wait for conditions to be met, which is generally an inefficient way to handle concurrent access.
+
+RECOMMENDATIONS:
+To fix the vulnerability, consider using synchronization primitives such as locks or atomic operations to protect access to the shared memory locations. For example, you can use atomic load/store instructions or acquire/release semantics to ensure that accesses to shared memory locations are executed in a thread-safe manner.
+
+Additionally, consider using more efficient synchronization mechanisms such as spinlocks or mutexes to replace the busy-waiting loops.
+
+ORIGINAL CODE:
+mopi	a2, cpu_start_ccount
+1:
+	memw
+	l32i	a3, a2, 0
+	beqi	a3, 0, 1b
+	movi	a3, 0
+	s32i	a3, a2, 0
+1:
+	memw
+	l32i	a3, a2, 0
+	beqi	a3, 0, 1b
+	wsr	a3, ccount
+	movi	a3, 0
+	rsr	a0, prid
+	neg	a2, a0
+	movi	a3, cpu_start_id
+	memw
+	s32i	a2, a3, 0
+#if XCHAL_DCACHE_IS_WRITEBACK
+	dhwbi	a3, 0
+#endif
+1:
+	memw
+	l32i	a2, a3, 0
+	dhi	a3, 0
+	bne	a2, a0, 1b

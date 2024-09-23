@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+Insecure Use of Hardcoded Timeout Values
+
+EXPLANATION:
+The code snippet uses a hardcoded timeout value (`HCI_AUTO_OFF_TIMEOUT`) to schedule a delayed work. However, the value of this timeout is not explicitly defined in the provided snippet. The concern here is that hardcoded values can be inflexible and easily discoverable by an attacker. This may lead to potential issues in the system's responsiveness and maintainability. Hardcoded values may also be vulnerable to "time-of-check to time-of-use" (TOCTOU) attacks.
+
+RECOMMENDATIONS:
+Consider using a more secure and maintainable approach to defining timeout values, such as:
+- Using a configurable constant that can be adjusted through a secure mechanism.
+- Dynamically calculating the timeout based on the system's current state or environment.
+- Using a secure randomization mechanism to make the timeout value unpredictable.
+
+Additionally, it is recommended to validate the `HCI_AUTO_OFF_TIMEOUT` value and handle potential overflows to ensure the system remains stable under different timing conditions.
+
+ORIGINAL CODE:
+```c
+static void hci_power_on(struct work_struct *work)
+{
+	struct hci_dev *hdev = container_of(work, struct hci_dev, power_on);
+	int err;
+
+	BT_DBG("%s", hdev->name);
+
+	err = hci_dev_open(hdev->id);
+	if (err < 0) {
+		mgmt_set_powered_failed(hdev, err);
+		return;
+	}
+
+	if (test_bit(HCI_AUTO_OFF, &hdev->dev_flags))
+		queue_delayed_work(hdev->req_workqueue, &hdev->power_off,
+				   HCI_AUTO_OFF_TIMEOUT);
+}

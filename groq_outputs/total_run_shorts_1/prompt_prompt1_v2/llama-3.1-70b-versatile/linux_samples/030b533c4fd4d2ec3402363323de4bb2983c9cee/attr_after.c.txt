@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Time-Of-Check-To-Time-Of-Use (TOCTOU) vulnerability.
+
+EXPLANATION:
+The TOCTOU vulnerability occurs when a program checks the state of a resource before using it, but there is a window of time between the check and the use during which the state of the resource could change. In this code, the check is performed when it verifies whether the user is the owner of the inode (`uid_eq(current_fsuid(), inode->i_uid)`). However, the code later calls `security_inode_need_killpriv(dentry)` or `security_inode_killpriv(dentry)`, which may depend on the state of the inode or dentry. If an attacker can change the state of the inode or dentry between the check and the call to the security function, they may be able to exploit a vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the check of the user's permissions is performed immediately before the call to the security function, and that the state of the inode and dentry cannot be changed by an attacker during this time. This could be achieved by using a locking mechanism or by ensuring that the inode and dentry are not accessible to other processes during the check and call. Additionally, verify that the `security_inode_need_killpriv` and `security_inode_killpriv` functions properly handle errors and changing states of the inode and dentry.
+
+ORIGINAL CODE:
+
+
+/* If force is set do it anyway. */
+if (ia_valid & ATTR_FORCE)
+	goto kill_priv;
+
+/* Make sure a caller can chown. */
+if ((ia_valid & ATTR_UID) &&
+    (!uid_eq(current_fsuid(), inode->i_uid) ||
+			return -EPERM;
+}
+
+kill_priv:
+/* User has permission for the change */
+if (ia_valid & ATTR_KILL_PRIV) {
+	int error;
+
+error = security_inode_killpriv(dentry);
+if (error)
+	return error;
+}
+
+return 0;
+}
+EXPORT_SYMBOL(setattr_prepare);
+
+	if (!(ia_valid & ATTR_MTIME_SET))
+		attr->ia_mtime = now;
+if (ia_valid & ATTR_KILL_PRIV) {
+	error = security_inode_need_killpriv(dentry);
+	if (error < 0)
+		return error;
+	if (error == 0)
+		ia_valid = attr->ia_valid &= ~ATTR_KILL_PRIV;
+}
+
+/*
+ * We now pass ATTR_KILL_S*ID to the lower level setattr function so

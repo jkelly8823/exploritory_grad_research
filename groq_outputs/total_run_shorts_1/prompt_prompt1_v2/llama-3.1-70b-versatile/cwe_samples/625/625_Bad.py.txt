@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18
+VULNERABILITY_DESCRIPTION:
+Command injection vulnerability in subprocess.call() with untrusted input.
+
+EXPLANATION:
+The code snippet uses the `subprocess.call()` function with an argument that is directly generated from user input (`validated` IP address). Although the `validate_ip_regex` function attempts to validate the IP address, it does not guarantee that the input is safe for use in a shell command. In some cases, an IP address may contain shell metacharacters (e.g., `()` or `;`), which can potentially lead to a command injection attack.
+
+However, there's one main issue with using subprocess.call() in this context - ping doesn't handle IP addresses with shell metacharacters, it handles the IP address that was fed to it directly. In this context the variable `validated` will cause issues where it may contain shell metacharacters. 
+
+A malicious IP address like `$(rm -rf /)` wouldn't cause damage as described earlier but would not resolve correctly for the ping operation.
+
+Nonetheless, use of `subprocess.call()` with variable input is considered potentially insecure and this could potentially have security implications even if unlikely due to the `ping` command properties.
+
+RECOMMENDATIONS:
+Instead of using `subprocess.call()`, consider using `subprocess.Popen()` with the `shell=False` argument to prevent shell metacharacters from being interpreted. This will provide an extra layer of security against potential command injection attacks.
+Be cautious with constructing the arguments to the subprocess APIs and avoid using string concatenation or formatting. 
+
+Here's an example of a more secure approach:
+
+```python
+subprocess.Popen(["ping", validated], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+```
+
+ORIGINAL CODE:
+```python
+import subprocess
+import re
+
+def validate_ip_regex(ip: str):
+    ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+    if ip_validator.match(ip):
+        return ip
+    else:
+        raise ValueError("IP address does not match valid pattern.")
+
+def run_ping_regex(ip: str):
+    validated = validate_ip_regex(ip)
+    result = subprocess.call(["ping", validated])
+    print(result)
+```

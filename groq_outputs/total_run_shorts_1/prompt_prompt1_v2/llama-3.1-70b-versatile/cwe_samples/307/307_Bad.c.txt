@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 6
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a buffer overflow vulnerability due to the potential for reading into `username` and `password` without bounds checking.
+
+EXPLANATION:
+In the given code, `getNextMessage` function reads data into `username` and `password` without validating the amount of data being written. If `getNextMessage` were to read more data than `USERNAME_SIZE` or `PASSWORD_SIZE`, this could lead to a buffer overflow vulnerability. Additionally, there is potential for Information Exposure through the reading of user credentials into a statically sized buffer with fixed maximum size. If `USERNAME_SIZE` or `PASSWORD_SIZE` are too small to hold valid input data, this might also cause segmentation errors due to unhandled buffer overflow events.
+
+RECOMMENDATIONS:
+Use a safer function to read input from the socket. For example, use `recv` with `MSG_PEEK` flag to get the size of the message before parsing it. Validate and check the length of the input data read by `getNextMessage` before copying data into the buffers to prevent buffer overflows.
+
+```c
+size_t bytesRead = recv(socket, buffer, size, MSG_PEEK);
+if (bytesRead <= 0) {
+    // handle error
+} else if (bytesRead > USERNAME_SIZE || bytesRead > PASSWORD_SIZE) {
+    // handle error or truncation
+}
+
+readData = recv(socket, username, bytesRead, 0);
+if (readData <= 0) {
+    // handle error
+} else if (readData < USERNAME_SIZE) {
+    // handle truncation
+}
+```
+Also consider employing `fgets` with a maximum allowed length (`USERNAME_SIZE-1`) while parsing input for both the `username` and `password`. As an additional security practice:
+
+* Consider avoiding `printf` for error messages as they can reveal system information (change `printf` to a secure logging function).
+* Avoid returning on `FAIL` rather use a proper exceptions handling if available for the used programming language.
+
+ORIGINAL CODE:
+```
+int validateUser(char *host, int port){
+    int socket = openSocketConnection(host, port);if (socket < 0) {printf("Unable to open socket connection");return(FAIL);}
+    int isValidUser = 0;char username[USERNAME_SIZE];char password[PASSWORD_SIZE];
+    while (isValidUser == 0) {
+        if (getNextMessage(socket, username, USERNAME_SIZE) > 0) {if (getNextMessage(socket, password, PASSWORD_SIZE) > 0) {isValidUser = AuthenticateUser(username, password);}}
+    }return(SUCCESS);
+}
+```

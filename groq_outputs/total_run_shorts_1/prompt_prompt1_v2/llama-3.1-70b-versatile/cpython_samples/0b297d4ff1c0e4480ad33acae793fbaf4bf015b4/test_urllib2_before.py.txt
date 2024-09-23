@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 28
+VULNERABILITY_DESCRIPTION:
+Potential HTTP header injection vulnerability through unvalidated user input.
+
+EXPLANATION:
+The code is using a concatenation of strings to construct the WWW-Authenticate header. This allows for a potential HTTP header injection vulnerability when using user-controlled data. While the examples provided here use a static string for the realm, the vulnerability could be exploited if the realm or any other part of the header was constructed using user-controllable data.
+
+RECOMMENDATIONS:
+Use the `response.headers` dictionary to set the WWW-Authenticate header instead of concatenating strings. This will prevent malicious characters from being injected into the header. Alternatively, consider using a library like `rfc3986` or `urllib.parse` to properly encode and escape the header values.
+
+ORIGINAL CODE:
+```python
+bypass = {'exclude_simple': True, 'exceptions': []}
+self.assertTrue(_proxy_bypass_macosx_sysconf('test', bypass))
+
+def test_basic_auth(self, quote_char='"'):
+    opener = OpenerDirector()
+    password_manager = MockPasswordManager()
+    auth_handler = urllib.request.HTTPBasicAuthHandler(password_manager)
+    realm = "ACME Widget Store"
+    http_handler = MockHTTPHandler(
+        401, 'WWW-Authenticate: Basic realm=%s%s%s\r\n\r\n' %
+        (quote_char, realm, quote_char))
+    opener.add_handler(auth_handler)
+    opener.add_handler(http_handler)
+    self._test_basic_auth(opener, auth_handler, "Authorization",
+                          realm, http_handler, password_manager,
+                          "http://acme.example.com/protected",
+                          "http://acme.example.com/protected",
+                          )
+
+def test_basic_auth_with_single_quoted_realm(self):
+    self.test_basic_auth(quote_char="'")
+
+def test_basic_auth_with_unquoted_realm(self):
+    opener = OpenerDirector()
+    password_manager = MockPasswordManager()
+    auth_handler = urllib.request.HTTPBasicAuthHandler(password_manager)
+    realm = "ACME Widget Store"
+    http_handler = MockHTTPHandler(
+        401, 'WWW-Authenticate: Basic realm=%s\r\n\r\n' % realm)
+    opener.add_handler(auth_handler)
+    opener.add_handler(http_handler)
+    with self.assertWarns(UserWarning):
+        self._test_basic_auth(opener, auth_handler, "Authorization",
+                            realm, http_handler, password_manager,
+                            "http://acme.example.com/protected",
+                            "http://acme.example.com/protected",
+                            )
+
+def test_proxy_basic_auth(self):
+    opener = OpenerDirector()
+    ph = urllib.request.ProxyHandler(dict(http="proxy.example.com:3128"))
+```

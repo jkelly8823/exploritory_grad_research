@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 15-16
+VULNERABILITY_DESCRIPTION:
+Dereferencing a potentially null pointer and accessing an uninitialized variable.
+
+EXPLANATION:
+The code snippet has two potential vulnerabilities. 
+1. On line 12, the `escan_result_le` structure is assigned a value and then checked for null. However, before this null check, the code does not verify if the `data` pointer is null. If `data` is null, the code will attempt to dereference a null pointer when assigning to `escan_result_le`, leading to a segmentation fault.
+2. On lines 15-16, the code accesses the `bss_info_le` structure without verifying if it is null or has been initialized. This could lead to a segmentation fault if `bss_info_le` is null or contains garbage data.
+
+RECOMMENDATIONS:
+1. Before assigning to `escan_result_le`, verify if the `data` pointer is null.
+2. Initialize or assign a valid value to `bss_info_le` before accessing it.
+3. Consider adding a null check for `bss_info_le` before accessing it.
+
+ORIGINAL CODE:
+```c
+struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+s32 status;
+struct brcmf_escan_result_le *escan_result_le;
+struct brcmf_bss_info_le *bss_info_le;
+struct brcmf_bss_info_le *bss = NULL;
+u32 bi_length;
+struct brcmf_scan_results *list;
+
+if (status == BRCMF_E_STATUS_PARTIAL) {
+    brcmf_dbg(SCAN, "ESCAN Partial result\n");
+    escan_result_le = (struct brcmf_escan_result_le *) data;
+    if (!escan_result_le) {
+        brcmf_err("Invalid escan result (NULL pointer)\n");
+        goto exit;
+    }
+    if (le16_to_cpu(escan_result_le->bss_count) != 1) {
+        brcmf_err("Invalid bss_count %d: ignoring\n",
+              escan_result_le->bss_count);
+        goto exit;
+    }
+
+    bi_length = le32_to_cpu(bss_info_le->length);
+    if (bi_length != (le32_to_cpu(escan_result_le->buflen) -
+            WL_ESCAN_RESULTS_FIXED_SIZE)) {
+        brcmf_err("Invalid bss_info length %d: ignoring\n",
+              bi_length);
+        goto exit;
+    }
+```

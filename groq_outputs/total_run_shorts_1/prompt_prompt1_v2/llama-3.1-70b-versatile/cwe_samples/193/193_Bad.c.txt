@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to incorrect allocation and access of memory.
+
+EXPLANATION:
+The code dynamically allocates memory for `WidgetList` based on the value of `numWidgets`. However, it then assigns a value to `WidgetList[numWidgets]`, which is outside the bounds of the allocated memory. This can lead to a buffer overflow, potentially allowing an attacker to write arbitrary data to adjacent memory locations.
+
+The issue arises because `WidgetList[numWidgets]` is attempting to access an index equal to the size of the array, which is not valid in C. Arrays in C are 0-indexed, meaning that the last valid index is always one less than the size of the array.
+
+Additionally, there is no validation of the size of the memory allocation. If an attacker can manipulate the value of `numWidgets` to be very large, this can lead to an integer overflow when calculating the size of the allocation, potentially resulting in a smaller than expected allocation, which can also lead to a buffer overflow.
+
+RECOMMENDATIONS:
+1. Change the allocation to include space for the null-terminator:
+   `WidgetList = (Widget **)malloc((numWidgets + 1) * sizeof(Widget *));`
+
+2. Validate the result of `malloc` to ensure that the allocation was successful:
+   ```c
+WidgetList = (Widget **)malloc((numWidgets + 1) * sizeof(Widget *));
+if (WidgetList == NULL) {
+    // handle allocation error
+}
+```
+
+3. Rethink the use of a sentinel value (`NULL`) to mark the end of the array. This approach may not be the best choice, especially if `WidgetList` is going to be used as a regular array. Instead, consider passing the size of the array along with it, or using a struct that includes the size and the array.
+
+ORIGINAL CODE:
+```c
+int i;
+unsigned int numWidgets;
+Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+WidgetList = (Widget **)malloc(numWidgets * sizeof(Widget *));
+printf("WidgetList ptr=%p\n", WidgetList);
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```

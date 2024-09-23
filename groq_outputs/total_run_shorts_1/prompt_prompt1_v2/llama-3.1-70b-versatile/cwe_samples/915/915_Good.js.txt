@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION: Prototype Pollution Vulnerability
+EXPLANATION:
+The provided `setValueByPath` function is vulnerable to prototype pollution. Although the code has a check to ignore attributes that resolve to object prototype, it does not handle nested prototype pollution attacks. An attacker could construct a `path` that would cause the function to pollute the prototype of the `object`.
+
+The vulnerability lies in the line where `objectToModify[attr] = {};` is not checked for a potential prototype pollution attack. If the attacker provides a `path` with multiple levels, they could overwrite the prototype of the `object` or any of its ancestors, leading to unexpected behavior or code injection.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the function should recursively check if the attribute is being assigned to the prototype chain. This can be done by checking if the `attr` is in the prototype chain of the object using `Object.prototype.hasOwnProperty.call(objectToModify, attr)` or `Object-has-own-property.call(objectToModify, attr)` method.
+
+You can modify the code as shown below:
+
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+        // Ignore attributes which resolve to object prototype
+        if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+            continue;
+        }
+        
+        // Check if the attribute is in the object's own property
+        if (!Object.prototype.hasOwnProperty.call(objectToModify, attr)) {
+            objectToModify[attr] = {};
+        }
+        
+        objectToModify = objectToModify[attr];
+    }
+    
+    // Set the attribute to value while checking for prototype collision
+    Object.defineProperty(objectToModify, attributeToSet, {
+        value: value,
+        enumerable: true,
+        writable: true,
+        configurable: true
+    });
+    
+    return object;
+}
+```
+
+However, the best solution would be to avoid using user-provided data to manipulate the prototype chain directly.
+
+ORIGINAL CODE:
+
+
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+    
+        // Ignore attributes which resolve to object prototype
+        if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+        
+            continue;
+            }
+        
+        if (typeof objectToModify[attr] !== "object") {
+        
+            objectToModify[attr] = {};
+            }
+        
+        objectToModify = objectToModify[attr];
+        }
+    
+    objectToModify[attributeToSet] = value;
+    return object;
+    }
+```

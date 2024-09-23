@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6, 20-22
+VULNERABILITY_DESCRIPTION:
+The code contains a potential buffer overflow vulnerability due to the use of `memcpy`. In the event that `olen` is not correctly validated or can be controlled by an attacker, it may lead to copying more data than the `efs` buffer can hold, resulting in a buffer overflow.
+
+EXPLANATION:
+The `memcpy` function copies a block of memory from one location to another without any bounds checking. If `olen` is not correctly validated or can be controlled by an attacker, it may be possible to copy more data than the `efs` buffer can hold. This can result in a buffer overflow, which can cause the program to crash or execute arbitrary code.
+
+The vulnerability is present in both instances of the `memcpy` function calls at lines 4-6 and lines 20-22. It's worth noting that the code does perform a validation check on `olen` before performing the copy, but this check only verifies that `olen` is equal to `sizeof(efs)`, and does not provide any additional protection against buffer overflows.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to use safer alternatives to `memcpy` such as `memmove` or `memcpy_s`. These functions provide additional bounds checking and can help prevent buffer overflows.
+
+Additionally, it is recommended to verify that `olen` is within valid bounds before performing the copy. This can be done by checking that `olen` is less than or equal to `sizeof(efs)`.
+
+Here's an example of how the code can be modified to use `memmove` and add bounds checking:
+```c
+if (olen <= sizeof(efs)) {
+    memmove(&efs, (void *)val, olen);
+    ...
+}
+```
+
+ORIGINAL CODE:
+```c
+break;
+
+case L2CAP_CONF_EFS:
+if (olen == sizeof(efs)) {
+    remote_efs = 1;
+    memcpy(&efs, (void *) val, olen);
+}
+break;
+
+case L2CAP_CONF_EWS:
+if (!(chan->conn->local_fixed_chan & L2CAP_FC_A2MP))
+break;
+
+case L2CAP_CONF_EFS:
+if (olen == sizeof(efs)) {
+    memcpy(&efs, (void *)val, olen);
+
+    if (chan->local_stype != L2CAP_SERV_NOTRAFIC &&
+        efs.stype != L2CAP_SERV_NOTRAFIC &&
+        efs.stype != chan->local_stype)
+        return -ECONNREFUSED;
+
+    l2cap_add_conf_opt(&ptr, L2CAP_CONF_EFS, sizeof(efs),
+                       (unsigned long) &efs, endptr - ptr);
+}
+break;
+
+case L2CAP_CONF_FCS:
+if (*result == L2CAP_CONF_PENDING)
+```

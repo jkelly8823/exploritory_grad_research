@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5, 7-17
+VULNERABILITY_DESCRIPTION:
+The code has multiple instances of potential memory corruption and uncontrolled object lifetime due to incorrect handling of object interning and reference counting.
+
+EXPLANATION:
+The provided code snippet shows repeated calls to `PyUnicode_InternInPlace` followed by assigning a new address to the `string` variable. If `PyUnicode_InternInPlace` fails to intern the given object, it may raise a `MemoryError` exception or return a null value. Assigning a new address to `string` without first verifying that the previous interning was successful, may result in memory corruption.
+
+Additionally, the checks for `Py_REFCNT` may potentially introduce issues due to comparing with a fixed value `_PyObject_IMMORTAL_REFCNT`. Python uses a private reference counting mechanism to manage object lifetime, and reference counts may fluctuate based on usage, caching, and the Python version being used.
+
+Furthermore, there is a sequence of actions where an object is checked if it's immortal (an interned object intended to live for the entire execution of the program), its reference count is verified and then the object's associated memory is accessed and dumped using `_PyObject_Dump` directly after that. This allows potential exploitation through manipulated pointers, allowing for an attacker-controlled pointer dereference.
+
+RECOMMENDATIONS:
+- Ensure that the object was successfully interned before assigning its address to `string`. 
+- Handle the `MemoryError` exception when calling `PyUnicode_InternInPlace`.
+- Avoid comparing with `_PyObject_IMMORTAL_REFCNT` as this may vary across Python versions and object caching. Consider dynamically getting the correct reference count instead of hardcoding it.
+- Remove `_PyObject_Dump` calls for immortal objects with an expectation to make those calls valid in a normal program execution. Using `Py_FatalError` in this context seems to override legitimate error mechanisms like `MemoryError` instances by switching into fatal errors raised directly by calling `_Py_FatalInitError`.
+
+ORIGINAL CODE:
+                INIT_ID(mapping), \
+                INIT_ID(match), \
+                INIT_ID(max_length), \
+                INIT_ID(maxdigits), \
+                INIT_ID(maxevents), \
+                INIT_ID(maxmem), \
+                INIT_ID(maxsplit), \
+                INIT_ID(maxvalue), \
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(max_length);
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(maxdigits);
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(maxevents);
+    PyUnicode_InternInPlace(&string);
+    string = &_Py_ID(maxmem);
+    PyUnicode_InternInPlace(&string);
+        _PyObject_Dump((PyObject *)&_Py_ID(max_length));
+        Py_FatalError("immortal object has less refcnt than expected _PyObject_IMMORTAL_REFCNT");
+    };
+    if (Py_REFCNT((PyObject *)&_Py_ID(maxdigits)) < _PyObject_IMMORTAL_REFCNT) {
+        _PyObject_Dump((PyObject *)&_Py_ID(maxdigits));
+        Py_FatalError("immortal object has less refcnt than expected _PyObject_IMMORTAL_REFCNT");
+    };
+    if (Py_REFCNT((PyObject *)&_Py_ID(maxevents)) < _PyObject_IMMORTAL_REFCNT) {
+        _PyObject_Dump((PyObject *)&_Py_ID(maxevents));
+        Py_FatalError("immortal object has less refcnt than expected _PyObject_IMMORTAL_REFCNT");
+    };

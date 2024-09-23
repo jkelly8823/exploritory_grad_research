@@ -1,0 +1,95 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 78-91
+VULNERABILITY_DESCRIPTION: 
+ Unbounded string copy vulnerability through format string.
+
+EXPLANATION:
+ The vulnerability is due to the unbounded string copy operation done by the sscanf function in the mt7915_sta_fixed_rate_set function. This function reads from a user-provided buffer and stores it into the local 'buf' variable. 
+
+ However, if the user-provided buffer exceeds 99 characters (the size of the 'buf' array), it can lead to a buffer overflow when sscanf tries to store the data. This can potentially lead to arbitrary code execution.
+
+ Also, there is no limit check for the 'count' variable, which can also lead to a potential buffer overflow if it exceeds the size of 'buf'.
+
+ Furthermore, the 'format: Mode BW NSS MCS (HE)GI LDPC STBC HE_LTF' message can also indicate to an attacker the expected format for the string. 
+
+ Another problem with this code is that 'count' can be 0. In this scenario, the condition 'if (count && buf[count - 1] == '\n')' will be false and the last character of 'buf' won't be replaced with a '\0'. This can also lead to a buffer overflow.
+
+RECOMMENDATIONS:
+ To mitigate these vulnerabilities, it is recommended to:
+
+ 1. Bound the user-provided input through the 'count' variable. Ensure that it does not exceed the size of the 'buf' array.
+
+ 2. Use fgets instead of sscanf to prevent buffer overflow. Also, restrict the number of bytes to read from 'user_buf' so that it does not overflow 'buf'.
+
+ 3. Validate the return value of sscanf and handle it properly.
+
+ 4. Use strsep function if you need to split the input string at specific separators and handle it properly.
+
+ 5. Avoid sscanf for reading untrusted input. 
+
+ Here's a code example using fgets and validation of return value of sscanf:
+
+```
+...
+if (fgets(buf, 100, user_buf)) {
+    if (sscanf(buf, "%hhu %hhu %hhu %hhu %hhu %hhu %hhu",
+               &phy.type, &phy.bw, &phy.nss, &phy.mcs, &gi,
+               &phy.ldpc, &phy.stbc, &he_ltf) != 8) {
+        dev_warn(dev->mt76.dev,
+                 "format: Mode BW NSS MCS (HE)GI LDPC STBC HE_LTF\n");
+        field = RATE_PARAM_AUTO;
+        goto out;
+    }
+} else {
+    /* Handle fgets error here */
+}
+...
+```
+
+ORIGINAL CODE:
+```c
+static ssize_t mt7915_sta_fixed_rate_set(struct file *file,
+					 const char __user *user_buf,
+					 size_t count, loff_t *ppos)
+{
+	...
+	/* mode - cck: 0, ofdm: 1, ht: 2, gf: 3, vht: 4, he_su: 8, he_er: 9
+	 * bw - bw20: 0, bw40: 1, bw80: 2, bw160: 3
+	 * nss - vht: 1~4, he: 1~4, others: ignore
+	 * mcs - cck: 0~4, ofdm: 0~7, ht: 0~32, vht: 0~9, he_su: 0~11, he_er: 0~2
+	 * gi - (ht/vht) lgi: 0, sgi: 1; (he) 0.8us: 0, 1.6us: 1, 3.2us: 2
+	 * ldpc - off: 0, on: 1
+	 * stbc - off: 0, on: 1
+	 * he_ltf - 1xltf: 0, 2xltf: 1, 4xltf: 2
+	 */
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf, "%hhu %hhu %hhu %hhu %hhu %hhu %hhu %hhu",
+		   &phy.type, &phy.bw, &phy.nss, &phy.mcs, &gi,
+		   &phy.ldpc, &phy.stbc, &he_ltf) != 8) {
+		dev_warn(dev->mt76.dev,
+			 "format: Mode BW NSS MCS (HE)GI LDPC STBC HE_LTF\n");
+		field = RATE_PARAM_AUTO;
+		goto out;
+	}
+
+	phy.ldpc = (phy.bw || phy.ldpc) * GENMASK(2, 0);
+	for (i = 0; i <= phy.bw; i++) {
+		phy.sgi |= gi << (i << sta->he_cap.has_he);
+		phy.he_ltf |= he_ltf << (i << sta->he_cap.has_he);
+	}
+	field = RATE_PARAM_FIXED;
+
+out:
+	...
+}
+```

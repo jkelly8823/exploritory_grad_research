@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+Potential NULL pointer dereference vulnerability in the `update_stats` function.
+
+EXPLANATION:
+The `update_stats` function retrieves a value from the `hash_map` using the `bpf_map_lookup_elem` function. However, if the lookup operation fails, `bpf_map_lookup_elem` returns a null pointer, which is then stored in the `value` variable. The code does not explicitly check if `bpf_map_lookup_elem` returns an error before dereferencing the `value` pointer. The `if (value)` check only checks if the pointer is non-null, which may not be sufficient.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend adding an explicit error check after calling `bpf_map_lookup_elem`. This can be done by checking the return value of the function against `-EINVAL` or other valid error codes that may indicate a lookup failure.
+
+```c
+value = bpf_map_lookup_elem(&hash_map, &key);
+if (value) {
+    // existing code
+} else {
+    int err = bpf_map_lookup_elem(&hash_map, &key);
+    if (err) {
+        // handle error
+    }
+}
+```
+
+Alternatively, you can use `bpf_map_lookup_elem(&hash_map, &key, &value);` (note the difference in the order of the parameters and the additional `&` symbol before `value`), which will set `err` to the return value, making it easier to handle the error. However, please be aware that not all `bpf_map_lookup_elem` implementations return an error code in such cases.
+
+ORIGINAL CODE:
+```c
+__be16 h_vlan_encapsulated_proto;
+};
+
+struct flow_key_record {
+    __be32 src;
+    __be32 dst;
+    union {
+        __be32 ports;
+}
+
+struct globals {
+    struct flow_key_record flow;
+};
+
+struct bpf_map_def SEC("maps") percpu_map = {
+    .type = BPF_MAP_TYPE_ARRAY,
+
+struct bpf_map_def SEC("maps") hash_map = {
+    .type = BPF_MAP_TYPE_HASH,
+    .key_size = sizeof(struct flow_key_record),
+    .value_size = sizeof(struct pair),
+    .max_entries = 1024,
+};
+
+static void update_stats(struct __sk_buff *skb, struct globals *g)
+{
+    struct flow_key_record key = g->flow;
+    struct pair *value;
+
+    value = bpf_map_lookup_elem(&hash_map, &key);
+    if (value) {
+```

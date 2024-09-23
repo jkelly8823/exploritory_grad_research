@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Insecure Proxy Settings and Lack of Input Validation
+
+EXPLANATION:
+The code sets 'NO_PROXY' environment variable with a hardcoded list of domains, including 'localhost' and two external domains. However, the 'NO_PROXY' list is not validated for malicious input. The 'test_proxy_cgi_ignore' function does demonstrate a correct proxy setup and test case, but does not validate the domains set in the 'NO_PROXY' list.
+
+Moreover, if an attacker can manipulate the 'NO_PROXY' list to include domains that are not intended to bypass the proxy, this could potentially allow the attacker to intercept sensitive data. Another concern is that 'localhost' is explicitly included in the 'NO_PROXY' list, which may not be secure.
+
+Although 'localhost' is generally considered a non-routable domain, it could potentially be exploited in some edge cases. Additionally, the inclusion of two external domains ('anotherdomain.com' and 'newdomain.com') in the 'NO_PROXY' list without any validation or sanity checking could lead to security issues if an attacker can manipulate these domains.
+
+Furthermore, urllib.request.proxy_bypass_environment does not validate the 'NO_PROXY' list either. While test_proxy_cgi_ignore is present to validate the presence of an HTTP_PROXY but the key concern remains that an attacker may potentially set up their own proxy server with the same domain and intercept sensitive data.
+
+RECOMMENDATIONS:
+Use environment sécurisation approaches such as parsing manually over delegating to a third library (urllib).
+
+Split hardcoded domains, ideally, loading them from whitelisted trusted locations avoiding any  external code injections. Always follow the rule "only request - only permit ". Since here we expose "localhost" in case of exposing services inside our server is required then its better removing name configurations into safe ones (localhost:80).
+Add explicit static proxy setting if using is necessary so  "unproxable" access are truly set properly else this would be required
+The default getproxies does not support removing or blocking external access to network traffic. so manually set proxies is very recommended.
+
+Here's an illustration of static values changes, take these for your reference.
+Instead, use getproxies_environment directly
+proxies = {'http': None, 'https': None} 
+
+Define critical domains statically, but properly.
+
+ ORIGINAL CODE:
+```python
+self.env.set('NO_PROXY', 'localhost, anotherdomain.com, newdomain.com')
+self.assertTrue(urllib.request.proxy_bypass_environment('anotherdomain.com'))
+
+def test_proxy_cgi_ignore(self):
+    try:
+        self.env.set('HTTP_PROXY', 'http://somewhere:3128')
+        proxies = urllib.request.getproxies_environment()
+        self.assertEqual('http://somewhere:3128', proxies['http'])
+        self.env.set('REQUEST_METHOD', 'GET')
+        proxies = urllib.request.getproxies_environment()
+        self.assertNotIn('http', proxies)
+    finally:
+        self.env.unset('REQUEST_METHOD')
+        self.env.unset('HTTP_PROXY')
+
+
+class urlopen_HttpTests(unittest.TestCase, FakeHTTPMixin):
+    """Test urlopen() opening a fake http connection."""
+
+    def check_read(self, ver):
+```

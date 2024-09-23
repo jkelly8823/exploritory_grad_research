@@ -1,0 +1,37 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION: 
+No apparent vulnerability detected in the provided code snippet.
+
+EXPLANATION:
+This code snippet appears to be a part of a low-level memory management routine in the S/390 architecture. It handles active ASCEs (Address Space Control Elements) and flushes the TLB (Translation Lookaside Buffer) locally. After analyzing the provided code, I did not find any apparent vulnerability related to security weaknesses.
+
+The usage of pointers and memory access seems correct and guarded by checks. The access to flags (e.g., CIF_ASCE_PRIMARY) seems properly handled by checking the current thread's mm_segment register and clearing/setting the corresponding flags. There are also proper warnings if certain conditions are met (e.g., test_cpu_flag in the second if statement).
+
+However, it's essential to note that without the complete context and the full file contents, it's impossible to provide an absolute guarantee. Nevertheless, within the given code snippet, no apparent vulnerability was detected.
+
+RECOMMENDATIONS:
+Since no vulnerability was found, no recommendations for fixing the code are required.
+
+ORIGINAL CODE:
+{
+	struct mm_struct *mm = arg;
+
+	/* we must change all active ASCEs to avoid the creation of new TLBs */
+	if (current->active_mm == mm) {
+		S390_lowcore.user_asce = mm->context.asce;
+		if (current->thread.mm_segment == USER_DS) {
+			__ctl_load(S390_lowcore.user_asce, 1, 1);
+			/* Mark user-ASCE present in CR1 */
+			clear_cpu_flag(CIF_ASCE_PRIMARY);
+		}
+		if (current->thread.mm_segment == USER_DS_SACF) {
+			__ctl_load(S390_lowcore.user_asce, 7, 7);
+			/* enable_sacf_uaccess does all or nothing */
+			WARN_ON(!test_cpu_flag(CIF_ASCE_SECONDARY));
+		}
+	}
+	__tlb_flush_local();
+}
+
+int crst_table_upgrade(struct mm_struct *mm, unsigned long end)

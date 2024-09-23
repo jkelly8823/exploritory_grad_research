@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to timing attacks.
+
+EXPLANATION: 
+The "equal" function used to compare the hashed passwords is not secure. It likely compares the two strings byte by byte and stops as soon as it finds a mismatch. An attacker can use the time it takes for the comparison to fail to deduce information about the password. This is known as a timing attack.
+
+The issue is compounded by the fact that SHA-1, a relatively slow hash function, is used to hash the plaintext password, and then this hash is compared using an insecure method.
+
+RECOMMENDATIONS:
+To prevent timing attacks, use a secure comparison function, such as a constant-time comparison function. This function should compare the two strings in a way that always takes the same amount of time, regardless of the contents of the strings.
+
+Here is a revised version of the function that uses constant-time comparison:
+ 
+```c
+#include <string.h>
+
+// Function to securely compare two buffers
+int compare_buffers(const void *b1, size_t len1, const void *b2, size_t len2) {
+    int result = (len1 != len2);
+    if (!result) {
+        const unsigned char *u1 = b1;
+        const unsigned char *u2 = b2;
+        for (size_t i = 0; i < len1; i++) {
+            result |= u1[i] ^ u2[i];
+        }
+    }
+    return result;
+}
+
+unsigned char *check_passwd(char *plaintext) {
+    // ... calculate ctext as before ...
+
+    // Use a secure comparison function
+    if (compare_buffers(ctext, SHA_DIGEST_LENGTH, secret_password(), SHA_DIGEST_LENGTH) == 0) {
+        login_user();
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+unsigned char *check_passwd(char *plaintext) {ctext = simple_digest("sha1",plaintext,strlen(plaintext), ... );
+    //Login if hash matches stored hash
+    if (equal(ctext, secret_password())) {login_user();}
+}
+```

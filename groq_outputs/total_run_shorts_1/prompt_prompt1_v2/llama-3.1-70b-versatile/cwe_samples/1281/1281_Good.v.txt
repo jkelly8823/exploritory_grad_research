@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an exception handling race condition, potentially leading to incorrect exception information being propagated.
+EXPLANATION:
+The code checks for a valid CSR exception and commits it if certain conditions are met. However, it does not properly synchronize access to the exception information between the time it checks its validity and the time it propagates the exception information to the output. This can lead to a situation where the exception information is updated concurrently with the commit, causing inconsistent and potentially incorrect exception information to be propagated. Additionally, it is worth noting that there is no null check for `exception_o` or `commit_instr_i` which might lead to a null pointer dereference.
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to ensure proper synchronization of access to the exception information. This can be achieved by adding locks or atomic operations to protect the critical section where the exception information is accessed and propagated. Additionally, null checks should be added for `exception_o` and `commit_instr_i` to prevent potential null pointer dereferences. Here is an example of how the code can be modified to address these issues:
+
+```verilog
+if (csr_exception_i.valid && csr_exception_i.cause[63] && !amo_valid_commit_o && commit_instr_i[0].fu != CSR) begin
+    // Acquire lock or enter critical section
+    unique_lock lock(exception_lock);
+    
+    if (exception_o != null) begin
+        exception_o = csr_exception_i;
+        exception_o.tval = commit_instr_i[0].ex.tval;
+    end
+    // Release lock or exit critical section
+end
+```
+ORIGINAL CODE:
+```verilog
+if (csr_exception_i.valid && csr_exception_i.cause[63] && !amo_valid_commit_o && commit_instr_i[0].fu != CSR) begin
+    exception_o = csr_exception_i;
+    exception_o.tval = commit_instr_i[0].ex.tval;
+end
+```

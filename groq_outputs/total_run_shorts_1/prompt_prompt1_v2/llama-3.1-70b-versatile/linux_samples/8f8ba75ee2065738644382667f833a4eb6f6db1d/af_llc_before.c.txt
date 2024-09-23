@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION:
+Kernel memory leak due to missing error handling in the allocation and initialization of kernel resources.
+
+EXPLANATION:
+In the provided code snippet, there is a potential kernel memory leak vulnerability in the error handling of `llc_sysctl_init()` and `llc_proc_init()`. When `llc_sysctl_init()` returns an error, `llc_sysctl_exit()` is called, but there is no matching call to `llc_proc_exit()` in the error path. Similarly, when `llc_proc_init()` returns an error, only `proto_unregister(&llc_proto)` is called, but `llc_sysctl_exit()` is not. This suggests that the initialization or allocation of kernel resources may not be properly cleaned up in case of errors, potentially leading to kernel memory leaks.
+
+RECOMMENDATIONS:
+- Ensure proper cleanup of kernel resources in the error paths.
+- Consider adding error checking for `llc_sysctl_exit()` and `llc_proc_exit()` calls to prevent potential issues.
+- Verify that all allocated resources are properly released on error paths.
+- Add proper error propagation and cleaning up of kernel resources when returning errors.
+- Consider refactoring the error handling to use a more unified and consistent approach.
+
+ORIGINAL CODE:
+```c
+struct sockaddr_llc sllc;
+struct sock *sk = sock->sk;
+struct llc_sock *llc = llc_sk(sk);
+int rc = 0;
+
+memset(&sllc, 0, sizeof(sllc));
+lock_sock(sk);
+if (sock_flag(sk, SOCK_ZAPPED))
+    goto out;
+*uaddrlen = sizeof(sllc);
+memset(uaddr, 0, *uaddrlen);
+if (peer) {
+    rc = -ENOTCONN;
+    if (sk->sk_state != TCP_ESTABLISHED)
+        goto out;
+    rc = llc_proc_init();
+    if (rc != 0) {
+        printk(llc_proc_err_msg);
+        goto out_unregister_llc_proto;
+    }
+    rc = llc_sysctl_init();
+    if (rc) {
+        printk(llc_sysctl_err_msg);
+        llc_sysctl_exit();
+out_proc:
+        llc_proc_exit();
+out_unregister_llc_proto:
+        proto_unregister(&llc_proto);
+        goto out;
+    }
+}
+```

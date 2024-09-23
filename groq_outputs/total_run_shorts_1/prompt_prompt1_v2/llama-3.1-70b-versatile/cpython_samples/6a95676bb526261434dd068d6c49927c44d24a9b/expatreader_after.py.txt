@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-13, 16
+VULNERABILITY_DESCRIPTION:
+Resource leak in exception handling, and faulty close_resource
+
+EXPLANATION:
+In the provided code snippet, there are potential resource leaks and close operations that are not properly handled. In the flush method, the _parser is properly closed in the finally block. However, in the _close_source method, the file is not properly closed in case of an exception. If an exception occurs during file access, the file will not be closed. The same thing can happen in other methods due to low level exception.
+
+Additionally, there's an exception of type SAXParseException being constructed, this error may leak sensitive information about the handled exception with its constructor argument "expat.ErrorString(e.code)" .
+
+In other method, the comment  "# FIXME: when to invoke error()?" shows there are some functionality that was not taken into considerations.
+
+
+RECOMMENDATIONS:
+To address the identified vulnerability, it's recommended to:
+
+- Use a context manager to ensure that files are always closed, even when exceptions occur. You can use the 'with' statement for this.
+- Avoid storing the exception messages that could include some internal detail in variable, log this carefully to not disclose internal information.
+- It is good idea to be careful while disclosing the handled low level exception detail.
+
+
+ ORIGINAL CODE:
+
+    # FIXME: when to invoke error()?
+    self._err_handler.fatalError(exc)
+
+    def flush(self):
+        if self._parser is None:
+            return
+
+        was_enabled = self._parser.GetReparseDeferralEnabled()
+        try:
+            self._parser.SetReparseDeferralEnabled(False)
+            self._parser.Parse(b"", False)
+        except expat.error as e:
+            exc = SAXParseException(expat.ErrorString(e.code), e, self)
+            self._err_handler.fatalError(exc)
+        finally:
+            self._parser.SetReparseDeferralEnabled(was_enabled)
+
+    def _close_source(self):
+        source = self._source
+        try:
+            file = source.getCharacterStream()

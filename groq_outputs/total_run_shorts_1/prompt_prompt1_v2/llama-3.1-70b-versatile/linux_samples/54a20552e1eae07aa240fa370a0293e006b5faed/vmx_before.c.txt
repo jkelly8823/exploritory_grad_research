@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-11
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Resource Consumption
+
+EXPLANATION:
+The provided code snippet appears to be a part of a virtual machine manager or a kernel module. The vulnerability lies in the way it handles debug-related functionality. When both software and hardware breakpoints are enabled, the code allows a guest VM to potentially execute uncontrolled debug operations (e.g., single-stepping and hardware breakpoints). This could lead to uncontrolled resource consumption, potentially allowing a malicious guest VM to exhaust host resources.
+
+RECOMMENDATIONS:
+- Implement rate limiting for debug operations or limit the amount of resources allocated to guest VM debug operations.
+- Verify that guest debug-related operations comply with security policies or restrictions enforced by the host.
+- Validate the inputs and intentions of guest VMs before enabling debug operations.
+
+ORIGINAL CODE:
+```c
+u32 eb;
+
+eb = (1u << PF_VECTOR) | (1u << UD_VECTOR) | (1u << MC_VECTOR) |
+     (1u << NM_VECTOR) | (1u << DB_VECTOR);
+if ((vcpu->guest_debug &
+     (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP)) ==
+    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP))
+    eb |= 1u << BP_VECTOR;
+return handle_rmode_exception(vcpu, ex_no, error_code);
+
+switch (ex_no) {
+case DB_VECTOR:
+    dr6 = vmcs_readl(EXIT_QUALIFICATION);
+    if (!(vcpu->guest_debug &
+          (KVM_GUESTDBG_SINGLESTEP | KVM_GUESTDBG_USE_HW_BP))) {
+```

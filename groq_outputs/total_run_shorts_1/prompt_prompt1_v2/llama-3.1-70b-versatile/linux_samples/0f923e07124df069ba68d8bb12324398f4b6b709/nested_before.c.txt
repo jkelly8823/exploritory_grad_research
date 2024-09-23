@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Use of Dereferenced Pointers
+EXPLANATION:
+In this segment, we observe that the code dereferences the pointer 'svm->vmcb01.ptr' without any explicit null checks. This could potentially lead to a segmentation fault if the pointer is null or points to an invalid memory location. While this might not be exploitable in this specific context due to the presence of comments indicating that it's "Filled at exit", there's no guarantee that 'svm->vmcb01.ptr' isn't null or invalid.
+
+Moreover, if 'svm->vmcb01.ptr' is an attacker-controlled value (in a scenario where an attacker has the capability to directly control SVM's internal state), this could be a more severe vulnerability. This might allow an attacker to cause undefined behavior in the system, potentially leading to crashes, information leaks, or even code execution. Although there's a lack of context that would suggest svm->vmcb01.ptr is under indirect user control in this snippet, it remains valuable to be mindful of this scenario.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend adding null checks before dereferencing the 'svm->vmcb01.ptr' pointer. Additionally, ensure that 'svm->vmcb01.ptr' is properly initialized before being used. Here's a simple null check that can be added:
+```c
+if (svm->vmcb01.ptr != NULL) {
+    svm->vmcb->control.int_ctl =
+        (svm->nested.ctl.int_ctl & ~mask) |
+        (svm->vmcb01.ptr->control.int_ctl & mask);
+} else {
+    // Handle the error or alternative logic
+}
+```
+ORIGINAL CODE:
+```c
+static void nested_vmcb02_prepare_control(struct vcpu_svm *svm)
+{
+	const u32 mask = V_INTR_MASKING_MASK | V_GIF_ENABLE_MASK | V_GIF_MASK;
+	struct kvm_vcpu *vcpu = &svm->vcpu;
+
+	/*
+	 * Filled at exit: exit_code, exit_code_hi, exit_info_1, exit_info_2,
+	vcpu->arch.l1_tsc_offset + svm->nested.ctl.tsc_offset;
+
+	svm->vmcb->control.int_ctl             =
+		(svm->nested.ctl.int_ctl & ~mask) |
+		(svm->vmcb01.ptr->control.int_ctl & mask);
+
+	svm->vmcb->control.virt_ext            = svm->nested.ctl.virt_ext;
+	svm->vmcb->control.int_vector          = svm->nested.ctl.int_vector;
+	svm->vmcb->control.int_state           = svm->nested.ctl.int_state;
+```

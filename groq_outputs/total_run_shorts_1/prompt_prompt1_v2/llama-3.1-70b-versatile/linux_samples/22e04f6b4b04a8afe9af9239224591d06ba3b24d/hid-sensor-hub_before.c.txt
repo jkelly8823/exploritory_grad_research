@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 149, 150-151, 163-164
+VULNERABILITY_DESCRIPTION:
+Potential Memory Leaks and Double-Free in Error Handling
+EXPLANATION:
+The provided code snippet appears to be a part of a Linux kernel module for a HID sensor hub driver. Upon reviewing the code, potential memory leaks and double-free vulnerabilities have been identified in the error handling paths.
+
+In the function that allocates memory for `struct sensor_hub_data` and its elements, error handling is performed by freeing the already allocated memory and returning an error code. However, in some cases, not all allocated memory is properly freed. For example, if `kzalloc(sizeof(struct hid_sensor_hub_device), GFP_KERNEL)` fails, the previously allocated memory for `struct sensor_hub_data` is not freed.
+
+Additionally, there are instances where the same memory is freed multiple times, such as in the `err_free` label, where both `sd->hsdev` and `sd` are freed. This can lead to a double-free vulnerability.
+
+RECOMMENDATIONS:
+To fix the potential memory leaks and double-free vulnerabilities, ensure that all allocated memory is properly freed in each error handling path. Review the code to identify any instances of missing memory frees or double-frees and correct them accordingly.
+
+Here's an updated version of the relevant code snippet with improved error handling:
+```c
+sd = kzalloc(sizeof(struct sensor_hub_data), GFP_KERNEL);
+if (!sd) {
+    hid_err(hdev, "cannot allocate Sensor data\n");
+    return -ENOMEM;
+}
+sd->hsdev = kzalloc(sizeof(struct hid_sensor_hub_device), GFP_KERNEL);
+if (!sd->hsdev) {
+    kfree(sd); // Free the previously allocated memory
+    hid_err(hdev, "cannot allocate hid_sensor_hub_device\n");
+    return -ENOMEM;
+}
+// ...
+```
+ORIGINAL CODE:
+(listed above)

@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow attack due to the incorrect handling of the _MAXLINE variable.
+
+EXPLANATION:
+The _getline method reads a line from a file with a maximum size of _MAXLINE + 1. This extra byte can cause a buffer overflow if the line length is exactly equal to _MAXLINE. Although an error is raised if the line length is greater than _MAXLINE, this condition is not sufficient to prevent a buffer overflow. 
+
+Furthermore, the variable _MAXLINE is set to a rather high value (2048) which might not be necessary for all use cases, and in some cases this value could be adjusted for specific use cases.
+
+Additionally, it's worth noting that if the line is read from a file descriptor, which could be connected to the network (e.g., reading data received over a network connection), the _getline method does not handle potential partial reads or the case where the number of octets read does not match the returned line length.
+
+RECOMMENDATIONS:
+1. Remove the extra +1 from the readline call, or ensure it is correctly handled. 
+2. Reconsider the value of _MAXLINE and set a more reasonable value.
+3. Validate the octets length of the returned line against its actual length, and handle any discrepancies.
+4. Add error handling for potential partial reads when reading data from a file descriptor.
+5. Consider using a safer method, such as reading one line at a time using a loop, to prevent potential buffer overflows.
+
+ORIGINAL CODE:
+LF = b'\n'
+CRLF = CR+LF
+
+# maximal line length when calling readline(). This is to prevent
+# reading arbitrary lenght lines. RFC 1939 limits POP3 line length to
+# 512 characters, including CRLF. We have selected 2048 just to be on
+# the safe side.
+_MAXLINE = 2048
+
+
+class POP3:
+
+    """This class supports both the minimal and optional command sets.
+    # Raise error_proto('-ERR EOF') if the connection is closed.
+
+    def _getline(self):
+        line = self.file.readline(_MAXLINE + 1)
+        if len(line) > _MAXLINE:
+            raise error_proto('line too long')
+
+        if self._debugging > 1: print('*get*', repr(line))
+        if not line: raise error_proto('-ERR EOF')
+        octets = len(line)
+        # server can send any combination of CR & LF

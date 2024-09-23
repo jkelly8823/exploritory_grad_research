@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Null Pointer Dereference/Use After Free
+
+EXPLANATION:
+The provided code snippet is vulnerable to a null pointer dereference. The null pointer check on line 3 suggests that the code is attempting to handle a case where 'report' is null. However, if 'report' is not null, but its contents have been freed or pointed elsewhere since its declaration, the program may execute undefined behavior. Furthermore, even though the null check is present, using 'report' in 'hid_hw_request' (line 5) and other potential subsequent function calls may lead to a crash if 'report' is freed prematurely.
+
+However, the real case here might be the lack of correct error checking in line 5. Specifically, after calling 'hid_hw_request' and 'hid_hw_wait' the function does not report an error when either operation fails.
+
+RECOMMENDATIONS:
+The function should check the return values of 'hid_hw_request' and 'hid_hw_wait' for any potential errors and handle them accordingly. Also, consider the lifetime of the 'report' object and make sure it is not used after it has been freed. It might be necessary to add a lock or another synchronization primitive to ensure that 'report' is not accessed after it has been freed.
+
+ORIGINAL CODE:
+
+		struct hid_report *report = hdev->report_enum[HID_FEATURE_REPORT].
+							    report_id_hash[0x0d];
+
+		if (!report)
+			return -EINVAL;
+
+		hid_hw_request(hdev, report, HID_REQ_GET_REPORT);
+		hid_hw_wait(hdev);

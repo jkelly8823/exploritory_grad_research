@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7, 14-15
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability in `tcp_skb_shift` function. 
+The function `tcp_skb_shift` does not properly validate its input, which can lead to an integer overflow vulnerability. Specifically, it does not check if the value of `tcp_skb_pcount(skb) + pcount` will exceed the maximum value that can be stored in a 16-bit signed integer. This can result in a situation where a very large value is passed to `skb_shift` which may cause undefined behavior.
+
+EXPLANATION:
+The vulnerability comes from the fact that `tcp_skb_pcount(skb)` returns a 16-bit value, which can range from -32768 to 32767. If we have `pcount` near the maximum value and `tcp_skb_pcount(skb)` is around the maximum, when adding `pcount` to it, it can exceed the maximum value for 16-bit signed integer. When this happens, an integer overflow occurs. This in theory could be exploited to cause an abnormal termination of the program.
+
+Additionally, this may have the potential for Denial of Service (DoS) if this were to cause an abnormal termination of the program, as this would be fairly easy for attackers with access to a user account to trigger.
+
+RECOMMENDATIONS:
+The fix would be to check that `tcp_skb_pcount(skb) + pcount` does not exceed the maximum value that can be stored in a 16-bit signed integer before calling `skb_shift`. Here is an example of how this could be done:
+
+	```c
+	int pcount_sum = tcp_skb_pcount(to) + pcount;
+	if (unlikely(pcount_sum << 8 >= 0 || pcount_sum > 32767))
+		return 0;
+	if (unlikely(to->len + shiftlen >= 65535 * TCP_MIN_GSO_SIZE))
+		return 0;
+	return skb_shift(to, from, shiftlen);
+```
+This change will prevent any potential integer overflows from occurring.
+
+ORIGINAL CODE:
+```c
+	TCP_SKB_CB(skb)->seq += shifted;
+
+	tcp_skb_pcount_add(prev, pcount);
+	WARN_ON_ONCE(tcp_skb_pcount(skb) < pcount);
+	tcp_skb_pcount_add(skb, -pcount);
+
+	/* When we're adding to gso_segs == 1, gso_size will be zero,
+	 * in theory this shouldn't be necessary but as long as DSACK
+	return !skb_headlen(skb) && skb_is_nonlinear(skb);
+}
+
+int tcp_skb_shift(struct sk_buff *to, struct sk_buff *from,
+		  int pcount, int shiftlen)
+{
+	/* TCP min gso_size is 8 bytes (TCP_MIN_GSO_SIZE)
+	 * Since TCP_SKB_CB(skb)->tcp_gso_segs is 16 bits, we need
+	 * to make sure not storing more than 65535 * 8 bytes per skb,
+	 * even if current MSS is bigger.
+	 */
+	if (unlikely(to->len + shiftlen >= 65535 * TCP_MIN_GSO_SIZE))
+		return 0;
+	if (unlikely(tcp_skb_pcount(to) + pcount > 65535))
+		return 0;
+	return skb_shift(to, from, shiftlen);
+}
+
+/* Try collapsing SACK blocks spanning across multiple skbs to a single
+ * skb.
+ */
+static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
+	if (!after(TCP_SKB_CB(skb)->seq + len, tp->snd_una))
+		goto fallback;
+
+	if (!tcp_skb_shift(prev, skb, pcount, len))
+		goto fallback;
+	if (!tcp_shifted_skb(sk, prev, skb, state, pcount, len, mss, dup_sack))
+		goto out;
+
+		goto out;
+
+	len = skb->len;
+	pcount = tcp_skb_pcount(skb);
+	if (tcp_skb_shift(prev, skb, pcount, len))
+		tcp_shifted_skb(sk, prev, skb, state, pcount,
+				len, mss, 0);
+
+out:
+	return prev;
+```

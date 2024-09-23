@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+7 (in the first code block)
+
+VULNERABILITY_DESCRIPTION:
+Use-after-Free vulnerability.
+
+EXPLANATION:
+The vulnerability is present in the first code block, line 7, where `put_device(&w->dev->ib_dev.dev);` is called after `ib_device_put(&w->dev->ib_dev);`. This is because `ib_device_put` might release the last reference to the `ib_dev` object, allowing it to be freed. However, `put_device(&w->dev->ib_dev.dev);` then tries to access `w->dev->ib_dev.dev` which may have been freed, resulting in a use-after-free situation.
+
+RECOMMENDATIONS:
+The fix is to swap the order of `ib_device_put(&w->dev->ib_dev);` and `put_device(&w->dev->ib_dev.dev);`. This ensures that `put_device` is called before `ib_device_put`, preventing the `ib_dev` object from being freed prematurely. The corrected code should look like this:
+```c
+if (ib_device_try_get(&w->dev->ib_dev)) {
+    mlx5_ib_prefetch_sg_list(w->dev, w->pf_flags, w->sg_list,
+                        w->num_sge);
+    put_device(&w->dev->ib_dev.dev);
+    ib_device_put(&w->dev->ib_dev);
+}
+```
+This fix ensures that `put_device` is called while the `ib_dev` object is still valid, preventing a potential use-after-free vulnerability.
+
+ORIGINAL CODE:
+```c
+struct prefetch_mr_work *w =
+    container_of(work, struct prefetch_mr_work, work);
+
+if (ib_device_try_get(&w->dev->ib_dev)) {
+    mlx5_ib_prefetch_sg_list(w->dev, w->pf_flags, w->sg_list,
+                        w->num_sge);
+    ib_device_put(&w->dev->ib_dev);
+}
+put_device(&w->dev->ib_dev.dev);
+kfree(w);
+}
+
+int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+        return mlx5_ib_prefetch_sg_list(dev, pf_flags, sg_list,
+                        num_sge);
+
+work = kvzalloc(struct_size(work, sg_list, num_sge), GFP_KERNEL);
+if (!work)
+        return -ENOMEM;
+
+memcpy(work->sg_list, sg_list, num_sge * sizeof(struct ib_sge));
+
+get_device(&dev->ib_dev.dev);
+work->dev = dev;
+work->pf_flags = pf_flags;
+work->num_sge = num_sge;
+```

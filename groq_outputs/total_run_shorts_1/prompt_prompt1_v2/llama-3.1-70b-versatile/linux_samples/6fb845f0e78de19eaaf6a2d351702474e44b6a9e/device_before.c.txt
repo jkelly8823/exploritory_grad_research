@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11 (static struct ib_device *__ib_device_get_by_name) and 4-5, 9 (device->reg_state...)
+VULNERABILITY_DESCRIPTION:
+ The code snippet has two potential vulnerabilities. The first is that the `__ib_device_get_by_name` function does not properly initialize the `device` pointer before using it to initialize locks and lists. The second vulnerability is related to insecure use of locks when updating the `reg_state` of the `device`.
+
+EXPLANATION:
+The `__ib_device_get_by_name` function does not allocate memory for the `device` pointer. It tries to use it immediately, calling `rwlock_init` and `INIT_LIST_HEAD` on its members. This will result in a crash when trying to access the uninitialized memory.
+
+Additionally, when updating the `reg_state` of the `device`, there is no lock protecting it. This can lead to a data race if multiple threads try to access the `reg_state` at the same time.
+
+RECOMMENDATIONS:
+To fix the first vulnerability, you should allocate memory for the `device` pointer in the `__ib_device_get_by_name` function using `kmalloc` or a similar function.
+
+To fix the second vulnerability, you should protect the update of the `reg_state` with a lock, such as the `lists_rwsem` used earlier in the code.
+
+ORIGINAL CODE:
+
+```
+down_read(&lists_rwsem);
+device = __ib_device_get_by_index(index);
+if (device) {
+    /* Do not return a device if unregistration has started. */
+    if (!refcount_inc_not_zero(&device->refcount))
+        device = NULL;
+}
+up_read(&lists_rwsem);
+return device;
+
+void ib_device_put(struct ib_device *device)
+{
+if (refcount_dec_and_test(&device->refcount))
+    complete(&device->unreg_completion);
+}
+
+static struct ib_device *__ib_device_get_by_name(const char *name)
+{
+    struct ib_device *device;
+    rwlock_init(&device->client_data_lock);
+    INIT_LIST_HEAD(&device->client_data_list);
+    INIT_LIST_HEAD(&device->port_list);
+    refcount_set(&device->refcount, 1);
+    init_completion(&device->unreg_completion);
+
+    return device;
+}
+    goto cg_cleanup;
+}
+
+device->reg_state = IB_DEV_REGISTERED;
+
+list_for_each_entry(client, &client_list, list)
+    if (!add_client_context(device, client) && client->add)
+```

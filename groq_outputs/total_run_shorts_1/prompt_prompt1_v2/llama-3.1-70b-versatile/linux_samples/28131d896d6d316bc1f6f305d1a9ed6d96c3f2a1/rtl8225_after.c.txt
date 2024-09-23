@@ -1,0 +1,88 @@
+VULNERABLE: YES
+VULNERABLE_LINES: All applicable 'usb_control_msg' calls
+VULNERABILITY_DESCRIPTION:
+ Unchecked return values and missing error handling in calls to 'usb_control_msg' function.
+EXPLANATION:
+The function 'usb_control_msg' is used to send USB control messages, and it returns an error value. However, this code snippet does not check the return value of these function calls. If 'usb_control_msg' fails for any reason, the code will continue to execute, potentially causing unexpected behavior.
+
+Furthermore, it appears that 'usb_control_msg' is being used for both reading and writing operations. However, in case of writing operations, not checking the return value might lead to incorrect assumptions about the state of the device.
+
+In some cases, 'usb_control_msg' calls are not checked for errors even though they are in critical paths. Not checking return values in such cases can potentially cause security vulnerabilities as incorrect assumptions about the state of the device can lead to unintended behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check the return values of 'usb_control_msg' calls and properly handle potential errors. 
+
+```c
+int result = usb_control_msg(priv->udev, usb_rcvctrlpipe(priv->udev, 0),
+			RTL8187_REQ_GET_REG, RTL8187_REQT_READ,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits8, sizeof(val), 500);
+
+if (result < 0) {
+	// Handle error here, such as logging the error and/or aborting the operation.
+	// Comment: Proper error handling would depend on the application requirements and context.
+}
+```
+
+This should be applied to all 'usb_control_msg' calls to ensure robust error handling.
+
+ORIGINAL CODE:
+
+```
+usb_control_msg(priv->udev, usb_rcvctrlpipe(priv->udev, 0),
+			RTL8187_REQ_GET_REG, RTL8187_REQT_READ,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits8, sizeof(val), 500);
+
+val = priv->io_dmabuf->bits8;
+mutex_unlock(&priv->io_mutex);
+
+usb_control_msg(priv->udev, usb_rcvctrlpipe(priv->udev, 0),
+			RTL8187_REQ_GET_REG, RTL8187_REQT_READ,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits16, sizeof(val), 500);
+
+val = priv->io_dmabuf->bits16;
+mutex_unlock(&priv->io_mutex);
+
+usb_control_msg(priv->udev, usb_rcvctrlpipe(priv->udev, 0),
+			RTL8187_REQ_GET_REG, RTL8187_REQT_READ,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits32, sizeof(val), 500);
+
+val = priv->io_dmabuf->bits32;
+mutex_unlock(&priv->io_mutex);
+
+usb_control_msg(priv->udev, usb_sndctrlpipe(priv->udev, 0),
+			RTL8187_REQ_SET_REG, RTL8187_REQT_WRITE,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits8, sizeof(val), 500);
+
+mutex_unlock(&priv->io_mutex);
+}
+
+usb_control_msg(priv->udev, usb_sndctrlpipe(priv->udev, 0),
+			RTL8187_REQ_SET_REG, RTL8187_REQT_WRITE,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits16, sizeof(val), 500);
+
+mutex_unlock(&priv->io_mutex);
+}
+
+usb_control_msg(priv->udev, usb_sndctrlpipe(priv->udev, 0),
+			RTL8187_REQ_SET_REG, RTL8187_REQT_WRITE,
+			(unsigned long)addr, idx & 0x03,
+			&priv->io_dmabuf->bits32, sizeof(val), 500);
+
+mutex_unlock(&priv->io_mutex);
+}
+
+usb_control_msg(priv->udev, usb_sndctrlpipe(priv->udev, 0),
+			RTL8187_REQ_SET_REG, RTL8187_REQT_WRITE,
+			addr, 0x8225, &priv->io_dmabuf->bits16, sizeof(data),
+			500);
+
+mutex_unlock(&priv->io_mutex);
+
+rtl818x_iowrite16(priv, &priv->map->RFPinsOutput, reg80 | (1 << 2));
+```

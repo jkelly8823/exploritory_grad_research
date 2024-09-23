@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 10-11
+VULNERABILITY_DESCRIPTION:
+The entropy counter is not sanitized, and user-controlled data is directly manipulated, potentially allowing user-controlled concurrency attacks and unauthorized access.
+
+EXPLANATION:
+The entropy counter is set directly by `r->entropy_count = reserved` and then used to check `if (r->entropy_count < random_write_wakeup_thresh)`. However, the `reserved` parameter's origin is unknown, but in the given context, it suggests potential user control. Directly setting this value could be exploited by a malicious user to perform unauthorized actions, as a low entropy count triggers the wake-up of interruptible waits, providing an opportunity for concurrency attacks.
+
+Additionally, the calls `kill_fasync` and `wake_up_interruptible` have the potential to introduce concurrency issues when dealing with shared resources. These calls are performed based on user-manipulated values. A race condition can occur if multiple threads or processes access the shared resource concurrently.
+
+RECOMMENDATIONS:
+To prevent unauthorized access and concurrency attacks, we recommend sanitizing user input before using it to set internal counters. It would be best to limit the rate at which wakes are issued, preventing excessive resource consumption. Also, validation of input data should be performed to prevent tampering with internal counters.
+
+Moreover, locking critical sections of code using `spin_lock_irqsave` prevents concurrent access but unlocking critical sections should be as close as possible to prevent false sharing. 
+
+Here is an updated code that contains these recommendations:
+```c
+// ... (rest of the code remains the same)
+
+// Limit rate of wake-up calls to prevent excessive wake-up calls
+static atomic_t wake_up_permitted = ATOMIC_INIT(WAKE_UP_THRESHOLD)
+
+// ... (rest of the code remains the same)
+
+if (r->entropy_count < random_write_wakeup_thresh) {
+    if (atomic_dec_and_test(&wake_up_permitted)) {
+        // allow thread to wake up
+        spin_unlock_irqrestore(&r->lock, flags);
+
+        wake_up_interruptible(&random_write_wait);
+
+        kill_fasync(&fasync, SIGIO, POLL_OUT);
+    }
+}
+
+return nbytes;
+```
+
+ORIGINAL CODE:
+```c
+int reserved)
+{
+	unsigned long flags;
+	int wakeup_write = 0;
+
+	/* Hold lock while accounting */
+	spin_lock_irqsave(&r->lock, flags);
+
+		else
+			r->entropy_count = reserved;
+
+		if (r->entropy_count < random_write_wakeup_thresh)
+			wakeup_write = 1;
+	}
+
+	DEBUG_ENT("debiting %zu entropy credits from %s%s\n",
+		  nbytes * 8, r->name, r->limit ? "" : " (unlimited)");
+
+	spin_unlock_irqrestore(&r->lock, flags);
+
+	if (wakeup_write) {
+		wake_up_interruptible(&random_write_wait);
+		kill_fasync(&fasync, SIGIO, POLL_OUT);
+	}
+
+	return nbytes;
+}
+
+static void extract_buf(struct entropy_store *r, __u8 *out)
+```

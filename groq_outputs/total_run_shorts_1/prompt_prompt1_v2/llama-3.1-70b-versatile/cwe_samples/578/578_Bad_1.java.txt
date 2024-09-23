@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a potential vulnerability related to insecure class loading. The `CustomClassLoader` is used to load and instantiate classes dynamically, which can lead to SecurityManager bypass or arbitrary code execution attacks.
+EXPLANATION:
+The use of `ClassLoader` to load classes dynamically is inherently insecure if not carefully implemented. This can lead to loading of arbitrary classes and potentially malicious code execution. In this case, the `CustomClassLoader` class does not perform any input validation or classpath filtering, making it vulnerable to loading any class. Additionally, creating class instances through `newInstance()` can also lead to invoking constructor methods that can execute arbitrary code.
+The use of `ClassLoader` can be insecure when loading classes from untrusted sources. In addition, the use of `newInstance()` is also insecure and deprecated since Java 9. Instead, use `getDeclaredConstructor()` to create instances safely.
+The potential vulnerabilities addressed here can include insecure class loading, arbitrary code execution, or SecurityManager bypass.
+
+RECOMMENDATIONS:
+1. Use secure class loading mechanisms like `URLClassLoader` or `SecureClassLoader`, and load classes from trusted sources only. 
+2. Implement classpath filtering or input validation in the `CustomClassLoader` to restrict class loading.
+3. Use `getDeclaredConstructor()` instead of `newInstance()` to create class instances safely.
+Here's an example of how you can implement the recommendations:
+
+```java
+@Stateless
+public class LoaderSessionBean implements LoaderSessionRemote {
+    public LoaderSessionBean() {
+        try {
+            URL url = new URL("file://path/to/trusted/classes");
+            URLClassLoader loader = new URLClassLoader(new URL[] {url});
+            Class c = loader.loadClass("someClass");
+            Constructor<?> constructor = c.getDeclaredConstructor();
+            Object obj = constructor.newInstance(); // consider using any constructor parameters where relevant
+            //... use the loaded class instance
+        } catch (Exception ex) {
+            //... handle the exception
+        }
+    }
+
+    // No custom class loader implementation needed
+}
+```
+ORIGINAL CODE:
+```java
+@Stateless
+public class LoaderSessionBean implements LoaderSessionRemote {
+    public LoaderSessionBean() {
+        try {
+            ClassLoader loader = new CustomClassLoader();
+            Class c = loader.loadClass("someClass");
+            Object obj = c.newInstance();
+            /* perform some task that uses the new class instance member variables or functions */
+            ...} catch (Exception ex) {...}
+    }
+    public class CustomClassLoader extends ClassLoader {
+    }
+}
+```

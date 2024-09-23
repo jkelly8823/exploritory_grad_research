@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 12
+VULNERABILITY_DESCRIPTION: 
+Inconsistent Return Statement, Potential Use After Free.
+
+EXPLANATION:
+The code contains two potential vulnerabilities. The first one lies in the inconsistent return statement. If the `qtnf_cmd_send_stop_ap(vif)` function fails and `ret` is non-zero, the function will print an error message but continue executing. However, the `!qtnf_sta_list_lookup(&vif->sta_list, params->mac)` line seems to be incorrectly indented and does not appear to be a condition for a return statement. If this line was actually intended to check the result of `qtnf_sta_list_lookup`, it could potentially cause the function to return prematurely without finishing its execution. The second vulnerability could be a potential use after free. After `qtnf_cmd_send_del_sta(vif, params)` is called, it's not clear if the memory for `vif` is freed, but the following lines still use `vif`.
+
+RECOMMENDATIONS:
+Consistently handle error conditions and return statements. Also, examine the code flow and boundaries to ensure that no memory access is made after free.
+
+There is also an undefined variable `params` used throughout the function, which may indicate an issue with the given code snippet.
+
+Additionally, to clarify the intent of the code, correct the indentation for the `!qtnf_sta_list_lookup(&vif->sta_list, params->mac)` line.
+
+ORIGINAL CODE:
+
+
+	vif = qtnf_netdev_get_priv(wdev->netdev);
+
+	if (qtnf_cmd_send_del_intf(vif))
+		pr_err("VIF%u.%u: failed to delete VIF\n", vif->mac->macid,
+		       vif->vifid);
+
+	struct qtnf_vif *vif = qtnf_netdev_get_priv(dev);
+	int ret;
+
+	ret = qtnf_cmd_send_stop_ap(vif);
+	if (ret) {
+		pr_err("VIF%u.%u: failed to stop AP operation in FW\n",
+		       vif->mac->macid, vif->vifid);
+	    !qtnf_sta_list_lookup(&vif->sta_list, params->mac))
+		return 0;
+
+	qtnf_scan_done(vif->mac, true);
+
+	ret = qtnf_cmd_send_del_sta(vif, params);
+	if (ret)
+		pr_err("VIF%u.%u: failed to delete STA %pM\n",
+		       vif->mac->macid, vif->vifid, params->mac);
+		}
+
+		vif->sta_state = QTNF_STA_DISCONNECTED;
+		qtnf_scan_done(mac, true);
+	}
+}
+
+void qtnf_cfg80211_vif_reset(struct qtnf_vif *vif)
+{

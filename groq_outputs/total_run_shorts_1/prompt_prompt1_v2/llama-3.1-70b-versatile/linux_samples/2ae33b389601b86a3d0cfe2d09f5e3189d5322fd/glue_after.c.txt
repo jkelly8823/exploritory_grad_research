@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18, 23-24, 30-31, 35-36
+VULNERABILITY_DESCRIPTION:
+This code contains several synchronization issues due to improper use of lock and semaphore handling in a multithreaded environment, including incorrect nesting of semaphores and missing release conditions for semaphores.
+
+EXPLANATION:
+In the given code, we notice that there are several functions accessing and manipulating a shared list (`bus_type_list`) that is protected by a semaphore (`bus_type_sem`). However, the use of this semaphore is not consistent throughout the functions, and there are multiple places where the semaphore is locked and unlocked without proper nesting.
+
+Specifically, the line at `18` (`down_write(&bus_type_sem);`) appears to be a truncated code snippet, and without its context, it is difficult to accurately assess the impact of this line. However, the other places where the semaphore is locked and unlocked do not appear to follow proper nesting rules.
+
+Furthermore, at lines `23-24`, the `acpi_get_bus_type` function only takes a read lock on the semaphore, but it does not release the lock if an exception is thrown within the loop. Similarly, at lines `30-31` in `do_acpi_find_child`, the function does not handle any exceptions that might occur during the execution of the lock function.
+
+Lastly, the code snippet between lines `35-36` also appears to have locked the semaphore at some point prior to this code snippet being called, but there is no clear indication of whether the lock was ever released prior to this code snippet being called.
+
+RECOMMENDATIONS:
+
+* The code should follow proper nesting rules for the semaphore. This means that whenever a write lock is acquired, it should be released as soon as possible, and always released in the reverse order that it was acquired.
+* All paths in the functions that access shared resources should properly handle exceptions and errors to ensure that semaphores are properly released even in the event of an error.
+* Add `try`/`catch` or error-checking blocks around critical sections where semaphores are locked to prevent nested locks and release resources even when errors occur.
+
+ORIGINAL CODE:
+```
+{
+	if (acpi_disabled)
+		return -ENODEV;
+	if (type && type->match && type->find_device) {
+		down_write(&bus_type_sem);
+		list_add_tail(&type->list, &bus_type_list);
+		up_write(&bus_type_sem);
+		printk(KERN_INFO PREFIX "bus type %s registered\n", type->name);
+		return 0;
+	}
+	return -ENODEV;
+}
+		down_write(&bus_type_sem);
+		list_del_init(&type->list);
+		up_write(&bus_type_sem);
+		printk(KERN_INFO PREFIX "bus type %s unregistered\n",
+		       type->name);
+		return 0;
+	}
+	return -ENODEV;
+}
+EXPORT_SYMBOL_GPL(unregister_acpi_bus_type);
+
+static struct acpi_bus_type *acpi_get_bus_type(struct device *dev)
+{
+	struct acpi_bus_type *tmp, *ret = NULL;
+
+	down_read(&bus_type_sem);
+	list_for_each_entry(tmp, &bus_type_list, list) {
+		if (tmp->match(dev)) {
+			ret = tmp;
+			break;
+		}
+	}
+	return ret;
+}
+
+static acpi_status do_acpi_find_child(acpi_handle handle, u32 lvl_not_used,
+				      void *addr_p, void **ret_p)
+{
+	unsigned long long addr;
+
+static int acpi_platform_notify(struct device *dev)
+{
+	struct acpi_bus_type *type = acpi_get_bus_type(dev);
+	acpi_handle handle;
+	int ret;
+
+	ret = acpi_bind_one(dev, NULL);
+	if (ret && type) {
+		ret = type->find_device(dev, &handle);
+		if (ret) {
+			DBG("Unable to get handle for %s\n", dev_name(dev));
+			goto out;
+{
+	struct acpi_bus_type *type;
+
+	type = acpi_get_bus_type(dev);
+	if (type && type->cleanup)
+		type->cleanup(dev);
+
+	acpi_unbind_one(dev);
+```

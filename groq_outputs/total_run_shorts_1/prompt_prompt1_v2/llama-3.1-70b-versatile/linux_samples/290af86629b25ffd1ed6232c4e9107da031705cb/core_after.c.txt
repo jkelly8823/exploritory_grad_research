@@ -1,0 +1,88 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 33-37, 41-43, 51-53
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to potential integer overflow and incorrect error handling when dealing with JIT compilation and program offloading.
+
+EXPLANATION:
+The function `bpf_prog_select_runtime` does not properly validate the stack depth before assigning it to `fp->bpf_func` (line 33-37). This could lead to a potential integer overflow, which could be exploited. 
+
+Additionally, the code does not correctly handle the error case for JIT compilation (line 41-43 and 51-53). The function returns `fp` without checking if it is NULL, and the error value is only set in certain cases.
+
+Moreover, `bpf_int_jit_compile` and `bpf_prog_offload_compile` return values are not checked thoroughly. This could also lead to incorrect error handling.
+
+RECOMMENDATIONS:
+To fix these issues, proper bounds checking should be performed before assigning `fp->bpf_func`. `bpf_int_jit_compile` and `bpf_prog_offload_compile` return values should be checked, and the function should handle potential errors more robustly.
+
+Here are the recommended changes:
+```c
+// Add bounds checking for stack depth
+u32 stack_depth = max_t(u32, fp->aux->stack_depth, 1);
+if (stack_depth > MAX_SUPPORTED_STACK_DEPTH) {
+    // handle error
+}
+// ...
+
+// Check bpf_int_jit_compile and bpf_prog_offload_compile return values
+fp = bpf_int_jit_compile(fp);
+if (!fp) {
+    // handle error
+}
+
+// Refactor error handling
+int ret_val = bpf_prog_offload_compile(fp);
+if (ret_val) {
+    *err = ret_val;
+    return NULL;
+}
+```
+ ORIGINAL CODE:
+ }
+EXPORT_SYMBOL_GPL(__bpf_call_base);
+
+#ifndef CONFIG_BPF_JIT_ALWAYS_ON
+/**
+ *	__bpf_prog_run - run eBPF program on a given context
+ *	@ctx: is the data we are operating on
+ *	@insn: is the array of eBPF instructions
+EVAL4(PROG_NAME_LIST, 416, 448, 480, 512)
+};
+
+#else
+static unsigned int __bpf_prog_ret0(const void *ctx,
+				    const struct bpf_insn *insn)
+{
+	return 0;
+}
+#endif
+
+bool bpf_prog_array_compatible(struct bpf_array *array,
+			       const struct bpf_prog *fp)
+{
+	if (!array->owner_prog_type) {
+ */
+struct bpf_prog *bpf_prog_select_runtime(struct bpf_prog *fp, int *err)
+{
+#ifndef CONFIG_BPF_JIT_ALWAYS_ON
+	u32 stack_depth = max_t(u32, fp->aux->stack_depth, 1);
+
+	fp->bpf_func = interpreters[(round_up(stack_depth, 32) / 32) - 1];
+#else
+	fp->bpf_func = __bpf_prog_ret0;
+#endif
+
+	/* eBPF JITs can rewrite the program in case constant
+	 * blinding is active. However, in case of error during
+	 * blinding, bpf_int_jit_compile() must always return a
+	 */
+	if (!bpf_prog_is_dev_bound(fp->aux)) {
+		fp = bpf_int_jit_compile(fp);
+#ifdef CONFIG_BPF_JIT_ALWAYS_ON
+		if (!fp->jited) {
+			*err = -ENOTSUPP;
+			return fp;
+		}
+#endif
+	} else {
+		*err = bpf_prog_offload_compile(fp);
+		if (*err)
+			return fp;

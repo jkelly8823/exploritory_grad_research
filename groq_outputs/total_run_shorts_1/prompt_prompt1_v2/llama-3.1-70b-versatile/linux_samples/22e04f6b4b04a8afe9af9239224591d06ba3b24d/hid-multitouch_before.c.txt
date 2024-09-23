@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 213-221, 229-230
+VULNERABILITY_DESCRIPTION:
+Use after free in `mt_free_input_name` function. 
+The `mt_free_input_name` function is called in multiple places, including in `mt_remove`, `mt_probe`, after a successful allocation and `mt_input_configured` after freeing `name` and reassigning the `input->name` pointer.
+
+EXPLANATION:
+In the `mt_free_input_name` function, the `name` pointer is checked against `hdev->name` before being freed. However, in some cases, after freeing `name`, the `hi->input->name` pointer is reassigned to point to `hdev->name`. The problem is that the `hdev->name` pointer could also be freed or reallocated when the device is removed or restarted. This can lead to a use-after-free scenario where the program tries to access memory that is no longer allocated.
+
+In the `mt_probe` function, the `list_for_each_entry` loop iterates over the `inputs` list in the `hdev` and calls `mt_free_input_name`. However, if the `td->fields` allocation fails, the loop will not be executed but the `hdev` and `hi` are still valid and `mt_free_input_name` might be called later, potentially using a freed `name` pointer.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the `input->name` pointer is not accessed after the `name` pointer is freed. This can be achieved by using a local variable to store the value of `hdev->name` before freeing the `name` pointer. 
+
+Additionally, the code in `mt_probe` should be modified to handle errors correctly by calling `mt_free_input_name` only when it's safe to do so, for example after the `td->fields` allocation succeeds.
+
+Here is the corrected code snippet for the `mt_free_input_name` function:
+```c
+static void mt_free_input_name(struct hid_input *hi)
+{
+    struct hid_device *hdev = hi->report->device;
+    const char *name = hi->input->name;
+    const char *hdev_name = hdev->name;
+
+    if (name != hdev_name) {
+        hi->input->name = hdev_name;
+        kfree(name);
+    }
+}
+```
+Note that a similar correction should be applied to all places where `mt_free_input_name` is called.
+
+ORIGINAL CODE:
+```c
+... same as the original code snippet provided ...
+```

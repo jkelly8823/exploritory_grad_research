@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 7
+VULNERABILITY_DESCRIPTION:
+ The code is vulnerable to a race condition attack. The use of `flock()` is partially correct; however, the code does not handle the edge case where the file is locked and the program crashes before unlocking.
+
+EXPLANATION:
+The function tries to acquire an exclusive lock on the log file before writing to it. However, if the program crashes after writing to the file but before releasing the lock, the lock will not be released, potentially leading to a permanent log file lock. This could result in future attempts to log messages failing.
+
+Additionally, the variable `$logfile` is referenced as `$logFile` in the fclose statement, which would result in an undefined variable error and no file being closed if the PHP interpreter continued executing after the error.
+
+RECOMMENDATIONS:
+ To avoid the potential lock issue, use a `finally` block to ensure the lock is released regardless of the program's termination. Secondly, use the same variable for the file pointer in the fclose function to ensure the file is properly closed. A better practice would be to use an `__destruct` block if you created a class around this function.
+
+Here is a simplified corrected version:
+
+```php
+function writeToLog($message) {
+    $logfile = fopen("logFile.log", "a");
+    try {
+        if (flock($logfile, LOCK_EX)) {
+            fwrite($logfile, $message);
+        } else {
+            print "Could not obtain lock on logFile.log, message not recorded\n";
+        }
+    } finally {
+        if (flock($logfile, LOCK_UN) === false) {
+            print "Error releasing lock on logFile.log\n";
+        }
+        fclose($logfile);
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```php
+function writeToLog($message){$logfile = fopen("logFile.log", "a");
+                        //attempt to get logfile lock
+                        if (flock($logfile, LOCK_EX)) {fwrite($logfile,$message);
+                           // unlock logfile
+                           flock($logfile, LOCK_UN);}else {print "Could not obtain lock on logFile.log, message not recorded\n";}}fclose($logFile);
+```

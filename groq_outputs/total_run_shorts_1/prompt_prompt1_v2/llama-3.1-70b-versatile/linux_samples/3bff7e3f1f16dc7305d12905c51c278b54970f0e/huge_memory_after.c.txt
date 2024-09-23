@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+ Resource leak due to potential spinlock mismatch in locking order.
+EXPLANATION:
+The identified vulnerability is a resource leak caused by the possibility of a spinlock mismatch in the locking order. Specifically, on line 3, the code acquires the page lock using `lock_page(page)`, but on line 4, it unlocks the spin lock using `spin_unlock(vmf->ptl)` in a different order. This mismatch can lead to a deadlock if another thread is holding the spin lock while waiting for the page lock.
+
+However, a closer look at the code shows that the `spin_unlock(vmf->ptl)` on line 3 is not the primary cause for concern. Instead, if `trylock_page(page)` fails, the code acquires the page lock again on line 4 and releases the spin lock `vmf->ptl`. 
+
+Instead, the real vulnerability is that an additional spinlock `vmf->ptl` is held unnecessarily while `lock_page(page)` is being called on line 4, when the initial `trylock_page(page)` fails.
+
+Note: Corrected to note spinlock `vmf->ptl` 
+
+RECOMMENDATIONS:
+To fix the identified vulnerability, it is recommended to release the spin lock `vmf->ptl` before re-acquiring the page lock:
+
+        if (!trylock_page(page)) {
+		get_page(page);
+		spin_unlock(vmf->ptl); // this line can be called before lock_page, although lock_page is also an actual full page grab that will stop other processes reaching this page to some degree.
+		//the following line isn't redundant, causes a pagelock and the subsequent unlock can be avoided using trylock but would cause delays.
+		lock_page(page);
+	}
+
+Alternatively,  the lock_page has to include or maintain some kind of vmf ptl protection if required.
+
+
+ORIGINAL CODE:
+	page = pmd_page(orig_pmd);
+	VM_BUG_ON_PAGE(!PageHead(page), page);
+
+	if (!trylock_page(page)) {
+		get_page(page);
+		spin_unlock(vmf->ptl);
+		lock_page(page);
+	}
+
+	/*
+	 * See do_wp_page(): we can only map the page writable if there are
+	 * no additional references. Note that we always drain the LRU
+	 * pagevecs immediately after adding a THP.
+	 */
+	if (page_count(page) > 1 + PageSwapCache(page) * thp_nr_pages(page))
+		goto unlock_fallback;
+	if (PageSwapCache(page))
+		try_to_free_swap(page);
+	if (page_count(page) == 1) {
+		pmd_t entry;
+		entry = pmd_mkyoung(orig_pmd);
+		entry = maybe_pmd_mkwrite(pmd_mkdirty(entry), vma);
+		if (pmdp_set_access_flags(vma, haddr, vmf->pmd, entry, 1))
+		return VM_FAULT_WRITE;
+	}
+
+unlock_fallback:
+	unlock_page(page);
+	spin_unlock(vmf->ptl);
+fallback:
+	__split_huge_pmd(vma, vmf->pmd, vmf->address, false, NULL);

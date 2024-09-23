@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 9-10
+VULNERABILITY_DESCRIPTION:
+Potential double-free vulnerability in put_page and put_free_entry.
+
+EXPLANATION:
+The code is vulnerable to a double-free vulnerability when both put_page(virt_to_page(page)) and put_free_entry(ref) are called. This can occur if gnttab_end_foreign_access_ref(ref, readonly) returns a value that causes put_free_entry to be called, and then when page is not zero, the put_page(virt_to_page(page)) is called. 
+If put_free_entry and put_page operate on the same data structure or the same resource is released in both, it could lead to a double-free situation which is equivalent to a dangling pointer vulnerability as it allows the released memory to be easily overwritten by malicious data.
+Additionally, using virt_to_page without any validation can lead to unexpected crashes due to kernel oops, allowing malicious user-space applications to potentially execute code as privileged kernel.
+
+RECOMMENDATIONS:
+- Always check if the value returned by put_page and put_free_entry is valid, ensuring the potential resource or storage location isn't overwritten twice, reducing the chance of crashes or unexpected outcomes.
+- For added validation while using virt_to_page, try and add error checking to verify if the page is a valid input prior to being passed into put_page(virt_to_page(page)).
+- When using functions with double-free vulnerabilities, handle all possibilities both in successful or unsuccessful resource and memory acquiring releases.
+
+ORIGINAL CODE:
+void gnttab_end_foreign_access(grant_ref_t ref, int readonly,
+			       unsigned long page)
+{
+	if (gnttab_end_foreign_access_ref(ref, readonly)) {
+		put_free_entry(ref);
+		if (page != 0)
+			put_page(virt_to_page(page));
+	} else
+		gnttab_add_deferred(ref, readonly,

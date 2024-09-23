@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow Vulnerability via User-Controlled Pointer.
+
+EXPLANATION:
+The code snippet contains a vulnerability where a user-controlled value, `exec[i].relocs_ptr`, is directly cast to a pointer and then used without any validation. The value is used to construct a buffer that will later be accessed or manipulated. This could potentially lead to a buffer overflow or allow an attacker to write arbitrary data to an unintended location in memory.
+
+The vulnerability occurs on line 6 where the code casts `exec[i].relocs_ptr` to a `(char __user *)`. Additionally, although not directly affecting the vulnerability, the error handling on lines 9 and 18 (using `return -EINVAL`) do not consider the possibility of an overflow prior to incrementing `relocs_total`, making an attacker's efforts more feasible in exploiting this via carefully chosen relocation count.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to perform additional validation on `exec[i].relocs_ptr` before casting it to a pointer. This could involve checking whether the pointer is valid, whether it lies within a valid memory range, and whether it has the correct permissions.
+
+Additionally, consider using a safer method for constructing buffers, such as using `kmalloc` or `vmalloc` instead of relying on user-controlled pointers. Ensure proper bounds checking is in place to prevent buffer overflows.
+
+Moreover, consider using kernel address sanitizer tools to catch these types of bugs at runtime, and always prioritize static code analysis using tools such as smatch.
+
+ORIGINAL CODE:
+          int count)
+{
+	int i;
+	int relocs_total = 0;
+	int relocs_max = INT_MAX / sizeof(struct drm_i915_gem_relocation_entry);
+
+	for (i = 0; i < count; i++) {
+		char __user *ptr = (char __user *)(uintptr_t)exec[i].relocs_ptr;
+		int length; /* limited by fault_in_pages_readable() */
+		if (exec[i].flags & __EXEC_OBJECT_UNKNOWN_FLAGS)
+			return -EINVAL;
+
+		/* First check for malicious input causing overflow in
+		 * the worst case where we need to allocate the entire
+		 * relocation tree as a single array.
+		 */
+		if (exec[i].relocation_count > relocs_max - relocs_total)
+			return -EINVAL;
+		relocs_total += exec[i].relocation_count;
+
+		length = exec[i].relocation_count *
+			sizeof(struct drm_i915_gem_relocation_entry);
+		/* we may also need to update the presumed offsets */

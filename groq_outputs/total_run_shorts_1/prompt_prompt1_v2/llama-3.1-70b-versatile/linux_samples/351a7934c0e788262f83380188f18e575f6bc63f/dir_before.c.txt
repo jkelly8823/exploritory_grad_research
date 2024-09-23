@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Null pointer dereference and potential use-after-free vulnerability.
+
+EXPLANATION:
+The code does not check the return value of the `cifs_get_inode_info` function for errors, instead directly accessing the `server->ops->set_lease_key` without verifying if `server` and `server->ops` are valid. If `cifs_get_inode_info` fails and `server` is `NULL`, dereferencing `server->ops` will result in a null pointer dereference. Additionally, even if `server` is not `NULL`, if `server->ops` or `server->ops->set_lease_key` is `NULL`, calling the `set_lease_key` function will also result in a null pointer dereference. Furthermore, if `server->ops` or `server` is returned from the heap and freed in the `cifs_get_inode_info` function or elsewhere before this line, this will also result in a use-after-free.
+
+RECOMMENDATIONS:
+1. Add null checks for `server` and `server->ops` before using their pointers.
+2. Check the return value of `cifs_get_inode_info` to ensure `newinode` and `server` are valid.
+3. Ensure `server->ops` or `server` are not freed anywhere else in the code until their pointers are no longer in use.
+
+ORIGINAL CODE:
+                    xid);
+	else {
+		rc = cifs_get_inode_info(&newinode, full_path, buf, inode->i_sb,
+					 xid, &fid->netfid);
+		if (newinode) {
+			if (server->ops->set_lease_key)
+				server->ops->set_lease_key(newinode, fid);
+			if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_DYNPERM)

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability (Unbounded String Termination).
+
+EXPLANATION: 
+This vulnerability occurs in the function `nd_terminate_link` at line 14. This function writes a null character to the end of a string, but it does so without properly checking the bounds of the `name` buffer. The `min(len, maxlen)` function is used to prevent buffer overflow, but this is not enough because `min(len, maxlen)` can still exceed the actual allocated size of the `name` buffer if the allocated size is less than `maxlen`. This could potentially allow an attacker to overflow the `name` buffer by passing in a `name` with a length greater than its allocated size.
+
+However, further investigation is required to know for certain the allocated size of `name`. Since this is only a code snippet, it's impossible to know the size of `name`. If we assume the worst-case scenario, where `name` can be smaller than `maxlen`, then there is indeed a vulnerability.
+
+In order to absolutely ensure no vulnerability exists, the allocated size of `name` must be passed in and compared against `maxlen` and `len`.
+
+RECOMMENDATIONS: 
+- The function should be changed to also take in the allocated size of `name`.
+- Before writing the null character, the function should compare this new parameter with `maxlen` and `len` to ensure no overflow will occur.
+- In this way, you can prevent buffer overflows by properly checking the bounds of the `name` buffer.
+
+ORIGINAL CODE:
+```c
+#ifndef _LINUX_NAMEI_H
+#define _LINUX_NAMEI_H
+
+#include <linux/kernel.h>
+#include <linux/path.h>
+#include <linux/fcntl.h>
+#include <linux/errno.h>
+#define LOOKUP_ROOT		0x2000
+#define LOOKUP_ROOT_GRABBED	0x0008
+
+extern int path_pts(struct path *path);
+
+extern int user_path_at_empty(int, const char __user *, unsigned, struct path *, int *empty);
+
+extern struct dentry *lock_rename(struct dentry *, struct dentry *);
+extern void unlock_rename(struct dentry *, struct dentry *);
+
+extern void nd_jump_link(struct path *path);
+
+static inline void nd_terminate_link(void *name, size_t len, size_t maxlen)
+{
+	((char *) name)[min(len, maxlen)] = '\0';
+```

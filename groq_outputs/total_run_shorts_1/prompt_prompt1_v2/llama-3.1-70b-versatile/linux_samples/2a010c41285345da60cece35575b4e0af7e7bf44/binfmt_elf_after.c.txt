@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 6, 12
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability in the freeing of `interp_elf_ex` and `interp_elf_phdata`, and potential double-free of `interpreter`.
+
+EXPLANATION:
+The provided code snippet appears to be a section of a function responsible for freeing memory allocated for an ELF interpreter. However, upon closer inspection, there seems to be a Use After Free vulnerability in the freeing of `interp_elf_ex` and `interp_elf_phdata`. Specifically, these variables are freed twice in a row (lines 5 and 6), which could potentially result in a double-free vulnerability if the function were to be executed in such a manner that these lines are reached more than once.
+
+Furthermore, there seems to be an attempt to free `interpreter` again in the `out_free_file` label (line 12) if `interpreter` is not NULL. This can also be a double-free vulnerability, as `fput(interpreter)` has been called earlier.
+
+RECOMMENDATIONS:
+To fix this vulnerability, remove the duplicate `kfree(interp_elf_ex);` and `kfree(interp_elf_phdata);` calls. Also, consider using a pointer guard to prevent accessing freed memory.
+
+The corrected code could look like this:
+```c
+if (interp_elf_ex) {
+   	kfree(interp_elf_ex);
+    interp_elf_ex = NULL;
+}
+
+if (interp_elf_phdata) {
+   	kfree(interp_elf_phdata);
+    interp_elf_phdata = NULL;
+}
+
+out_free_file:
+if (interpreter) {
+   	fput(interpreter);
+   	interpreter = NULL;
+}
+out_free_ph:
+if (elf_phdata) {
+   	kfree(elf_phdata);
+    elf_phdata = NULL;
+}
+```
+
+ORIGINAL CODE:
+```
+		}
+		reloc_func_desc = interp_load_addr;
+
+		fput(interpreter);
+
+		kfree(interp_elf_ex);
+		kfree(interp_elf_phdata);
+	kfree(interp_elf_ex);
+	kfree(interp_elf_phdata);
+out_free_file:
+	if (interpreter)
+		fput(interpreter);
+out_free_ph:
+	kfree(elf_phdata);
+```

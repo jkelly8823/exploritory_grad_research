@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+Magic Number Usage, and Out-of-Bounds Read/Write in Memory-Mapped I/O.
+
+EXPLANATION:
+The code snippet provided uses magic numbers (0xf0001000, 0x1000, 0xf0000100, 0x1000, 0, 29, 0xffffffff, 0x3fffffff) directly in the code. These numbers should be defined as named constants to make the code easier to understand and maintain.
+
+Additionally, the code uses direct write operations (`__raw_writel`) on memory-mapped I/O registers. If the device or the registers are not correctly configured, this can lead to out-of-bounds read or write operations. There is no validation to ensure that the given addresses (e.g., INT2NTSR0, INT2NTSR1) are valid for the device being written to.
+
+RECOMMENDATIONS:
+1. Define the magic numbers as named constants to make the code more readable and maintainable.
+2. Add validation checks to ensure that the addresses being written to are valid and correctly configured.
+
+ORIGINAL CODE:
+```c
+void __init r8a7779_init_irq_dt(void)
+{
+#ifdef CONFIG_ARCH_SHMOBILE_LEGACY
+	void __iomem *gic_dist_base = ioremap_nocache(0xf0001000, 0x1000);
+	void __iomem *gic_cpu_base = ioremap_nocache(0xf0000100, 0x1000);
+#endif
+	gic_arch_extn.irq_set_wake = r8a7779_set_wake;
+
+#ifdef CONFIG_ARCH_SHMOBILE_LEGACY
+	gic_init(0, 29, gic_dist_base, gic_cpu_base);
+#else
+	irqchip_init();
+#endif
+	/* route all interrupts to ARM */
+	__raw_writel(0xffffffff, INT2NTSR0);
+	__raw_writel(0x3fffffff, INT2NTSR1);
+}
+```

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumbers: 1-9
+VULNERABILITY_DESCRIPTION:
+A potential resource leak or misuse vulnerability exists as the I915_READ function is being used to read hardware registers without proper checking for error conditions or hardware status.
+
+EXPLANATION:
+The code snippet is using I915_READ macros to read the value of hardware registers DP_TP_CTL and DDI_BUF_CTL. However, it does not check the device's status or handles potential errors before performing these reads. This can potentially result in reading invalid data if the device is not in a valid state or if these reads are not properly synchronized.
+
+Additionally, the I915_READ macros do not seem to have a corresponding error checking mechanism, which may make debugging and exception handling challenging. Also, this may potentially create issues when working with drivers where hardware access for a particular module has expired.
+
+RECOMMENDATIONS:
+1. Implement error checking: Use APIs provided by the driver to check for device readiness, validity, or error conditions before using I915_READ.
+
+```c
+if (unlikely(!intel_dp_enabled(intel_dp))) {
+    DRM_ERROR("DP not enabled, cannot read from DP_TP_CTL\n");
+    return -ENODEV;
+} else if (unlikely(intel_dp_hw_is_duplicate(intel_dp)) {
+    DRM_ERROR("DP is duplicate, cannot read from DP_TP_CTL\n");
+    return -ENODEV;
+}
+```
+
+2. Implement hardware synchronization: There should be mechanisms in place to prevent reading hardware registers while the hardware may be in an unsteady state, or in use. Potential issues include concurrent writes. You can use locks to prevent concurrent usage of a register.
+
+3. Provide for robust error handling. In case of hardware read errors, use a defined error handling method for dealing with such conditions.
+
+ORIGINAL CODE:
+```c
+struct intel_dp *intel_dp = &intel_dig_port->dp;
+struct drm_i915_private *dev_priv = encoder->dev->dev_private;
+enum port port = intel_dig_port->port;
+bool wait;
+uint32_t val;
+
+if (I915_READ(DP_TP_CTL(port)) & DP_TP_CTL_ENABLE) {
+    val = I915_READ(DDI_BUF_CTL(port));
+    if (val & DDI_BUF_CTL_ENABLE) {
+```

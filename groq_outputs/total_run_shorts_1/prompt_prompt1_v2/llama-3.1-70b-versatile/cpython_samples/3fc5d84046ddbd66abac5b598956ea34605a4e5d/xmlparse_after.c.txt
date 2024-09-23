@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 656-662, 671-677, 691-697
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in the expat library due to the usage of unsanitized user input in the storeAttributeValue and appendAttributeValue functions.
+
+EXPLANATION:
+The functions storeAttributeValue and appendAttributeValue in the expat library are vulnerable to buffer overflow attacks because they use unsanitized user input. The functions take input in the form of pointers to character arrays, but they do not check the lengths of these arrays before copying data into the pool of available memory. If the input arrays are too large, the copy operation can overflow the buffers, leading to undefined behavior.
+
+RECOMMENDATIONS:
+1. Validate user input: Before using user input in the storeAttributeValue and appendAttributeValue functions, validate the lengths of the input arrays to prevent buffer overflow attacks.
+
+2. Use bounds checking: Implement bounds checking to prevent the copy operation from overflowing the buffers.
+
+3. Use safe functions: Replace strcpy and strcat with safer alternatives like strlcpy and strlcat that prevent buffer overflows.
+
+4. Patch the library: Apply patches to the expat library to fix the buffer overflow vulnerability.
+
+ORIGINAL CODE:
+```c
+static enum XML_Error
+storeAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+                    const char *ptr, const char *end, STRING_POOL *pool,
+                    enum XML_Account account) {
+  enum XML_Error result
+      = appendAttributeValue(parser, enc, isCdata, ptr, end, pool, account);
+  if (result)
+    return result;
+  if (! isCdata && poolLength(pool) && poolLastChar(pool) == 0x20)
+    poolChop(pool);
+  return result;
+}
+
+static enum XML_Error
+appendAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+                    const char *ptr, const char *end, STRING_POOL *pool,
+                    enum XML_Account account) {
+  DTD *const dtd = parser->m_dtd; /* save one level of indirection */
+  for (;;) {
+    const char *next
+        = ptr; /* XmlAttributeValueTok doesn't always set the last arg */
+    int tok = XmlAttributeValueTok(enc, ptr, end, &next);
+    switch (tok) {
+    case XML_TOK_NONE:
+      return XML_ERROR_NONE;
+    case XML_TOK_INVALID:
+      XML_Char ch = (XML_Char)XmlPredefinedEntityName(
+          enc, ptr + enc->minBytesPerChar, next - enc->minBytesPerChar);
+      if (ch) {
+        if (! poolAppendChar(pool, ch))
+          return XML_ERROR_NO_MEMORY;
+        break;
+      }
+    // ...
+```
+Note: The above code is the relevant part of the original code that demonstrates the vulnerability.

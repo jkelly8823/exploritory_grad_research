@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 14
+VULNERABILITY_DESCRIPTION:
+Uncontrolled memory access vulnerability and potential unauthorized data access
+EXPLANATION:
+The code appears to be handling device registration and initialization for Intel(R) Accelerator Device. However, the variable 'idxd->user_submission_safe' is set to the value of 'data->user_submission_safe' which can be controlled by the user. This can potentially allow an attacker to bypass security checks, as indicated by the comment related to INTEL-SA-01084 security advisory.
+
+Additionally, the use of 'offsetof' macro can potentially lead to uncontrolled memory access if not used carefully. In this case, the code is using 'offsetof' to calculate offsets within structs, but the calculated values are not validated before being used. 
+
+Furthermore, the code does not validate the input values from 'pdev' and 'data' which can lead to unauthorized data access and other security issues.
+
+RECOMMENDATIONS:
+- Ensure that 'idxd->user_submission_safe' is not set to a value controlled by the user. Instead, the value should be set by the trusted code based on the system configuration.
+- Validate input values from 'pdev' and 'data' to prevent unauthorized data access.
+- Validate the calculated values of 'offsetof' before being used to prevent uncontrolled memory access.
+- Consider adding additional security checks to prevent potential attacks.
+
+ORIGINAL CODE:
+
+```c
+.align = 32,
+.dev_type = &dsa_device_type,
+.evl_cr_off = offsetof(struct dsa_evl_entry, cr),
+.user_submission_safe = false, /* See INTEL-SA-01084 security advisory */
+.cr_status_off = offsetof(struct dsa_completion_record, status),
+.cr_result_off = offsetof(struct dsa_completion_record, result),
+},
+[IDXD_TYPE_IAX] = {
+.align = 64,
+.dev_type = &iax_device_type,
+.evl_cr_off = offsetof(struct iax_evl_entry, cr),
+.user_submission_safe = false, /* See INTEL-SA-01084 security advisory */
+.cr_status_off = offsetof(struct iax_completion_record, status),
+.cr_result_off = offsetof(struct iax_completion_record, error_code),
+.load_device_defaults = idxd_load_iaa_device_defaults,
+},
+dev_info(&pdev->dev, "Intel(R) Accelerator Device (v%x)\n",
+idxd->hw.version);
+
+idxd->user_submission_safe = data->user_submission_safe;
+
+return 0;
+
+err_dev_register:
+idxd_cleanup(idxd);
+```

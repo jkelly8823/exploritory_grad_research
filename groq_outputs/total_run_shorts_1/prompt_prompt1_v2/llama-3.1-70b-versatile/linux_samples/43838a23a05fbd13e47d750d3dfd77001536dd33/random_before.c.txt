@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-19, 28-29, 36-37, 42-44, None
+VULNERABILITY_DESCRIPTION:
+Time-of-Check to Time-of-Use (TOCTOU) vulnerability
+
+EXPLANATION:
+A TOCTOU vulnerability occurs when a check for a condition is performed before an operation that relies on the condition. However, between the check and the operation, the condition is changed, resulting in unexpected behavior.
+
+In this code, there are multiple instances where `crng_ready()` is checked before performing some critical operations (lines 18-19, 28-29). However, between the check and the operation, the `crng_init` variable can be changed by another thread, potentially resulting in incorrect behavior.
+
+Additionally, there are instances where `crng_ready()` is checked and then some operations are performed assuming it will remain in the same state. However, between the check and the operation, the state can change, potentially resulting in incorrect behavior.
+
+For example, at lines 36-37, the `crng_ready()` function is checked, but immediately after that, it's possible for another thread to change `crng_init` to 0 (not ready) before the operation at line 42-44.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it's recommended to ensure exclusive access to the variables being checked before using them. Here are some possible fixes:
+
+1.  Use synchronization mechanisms such as locks or semaphores to ensure that the `crng_init` variable and the operations that depend on it are accessed exclusively.
+
+    For example, consider using `spin_lock_irqsave` for the entire operation instead of just for specific parts of it.
+
+2.  Use atomic variables for `crng_init` to prevent it from being changed between the check and the operation.
+
+    For example, you can use `atomic_set` and `atomic_read` functions for `crng_init`.
+
+    If using atomic variables is not feasible, you can use `spin_lock_irqsave` to ensure exclusive access to the `crng_init` variable.
+
+    Consider making the `crng_ready()` function atomic as well by using locks or barriers to prevent it from being interleaved with other operations.
+
+3.  Use a single check-and-operation function to reduce the attack window. This function would perform the check for `crng_ready()` and then immediately perform the necessary operations without giving another thread an opportunity to change the state.
+
+    For example, you can move the entire operation into the `crng_ready()` function.
+
+ORIGINAL CODE:
+
+```c
+* its value (from 0->1->2).
+*/
+static int crng_init = 0;
+#define crng_ready() (likely(crng_init > 0))
+static int crng_init_cnt = 0;
+#define CRNG_INIT_CNT_THRESH (2*CHACHA20_KEY_SIZE)
+static void _extract_crng(struct crng_state *crng,
+			  __u32 out[CHACHA20_BLOCK_WORDS]);
+
+	if (!spin_trylock_irqsave(&primary_crng.lock, flags))
+		return 0;
+	if (crng_ready()) {
+		spin_unlock_irqrestore(&primary_crng.lock, flags);
+		return 0;
+	}
+	p = (unsigned char *) &primary_crng.state[4];
+{
+	unsigned long v, flags;
+
+	if (crng_init > 1 &&
+	    time_after(jiffies, crng->init_time + CRNG_RESEED_INTERVAL))
+		crng_reseed(crng, crng == &primary_crng ? &input_pool : NULL);
+	spin_lock_irqsave(&crng->lock, flags);
+	if (arch_get_random_long(&v))
+	fast_mix(fast_pool);
+	add_interrupt_bench(cycles);
+
+	if (!crng_ready()) {
+		if ((fast_pool->count >= 64) &&
+		    crng_fast_load((char *) fast_pool->pool,
+				   sizeof(fast_pool->pool))) {
+			fast_pool->count = 0;
+{
+	struct entropy_store *poolp = &input_pool;
+
+	if (!crng_ready()) {
+		crng_fast_load(buffer, count);
+		return;
+	}
+```

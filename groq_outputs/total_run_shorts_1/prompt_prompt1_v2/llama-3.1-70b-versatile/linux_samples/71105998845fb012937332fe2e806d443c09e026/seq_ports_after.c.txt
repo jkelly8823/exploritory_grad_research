@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 10, 16
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a lack of bounds checking and a potential null pointer dereference. Additionally, there's a format string vulnerability due to the use of sprintf with an unchecked argument.
+
+EXPLANATION:
+The variable 'num' can hold any integer value, including negative values, and it is directly passed to the sprintf function as a format string argument. This could allow a potential attacker to perform format string attacks if 'num' is controlled by user input. 
+
+Furthermore, the structures 'new_port', 'p', and 'client' are used without checking if they are null pointers. This could lead to a null pointer dereference if any of these pointers are null. 
+
+Finally, the use of 'num' as an array index in 'sprintf' could potentially lead to an overflow attack.
+
+RECOMMENDATIONS:
+- Check if 'num' is within a safe range before passing it to sprintf. Consider using snprintf instead.
+- Perform null checks on 'new_port', 'p', and 'client' before using them.
+- Validate 'num' before storing it in 'new_port->addr.port' to prevent integer overflow or buffer overflow attacks.
+
+ORIGINAL CODE:
+
+
+/* create a port, port number is returned (-1 on failure);
+ * the caller needs to unref the port via snd_seq_port_unlock() appropriately
+ */
+struct snd_seq_client_port *snd_seq_create_port(struct snd_seq_client *client,
+						int port)
+{
+	unsigned long flags;
+	snd_use_lock_init(&new_port->use_lock);
+	port_subs_info_init(&new_port->c_src);
+	port_subs_info_init(&new_port->c_dest);
+	snd_use_lock_use(&new_port->use_lock);
+
+	num = port >= 0 ? port : 0;
+	mutex_lock(&client->ports_mutex);
+	write_lock_irqsave(&client->ports_lock, flags);
+	list_add_tail(&new_port->list, &p->list);
+	client->num_ports++;
+	new_port->addr.port = num;	/* store the port number in the port */
+	sprintf(new_port->name, "port-%d", num);
+	write_unlock_irqrestore(&client->ports_lock, flags);
+	mutex_unlock(&client->ports_mutex);
+
+	return new_port;
+}

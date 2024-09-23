@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-15, 28-32
+VULNERABILITY_DESCRIPTION:
+Null pointer dereference vulnerability.
+
+EXPLANATION:
+This vulnerability can be caused when `acpi_get_table(ACPI_SIG_MADT, 0, (struct acpi_table_header **)&madt)` fails, but the code does not properly check the return value of this function and does not check if `madt` is `NULL` before using it.
+
+Also, the `obj` variable in `map_mat_entry` function is used without being initialized, which can lead to a null pointer dereference.
+
+It's also worth noting that `buffer.pointer` is freed at the end of `map_mat_entry`, but the pointer itself is not set to `NULL` afterward. This could potentially lead to a double-free vulnerability, depending on how the rest of the code uses this variable.
+
+Finally, the code assumes that `acpi_evaluate_object` will return a valid `union acpi_object` that can be safely cast to a `struct acpi_subtable_header*`, but this is not explicitly checked.
+
+RECOMMENDATIONS:
+1. Add error checking after `acpi_get_table(ACPI_SIG_MADT, 0, (struct acpi_table_header **)&madt)` and handle the error properly if it occurs.
+
+2. Initialize the `obj` variable in `map_mat_entry` function before using it.
+
+3. Set the `buffer.pointer` to `NULL` after freeing it in `map_mat_entry` function to prevent potential double-free vulnerability.
+
+4. Add explicit checks after `acpi_evaluate_object` to ensure the returned object is indeed a valid `struct acpi_subtable_header*`.
+
+ORIGINAL CODE:
+The original code snippet is quite large; however, I've identified potentially problematic code areas as those related to null pointer dereferences.
+
+(unsigned long madt_end, entry;...
+
+ if (!read_madt) {
+  ....
+static int map_mat_entry(acpi_handle handle, int type, u32 acpi_id)

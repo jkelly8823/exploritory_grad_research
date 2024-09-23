@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12, 16-18
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free vulnerability and lack of proper SACK block handling.
+EXPLANATION:
+The vulnerable lines `tcp_skb_pcount_add(prev, pcount); BUG_ON(tcp_skb_pcount(skb) < pcount);` and `tcp_skb_pcount_add(skb, -pcount);` indicate possible misuse of the `tcp_skb_pcount_add` function. However, the main vulnerability lies in the lack of proper handling of SACK (Selective ACKnowledgment) blocks spanning across multiple segments.
+
+The code is designed to collapse these SACK blocks, but it does so without ensuring that the `skb` pointer remains valid throughout the shifting process. The `skb_shift` function might reallocate or free the memory for `skb`, potentially leading to use-after-free errors when `skb` is referenced afterwards. Furthermore, the `tcp_shifted_skb` function might modify the `skb` pointer, and its success is checked using the `tcp_skb_pcount(skb)` function, which might result in an invalid read or use-after-free if `skb` has been modified.
+
+Additionally, the function `tcp_shift_skb_data` attempts to collapse SACK blocks but lacks clear checks for potential errors and allocation failures.
+
+RECOMMENDATIONS:
+To address the vulnerabilities:
+
+1. Verify that the `skb_shift` function does not reallocate or free memory for `skb`. If it does, ensure that the `skb` pointer is updated accordingly.
+
+2. Before calling `tcp_skb_pcount(skb)`, check if `skb` remains a valid pointer to avoid potential use-after-free errors.
+
+3. Embed error checking for `skb_shift` and `tcp_shifted_skb` to prevent silent failures. For instance, check if the new skb allocation failed and handle it properly.
+
+4. Ensure that `tcp_skb_pcount_add` is used correctly. If `tcp_skb_pcount(skb)` underflows due to `BUG_ON(tcp_skb_pcount(skb) < pcount)`, add additional checks for the potential underflow before calling `tcp_skb_pcount_add`.
+
+5. Include more robust error handling in `tcp_shift_skb_data` for potential allocation failures or invalid `skb` state.
+
+ORIGINAL CODE:
+
+```c
+TCP_SKB_CB(skb)->seq += shifted;
+
+tcp_skb_pcount_add(prev, pcount);
+BUG_ON(tcp_skb_pcount(skb) < pcount);
+tcp_skb_pcount_add(skb, -pcount);
+
+/* When we're adding to gso_segs == 1, gso_size will be zero,
+ * in theory this shouldn't be necessary but as long as DSACK
+return !skb_headlen(skb) && skb_is_nonlinear(skb);
+}
+
+/* Try collapsing SACK blocks spanning across multiple skbs to a single
+ * skb.
+ */
+static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
+	if (!after(TCP_SKB_CB(skb)->seq + len, tp->snd_una))
+		goto fallback;
+
+	if (!skb_shift(prev, skb, len))
+		goto fallback;
+	if (!tcp_shifted_skb(sk, prev, skb, state, pcount, len, mss, dup_sack))
+		goto out;
+
+		goto out;
+
+	len = skb->len;
+	if (skb_shift(prev, skb, len)) {
+		pcount += tcp_skb_pcount(skb);
+		tcp_shifted_skb(sk, prev, skb, state, tcp_skb_pcount(skb),
+				len, mss, 0);
+	}
+
+out:
+	return prev;
+```

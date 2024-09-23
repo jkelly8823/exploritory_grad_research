@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability.
+The given code snippet appears to have a double-free vulnerability. The `hdev` is being freed in `kcalloc(hdev)` and also `device_del(&hdev->dev)` might have deleted the same resource.
+
+EXPLANATION:
+The `device_del` call might internally free the same resource if it's a managed device, as shown in [Linux kernel documentation](https://www.kernel.org/doc/htmldocs/device_drivers/api/device.html#device-del). This leads to a double-free, which might cause program crashes or undefined behavior.
+
+However, the actual behavior can be confirmed with more information on the definition of `device_del`. We consider this vulnerability as a potential issue given the analysis of the code snippet.
+
+RECOMMENDATIONS:
+We recommend following:
+
+1.  **Remove the line `device_del(&hdev->dev);`** if `hdev` has been already freed by `kcalloc(hdev)`.
+2.  **Use a managed device** for automatic resource cleanup when the module is being unloaded and does not need manual deletion.
+
+ORIGINAL CODE:
+
+```c
+/* Unregister HCI device */
+void hci_unregister_dev(struct hci_dev *hdev)
+{
+	BT_DBG("%p name %s bus %d", hdev, hdev->name, hdev->bus);
+
+	hci_dev_set_flag(hdev, HCI_UNREGISTER);
+
+	write_lock(&hci_dev_list_lock);
+	list_del(&hdev->list);
+	write_unlock(&hci_dev_list_lock);
+
+	}
+
+	device_del(&hdev->dev);
+	hci_dev_put(hdev);
+}
+EXPORT_SYMBOL(hci_unregister_dev);
+
+/* Release HCI device */
+void hci_release_dev(struct hci_dev *hdev)
+{
+	debugfs_remove_recursive(hdev->debugfs);
+	kfree_const(hdev->hw_info);
+	kfree_const(hdev->fw_info);
+
+	hci_blocked_keys_clear(hdev);
+	hci_dev_unlock(hdev);
+
+	ida_simple_remove(&hci_index_ida, hdev->id);
+	kfree(hdev);
+}
+EXPORT_SYMBOL(hci_release_dev);
+
+/* Suspend HCI device */
+int hci_suspend_dev(struct hci_dev *hdev)
+```

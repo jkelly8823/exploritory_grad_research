@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Potential buffer overflow vulnerability due to lack of bounds checking in the `get_rfc1002_length` function.
+
+EXPLANATION: 
+The `get_rfc1002_length` function assumes that the input buffer `buf` is at least 4 bytes in size (due to the casting to `__be32 *`). However, there is no check to ensure that this is indeed the case. If the buffer is smaller than 4 bytes, this could lead to a buffer overflow and potentially other vulnerabilities such as out-of-bounds access or segmentation faults.
+
+RECOMMENDATIONS: 
+It is recommended to add a bounds check to the `get_rfc1002_length` function to ensure that the input buffer is at least 4 bytes in size. Here is an example of how the function could be modified to include this check:
+
+```c
+static inline unsigned int
+get_rfc1002_length(void *buf, size_t buf_len)
+{
+    if (buf_len < sizeof(__be32))
+        return 0; // or handle error in a more suitable way
+    return be32_to_cpu(*((__be32 *)buf)) & 0xffffff;
+}
+```
+Additionally, the `inc_rfc1001_len` function has the same potential for buffer overflow, but due to a lack of code it is harder to assess this issue.
+
+ORIGINAL CODE:
+```c
+static inline unsigned int
+get_rfc1002_length(void *buf)
+{
+	return be32_to_cpu(*((__be32 *)buf)) & 0xffffff;
+}
+
+static inline void
+inc_rfc1001_len(void *buf, int count)
+```

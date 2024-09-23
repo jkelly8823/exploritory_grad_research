@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Dereference of a potential null pointer without checking for nullity.
+EXPLANATION:
+In the code snippet, the function `idr_find` is called to find a VM with the given `pasid`. The returned value is then immediately dereferenced without checking if it's null. If `idr_find` fails to find a VM with the given `pasid`, it will return NULL. Dereferencing a null pointer can cause the program to crash or even lead to arbitrary code execution.
+
+However, upon closer inspection, the code does perform a check with the line `if (vm)`. This indeed protects against the null pointer dereference vulnerability, but only after the pointer has already been dereferenced, in a sense, because it checks the truthiness of `vm` and still uses `vm` only inside that if block.
+
+
+But, in this specific code we only see `if(vm) *task_info = vm->task_info;` So this null check doesn't fully prevent a null pointer access, the reason is not a great deal because, almost in all the other scenarios the *task_info  also  must be defined. Because this still will cause problems, even though the if checks successfully but  task_info then is null so. If the function which has called this function doesn't pass pointer that leads again with null value , which finally leads to null pointer itself,
+therefore has vulnerability
+
+RECOMMENDATIONS:
+Should check for nullity of `task_info` as well, before assigning a value to the dereferenced pointer. This will prevent the potential null pointer dereference.
+
+```
+struct amdgpu_task_info *task_info)
+{
+	struct amdgpu_vm *vm;
+	unsigned long flags;
+
+	spin_lock_irqsave(&adev->vm_manager.pasid_lock, flags);
+
+	vm = idr_find(&adev->vm_manager.pasid_idr, pasid);
+	if (vm && task_info)
+		*task_info = vm->task_info;
+
+.spin_unlock_irqrestore(&adev->vm_manager.pasid_lock, flags);
+}
+```
+ORIGINAL CODE:
+```
+(struct amdgpu_task_info *task_info)
+{
+	struct amdgpu_vm *vm;
+	unsigned long flags;
+
+	spin_lock_irqsave(&adev->vm_manager.pasid_lock, flags);
+
+	vm = idr_find(&adev->vm_manager.pasid_idr, pasid);
+	if (vm)
+		*task_info = vm->task_info;
+
+	spin_unlock_irqrestore(&adev->vm_manager.pasid_lock, flags);
+}
+```

@@ -1,0 +1,96 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION: Potential use of null pointer dereference
+EXPLANATION:
+The variable 'pkcs7' is passed to the function pkcs7_validate_trust() without being checked for null first. If 'pkcs7' is null when pkcs7_validate_trust() is called, it may lead to a null pointer dereference. 
+
+Additionally, 'blacklist_keyring' is not checked for null before being used. If 'blacklist_keyring' is not initialized or is null, it may also lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+Add a null check for 'pkcs7' before passing it to pkcs7_validate_trust(). 
+
+Add a null check for 'blacklist_keyring' before using it.
+
+Here is an example of how you can modify the function to include null checks:
+
+```c
+int is_key_on_revocation_list(struct pkcs7_message *pkcs7)
+{
+    if (pkcs7 == NULL)
+    {
+        // handle null error
+        return -EINVAL;
+    }
+
+    if (blacklist_keyring == NULL)
+    {
+        // handle null error
+        return -EINVAL;
+    }
+
+    int ret;
+
+    ret = pkcs7_validate_trust(pkcs7, blacklist_keyring);
+
+    if (ret == 0)
+        return -EKEYREJECTED;
+
+    return -ENOKEY;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+
+}
+EXPORT_SYMBOL_GPL(is_binary_blacklisted);
+
+#ifdef CONFIG_SYSTEM_REVOCATION_LIST
+/**
+ * add_key_to_revocation_list - Add a revocation certificate to the blacklist
+ * @data: The data blob containing the certificate
+ * @size: The size of data blob
+ */
+int add_key_to_revocation_list(const char *data, size_t size)
+{
+	key_ref_t key;
+
+	key = key_create_or_update(make_key_ref(blacklist_keyring, true),
+				   "asymmetric",
+				   NULL,
+				   data,
+				   size,
+				   ((KEY_POS_ALL & ~KEY_POS_SETATTR) | KEY_USR_VIEW),
+				   KEY_ALLOC_NOT_IN_QUOTA | KEY_ALLOC_BUILT_IN);
+
+	if (IS_ERR(key)) {
+		pr_err("Problem with revocation key (%ld)\n", PTR_ERR(key));
+		return PTR_ERR(key);
+	}
+
+	return 0;
+}
+
+/**
+ * is_key_on_revocation_list - Determine if the key for a PKCS#7 message is revoked
+ * @pkcs7: The PKCS#7 message to check
+ */
+int is_key_on_revocation_list(struct pkcs7_message *pkcs7)
+{
+	int ret;
+
+	ret = pkcs7_validate_trust(pkcs7, blacklist_keyring);
+
+	if (ret == 0)
+		return -EKEYREJECTED;
+
+	return -ENOKEY;
+}
+#endif
+
+/*
+ * Initialise the blacklist
+ */
+static int __init blacklist_init(void)
+```

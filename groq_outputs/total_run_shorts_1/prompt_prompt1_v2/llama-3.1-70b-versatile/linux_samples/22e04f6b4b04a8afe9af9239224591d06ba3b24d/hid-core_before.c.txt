@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 55-59, 61-65
+VULNERABILITY_DESCRIPTION:
+Use of potentially unvalidated user input for memory allocation and incomplete error checking.
+
+EXPLANATION:
+In the provided code snippet, there are two instances where `kmalloc` is called without checking if the len value is positive. 
+
+The first instance:
+```c
+usbhid->out[usbhid->outhead].raw_report = kmalloc(len, GFP_ATOMIC);
+```
+
+The second instance:
+```c
+usbhid->ctrl[usbhid->ctrlhead].raw_report = kmalloc(len, GFP_ATOMIC);
+```
+
+Both instances validate whether the resulting allocation is null, and log an error message in case of allocation failure. However, if `kmalloc` is successful, but the allocated size is smaller than expected due to overflow, this is not immediately clear.
+
+Moreover, before the `kmalloc` calls, the variable `len` is calculated based on the `report->size` value. However, there is no validation for the `report->size` value being within a valid range. This is a condition that can lead to memory overflows, as the variable `len` might become an extremely large value in case `report->size` is large.
+
+ 
+
+RECOMMENDATIONS:
+To fix this vulnerability, we can introduce validation checks for the `report->size` value. This can be done before calculating the `len` variable. 
+
+```c
+#include <linux/limit.h>
+
+if (report->size > LONG_MAX / 8) {
+    hid_err(hid, "Report size is too large.\n");
+    return -EINVAL;
+}
+int len = ((report->size - 1) >> 3) + 1 + (report->id > 0);
+
+// Validate len before calling kmalloc
+if (len <= 0) {
+    hid_err(hid, "Invalid len value.\n");
+    return -EINVAL;
+}
+```
+
+This would prevent overflow by checking that `report->size` is within valid range before doing any allocation.
+
+The usage of GFP_ATOMIC might be a potential issue as well. This flag means "access with interrupts disabled and might go to sleep". However, it is mostly applicable for cases of an imminent interrupt. Also GFP_ATOMIC might immediately return if unsuccessful in memory allocation, failing the function even though memory could have been allocated later.
+
+The system configuration and available memory can influence what memory allocation flags should be chosen and their desired combination. Based on your system's setup, they may need some adjustment.
+
+ORIGINAL CODE:
+(Original code provided here, not the modified code)
+
+Please note this description might be better formulated when there is more knowledge about code originality and function as for any system code you read to help you to create more coherent descriptions and accurate proposals of remedies

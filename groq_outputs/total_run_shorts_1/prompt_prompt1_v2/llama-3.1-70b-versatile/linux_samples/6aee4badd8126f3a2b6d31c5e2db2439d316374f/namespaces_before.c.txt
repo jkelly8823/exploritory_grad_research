@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability
+
+EXPLANATION:
+The vulnerability exists in the incorrect ordering of memory allocation and deallocation. The `put_task_struct(task);` function is called after the task pointer is used in the `error = ns_get_path(&ns_path, task, ns_ops);` function call, even though the `put_task_struct(task);` function likely decreases the reference count of the task, potentially causing the task to be deallocated. However, if `ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS)` returns true and `ns_get_path(&ns_path, task, ns_ops);` returns an error, the `put_task_struct(task);` function will still be executed, potentially leading to a use-after-free scenario when `put_task_struct(task);` is called again.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `put_task_struct(task);` function call should be moved to ensure that it is always executed after the task pointer has been used, and that it can never be executed after the task pointer has been deallocated. Here is a potential fix:
+
+- Move `put_task_struct(task);` to the end of the function, after all potential paths that use the task pointer.
+- Ensure that all error paths properly handle the task pointer and either prevent the task from being deallocated prematurely or prevent any further uses of the task pointer after it has been deallocated.
+
+ORIGINAL CODE:
+```
+const struct proc_ns_operations *ns_ops = PROC_I(inode)->ns_ops;
+struct task_struct *task;
+struct path ns_path;
+void *error = ERR_PTR(-EACCES);
+
+if (!dentry)
+	return ERR_PTR(-ECHILD);
+
+task = get_proc_task(inode);
+if (!task)
+	return error;
+
+if (ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS)) {
+	error = ns_get_path(&ns_path, task, ns_ops);
+	if (!error)
+		nd_jump_link(&ns_path);
+}
+put_task_struct(task);
+return error;
+}
+
+static int proc_ns_readlink(struct dentry *dentry, char __user *buffer, int buflen)
+{
+```

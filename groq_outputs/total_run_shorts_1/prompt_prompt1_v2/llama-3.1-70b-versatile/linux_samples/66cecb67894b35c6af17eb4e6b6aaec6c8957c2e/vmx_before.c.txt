@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 166-167, 173-174, 242-243, 272-273
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to integer overflows and underflows due to the use of signed integers in calculations. The `vmcs_read64(TSC_OFFSET)` function returns an unsigned 64-bit integer, but the result is stored in a signed `s64` variable in the `vmx_adjust_tsc_offset_guest` function. This can cause integer overflows or underflows when adding or subtracting values to this variable.
+
+Additionally, the `vmcs_write64(TSC_OFFSET, offset + adjustment)` function in the `vmx_adjust_tsc_offset_guest` function also uses a signed `s64` variable for the `adjustment` parameter. If this value is larger than the `offset` variable, an integer overflow can occur.
+
+EXPLANATION:
+Integer overflows and underflows can occur when signed integers are used to store values that exceed their range. In this case, the `s64` variables used in the `vmx_adjust_tsc_offset_guest` function can overflow or underflow when adding or subtracting values that exceed their range.
+
+This is a common issue in C programming languages, as the language does not prevent integer overflows. It is the responsibility of the programmer to handle such cases.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should use unsigned integers for all calculations involving `TSC_OFFSET` values. The `vmx_adjust_tsc_offset_guest` function can be modified to use unsigned `u64` variables for the `offset` and `adjustment` parameters.
+
+Additionally, checks should be added to ensure that the `adjustment` value does not exceed the maximum value that can be stored in a `u64` variable. This can be done using simple conditional statements to check for potential overflows.
+
+Here is an example of how the `vmx_adjust_tsc_offset_guest` function can be modified:
+
+```c
+static void vmx_adjust_tsc_offset_guest(struct kvm_vcpu *vcpu, s64 adjustment)
+{
+	u64 offset = vmcs_read64(TSC_OFFSET);
+	u64 new_offset = offset + adjustment;
+
+	if (new_offset > U64_MAX) {
+		// handle overflow
+	}
+	else {
+		vmcs_write64(TSC_OFFSET, new_offset);
+		if (is_guest_mode(vcpu)) {
+			/* Even when running L2, the adjustment needs to apply to L1 */
+			to_vmx(vcpu)->nested.vmcs01_tsc_offset += adjustment;
+		} else {
+			//...
+		}
+	}
+}
+```
+
+ORIGINAL CODE:
+
+(The original code has been truncated to focus on the relevant parts. For the full code, please refer to the original code snippet.)
+
+```c
+static void vmx_adjust_tsc_offset_guest(struct kvm_vcpu *vcpu, s64 adjustment)
+{
+	u64 offset = vmcs_read64(TSC_OFFSET);
+
+	vmcs_write64(TSC_OFFSET, offset + adjustment);
+	if (is_guest_mode(vcpu)) {
+	/* Even when running L2, the adjustment needs to apply to L1 */
+	to_vmx(vcpu)->nested.vmcs01_tsc_offset += adjustment;
+} else
+	trace_kvm_write_tsc_offset(vcpu->vcpu_id, offset,
+	offset + adjustment);
+}
+```

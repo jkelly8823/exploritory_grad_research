@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential format string vulnerability.
+
+EXPLANATION:
+The code uses the `sprintf` function, which can lead to a format string vulnerability if not used carefully. The format strings used in the `sprintf` functions do not contain any format specifiers that directly allow an attacker to inject arbitrary code. However, in the lines 7-10, some format strings use unconfirmed input which could be user-supplied, such as `priv->version_str`, `netdev->name`, and `bss_modes[info.bss_mode]`. If an attacker can manipulate these values to contain format specifiers, it may lead to information disclosure or even arbitrary code execution. Furthermore, line 10 introduces another potential issue: format string vulnerability due to the `%pM` which may lead to reading of memory locations on the buffer if it is not properly handled.
+
+RECOMMENDATIONS:
+To fix the potential format string vulnerability, you should use `snprintf` instead of `sprintf` to prevent buffer overflows, and ensure that the format strings do not contain any user-supplied data. You should also use the `%s` format specifier to prevent format string injection. It is also recommended to validate the incoming data before formatting it as a string.
+
+Additionally, for the `%pM` issue on line 10, be aware that `dev_addr` may hold garbage if not previously initialized or if its length does not fit `ETH_ALEN` requirement, consider assigning `ETH_ALEN` length size instead of `"%pM"` or validating previously that `dev_addr` indeed has 6 bytes (as requirement is). Also consider using the following instead as it is safer ` sprintf(p, "mac_address=\"%02x:%02x:%02x:%02x:%02x:%02x\"\n" , netdev->dev_addr[0],  netdev->dev_addr[1],  netdev->dev_addr[2],  netdev->dev_addr[3],  netdev->dev_addr[4],  netdev->dev_addr[5]);`
+
+ORIGINAL CODE:
+```c
+static struct dentry *mwifiex_dfs_dir;
+
+static char *bss_modes[] = {
+	"Unknown",
+	"Ad-hoc",
+	"Managed",
+	"Auto"
+};
+
+/* size/addr for mwifiex_debug_info */
+#define item_size(n)		(FIELD_SIZEOF(struct mwifiex_debug_info, n))
+	p += sprintf(p, "driver_version = %s", fmt);
+	p += sprintf(p, "\nverext = %s", priv->version_str);
+	p += sprintf(p, "\ninterface_name=\"%s\"\n", netdev->name);
+	p += sprintf(p, "bss_mode=\"%s\"\n", bss_modes[info.bss_mode]);
+	p += sprintf(p, "media_state=\"%s\"\n",
+		     (!priv->media_connected ? "Disconnected" : "Connected"));
+	p += sprintf(p, "mac_address=\"%pM\"\n", netdev->dev_addr);
+```

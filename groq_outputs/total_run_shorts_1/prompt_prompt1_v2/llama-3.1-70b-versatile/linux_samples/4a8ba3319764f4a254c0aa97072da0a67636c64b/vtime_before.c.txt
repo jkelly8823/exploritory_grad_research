@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7
+VULNERABILITY_DESCRIPTION:
+The provided code is vulnerable to a race condition in the updating of S390_lowcore.system_timer.
+
+EXPLANATION:
+The code first reads the value of S390_lowcore.last_update_timer and stores it in the `timer` variable. It then updates S390_lowcore.last_update_timer to the current value returned by get_vtimer(). However, there is a window of opportunity between these two operations where another task or interrupt handler could modify S390_lowcore.last_update_timer. 
+
+This is problematic because the code then increments S390_lowcore.system_timer by the difference between the previous value of `timer` (S390_lowcore.last_update_timer) and its new value. However, since the new value could have been modified by another task, this calculation might result in an incorrect update to S390_lowcore.system_timer.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you could protect the updating of S390_lowcore.system_timer and S390_lowcore.last_update_timer with a lock, and ensure that the data type used for the timer variables is atomic (this last piece is an assumption given that the complete declarations and definitions are not provided). 
+
+If possible, using a spinlock (e.g., `spin_lock_irqsave` and `spin_unlock_irqrestore`) could protect the critical section. Alternatively, if available for the type of timer used (another assumption due to missing code), using a memory barrier to enforce the correct order of reads and writes could be used to mitigate the issue.
+
+ORIGINAL CODE:
+
+	struct thread_info *ti = task_thread_info(tsk);
+	u64 timer, system;
+
+	WARN_ON_ONCE(!irqs_disabled());
+
+	timer = S390_lowcore.last_update_timer;
+	S390_lowcore.last_update_timer = get_vtimer();
+	S390_lowcore.system_timer += timer - S390_lowcore.last_update_timer;

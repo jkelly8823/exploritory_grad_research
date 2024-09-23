@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-8, 12-16
+VULNERABILITY_DESCRIPTION:
+This code may be vulnerable to improper error handling and resource leaks. Specifically, if the functions `RING_SPACE`, `BEGIN_NV04`, `OUT_RING`, and/or `nouveau_bo_tile_layout` fail or return an error, the error is checked but then the function continues executing without properly cleaning up resources.
+
+EXPLANATION:
+The code checks for an error in `RING_SPACE` by checking the result of `ret`. If an error is found, the function will return, but this does not necessarily mean all system resources have been cleaned up or deallocated. The same is true for the second `RING_SPACE` call and its error handling.
+
+Furthermore, both return calls may leave allocated resources (in the case of the first call, the NV04 command which has already been begin) in a state where they are accessible and could be used to exploit vulnerabilities.
+
+It is also possible that exceptions are being silenced unintentionally. There is no way of knowing the true intent without being able to view more code.
+
+RECOMMENDATIONS:
+To address the potential for resource leaks and improper error handling, we should handle these potential errors such that all resources are properly cleaned up regardless of whether or not an error is encountered.
+
+Consider adding try/finally or error handling structures to handle cleanup when exceptions are encountered. Ensure all allocated resources, such as any Ring Buffers or other objects which have been committed, are freed when no longer needed.
+
+Ensure also, that any outstanding commands, such as the NvSubCopy command, are synced for properly before continuing. Without doing so leaves room for many more issues to arise.
+
+ORIGINAL CODE:
+
+		stride  = 16 * 4;
+		height  = amount / stride;
+
+		if (old_mem->mem_type == TTM_PL_VRAM &&
+		    nouveau_bo_tile_layout(nvbo)) {
+			ret = RING_SPACE(chan, 8);
+			if (ret)
+				return ret;
+			BEGIN_NV04(chan, NvSubCopy, 0x0200, 1);
+			OUT_RING  (chan, 1);
+		}
+		if (new_mem->mem_type == TTM_PL_VRAM &&
+		    nouveau_bo_tile_layout(nvbo)) {
+			ret = RING_SPACE(chan, 8);
+			if (ret)
+				return ret;

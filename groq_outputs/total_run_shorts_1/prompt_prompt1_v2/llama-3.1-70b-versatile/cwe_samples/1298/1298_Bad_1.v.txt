@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 47-53
+VULNERABILITY_DESCRIPTION:
+Uninitialized values may cause unexpected behavior in the Physical Memory Protection (PMP) checks.
+
+EXPLANATION:
+The PMP module, which is a critical component of the RISC-V architecture, is not properly initialized with the input values `pmpaddr_i` and `pmpcfg_i`. Although the code snippet provides a description of the PMP configuration and checks, it is possible that these input values might not be properly validated or sanitized, potentially leading to undefined behavior.
+
+RECOMMENDATIONS:
+To address this vulnerability, the code should ensure that `pmpaddr_i` and `pmpcfg_i` are properly validated and initialized before using them as inputs to the PMP module. This can be done by:
+
+1. Adding assertions to verify that `pmpaddr_i` and `pmpcfg_i` are within valid ranges.
+2. Initializing `pmpaddr_i` and `pmpcfg_i` with default values to prevent undefined behavior.
+3. Implementing input validation using additional logic to verify that the inputs are valid and conform to the expected format.
+
+ORIGINAL CODE:
+
+```verilog
+module dma # (...)(...);
+...
+    input [7:0] [16-1:0] pmpcfg_i;
+    input logic [16-1:0][53:0]     pmpaddr_i;
+    ...
+    //// Save the input command
+    always @ (posedge clk_i or negedge rst_ni)
+        begin: save_inputs
+        if (!rst_ni)
+        ...
+        else
+        ...
+    end // save_inputs
+    ...
+    // Load/store PMP check
+    pmp #(
+        .XLEN       ( 64                     ),
+        .PMP_LEN    ( 54                     ),
+        .NR_ENTRIES ( 16           )
+    ) i_pmp_data (
+        .addr_i        ( pmp_addr_reg        ),
+        .priv_lvl_i    ( riscv::PRIV_LVL_U   ),
+        .access_type_i ( pmp_access_type_reg ),
+        // Configuration
+        .conf_addr_i   ( pmpaddr_i           ),
+        .conf_i        ( pmpcfg_i            ),
+        .allow_o       ( pmp_data_allow      )
+    );
+endmodule
+```

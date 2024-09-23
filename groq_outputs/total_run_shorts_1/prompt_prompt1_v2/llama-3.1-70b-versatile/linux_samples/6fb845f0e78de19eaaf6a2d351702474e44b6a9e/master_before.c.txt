@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION: 
+Data Exposure Due to Insecure Use of Shared Handles.
+
+EXPLANATION:
+The code appears to handle duplicate devices by reusing the boardinfo from an existing device (`olddev->boardinfo`). However, this may lead to unintended consequences if multiple devices share the same `boardinfo` structure. If any device modifies the `boardinfo` contents, it will affect all devices using that handle. This can lead to data exposure, corruption, or other security issues.
+
+Furthermore, without seeing the declaration of `boardinfo`, it's difficult to assess if any other important data is being reassigned. However, since `boardinfo` is being set to `olddev->boardinfo`, we assume it's storing some critical piece of information, hence leading to potential vulnerability.
+
+RECOMMENDATIONS:
+1. Validate the usage of shared handles: Ensure that the reuse of `boardinfo` is intentional and secure.
+2. Make a deep copy of `olddev->boardinfo`: If reusing the boardinfo is necessary, clone it to prevent shared modifications. 
+3. Verify data consistency across all devices using that boardinfo: The program should check for any inconsistencies between device configurations, configurations of the reused boardinfo, and flag any discrepancies.
+
+ORIGINAL CODE:
+	ret = i3c_master_retrieve_dev_info(newdev);
+	if (ret)
+		goto err_free_dev;
+
+	olddev = i3c_master_search_i3c_dev_duplicate(newdev);
+	if (olddev) {
+		newdev->boardinfo = olddev->boardinfo;

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15
+VULNERABILITY_DESCRIPTION:
+Buffer misuse through accessing memory after changing the type in a union.
+
+EXPLANATION:
+In the given code snippet, a union is used to store either a character pointer or an integer value. Initially, `buf.name` is assigned the address of the string `"Hello World"`. Later, `buf.nameID` is assigned a value that was derived from `buf.name`. Then, `buf.name` is accessed as if it were a character pointer again. This presents a problem: after the union's `nameID` field is used to store a value, the memory layout of the union has effectively changed, and the previously-stored pointer in `buf.name` is no longer valid. The subsequent access to `buf.name` can lead to undefined behavior, as it may access memory that was never properly initialized as a string.
+
+RECOMMENDATIONS:
+- Ensure that when switching between the union's fields, you properly initialize the correct field and avoid using the other fields until you switch back. In this case, if you must use the `nameID` field, consider using a different data structure or separating the `name` and `nameID` fields.
+- Never use a value that was stored in one field as if it applies to a different field without proper initialization.
+- If memory safety is a concern, consider using a safer language or data structure that checks the types and accesses of data.
+
+ORIGINAL CODE:
+
+
+#define NAME_TYPE 1
+#define ID_TYPE 2
+struct MessageBuffer{
+    int msgType;
+    union {
+        char *name;
+        int nameID;
+    };
+};
+
+int main (int argc, char **argv) {
+    struct MessageBuffer buf;
+    char *defaultMessage = "Hello World";
+    buf.msgType = NAME_TYPE;
+    buf.name = defaultMessage;
+    printf("Pointer of buf.name is %p\n", buf.name);
+
+    /* This particular value for nameID is used to make the code architecture-independent. If coming from untrusted input, it could be any value. */
+
+    buf.nameID = (int)(defaultMessage + 1);
+    printf("Pointer of buf.name is now %p\n", buf.name);
+    if (buf.msgType == NAME_TYPE) {
+        printf("Message: %s\n", buf.name);
+    } else {
+        printf("Message: Use ID %d\n", buf.nameID);
+    }
+}

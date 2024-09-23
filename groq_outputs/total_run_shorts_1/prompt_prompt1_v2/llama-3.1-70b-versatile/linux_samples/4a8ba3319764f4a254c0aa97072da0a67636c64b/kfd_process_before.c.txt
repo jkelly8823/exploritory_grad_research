@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION: Potential use-after-free vulnerability.
+EXPLANATION:
+The given code snippet appears to be a part of an error handling path in the Linux kernel. On line 5, the 'hash_del_rcu' function is called, which may lead to the 'process' structure being freed. However, after calling 'synchronize_rcu' to ensure the removal is visible to all CPU cores, the code still accesses 'process' in line 7 by calling 'mmu_notifier_unregister_no_release' on 'process->mm'. This is potentially problematic because if the 'process' structure is indeed freed due to 'hash_del_rcu', accessing 'process' after synchronization could lead to a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the 'mmu_notifier_unregister_no_release' call happens before the 'process' structure can be freed. This can be achieved by calling 'mmu_notifier_unregister_no_release' before 'hash_del_rcu', and using an access check to ensure 'process' is not used after it is potentially freed.
+
+Alternatively, if 'process' cannot be guaranteed to be alive after 'hash_del_rcu', dynamically assign it to a local variable, check the local variable after the 'synchronize_rcu' call and only use the local variable for 'mmu_notifier_unregister_no_release' when safe to do so:
+
+```c
+struct mm_struct *local_process_mm = process->mm;
+if (local_process_mm) {
+    mmu_notifier_unregister_no_release(&process->mmu_notifier, local_process_mm);
+}
+```
+
+ORIGINAL CODE:
+
+```c
+if (err != 0)
+    goto err_process_pqm_init;
+
+return process;
+
+err_process_pqm_init:
+hash_del_rcu(&process->kfd_processes);
+synchronize_rcu();
+mmu_notifier_unregister_no_release(&process->mmu_notifier, process->mm);
+```

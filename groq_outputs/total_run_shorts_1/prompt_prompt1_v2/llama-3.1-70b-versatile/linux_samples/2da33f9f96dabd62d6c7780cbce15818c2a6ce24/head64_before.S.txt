@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: ENTRY(startup_continue)
+VULNERABILITY_DESCRIPTION:
+Unvalidated System Call
+
+EXPLANATION:
+This code segment contains a vulnerable system call. The tm (test mask) instruction checks if LPP ( Licensed Program Products ) is available, but it directly uses the result of this check to execute other instructions without validating the system's state.
+
+The vulnerability arises because a successful test mask instruction can lead to instructions that manipulate system registers without proper validation. If an adversary could interfere with the system's state before the test mask instruction, they could potentially induce incorrect results, leading to an exploitable condition.
+
+RECOMMENDATIONS:
+To fix this vulnerability, validate the system's state after the test mask instruction to ensure that the system is in a correct state before executing the other instructions.
+
+Change:
+```
+tm	__LC_STFLE_FAC_LIST+6,0x80	# LPP available ?
+jz	0f
+```
+
+To:
+```
+tm	__LC_STFLE_FAC_LIST+6,0x80	# LPP available ?
+jz	0f
+;
+; Validate system state here
+;
+```
+
+Additionally, you may consider introducing checks to verify the integrity of system registers and state variables before and after the vulnerable instructions.
+
+ORIGINAL CODE:
+```
+__HEAD
+ENTRY(startup_continue)
+	tm	__LC_STFLE_FAC_LIST+6,0x80	# LPP available ?
+	jz	0f
+	xc	__LC_LPP+1(7,0),__LC_LPP+1	# clear lpp and current_pid
+	mvi	__LC_LPP,0x80			#   and set LPP_MAGIC
+	.insn	s,0xb2800000,__LC_LPP		# load program parameter
+```

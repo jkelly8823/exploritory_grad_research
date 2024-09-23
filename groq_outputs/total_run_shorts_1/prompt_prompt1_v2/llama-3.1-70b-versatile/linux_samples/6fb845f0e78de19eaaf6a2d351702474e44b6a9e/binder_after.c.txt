@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 32
+VULNERABILITY_DESCRIPTION:
+The code uses a while loop with strsep and hlist_for_each_entry_safe without handling a potential out-of-order iteration.
+EXPLANATION:
+The vulnerability lies in the use of hlist_for_each_entry_safe function call which is supposed to iterate the hlist safely by handling removals and reoders concurrently.
+However, if one of the items on the list is removed (e.g., because init_binder_device failed) or reordered, the hlist_for_each_entry_safe will attempt to continue the iteration, but it won't properly update it's internal tracking. This can lead to either: 
+1) itterating the same items again resulting in an infinite loop, or 
+2) missing certain entries.
+
+Here, since 'goto err_init_binder_device_failed;' statements are used above the loop, it's not guaranteed that a failure in init_binder_device() will get properly cleaned from the hlist making the loop liable to the aforementioned concerns. 
+
+RECOMMENDATIONS:
+Instead of performing the removal directly in the loop consider the following: 
+Use a different data structure other than a linked list, if possible. Linked lists will always be prone to this vulnerability. If it is necessary to use a linked list consider adding separate tracking variables or secondary methods to handle missing or reordered entries. Alternatively consider creating another list and then performing the deletion from there when the specific items have been found by searching.
+
+ To handle reordering and guaranteed loop completion (if this is required based on context), mark the entry with a status flag instead of immediately deleting it from the list and then after the loop completes all the removals for flagged items should be handled.
+
+ The removal of this bug depends on what additional functionalities or behaviors are expected in your method.
+
+ORIGINAL CODE:
+static int __init binder_init(void)
+{
+	int ret;
+	char *device_name, *device_tmp;
+	struct binder_device *device;
+	struct hlist_node *tmp;
+	char *device_names = NULL;
+
+	ret = binder_alloc_shrinker_init();
+	if (ret)
+		return ret;
+				    &transaction_log_fops);
+	}
+
+	if (strcmp(binder_devices_param, "") != 0) {
+		/*
+		* Copy the module_parameter string, because we don't want to
+		* tokenize it in-place.
+		 */
+		device_names = kstrdup(binder_devices_param, GFP_KERNEL);
+		if (!device_names) {
+			ret = -ENOMEM;
+			goto err_alloc_device_names_failed;
+		}
+
+		device_tmp = device_names;
+		while ((device_name = strsep(&device_tmp, ","))) {
+			ret = init_binder_device(device_name);
+			if (ret)
+				goto err_init_binder_device_failed;
+		}
+	}
+
+	ret = init_binderfs();
+	if (ret)
+		goto err_init_binder_device_failed;
+
+	return ret;
+
+err_init_binder_device_failed:
+	hlist_for_each_entry_safe(device, tmp, &binder_devices, hlist) {

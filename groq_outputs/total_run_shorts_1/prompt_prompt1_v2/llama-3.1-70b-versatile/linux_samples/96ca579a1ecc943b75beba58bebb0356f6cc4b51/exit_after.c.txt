@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 11-12
+VULNERABILITY_DESCRIPTION: Use of unchecked user input and repetition of safety checks
+
+EXPLANATION: 
+The code snippet uses `access_ok()` to check if a certain memory area is accessible for writing, and if so, it calls `user_access_begin()` and `unsafe_put_user()` to write user-provided input to that memory area. However, the use of `unsafe_put_user()` is concerning as it allows writing arbitrary data to user space, potentially leading to data corruption or other security issues. Furthermore, the repeated checks `if (!infop)` and `if (!access_ok(VERIFY_WRITE, infop, sizeof(*infop)))` are problematic since they always refer to `infop`, but there is no functionality that would change the state of `infop` between the checks. This repeated checking for the same condition could mask other potential issues. The main concern though is the possibility of `info.cause` and `signo` containing unchecked user input which can lead to vulnerabilities like buffer overflows.
+
+RECOMMENDATIONS:
+- Instead of using `unsafe_put_user()`, use `put_user()` which checks if the value can be safely written to the user space location, and if not, returns -EFAULT.
+- Instead of always using `access_ok(VERIFY_WRITE, infop, sizeof(*infop))`, consider verifying that `infop` actually points to a valid location (e.g., not NULL), and handle other potential invalid input.
+- Always validate and sanitize the input from `info.cause` and `signo` to prevent the introduction of vulnerabilities.
+
+ORIGINAL CODE:
+```c
+	if (!infop)
+		return err;
+
+	if (!access_ok(VERIFY_WRITE, infop, sizeof(*infop)))
+		goto Efault;
+
+	user_access_begin();
+	unsafe_put_user(signo, &infop->si_signo, Efault);
+	unsafe_put_user(0, &infop->si_errno, Efault);
+	unsafe_put_user(info.cause, &infop->si_code, Efault);
+	if (!infop)
+		return err;
+
+	if (!access_ok(VERIFY_WRITE, infop, sizeof(*infop)))
+		goto Efault;
+
+	user_access_begin();
+	unsafe_put_user(signo, &infop->si_signo, Efault);
+	unsafe_put_user(0, &infop->si_errno, Efault);
+	unsafe_put_user(info.cause, &infop->si_code, Efault);
+```

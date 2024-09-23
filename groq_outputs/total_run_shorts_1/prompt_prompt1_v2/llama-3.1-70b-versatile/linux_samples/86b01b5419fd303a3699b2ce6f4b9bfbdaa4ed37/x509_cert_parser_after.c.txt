@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION: 
+Use after free vulnerability. 
+The function x509_free_certificate(cert) is being called after kfree(ctx) without ensuring that 'cert' is not still being used by the freed context 'ctx'.
+
+EXPLANATION:
+The 'error_decode' label seems to handle an error case by freeing 'ctx' but still proceeds to call functions that may use or belong to the 'ctx' context. In this case, the function 'x509_free_certificate(cert)' is called after 'ctx' has been freed, potentially using the freed context 'ctx'. If 'cert' belongs to 'ctx' or uses it in any way, calling 'x509_free_certificate(cert)' after 'ctx' has been freed could result in unpredictable behavior or crashes.
+
+RECOMMENDATIONS:
+To fix this issue, ensure that 'cert' is not dependent on 'ctx' and will not use 'ctx' after it has been freed. If 'cert' is part of 'ctx', then move 'x509_free_certificate(cert)' before 'kfree(ctx)'. If 'cert' does not depend on 'ctx', then ensure that this will remain true in all uses of this function, possibly by adding a documentation comment or using a code analysis tool to enforce this.
+
+ORIGINAL CODE:
+```c
+return cert;
+
+error_decode:
+	kfree(ctx);
+error_no_ctx:
+	x509_free_certificate(cert);
+error_no_cert:
+```

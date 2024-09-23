@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-18
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds Write Vulnerability
+
+EXPLANATION:
+The vulnerability is present in the fact that the `insert` variable is not being validated against the bounds of the `coalesced_mmio` array. Although `insert` is taken from `ring->last`, it is then incremented and assigned back to `ring->last`. However, this operation is performed without checking if the resulting value of `insert` exceeds the maximum index of the `coalesced_mmio` array. 
+
+The `coalesced_mmio_has_room` function does perform a validation on `avail`, but this validation only checks if there is enough room in the buffer, not that `insert` is within bounds. As a result, the `memcpy` function may access memory outside of the bounds of the `coalesced_mmio` array.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a bounds check should be performed on `insert` before using it as an index for the `coalesced_mmio` array. Additionally, it should be validated that the `len` variable does not exceed the size of the `data` array.
+
+```c
+if (insert >= KVM_COALESCED_MMIO_MAX || 
+    insert + len > KVM_COALESCED_MMIO_MAX ||
+    len > sizeof(ring->coalesced_mmio[0].data)) {
+    spin_unlock(&dev->kvm->ring_lock);
+    return -EOPNOTSUPP;
+}
+```
+ORIGINAL CODE:
+```c
+return 1;
+}
+
+static int coalesced_mmio_has_room(struct kvm_coalesced_mmio_dev *dev, u32 last)
+{
+	struct kvm_coalesced_mmio_ring *ring;
+	unsigned avail;
+
+	 * there is always one unused entry in the buffer
+	 */
+	ring = dev->kvm->coalesced_mmio_ring;
+	avail = (ring->first - last - 1) % KVM_COALESCED_MMIO_MAX;
+	if (avail == 0) {
+		/* full */
+		return 0;
+	}
+{
+	struct kvm_coalesced_mmio_dev *dev = to_mmio(this);
+	struct kvm_coalesced_mmio_ring *ring = dev->kvm->coalesced_mmio_ring;
+	__u32 insert;
+
+	if (!coalesced_mmio_in_range(dev, addr, len))
+		return -EOPNOTSUPP;
+
+	spin_lock(&dev->kvm->ring_lock);
+
+	insert = READ_ONCE(ring->last);
+	if (!coalesced_mmio_has_room(dev, insert) ||
+	    insert >= KVM_COALESCED_MMIO_MAX) {
+		spin_unlock(&dev->kvm->ring_lock);
+		return -EOPNOTSUPP;
+	}
+
+	/* copy data in first free entry of the ring */
+
+	ring->coalesced_mmio[insert].phys_addr = addr;
+	ring->coalesced_mmio[insert].len = len;
+	memcpy(ring->coalesced_mmio[insert].data, val, len);
+	ring->coalesced_mmio[insert].pio = dev->zone.pio;
+	smp_wmb();
+	ring->last = (insert + 1) % KVM_COALESCED_MMIO_MAX;
+	spin_unlock(&dev->kvm->ring_lock);
+	return 0;
+}
+```

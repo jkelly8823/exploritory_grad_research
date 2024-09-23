@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Use-after-free vulnerability in skb_dequeue.
+
+EXPLANATION:
+The code is vulnerable to a use-after-free vulnerability when dehydration of skb occurs after skb_dequeue. When skb_dequeue is called, it removes a packet from the queue and returns a pointer to it. However, it's possible that after skb_dequeue is called, the packet is already freed elsewhere in the code (for example, the packet is freed in another thread or by another part of this code). Then, in the line WARN_ON(tmp != skb), skb is used after it's freed. This could cause a use-after-free error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the skb pointer is not used after it's freed. You can avoid this by checking if skb is NULL before using it, and also by not using skb after dev_consume_skb_any(skb) as dev_consume_skb_any(skb) will free the skb. Here is an example of how to fix this:
+
+```
+if (skb->len == 0) {
+    struct sk_buff *tmp = skb_dequeue(&ser->head);
+    if (tmp != NULL) {
+        if (tmp != skb) {
+            WARN_ON(1);
+        }
+        dev_consume_skb_any(tmp);
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```
+if (skb->len == 0) {
+    struct sk_buff *tmp = skb_dequeue(&ser->head);
+    WARN_ON(tmp != skb);
+    dev_consume_skb_any(skb);
+}
+}
+/* Send flow off if queue is empty */
+if (ser->head.qlen <= SEND_QUEUE_LOW &&
+```

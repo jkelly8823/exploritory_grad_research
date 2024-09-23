@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is potentially vulnerable to a buffer overflow attack due to indirect function calls without proper bounds checking.
+
+EXPLANATION:
+The line `call *sys_call_table(,%eax,4)` performs an indirect function call using the value stored in `%eax` as an index into the `sys_call_table` array. However, the `NR_syscalls` check earlier only ensures that `%eax` is within the bounds of the array, but does not prevent `%eax` from containing a value that has been tampered with or overflowed.
+
+A malicious attacker could potentially overflow `%eax` and use it to select a function pointer that is outside the bounds of the `sys_call_table` array, leading to arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, additional bounds checking should be performed on `%eax` to ensure that it is a valid index into the `sys_call_table` array. Additionally, the `sys_call_table` array should be protected against tampering or overflow.
+
+Specifically, consider the following changes:
+- Add additional checks to ensure that `%eax` is a valid index into the `sys_call_table` array.
+- Consider using a more robust bounds checking mechanism, such as a bounds-checking array index.
+- Protect the `sys_call_table` array against tampering or overflow by using data execution prevention (DEP) or other memory protection mechanisms.
+
+ORIGINAL CODE:
+
+	jnz sysenter_audit
+sysenter_do_call:
+	cmpl $(NR_syscalls), %eax
+	jae syscall_badsys
+	call *sys_call_table(,%eax,4)
+	movl %eax,PT_EAX(%esp)
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
+	movl TI_flags(%ebp), %ecx
+
+syscall_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp resume_userspace
+END(syscall_badsys)
+	CFI_ENDPROC
+
+.macro FIXUP_ESPFIX_STACK

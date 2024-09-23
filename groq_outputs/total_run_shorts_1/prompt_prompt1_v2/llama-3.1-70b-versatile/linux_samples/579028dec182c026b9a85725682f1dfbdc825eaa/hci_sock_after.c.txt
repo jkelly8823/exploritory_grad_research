@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-11
+VULNERABILITY_DESCRIPTION:
+The hci_dev_put() function is called within a loop that iterates over multiple sockets, without checking whether hdev is NULL before calling hci_dev_put(). However, hci_dev_put() should only be called after hci_pi(sk)->hdev has been set to NULL.
+
+However, more immediately concerning in this snippet is the nullification of hci_pi(sk)->hdev, followed by hci_dev_put(hdev). This presents a potential double-free vulnerability. A null-check is not present before hci_dev_put(hdev) is called.
+
+EXPLANATION:
+The issue arises because hdev could be freed before the loop has finished iterating over all sockets. If any subsequent iteration of the loop tries to access hdev or free it again after it has already been freed, a double-free error will occur. Additionally, in this given snippet, if there is another thread or user-space accessing this memory, it could result in 'use after free' error.
+
+RECOMMENDATIONS:
+ 
+Check whether hci_pi(sk)->hdev is NULL before calling hci_dev_put() to prevent double-free error.
+
+More safety might be added by utilizing reference counting. If the code has multiple users for a given device, a safe release process would incrementally decrement count as users are dissociated. Also, locking can be implemented for thread-safe handling.
+
+Here's a code recommendation:
+
+```c
+if (hci_pi(sk)->hdev == hdev) {
+    hci_pi(sk)->hdev = NULL;
+    sk->sk_err = EPIPE;
+    sk->sk_state = BT_OPEN;
+
+    if (hdev)
+        hci_dev_put(hdev);
+}
+```
+
+ORIGINAL CODE:
+    /* Detach sockets from device */
+    read_lock(&hci_sk_list.lock);
+    sk_for_each(sk, &hci_sk_list.head) {
+        lock_sock(sk);
+        if (hci_pi(sk)->hdev == hdev) {
+            hci_pi(sk)->hdev = NULL;
+            sk->sk_err = EPIPE;
+            sk->sk_state = BT_OPEN;
+
+            hci_dev_put(hdev);
+        }
+        release_sock(sk);
+    }
+    read_unlock(&hci_sk_list.lock);
+}

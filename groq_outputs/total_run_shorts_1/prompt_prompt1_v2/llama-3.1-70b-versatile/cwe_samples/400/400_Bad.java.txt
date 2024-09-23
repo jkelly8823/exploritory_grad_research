@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 14
+VULNERABILITY_DESCRIPTION:
+The code swallows and then immediately re-raises an InterruptedException when catching it in the execute method and when catching it in the run method of the anonymous Runnable. This can cause issues with interrupted threads and lead to unexpected behavior.
+
+EXPLANATION:
+InterruptedException is thrown when a thread is interrupted while waiting or sleeping. In the given code, the catch block of InterruptedException in both the execute method and the run method is simply re-throwing the interrupted status with Thread.currentThread().interrupt(). This action can have unintended consequences on the execution of the program, as the interruption status of the thread is being cleared and then re-set without any recovery actions being performed.
+
+Additionally, when InterruptedException is caught, exception handling best practices dictate that you should either handle the exception (i.e., actually do something about it), or propagate the exception to the caller (possibly wrapping the original exception in a higher-level exception to avoid API breakages). Swallowing and re-throwing exceptions in the way this code does could potentially cause confusion for future code maintenance.
+
+RECOMMENDATIONS:
+1. Consider properly handling the InterruptedException instead of just re-throwing it. Recovery actions could include error logging, notification of some kind, and/or cleanup or close operations for system resources that are no longer needed due to the thread being interrupted.
+
+2. Wrap the original InterruptedException in a higher-level exception if you must re-throw an exception. This way, code that catches higher-level exceptions can also get a reference to the InterruptedException cause. This would not lead to the complete loss of information about the original cause of the interruption.
+
+3. Rethrow the InterruptedException to force the code that initiated the action that got interrupted (in a separate thread) to handle the interruption properly.
+
+4. Perform the necessary cleanup actions and resource deallocations when interrupted before exiting.
+
+ORIGINAL CODE:
+
+
+                  class Worker implements Executor {
+                        ...public void execute(Runnable r) {
+                              
+                                 try {...}catch (InterruptedException ie) {
+                                    
+                                       
+                                       // postpone response
+                                       Thread.currentThread().interrupt();
+                                 }
+                           }
+                           public Worker(Channel ch, int nworkers) {...}
+                           protected void activate() {
+                              
+                                 Runnable loop = new Runnable() {
+                                    
+                                       public void run() {
+                                          
+                                             try {for (;;) {Runnable r = ...;r.run();}}catch (InterruptedException ie) {...}
+                                       }
+                                 };new Thread(loop).start();
+                           }
+                     }
+               
+               

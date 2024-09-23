@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26-27, 31-32
+VULNERABILITY_DESCRIPTION:
+The code contains potential null pointer dereferences and possible use of uninitialized data when working with the `crng`, `fast_pool`, and `input_pool` structures.
+
+EXPLANATION:
+In lines 26-27 and 31-32, the code does not check if the `crng`, `fast_pool`, and `input_pool` pointers are null before operating on them. This could lead to null pointer dereferences, which can result in a segmentation fault or unpredictable behavior. Additionally, there is no guarantee that the structures have been initialized before their pointers are dereferenced.
+
+Furthermore, in line 31-32, the `crng_fast_load` function is called with a potential null pointer argument (`buffer`), without any null check. This can lead to a null pointer dereference inside the function.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the code should add null checks before operating on the `crng`, `fast_pool`, and `input_pool` pointers. The following code changes are recommended:
+
+- Before calling functions that operate on these pointers, add the following check: `if (crng == NULL || fast_pool == NULL || input_pool == NULL) return;`
+- Before passing these pointers to functions, ensure that they are not null: `if (crng != NULL && fast_pool != NULL && input_pool != NULL) { crng_fast_load(buffer, count); }`
+
+Additionally, ensure that the `crng`, `fast_pool`, and `input_pool` structures are properly initialized before their pointers are used.
+
+ORIGINAL CODE:
+```
+ * its value (from 0->1->2).
+ */
+static int crng_init = 0;
+#define crng_ready() (likely(crng_init > 1))
+static int crng_init_cnt = 0;
+#define CRNG_INIT_CNT_THRESH (2*CHACHA20_KEY_SIZE)
+static void _extract_crng(struct crng_state *crng,
+			  __u32 out[CHACHA20_BLOCK_WORDS]);
+
+	if (!spin_trylock_irqsave(&primary_crng.lock, flags))
+		return 0;
+	if (crng_init != 0) {
+		spin_unlock_irqrestore(&primary_crng.lock, flags);
+		return 0;
+	}
+	p = (unsigned char *) &primary_crng.state[4];
+{
+	unsigned long v, flags;
+
+	if (crng_ready() &&
+	    time_after(jiffies, crng->init_time + CRNG_RESEED_INTERVAL))
+		crng_reseed(crng, crng == &primary_crng ? &input_pool : NULL);
+	spin_lock_irqsave(&crng->lock, flags);
+	if (arch_get_random_long(&v))
+	fast_mix(fast_pool);
+	add_interrupt_bench(cycles);
+
+	if (unlikely(crng_init == 0)) {
+		if ((fast_pool->count >= 64) &&
+		    crng_fast_load((char *) fast_pool->pool,
+				   sizeof(fast_pool->pool))) {
+			fast_pool->count = 0;
+{
+	struct entropy_store *poolp = &input_pool;
+
+	if (unlikely(crng_init == 0)) {
+		crng_fast_load(buffer, count);
+		return;
+	}
+```

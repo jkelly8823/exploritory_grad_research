@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Unvalidated Function Pointer Use and Unauthenticated Data Use
+
+EXPLANATION:
+The given code snippet appears to be handling interrupt requests (IRQs) for a hardware component. In this snippet, we see that the 'oh' struct has a function pointer 'xlate_irq' which can potentially be used to transform IRQ numbers. However, there is no validation on the 'xlate_irq' function pointer before using it. If this pointer is set by untrusted user input or an untrusted source, this can be used to execute arbitrary code.
+
+Additionally, unauthenticated data is used directly in computing 'irq' variable, which directly assigns value to the 'start' and 'end' fields of the resource.
+
+RECOMMENDATIONS:
+To fix this vulnerability, validate the function pointer 'xlate_irq' before using it. Check if it points to a valid function that has been initialized by your code, and also, validate user or untrusted input which sets the value to this function pointer. Here's an example of how you can validate and null check the function pointer:
+```c
+if (oh->xlate_irq && oh->xlate_irq != NULL) {
+	irq = oh->xlate_irq((oh->mpu_irqs + i)->irq);
+}
+```
+Moreover, before using data (like 'irq') it is necessary to validate if the data provided is within the range as per specification. Even without more context of the larger project, validation for these values should be a good start.
+
+ORIGINAL CODE:
+```c
+mpu_irqs_cnt = _count_mpu_irqs(oh);
+for (i = 0; i < mpu_irqs_cnt; i++) {
+	unsigned int irq;
+
+	if (oh->xlate_irq)
+		irq = oh->xlate_irq((oh->mpu_irqs + i)->irq);
+	else
+		irq = (oh->mpu_irqs + i)->irq;
+	(res + r)->name = (oh->mpu_irqs + i)->name;
+	(res + r)->start = irq;
+	(res + r)->end = irq;
+	(res + r)->flags = IORESOURCE_IRQ;
+	r++;
+}
+```

@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7, 13-14
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability in the `kvm_lapic_sync_from_vapic` and `kvm_lapic_set_vapic_addr` functions.
+
+EXPLANATION:
+In both functions, the code uses `offset_in_page(vcpu->arch.apic->vapic_addr)` without proper bounds checking. Additionally, in `kvm_lapic_set_vapic_addr`, the new address is stored directly without any validation. This can lead to a potential buffer overflow when writing data to the `vapic` buffer.
+
+The vulnerability occurs when `vcpu->arch.apic->vapic_addr` is not properly sanitized or validated, allowing an attacker to potentially overwrite adjacent memory locations. This can lead to code execution or data corruption.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+* Validate the `vapic_addr` before using it to calculate the offset in the page.
+* Check if the calculated offset is within the bounds of the `vapic` buffer to prevent potential overflows.
+* Use safer alternatives to `kmap_atomic` and `kunmap_atomic` such as `kmap` and `kunmap` if possible.
+* Consider using address space layout randomization (ASLR) to make the location of the `vapic` buffer more unpredictable.
+
+ORIGINAL CODE:
+```c
+void kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu)
+{
+    ...
+    vapic = kmap_atomic(vcpu->arch.apic->vapic_page);
+    data = *(u32 *)(vapic + offset_in_page(vcpu->arch.apic->vapic_addr));
+    kunmap_atomic(vapic);
+    ...
+}
+
+void kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
+{
+    vcpu->arch.apic->vapic_addr = vapic_addr;
+    ...
+}
+```

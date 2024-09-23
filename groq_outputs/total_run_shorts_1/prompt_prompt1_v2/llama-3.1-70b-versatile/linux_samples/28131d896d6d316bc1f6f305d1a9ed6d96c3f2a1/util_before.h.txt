@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability
+EXPLANATION:
+The code is vulnerable to a use-after-free vulnerability because the `wake_up_process` function is called before checking if the `kthread_create` function failed or not. If `kthread_create` fails, `ret` will be non-zero, and `w->task` is set to `NULL`. However, if `ret` is not checked before calling `wake_up_process`, and `w->task` is `NULL`, this will lead to undefined behavior.
+
+In this case, the code checks the return value of `kthread_create` after calling `wake_up_process`, which means if `ret` is non-zero, `w->task` is set to `NULL`, and `wake_up_process` is still called with the now-free `w->task`. 
+
+While this is a rare occurrence since the `wake_up_process` function will only fail when the process state already equals TASK_RUNNING or TASK_INTERRUPTIBLE state, in which case, the calling path above won't fail (because success operation flows after wake up are also included), still waking on the thread before the pointer value even reaches to potentially null for non-task code can still result in loss of data and application instability.
+ 
+
+RECOMMENDATIONS:
+To fix this vulnerability, the call to `wake_up_process(w->task)` should be made after checking the return value of `kthread_create`. Here's the corrected code:
+
+```c
+if (fn)
+	w->fn = fn;
+w->task = kthread_create(__mt76_worker_fn, w, "mt76-%s %s",
+				 name, dev_name);
+
+ret = PTR_ERR_OR_ZERO(w->task);
+if (ret) {
+	w->task = NULL;
+	return ret;
+}
+// after we have ensured ret = 0 before calling wake up
+wake_up_process(w->task);
+return 0;
+```
+Note how this revised code moved the line `wake_up_process(w->task);` one level down and was moved under a new added parenthesis closing bracket.
+
+ORIGINAL CODE:
+
+
+	if (fn)
+		w->fn = fn;
+	w->task = kthread_create(__mt76_worker_fn, w, "mt76-%s %s",
+				 name, dev_name);
+
+	ret = PTR_ERR_OR_ZERO(w->task);
+	if (ret) {
+		w->task = NULL;
+		return ret;
+	}
+
+	wake_up_process(w->task);
+
+	return 0;
+}
+
+static inline void mt76_worker_schedule(struct mt76_worker *w)

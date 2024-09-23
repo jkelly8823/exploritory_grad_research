@@ -1,0 +1,14 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2, 4
+VULNERABILITY_DESCRIPTION:
+Impersonation vulnerability due to incorrect order of operations.
+EXPLANATION:
+The provided code snippet reveals a vulnerability due to improper handling of impersonation. Specifically, it appears to impersonate a client using `ImpersonateNamedPipeClient`, and then attempts to perform some operations, but the `RevertToSelf` call is outside the provided snippet. If this order of operations remains in the full code base and not properly handled after this snippet, this poses an issue. The impersonation should always be reverted as soon as possible after use to prevent escalated privileges from persisting.
+
+However, also of note, it's also critical that we never leave this Impersonated context open (via calling RevertToSelf) after the File creation occurs due to when file creation occurs, it uses current impersonation context which will also apply to file ACL. To negate this potential we should call RevertToSelf prior to the file creation in order to remove current impersonation before creating new file and applying its ACL. When reverted we'll create the file with proper credential ACLs that are expected.
+RECOMMENDATIONS:
+1) Ensure `RevertToSelf` is called immediately after using the impersonated context.
+2) Reorder the code so that `RevertToSelf` is called before creation of the file to prevent sensitive file creation using elevated privileges.
+3) Review code using impersonation contexts to ensure consistent and proper use.
+ORIGINAL CODE:
+bool DoSecureStuff(HANDLE hPipe) {bool fDataWritten = false;ImpersonateNamedPipeClient(hPipe);HANDLE hFile = CreateFile(...);/../RevertToSelf()/../}

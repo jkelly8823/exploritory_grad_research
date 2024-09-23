@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The vulnerability is in the line `call *sys_call_table(,%eax,4)`. This line of code is vulnerable to a potential TOCTOU (Time-of-Check-to-Time-of-Use) vulnerability.
+
+EXPLANATION:
+The code snippet appears to be part of the Linux kernel's system call handling mechanism. The `sys_call_table` is used to dispatch system calls based on the value of `eax`. However, there is no explicit validation that the dereferenced function pointer points to a valid system call handler. This could allow an attacker to potentially exploit a TOCTOU vulnerability if the table is modified between the time it is validated and the time the call is made.
+
+However a closer inspection reveals that while the table is an array of function pointers, the addresses are relative, hence, as long as these addresses point to the correct address in the `sys_call_table`, the vulnerability potential is greatly diminished due to the checks before this instruction (i.e. the checks that `eax` is in bounds). Therefore, given that validation occurs to ensure the table index is valid prior to this line, the likelihood of this being a TOCTOU has narrowed.
+
+RECOMMENDATIONS:
+1. Validate the function pointer: Before making the call, it would be good to validate the function pointer to ensure it points to a valid location in the `sys_call_table` and is the correct offset.
+2. Implement address space layout randomization (ASLR): This would make it harder for an attacker to determine where the functions in the table are residing.
+3. Ensure bounds checking: The existing code appears to be doing this. It would be reasonable to assume that while these checks reduce the TOCTOU threat, a review of the code that loads `eax` with this index might provide assurances that this is genuinely secure.
+
+ORIGINAL CODE:
+
+	jnz sysenter_audit
+sysenter_do_call:
+	cmpl $(NR_syscalls), %eax
+	jae sysenter_badsys
+	call *sys_call_table(,%eax,4)
+	movl %eax,PT_EAX(%esp)
+sysenter_after_call:
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
+	movl TI_flags(%ebp), %ecx
+
+syscall_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp syscall_exit
+END(syscall_badsys)
+
+sysenter_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp sysenter_after_call
+END(syscall_badsys)
+	CFI_ENDPROC
+
+.macro FIXUP_ESPFIX_STACK

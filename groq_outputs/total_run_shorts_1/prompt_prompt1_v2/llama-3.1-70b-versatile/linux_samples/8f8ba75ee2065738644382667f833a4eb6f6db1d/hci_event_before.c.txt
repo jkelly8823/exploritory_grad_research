@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Unprotected usage of dynamically allocated memory, potentially leading to memory leaks and dereferencing of dangling pointers.
+
+EXPLANATION:
+The function hci_inquiry_cache_lookup_resolve returns a pointer to a dynamically allocated object. However, this object is not checked for null before its members are accessed. This could lead to segmentation faults or crashes if the function call fails and returns a null pointer. Furthermore, the object is not freed after its usage, which could result in memory leaks if this function is called repeatedly.
+
+Additionally, the line e->name_state = NAME_KNOWN; could potentially lead to a dangling pointer if e is null, but this is not the most severe vulnerability in this code snippet.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, you should add null checks after calling hci_inquiry_cache_lookup_resolve and make sure to free the dynamically allocated object when it's no longer needed. Here's an example of how you could do this:
+
+```c
+e = hci_inquiry_cache_lookup_resolve(hdev, BDADDR_ANY, NAME_NEEDED);
+if (e != NULL && hci_resolve_name(hdev, e) == 0) {
+    e->name_state = NAME_PENDING;
+    free(e);  // Assuming this is the correct place to free e
+    return true;
+}
+```
+
+Also, make sure to handle any exceptions that may occur during the execution of hci_resolve_name.
+```c
+e = hci_inquiry_cache_lookup_resolve(hdev, bdaddr, NAME_PENDING);
+if (e != NULL) {
+    e->name_state = NAME_KNOWN;
+    // free the memory here when it's no longer needed
+    list_del(&e->list);
+    if (name)
+        mgmt_remote_name(hdev, bdaddr, ACL_LINK, 0x00,
+                    e->data.rssi, name, name_len);
+    free(e);  // Assuming this is the correct place to free e
+}
+```
+
+ORIGINAL CODE:
+```c
+return false;
+
+e = hci_inquiry_cache_lookup_resolve(hdev, BDADDR_ANY, NAME_NEEDED);
+if (hci_resolve_name(hdev, e) == 0) {
+    e->name_state = NAME_PENDING;
+    return true;
+}
+return;
+
+e = hci_inquiry_cache_lookup_resolve(hdev, bdaddr, NAME_PENDING);
+if (e) {
+    e->name_state = NAME_KNOWN;
+    list_del(&e->list);
+    if (name)
+        mgmt_remote_name(hdev, bdaddr, ACL_LINK, 0x00,
+                    e->data.rssi, name, name_len);
+}
+
+if (hci_resolve_next_name(hdev))
+    return;
+if (conn->type == ACL_LINK) {
+    conn->state = BT_CONFIG;
+    hci_conn_hold(conn);
+    conn->disc_timeout = HCI_DISCONN_TIMEOUT;
+} else
+    conn->state = BT_CONNECTED;
+
+hci_conn_hold_device(conn);
+```

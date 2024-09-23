@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11, 15-16
+VULNERABILITY_DESCRIPTION:
+ Double-Free Vulnerability
+
+EXPLANATION:
+The provided code snippet appears to be part of a kernel module. In this snippet, memory is reallocated using `krealloc` for the `pmkids` structure. However, if the reallocation fails, the code still increments and updates the `pmkids->bssid_info_count` and `pmkids->length` values. This can lead to a double-free vulnerability when the code later tries to free the `pmkids` structure. This vulnerability is present because when the reallocation fails, the original `pmkids` structure is not updated correctly.
+
+RECOMMENDATIONS:
+To fix this vulnerability, update the `pmkids` structure with the new length and count only after a successful reallocation. In case of failure, do not update the `pmkids` structure. Here is a corrected version of the code:
+```c
+new_pmkids = krealloc(pmkids, newlen, GFP_KERNEL);
+if (!new_pmkids) {
+	err = -ENOMEM;
+	goto error;
+} else {
+	pmkids = new_pmkids;
+	pmkids->length = cpu_to_le32(newlen);
+	pmkids->bssid_info_count = cpu_to_le32(count + 1);
+}
+```
+ORIGINAL CODE:
+```c
+					struct cfg80211_pmksa *pmksa,
+					int max_pmkids)
+{
+	struct ndis_80211_pmkid *new_pmkids;
+	int i, err, newlen;
+	unsigned int count;
+
+	count = le32_to_cpu(pmkids->bssid_info_count);
+	/* add new pmkid */
+	newlen = sizeof(*pmkids) + (count + 1) * sizeof(pmkids->bssid_info[0]);
+
+	new_pmkids = krealloc(pmkids, newlen, GFP_KERNEL);
+	if (!new_pmkids) {
+		err = -ENOMEM;
+		goto error;
+	}
+	pmkids = new_pmkids;
+
+	pmkids->length = cpu_to_le32(newlen);
+	pmkids->bssid_info_count = cpu_to_le32(count + 1);
+```

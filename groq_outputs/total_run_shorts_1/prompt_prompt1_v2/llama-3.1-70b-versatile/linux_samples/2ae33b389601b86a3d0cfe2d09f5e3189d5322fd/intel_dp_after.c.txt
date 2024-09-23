@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Resource timeouts not properly handled, leading to potential denial of service or infinite wait.
+
+EXPLANATION:
+The provided code snippet handles a resource timeout in two different ways, depending on whether an AUX IRQ is available. However, in both cases, the timeout is not properly validated or handled to prevent denial of service or infinite wait scenarios. Specifically, the code does not properly verify that the timer did not expires prematurely due to some unexpected interrupt or signal, allowing for potential DoS attacks or hangs.
+
+RECOMMENDATIONS:
+To address this vulnerability, proper error handling should be implemented for the timeout. This includes:
+
+1. Validating that the wait_event_timeout or wait_for_atomic call was indeed interrupted due to the condition being met and not due to some external interrupt or error.
+2. Repeating the wait if necessary and possibly with reduced intervals to quickly detect failures.
+3. Limiting the amount of retries to prevent infinite wait.
+4. Providing informative error messages and/or logging to aid in troubleshooting.
+
+A snippet of the revised code could look like this:
+
+```c
+int retries = 0;
+while (!done && retries < MAX_RETRIES) {
+    if (has_aux_irq)
+        done = wait_event_timeout(dev_priv->gmbus_wait_queue, C,
+								  msecs_to_jiffies(10));
+    else
+        done = wait_for_atomic(C, 10) == 0;
+    retries++;
+}
+if (!done) {
+    DRM_ERROR("dp aux hw did not signal timeout (has irq: %i) after %i retries!\n",
+              has_aux_irq, retries);
+}
+```
+
+ORIGINAL CODE:
+```c
+#define C (((status = I915_READ_NOTRACE(ch_ctl)) & DP_AUX_CH_CTL_SEND_BUSY) == 0)
+    if (has_aux_irq)
+        done = wait_event_timeout(dev_priv->gmbus_wait_queue, C,
+								  msecs_to_jiffies(10));
+    else
+        done = wait_for_atomic(C, 10) == 0;
+    if (!done)
+        DRM_ERROR("dp aux hw did not signal timeout (has irq: %i)!\n",
+```

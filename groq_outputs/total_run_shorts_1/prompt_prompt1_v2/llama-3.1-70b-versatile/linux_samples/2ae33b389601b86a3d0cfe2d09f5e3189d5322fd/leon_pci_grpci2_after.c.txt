@@ -1,0 +1,121 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None (buffer overflow), and possibly lines with printk (insecure logging)
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability may exist in this code, specifically with the REGSTORE function calls where user-controlled data is being written to a register. Insecure logging practices may also exist in this code with printk function calls.
+
+EXPLANATION:
+The REGSTORE function calls may be vulnerable to a buffer overflow when writing user-controlled data to a register, as the REGLOAD call can be influenced by external data. 
+
+Moreover, printk function calls may be vulnerable to insecure logging practices. While printk is a common logging mechanism in kernel code, it can potentially introduce security issues if not properly managed. Without further information about the logging practices, we cannot conclude the exact vulnerability. However, in general, logs should be sanitized to prevent potential security issues like information disclosure or cross-site scripting.
+
+Additionally, there are several return statements that may result in data truncation, such as returning an integer value from a function that requires an enum type or a pointer. 
+
+Moreover, the bus number is checked against the PCI_SLOT and busno greater than 255 before assigning it to a variable of type unsigned int busno. This can lead to integer problems if the bus number is negative or has a value more than 255.
+
+There also appear to be several magic numbers such as 15, 255 and 0x2 etc, which are directly used in the code. The security concern due to this issue is related to integer problems in different places in the code 
+
+Lastly, there appears to be error handling for some potential errors. There are some potential places which could lead to access to memory after free if not properly locked (like the bus lock which is properly used). Considering we do not know the locking mechanism that would prevent this there is a potential security issue in accessing the memory.
+
+RECOMMENDATIONS:
+To fix the potential vulnerability, consider the following steps:
+
+1. Use secure functions or APIs to validate the user-controlled data before writing it to the registers.
+
+2. Limit the potential size of data that can be written to the registers to avoid buffer overflows.
+
+3. Implement secure logging practices to prevent information disclosure and cross-site scripting issues.
+
+4. Make all return statements correctly typed.
+
+5. Ensure memory access is correctly locked to avoid memory after free and similar problems.
+
+6. Verify integer problems such as sign data in bus no by comparing or casting bus no where necessary.
+
+7. Further prevent integer problems by using local constants instead of direct numbers.
+
+ORIGINAL CODE:
+#define CAP9_IOMAP_OFS 0x20
+#define CAP9_BARSIZE_OFS 0x24
+
+#define TGT 256
+
+struct grpci2_priv {
+    struct leon_pci_info       info;  /* must be on top of this structure */
+    struct grpci2_regs     *regs;
+    char                  irq;
+    if (where & 0x3)
+        return -EINVAL;
+
+    if (bus == 0) {
+        devfn += (0x8 * 6); /* start at AD16=Device0 */
+    } else if (bus == TGT) {
+        bus = 0;
+        devfn = 0; /* special case: bridge controller itself */
+    }
+
+    /* Select bus */
+    spin_lock_irqsave(&grpci2_dev_lock, flags);
+    REGSTORE(priv->regs->ctrl, (REGLOAD(priv->regs->ctrl) & ~(0xff << 16)) |
+    if (where & 0x3)
+        return -EINVAL;
+
+    if (bus == 0) {
+        devfn += (0x8 * 6); /* start at AD16=Device0 */
+    } else if (bus == TGT) {
+        bus = 0;
+        devfn = 0; /* special case: bridge controller itself */
+    }
+
+    /* Select bus */
+    spin_lock_irqsave(&grpci2_dev_lock, flags);
+    REGSTORE(priv->regs->ctrl, (REGLOAD(priv->regs->ctrl) & ~(0xff << 16)) |
+ unsigned int busno = bus->number;
+ int ret;
+
+    if (PCI_SLOT(devfn) > 15 || busno > 255) {
+        *val = ~0;
+        return 0;
+    }
+
+    struct grpci2_priv *priv = grpci2priv;
+    unsigned int busno = bus->number;
+
+    if (PCI_SLOT(devfn) > 15 || busno > 255)
+        return 0;
+
+#ifdef GRPCI2_DEBUG_CFGACCESS
+    printk(KERN_INFO "grpci2_write_config: [%02x:%02x:%x] ofs=%d size=%d "
+        REGSTORE(regs->ahbmst_map[i], priv->pci_area);
+
+    /* Get the GRPCI2 Host PCI ID */
+    grpci2_cfg_r32(priv, TGT, 0, PCI_VENDOR_ID, &priv->pciid);
+
+    /* Get address to first (always defined) capability structure */
+    grpci2_cfg_r8(priv, TGT, 0, PCI_CAPABILITY_LIST, &capptr);
+
+    /* Enable/Disable Byte twisting */
+    grpci2_cfg_r32(priv, TGT, 0, capptr+CAP9_IOMAP_OFS, &io_map);
+    io_map = (io_map & ~0x1) | (priv->bt_enabled ? 1 : 0);
+    grpci2_cfg_w32(priv, TGT, 0, capptr+CAP9_IOMAP_OFS, io_map);
+
+    /* Setup the Host's PCI Target BARs for other peripherals to access,
+     * and do DMA to the host's memory. The target BARs can be sized and
+     * enabled individually.
+            pciadr = 0;
+        }
+    }
+    grpci2_cfg_w32(priv, TGT, 0, capptr+CAP9_BARSIZE_OFS+i*4,
+            bar_sz);
+    grpci2_cfg_w32(priv, TGT, 0, PCI_BASE_ADDRESS_0+i*4, pciadr);
+    grpci2_cfg_w32(priv, TGT, 0, capptr+CAP9_BAR_OFS+i*4, ahbadr);
+    printk(KERN_INFO "        TGT BAR[%d]: 0x%08x (PCI)-> 0x%08x\n",
+        i, pciadr, ahbadr);
+    }
+
+    /* set as bus master and enable pci memory responses */
+    grpci2_cfg_r32(priv, TGT, 0, PCI_COMMAND, &data);
+    data |= (PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+    grpci2_cfg_w32(priv, TGT, 0, PCI_COMMAND, data);
+
+    /* Enable Error respone (CPU-TRAP) on illegal memory access. */
+    REGSTORE(regs->ctrl, CTRL_ER | CTRL_PE);

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code appears to be vulnerable to a potential buffer overflow attack, specifically in the `skb_pull` function.
+
+EXPLANATION:
+The issue is that `skb_pull` is used with a size argument that may exceed the actual size of the available buffer. While the code correctly copies the request data into `smp->preq[1]`, the subsequent use of `skb_pull` to remove that data may trigger an error if the buffer size is smaller than expected. This could lead to unexpected behavior or crashes.
+
+However, a potential buffer overflow issue also lies with the call to `memcpy` because there are no checks performed on `req` to ensure that it does not write past the end of `smp->preq`. 
+
+RECOMMENDATIONS:
+Include bounds checking in the `skb_pull` function and ensure that it does not exceed the valid length of the data buffer. The fix can be as simple as checking the remaining size before pulling the data.
+
+Moreover, to prevent the buffer overflow, there should be a check before copying data into `smp->preq[1]` to ensure that `req` does not exceed the destination buffer. Consider introducing a size check for this operation to prevent writing past the end of `smp->preq`.
+
+ORIGINAL CODE:
+```
+if (!test_and_set_bit(HCI_CONN_LE_SMP_PEND, &conn->hcon->flags))
+	smp = smp_chan_create(conn);
+else
+	smp = conn->smp_chan;
+
+if (!smp)
+	return SMP_UNSPECIFIED;
+
+smp->preq[0] = SMP_CMD_PAIRING_REQ;
+memcpy(&smp->preq[1], req, sizeof(*req));
+skb_pull(skb, sizeof(*req));
+```

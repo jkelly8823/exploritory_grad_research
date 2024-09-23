@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code contains a potential buffer overflow vulnerability when handling lengths greater than 0x80.
+
+EXPLANATION:
+The code checks the validity of lengths greater than 0x80 by verifying that it doesn't exceed the available data length (`n > datalen - dp`), and then constructs the length by reading multiple bytes from the data. However, it doesn't verify if the constructed length exceeds the remaining data buffer size. If an attacker provides a specially crafted input, they might be able to overflow the buffer and potentially execute arbitrary code.
+
+RECOMMENDATIONS:
+To address this issue, additional checks should be performed to verify that the constructed length doesn't exceed the remaining data buffer size. For example:
+
+```c
+if (len < 0 || len > datalen - dp) {
+    // Handle error: invalid or overflowed length
+    goto data_overrun_error;
+}
+```
+
+This check should be added after the loop that constructs the `len` variable.
+
+ORIGINAL CODE:
+```c
+    /* Extract a tag from the data */
+    tag = data[dp++];
+    if (tag == ASN1_EOC) {
+        /* It appears to be an EOC. */
+        if (data[dp++] != 0)
+            goto invalid_eoc;
+        if (--indef_level <= 0) {
+
+    /* Extract the length */
+    len = data[dp++];
+    if (len <= 0x7f)
+        goto check_length;
+
+    if (unlikely(len == ASN1_INDEFINITE_LENGTH)) {
+        /* Indefinite length */
+        if (unlikely((tag & ASN1_CONS_BIT) == ASN1_PRIM << 5))
+    }
+
+    n = len - 0x80;
+    if (unlikely(n > sizeof(len) - 1))
+        goto length_too_long;
+    if (unlikely(n > datalen - dp))
+        goto data_overrun_error;
+    len = 0;
+    for (; n > 0; n--) {
+        len <<= 8;
+        len |= data[dp++];
+    }
+check_length:
+    if (len > datalen - dp)
+        goto data_overrun_error;
+    dp += len;
+    goto next_tag;
+
+length_too_long:
+```

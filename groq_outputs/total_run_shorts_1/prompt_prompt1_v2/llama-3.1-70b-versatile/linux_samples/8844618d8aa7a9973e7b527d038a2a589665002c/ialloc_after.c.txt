@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in the memset function call.
+
+EXPLANATION:
+The memset function is used to clear the contents of a buffer (bh->b_data) by setting all its bytes to a specified value (in this case, 0). However, the size of the buffer that is being cleared is calculated as `(EXT4_INODES_PER_GROUP(sb) + 7) / 8`, which is a byte value that is dependent on the return value of `EXT4_INODES_PER_GROUP(sb)`. 
+
+There is a potential for an integer overflow if `EXT4_INODES_PER_GROUP(sb)` is a very large value, which could cause the memset function to write beyond the bounds of the buffer, resulting in undefined behavior.
+
+Additionally, there is a lack of validation of the buffer size before calling memset, which increases the risk of a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+- Validate the buffer size before calling memset to ensure that it is within the allocated bounds of the buffer.
+- Check if `EXT4_INODES_PER_GROUP(sb)` could potentially cause an integer overflow. If so, use a safer way to calculate the buffer size.
+
+Here is an example of how to validate the buffer size before calling memset:
+
+```c
+size_t buffer_size = (EXT4_INODES_PER_GROUP(sb) + 7) / 8;
+size_t alloc_size = sb->s_blocksize;
+
+if (buffer_size > alloc_size) {
+    // handle buffer overflow error
+}
+
+memset(bh->b_data, 0, buffer_size);
+```
+
+ORIGINAL CODE:
+
+```c
+}
+
+	ext4_lock_group(sb, block_group);
+	if (ext4_has_group_desc_csum(sb) &&
+	    (desc->bg_flags & cpu_to_le16(EXT4_BG_INODE_UNINIT))) {
+		if (block_group == 0) {
+			ext4_unlock_group(sb, block_group);
+			unlock_buffer(bh);
+			ext4_error(sb, "Inode bitmap for bg 0 marked "
+				   "uninitialized");
+			err = -EFSCORRUPTED;
+			goto out;
+		}
+		memset(bh->b_data, 0, (EXT4_INODES_PER_GROUP(sb) + 7) / 8);
+		ext4_mark_bitmap_end(EXT4_INODES_PER_GROUP(sb),
+				     sb->s_blocksize * 8, bh->b_data);
+		set_bitmap_uptodate(bh);
+
+		/* recheck and clear flag under lock if we still need to */
+		ext4_lock_group(sb, group);
+		if (ext4_has_group_desc_csum(sb) &&
+		    (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))) {
+			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_BLOCK_UNINIT);
+			ext4_free_group_clusters_set(sb, gdp,
+				ext4_free_clusters_after_init(sb, group, gdp));
+			ext4_block_bitmap_csum_set(sb, group, gdp,
+```

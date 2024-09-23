@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 14
+VULNERABILITY_DESCRIPTION:
+The code contains a potential resource leak vulnerability. In the IWL_UCODE_TLV_CMD_VERSIONS case, it returns an error code -ENOMEM without freeing the previously allocated memory in the iwl_dbg_tlv_alloc function call, leading to a resource leak.
+
+EXPLANATION:
+In the IWL_UCODE_TLV_CMD_VERSIONS case, if tlv_alloc returns an error, the function returns -ENOMEM immediately without checking the return value of iwl_dbg_tlv_alloc in the previous case. This means that if iwl_dbg_tlv_alloc was successful in the previous case, its allocated memory will not be freed, resulting in a resource leak.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to free the allocated memory in the iwl_dbg_tlv_alloc function call when an error occurs in the IWL_UCODE_TLV_CMD_VERSIONS case. This can be achieved by adding a check for the return value of tlv_alloc and freeing the previously allocated memory if tlv_alloc fails.
+
+For example:
+
+```c
+case IWL_UCODE_TLV_TYPE_HCMD:
+case IWL_UCODE_TLV_TYPE_REGIONS:
+case IWL_UCODE_TLV_TYPE_TRIGGERS:
+    if (iwlwifi_mod_params.enable_ini)
+        iwl_dbg_tlv_alloc(drv->trans, tlv, false);
+    break;
+case IWL_UCODE_TLV_CMD_VERSIONS:
+    temp_tlv_alloc = tlv_alloc;  // temp variable to hold return value of tlv_alloc
+    if (temp_tlv_alloc)
+        return -ENOMEM; 
+    drv->fw.phy_integration_ver_len = tlv_len;
+    break;
+```
+Then after the switch statement add:
+
+```c
+if (iwlwifi_mod_params.enable_ini)
+    iwl_dbg_tlv_free(drv->trans, tlv); // assuming iwl_dbg_tlv_free is a free function for iwl_dbg_tlv_alloc
+```
+
+ORIGINAL CODE:
+
+
+#define DRV_DESCRIPTION	"Intel(R) Wireless WiFi driver for Linux"
+MODULE_DESCRIPTION(DRV_DESCRIPTION);
+MODULE_AUTHOR(DRV_AUTHOR);
+MODULE_LICENSE("GPL");
+
+#ifdef CONFIG_IWLWIFI_DEBUGFS
+static struct dentry *iwl_dbgfs_root;
+	return 0;
+}
+
+static int iwl_parse_tlv_firmware(struct iwl_drv *drv,
+				const struct firmware *ucode_raw,
+				struct iwl_firmware_pieces *pieces,
+				struct iwl_ucode_capabilities *capa,
+		case IWL_UCODE_TLV_TYPE_HCMD:
+		case IWL_UCODE_TLV_TYPE_REGIONS:
+		case IWL_UCODE_TLV_TYPE_TRIGGERS:
+			if (iwlwifi_mod_params.enable_ini)
+				iwl_dbg_tlv_alloc(drv->trans, tlv, false);
+			break;
+		case IWL_UCODE_TLV_CMD_VERSIONS:
+				return -ENOMEM;
+			drv->fw.phy_integration_ver_len = tlv_len;
+			break;
+		default:
+			IWL_DEBUG_INFO(drv, "unknown TLV: %d\n", tlv_type);
+			break;
+		}

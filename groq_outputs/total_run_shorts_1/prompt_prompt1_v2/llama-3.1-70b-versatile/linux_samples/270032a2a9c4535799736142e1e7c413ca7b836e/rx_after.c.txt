@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION: Missing bounds checking on cipher selection.
+EXPLANATION: 
+The given code snippet evaluates the 'cipher' value within the 'conf' structure of 'rx->key'. However, it does not validate whether 'rx->key' or 'rx->key->conf' are null before accessing their contents. This could lead to a segmentation fault or crash, especially if 'rx->key' is null, resulting in a null pointer dereference. Furthermore, only specific cipher suites are explicitly checked, and any other cipher suite automatically falls under the 'default' case without any validation, potentially allowing unsupported or insecure cipher suites.
+
+RECOMMENDATIONS:
+Before evaluating the 'cipher' value, always validate that 'rx->key' and 'rx->key->conf' are not null. Implementing extensive error handling and bounds checking can mitigate potential crashes or undefined behavior.
+
+To address these concerns, consider the following modifications:
+
+1.  Add null checks before accessing `rx->key` and `rx->key->conf`:
+
+    ```c
+if (rx->key && rx->key->conf) {
+    switch (rx->key->conf.cipher) {
+    // ...
+    }
+} else {
+    // Handle the case when rx->key or rx->key->conf is null
+    // This may involve returning an error or dropping the packet
+}
+```
+
+2.  Improve cipher suite handling by explicitly rejecting unsupported cipher suites instead of falling under the 'default' case:
+
+    ```c
+switch (rx->key->conf.cipher) {
+case WLAN_CIPHER_SUITE_WEP40:
+case WLAN_CIPHER_SUITE_WEP104:
+case WLAN_CIPHER_SUITE_TKIP:
+    // ...
+case WLAN_CIPHER_SUITE_[SUPPORTED_SUITE_1]:
+case WLAN_CIPHER_SUITE_[SUPPORTED_SUITE_2]:
+    break;
+default:
+    // Reject unsupported cipher suites
+    return RX_DROP_UNUSABLE;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+ * Copyright 2007-2010	Johannes Berg <johannes@sipsolutions.net>
+ * Copyright 2013-2014  Intel Mobile Communications GmbH
+ * Copyright(c) 2015 - 2017 Intel Deutschland GmbH
+ * Copyright (C) 2018-2021 Intel Corporation
+ */
+
+#include <linux/jiffies.h>
+#include <linux/slab.h>
+	if (is_multicast_ether_addr(hdr->addr1))
+		return RX_DROP_UNUSABLE;
+
+	if (rx->key) {
+		/*
+		 * We should not receive A-MSDUs on pre-HT connections,
+		 * and HT connections cannot use old ciphers. Thus drop
+		 * them, as in those cases we couldn't even have SPP
+		 * A-MSDUs or such.
+		 */
+		switch (rx->key->conf.cipher) {
+		case WLAN_CIPHER_SUITE_WEP40:
+		case WLAN_CIPHER_SUITE_WEP104:
+		case WLAN_CIPHER_SUITE_TKIP:
+			return RX_DROP_UNUSABLE;
+		default:
+			break;
+		}
+	}
+
+	return __ieee80211_rx_h_amsdu(rx, 0);
+}
+
+#ifdef CONFIG_MAC80211_MESH
+```

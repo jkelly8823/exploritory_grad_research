@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a use-after-free issue.
+EXPLANATION:
+In the provided code snippet, the `sco_conn_unlock(conn)` function call is made before the `hci_conn_put(conn->hcon)` function call. However, the `conn` pointer is not checked for NULL before being dereferenced, and then used after the potential release of `conn->hcon`. 
+
+Additionally, after the `sco_conn_unlock(conn)` function call, there is no check to prevent the `conn` pointer from being freed. The subsequent usage of `conn->hcon` could result in a crash or unintended behavior if `conn` is freed.
+
+It is particularly noteworthy that the `hci_conn_put(conn->hcon)` function call, which potentially frees `conn->hcon`, is nested within an if statement checking if `conn->hcon` is not NULL. Still, the code fails to assess whether `conn` itself has been freed before trying to set `conn->hcon`.
+
+RECOMMENDATIONS:
+The fix for this vulnerability is to ensure that the `conn` pointer is checked for NULL after the `sco_conn_unlock(conn)` function call and before its subsequent use. This can be done by moving the `hci_conn_put(conn->hcon)` function call to before the `sco_conn_unlock(conn)` function call or by checking if `conn` is not NULL before the call to `sco_conn_unlock(conn)`.
+
+```c
+if (conn) {
+    sco_conn_lock(conn);
+    conn->sk = NULL;
+    sco_pi(sk)->conn = NULL;
+    if (conn->hcon)
+        hci_conn_put(conn->hcon);
+    sco_conn_unlock(conn);
+}
+```
+
+ORIGINAL CODE:
+
+    sco_sock_clear_timer(sk);
+    sco_chan_del(sk, err);
+    bh_unlock_sock(sk);
+    sco_sock_kill(sk);
+    }
+
+    hcon->sco_data = NULL;
+
+    BT_DBG("sk %p, conn %p, err %d", sk, conn, err);
+
+    if (conn) {
+        sco_conn_lock(conn);
+        conn->sk = NULL;
+        sco_pi(sk)->conn = NULL;
+        sco_conn_unlock(conn);
+
+        if (conn->hcon)
+            hci_conn_put(conn->hcon);
+    }
+
+    sk->sk_state = BT_CLOSED;
+    sk->sk_err   = err;
+    sk->sk_state_change(sk);

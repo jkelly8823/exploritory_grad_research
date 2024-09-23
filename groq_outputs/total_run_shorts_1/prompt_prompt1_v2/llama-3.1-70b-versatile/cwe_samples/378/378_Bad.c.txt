@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Insecure use of `tmpfile()` without proper validation of file descriptor and error handling in context, making it vulnerable to potential `tmpfile()` based attacks.
+
+EXPLANATION:
+The provided code uses the `tmpfile()` function to create a temporary file. However, it doesn't perform any validation on the file descriptor aside from checking if it is `NULL`. In the event of an error, `tmpfile()` will return `NULL` but also set `errno`. The presence of `perror()` is a good practice for error reporting. Still, it lacks proper error handling and information. Most notably, the code snippet is incomplete as it doesn't validate whether the removed temporary file corresponds to the created temporary file or whether any actual data was written to the temporary file.
+
+Additionally, according to the POSIX documentation, the return value of `tmpfile()` is indistinguishable from a valid but unused file descriptor value because `tmpfile()` checks whether the file descriptor can be reused before creating a temporary file. As a result, an attacker who is able to create many valid and unused file descriptor values may influence how a victim process's application behaves when passing those valid but unused file descriptors to other components.
+
+Moreover, deleting or renaming a file using `remove()` in the sequence as shown here should check its `errno` to prevent malicious tampering. It is vital to verify the type of file created before deleting it.
+
+Lastly, attackers may exploit the window between the writing of data and the deletion of a file, allowing the attacker to exploit some code that writes to or uses files directly. No control flow validation has been noticed in the provided snippet to address such potential race condition attempts.
+
+RECOMMENDATIONS:
+When dealing with files and error handling:
+1. Verify whether file descriptor is a valid and is write-able after opening a new file, in this case using `tmpfile()`
+2. Make sure that after checking for a null value, additional error detection is also performed.
+3. Make use of or verify how `tmpnam()` has undergone validation to be sure the correct thing will be created in the correct fashion.
+4. Always implement race condition protections to secure file operations.
+4. Provide safe parameters and arguments to file functions to prevent file descriptor leak attacks
+
+ORIGINAL CODE:
+
+FILE *stream;if( (stream = tmpfile()) == NULL ) {
+        
+               perror("Could not open new temporary file\n");return (-1);
+         }
+         // write data to tmp file
+         ...// remove tmp filermtmp();
+   
+   

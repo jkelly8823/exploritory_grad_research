@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-19
+VULNERABILITY_DESCRIPTION:
+A double-free vulnerability is possible if the allocation of 'sops' fails, causing a potential memory leak because the previously allocated 'kbuf' is not freed.
+
+EXPLANATION:
+In the given code snippet, memory allocations for 'kbuf' and 'sops' are performed using kmalloc. However, if the allocation for 'sops' fails, the function immediately returns -ENOMEM without freeing the previously allocated 'kbuf'. This can cause a memory leak and potentially lead to a double-free vulnerability if the caller of this function attempts to free the 'kbuf' later.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the allocated 'kbuf' should be freed before returning -ENOMEM when the allocation for 'sops' fails. Here's a recommended fix:
+
+```
+kbuf = kmalloc(sizeof(*kbuf) * maxevents, GFP_KERNEL);
+if (!kbuf)
+    return -ENOMEM;
+...
+sops = kmalloc(sizeof(*sops) * nsops, GFP_KERNEL);
+if (!sops) {
+    kfree(kbuf);  // Free kbuf to prevent memory leak
+    return -ENOMEM;
+}
+```
+
+ORIGINAL CODE:
+
+    mm_segment_t fs;
+	long ret, err, i;
+
+	if (maxevents <= 0 ||
+			maxevents > (INT_MAX/sizeof(*kbuf)) ||
+			maxevents > (INT_MAX/sizeof(*events)))
+		return -EINVAL;
+	if (!access_ok(VERIFY_WRITE, events, sizeof(*events) * maxevents))
+		return -EFAULT;
+	kbuf = kmalloc(sizeof(*kbuf) * maxevents, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+	fs = get_fs();
+
+	if (nsops < 1 || nsops > SEMOPM)
+		return -EINVAL;
+	if (!access_ok(VERIFY_READ, tsops, sizeof(*tsops) * nsops))
+		return -EFAULT;
+	sops = kmalloc(sizeof(*sops) * nsops, GFP_KERNEL);
+	if (!sops)
+		return -ENOMEM;
+	err = 0;

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 9, 10
+VULNERABILITY_DESCRIPTION:
+Use of Untrusted Data in a Dynamic Memory Function (e.g., strdup) and Use of Untrusted Data in a Signal Handler.
+
+EXPLANATION:
+The provided code snippet contains two main vulnerabilities. The first vulnerability is the use of untrusted data in a dynamic memory function (strdup). In the main function, the program uses strdup to duplicate the string passed as an argument (argv[1]) into the logMessage variable. This is a problem because it allows a malicious user to control the amount of memory allocated by the program, which can potentially lead to a denial-of-service attack.
+
+The second vulnerability is the use of untrusted data in a signal handler. The handler function uses the untrusted logMessage variable in a syslog call without validating its contents. This is a problem because a malicious user could potentially inject-format strings or other malicious data into the syslog call.
+
+Additionally, the call to sleep() function in both handler and main functions is also a problem. It artificially increases the size of the timing window, making the demonstration of this weakness easier. However, in a real-world application, using sleep() in this manner could introduce additional vulnerabilities, such as making it easier for an attacker to exploit other vulnerabilities.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the code should:
+
+1. Validate the contents of argv[1] before passing it to strdup. A good way to do this is to check the length of the string to prevent overflow.
+2. Use a secure method to copy the string, such as snprintf or strlcpy, which limits the size of the output string.
+3. Instead of passing untrusted data to syslog, sanitize it to prevent format string injection attacks.
+4. Avoid using sleep() function in signal handlers and other critical sections of code.
+5. Use a secure signal handling mechanism, such as sigaction instead of signal.
+
+ORIGINAL CODE:
+
+char *logMessage;
+void handler (int sigNum) {
+   syslog(LOG_NOTICE, "%s\n", logMessage);free(logMessage);
+   /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+   sleep(10);exit(0);
+}
+int main (int argc, char* argv[]) {
+   logMessage = strdup(argv[1]);
+   /* Register signal handlers. */
+   signal(SIGHUP, handler);signal(SIGTERM, handler);
+   /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+   sleep(10);
+}

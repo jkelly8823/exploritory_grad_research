@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16, 25-26
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability, and Use-After-Free Vulnerability.
+
+EXPLANATION:
+In this code snippet, there are two potential issues. Firstly, in the initial block of code, the variable 'hdev' is passed to multiple functions (hid_parse, hid_hw_start). However, it's possible that one of these functions may free the 'hdev' object and return, but the remaining code may still attempt to use this already freed object. This is a classic use-after-free situation.
+
+Secondly, in the a4_remove function, the 'a4' object is freed. However, if this object has previously been freed (perhaps in the err_free label in the initial block of code) and not set to NULL, the program will attempt to free the object again when the a4_remove function is called. This is known as a double-free vulnerability.
+
+It's worth noting, the provided code doesn't explicitly free the 'hdev' object within the functions called on it. Therefore, the 'use-after-free' vulnerability assumption might not hold true in this specific context.
+
+RECOMMENDATIONS:
+- Ensure that the 'hdev' object is not freed within the called functions, and wrap its usage with proper checks against pointer state.
+- Add a check to prevent double-free in the a4_remove function. Set the 'a4' object to NULL after freeing it.
+
+ORIGINAL CODE:
+
+	struct a4tech_sc *a4;
+	int ret;
+
+	a4 = kzalloc(sizeof(*a4), GFP_KERNEL);
+	if (a4 == NULL) {
+		hid_err(hdev, "can't alloc device descriptor\n");
+		ret = -ENOMEM;
+		goto err_free;
+	}
+
+	a4->quirks = id->driver_data;
+
+	ret = hid_parse(hdev);
+	if (ret) {
+		hid_err(hdev, "parse failed\n");
+		goto err_free;
+	}
+
+	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+	if (ret) {
+		hid_err(hdev, "hw start failed\n");
+		goto err_free;
+	}
+
+	return 0;
+err_free:
+	kfree(a4);
+	return ret;
+}
+
+static void a4_remove(struct hid_device *hdev)
+{
+	struct a4tech_sc *a4 = hid_get_drvdata(hdev);
+
+	hid_hw_stop(hdev);
+	kfree(a4);
+	a4 = NULL; // Add this line
+}
+
+static const struct hid_device_id a4_devices[] = {
+	{ HID_USB_DEVICE(USB_VENDOR_ID_A4TECH, USB_DEVICE_ID_A4TECH_WCP32PU),
+	.input_mapped = a4_input_mapped,
+	.event = a4_event,
+	.probe = a4_probe,
+	.remove = a4_remove,
+};
+module_hid_driver(a4_driver);
+
+MODULE_LICENSE("GPL");

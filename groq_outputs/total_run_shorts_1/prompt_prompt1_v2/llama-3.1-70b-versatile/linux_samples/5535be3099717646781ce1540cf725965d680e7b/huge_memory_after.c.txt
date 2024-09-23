@@ -1,0 +1,96 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 56-57
+VULNERABILITY_DESCRIPTION:
+The `follow_trans_huge_pmd` function returns a `struct page *` pointer to a page that may be modified after the function returns, potentially leading to use-after-free vulnerabilities.
+EXPLANATION:
+In the `follow_trans_huge_pmd` function, the code calculates the page offset based on the address and stores it in the `page` variable. The problem arises from the fact that the `page` variable is a pointer to a page that may be modified or unmapped by other threads after this function returns. This is a common issue in kernel code, where page tables are constantly being modified.
+However, I identified a potential issue with the page offset calculation when the called function does not ensure that the returned `page` pointer remains valid. Specifically, I point out the line in the function that shifts the `addr` down by `PAGE_SHIFT` and uses this to offset the page, but doesn't ensure this still refers to the correct page when the functions returns.
+This could potentially lead to use-after-free vulnerabilities if the returned page is used after it has been unmapped or modified by another thread.
+RECOMMENDATIONS:
+To fix this issue, the `follow_trans_huge_pmd` function should ensure that the returned `page` pointer remains valid and that the page is not modified or unmapped by other threads until it is safe to do so. One way to achieve this is by using `get_page_unless_zero` to get a reference to the page before returning it. If the `page` is no longer valid after getting a reference to it, you should safely handle the failure case.
+Additionally, consider using a synchronization mechanism such as spinlocks or semaphores to ensure that the returned page is not modified or unmapped until it is safe to do so.
+
+ORIGINAL CODE:
+
+
+	assert_spin_locked(pmd_lockptr(mm, pmd));
+
+	/* FOLL_GET and FOLL_PIN are mutually exclusive. */
+	if (WARN_ON_ONCE((flags & (FOLL_PIN | FOLL_GET)) ==
+			 (FOLL_PIN | FOLL_GET)))
+		return NULL;
+	return VM_FAULT_FALLBACK;
+}
+
+/* FOLL_FORCE can write to even unwritable PMDs in COW mappings. */
+static inline bool can_follow_write_pmd(pmd_t pmd, struct page *page,
+					struct vm_area_struct *vma,
+					unsigned int flags)
+{
+	/* If the pmd is writable, we can write to the page. */
+	if (pmd_write(pmd))
+		return true;
+
+	/* Maybe FOLL_FORCE is set to override it? */
+	if (!(flags & FOLL_FORCE))
+		return false;
+
+	/* But FOLL_FORCE has no effect on shared mappings */
+	if (vma->vm_flags & (VM_MAYSHARE | VM_SHARED))
+		return false;
+
+	/* ... or read-only private ones */
+	if (!(vma->vm_flags & VM_MAYWRITE))
+		return false;
+
+	/* ... or already writable ones that just need to take a write fault */
+	if (vma->vm_flags & VM_WRITE)
+		return false;
+
+	/*
+	 * See can_change_pte_writable(): we broke COW and could map the page
+	 * writable if we have an exclusive anonymous page ...
+	 */
+	if (!page || !PageAnon(page) || !PageAnonExclusive(page))
+		return false;
+
+	/* ... and a write-fault isn't required for other reasons. */
+	if (vma_soft_dirty_enabled(vma) && !pmd_soft_dirty(pmd))
+		return false;
+	return !userfaultfd_huge_pmd_wp(vma, pmd);
+}
+
+struct page *follow_trans_huge_pmd(struct vm_area_struct *vma,
+				   unsigned long addr,
+				   unsigned int flags)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	struct page *page;
+
+	assert_spin_locked(pmd_lockptr(mm, pmd));
+
+	page = pmd_page(*pmd);
+	VM_BUG_ON_PAGE(!PageHead(page) && !is_zone_device_page(page), page);
+
+	if ((flags & FOLL_WRITE) &&
+	    !can_follow_write_pmd(*pmd, page, vma, flags))
+		return NULL;
+
+	/* Avoid dumping huge zero page */
+	if ((flags & FOLL_DUMP) && is_huge_zero_pmd(*pmd))
+		return ERR_PTR(-EFAULT);
+
+	/* Full NUMA hinting faults to serialise migration in fault paths */
+	if ((flags & FOLL_NUMA) && pmd_protnone(*pmd))
+		return NULL;
+
+	if (!pmd_write(*pmd) && gup_must_unshare(flags, page))
+		return ERR_PTR(-EMLINK);
+
+	page += (addr & ~HPAGE_PMD_MASK) >> PAGE_SHIFT;
+	VM_BUG_ON_PAGE(!PageCompound(page) && !is_zone_device_page(page), page);
+
+	return page;
+}
+
+/* NUMA hinting page fault entry point for trans huge pmds */

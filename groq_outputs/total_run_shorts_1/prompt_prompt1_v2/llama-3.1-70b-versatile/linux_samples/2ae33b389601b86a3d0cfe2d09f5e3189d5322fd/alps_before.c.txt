@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-20
+VULNERABILITY_DESCRIPTION:
+Potential unhandled error in `alps_enter_command_mode` and related functions.
+This code does not properly check the return values of several functions, potentially leading to errors being overlooked.
+EXPLANATION:
+In the given code snippet, `alps_enter_command_mode` is a function that seems to handle entering command mode for a PS/2 mouse. The function calls several other functions, such as `alps_rpt_cmd`, and checks their return values, but not all of these return values are properly checked in the calling functions.
+
+For example, in `alps_set_defaults`, a return value from `alps_match_table` is checked, and a specific error code (0) is returned when the protocol version is V3. However, this return value is not checked consistently across all the calling functions.
+
+Furthermore, the function `alps_enter_command_mode` itself has several error paths, but they all return -1. However, not all the calling functions properly check for this error code.
+
+This inconsistent error checking can lead to errors being overlooked, which can have serious consequences.
+
+RECOMMENDATIONS:
+Properly check the return values of all the functions called by `alps_enter_command_mode` and its related functions. Use specific error codes and handle them consistently in the code. Avoid simply returning -1 for all error cases, as this can make error diagnosis difficult.
+
+Here is an example of how the error checking can be improved:
+
+```c
+static inline int alps_exit_command_mode(struct psmouse *psmouse)
+{
+    int ret = -EIO;
+
+    if (alps_enter_command_mode(psmouse, NULL)) {
+        psmouse_err(psmouse, "Failed to enter command mode\n");
+        return ret;
+    }
+
+    // ... rest of the function
+}
+```
+
+ORIGINAL CODE:
+
+
+(Note: The vulnerable code snippet has many code blocks but the exact code lines start after a sequence.)
+
+```c
+if (alps_enter_command_mode(psmouse, NULL)) {
+    return -1;
+}
+
+...
+
+if (alps_enter_command_mode(psmouse, NULL)) {
+    psmouse_err(psmouse, "Failed to enter command mode\n");
+    goto error;
+}
+
+...
+
+if (alps_enter_command_mode(psmouse, NULL) ||
+    alps_absolute_mode_v3(psmouse)) {
+    psmouse_err(psmouse, "Failed to enter absolute mode\n");
+    goto error;
+}
+
+...
+
+if (alps_enter_command_mode(psmouse, NULL) ||
+    alps_command_mode_read_reg(psmouse, 0xc2d9) == -1 ||
+    alps_command_mode_write_reg(psmouse, 0xc2cb, 0x00))
+    goto error;
+
+...
+
+if (alps_match_table(psmouse, priv, e7, ec) == 0) {
+    return 0;
+} else if (ec[0] == 0x88 && ec[1] == 0x08) {
+    priv->proto_version = ALPS_PROTO_V3;
+    alps_set_defaults(priv);
+}
+```

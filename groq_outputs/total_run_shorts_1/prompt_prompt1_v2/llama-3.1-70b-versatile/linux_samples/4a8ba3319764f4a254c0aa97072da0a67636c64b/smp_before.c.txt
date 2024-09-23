@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Concurrent Access to Shared Variables without Proper Synchronization
+
+EXPLANATION:
+The vulnerability lies in accessing and updating the `cpu_callin_map[cpu]` variable without proper synchronization. This variable appears to be a shared data structure accessed by multiple CPUs. The code snippet employs `preempt_disable()` to disable preemptability but fails to use any synchronization mechanisms (e.g., locks, atomic operations) when accessing `cpu_callin_map[cpu]`. This lack of synchronization can lead to a data corruption issue due to concurrent access and updates from multiple CPUs.
+
+Additionally, even though `smp_wmb()` (a memory barrier for SMP systems) is called before accessing `cpu_callin_map[cpu]`, it only ensures that all memory operations prior to the barrier are visible to other CPUs but does not prevent concurrent accesses and updates to the shared variable.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper synchronization should be used when accessing shared variables. This can be achieved by using a lock, such as a spinlock, or by utilizing atomic operations to ensure thread-safe access.
+
+A simple fix can be to use an atomic variable for `cpu_callin_map[cpu]` and update it using atomic operations:
+
+```c
+static atomic_t cpu_callin_map[NR_CPUS];
+
+...
+
+atomic_set(&cpu_callin_map[cpu], 1);
+```
+
+Alternatively, if locking is preferred, a spinlock can be used to synchronize access:
+
+```c
+static spinlock_t cpu_callin_map_lock = SPIN_LOCK_UNLOCKED;
+static int cpu_callin_map[NR_CPUS];
+
+...
+
+spin_lock(&cpu_callin_map_lock);
+cpu_callin_map[cpu] = 1;
+spin_unlock(&cpu_callin_map_lock);
+```
+
+ORIGINAL CODE:
+```c
+smp_store_cpu_info(cpu);
+set_dec(tb_ticks_per_jiffy);
+preempt_disable();
+
+if (smp_ops->setup_cpu)
+    smp_ops->setup_cpu(cpu);
+if (smp_ops->take_timebase)
+    notify_cpu_starting(cpu);
+set_cpu_online(cpu, true);
+
+/*
+ * CPU must be marked active and online before we signal back to the
+ * master, because the scheduler needs to see the cpu_online and
+ * cpu_active bits set.
+ */
+smp_wmb();
+cpu_callin_map[cpu] = 1;
+
+local_irq_enable();
+
+cpu_startup_entry(CPUHP_ONLINE);
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-5
+VULNERABILITY_DESCRIPTION: 
+Insecure Handling of Spin Lock Initialization
+
+EXPLANATION: 
+This code snippet initializes a spin lock using `spin_lock_init` in a conditional block. However, there is no apparent synchronization mechanism in place to prevent concurrent access to the `dev->power` structure. Specifically, the check `if (!dev->power.early_init)` followed by `spin_lock_init` may be vulnerable to a time-of-check-to-time-of-use (TOCTOU) attack or a data race if multiple threads are executing this code.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider the following recommendations:
+
+1. Ensure that the critical section is properly protected by a lock. However, in this specific case, since we're initializing the lock, we can't use it to protect its own initialization.
+2. Consider using a double-checked locking idiom to minimize the performance impact of locking. However, this approach is not foolproof and should be implemented carefully.
+3. If possible, use a initialization-once idiom (e.g., the singleton pattern) to ensure the `spin_lock_init` is only called once.
+
+ORIGINAL CODE:
+```c
+{
+	if (!dev->power.early_init) {
+		spin_lock_init(&dev->power.lock);
+		dev->power.qos = NULL;
+		dev->power.early_init = true;
+	}
+}
+
+static inline void device_pm_sleep_init(struct device *dev) {}
+
+static inline void device_pm_add(struct device *dev) {}
+
+static inline void device_pm_remove(struct device *dev)
+{
+	pm_runtime_remove(dev);
+}
+
+static inline void device_pm_move_before(struct device *deva,
+```

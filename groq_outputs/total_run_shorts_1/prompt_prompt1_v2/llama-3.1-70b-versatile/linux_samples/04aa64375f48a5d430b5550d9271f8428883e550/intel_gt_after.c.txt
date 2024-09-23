@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+Unvalidated input from 'engine->class' to a conditional statement that sets 'rb.bit' to an arbitrary value.
+
+EXPLANATION:
+In lines 4-5, 'rb.bit' is directly manipulated based on the value of 'engine->class'. While there is a check for the 'GRAPHICS_VER(i915)' value, 'engine->class' is not validated before being used in this conditional statement. This allows an arbitrary 'engine->class' value to influence the resulting value of 'rb.bit'. This is concerning as 'rb.bit' is used to update a device register with the 'intel_uncore_write_fw' function.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to validate the value of 'engine->class' before using it in the conditional statement. This can be done by specifying a finite list of acceptable 'engine->class' values and checking against this list:
+
+```c
+if (GRAPHICS_VER(i915) == 12 && (engine->class == VIDEO_DECODE_CLASS ||
+    engine->class == VIDEO_ENHANCEMENT_CLASS ||
+    engine->class == COMPUTE_CLASS)) {
+    // Code here should validate the rb.bit values before setting them
+    switch (engine->class) {
+    case VIDEO_DECODE_CLASS:
+    case VIDEO_ENHANCEMENT_CLASS:
+    case COMPUTE_CLASS:
+        rb.bit = _MASKED_BIT_ENABLE(rb.bit);
+        break;
+    default:
+        // Handle invalid or unexpected engine->class values
+        break;
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+	if (!i915_mmio_reg_offset(rb.reg))
+		continue;
+
+	if (GRAPHICS_VER(i915) == 12 && (engine->class == VIDEO_DECODE_CLASS ||
+	    engine->class == VIDEO_ENHANCEMENT_CLASS ||
+	    engine->class == COMPUTE_CLASS))
+		rb.bit = _MASKED_BIT_ENABLE(rb.bit);
+
+	intel_uncore_write_fw(uncore, rb.reg, rb.bit);
+	awake |= engine->mask;
+}
+```

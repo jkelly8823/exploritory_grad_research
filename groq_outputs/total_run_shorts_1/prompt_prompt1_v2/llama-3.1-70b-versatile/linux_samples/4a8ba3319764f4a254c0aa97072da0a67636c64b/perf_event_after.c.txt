@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Potential integer overflow vulnerability when writing to the counter.
+
+EXPLANATION:
+The issue is with the line where the `write_counter` function is called with the argument `(u64)(-left) & 0xffffffff`. This line suggests that the `left` variable is being cast to an unsigned 64-bit integer and then bitwise ANDed with 0xffffffff to limit its value to 32 bits. However, if the value of `left` is greater than 2^31-1, the cast to a 64-bit unsigned integer followed by the bitwise AND could result in an incorrect value being written to the counter.
+
+RECOMMENDATIONS:
+To avoid the potential integer overflow, consider using a safer approach to limit the value of `left` before casting it to a 64-bit unsigned integer. One possible solution is to use a ternary operator to check if `left` exceeds the maximum value that can be represented by a 32-bit signed integer, and if so, use the maximum value instead:
+
+```c
+armpmu->write_counter(event, (u64)(left > 0x7fffffff ? 0x7fffffff : -left));
+```
+
+Alternatively, you could also consider using a safer type for the `left` variable, such as a `uint32_t` or `int32_t`, to prevent it from exceeding the maximum value that can be represented by a 32-bit integer.
+
+ORIGINAL CODE:
+
+```c
+	ret = 1;
+	}
+
+	/*
+	 * Limit the maximum period to prevent the counter value
+	 * from overtaking the one we are about to program. In
+	 * effect we are reducing max_period to account for
+	 * interrupt latency (and we are being very conservative).
+	 */
+	if (left > (armpmu->max_period >> 1))
+		left = armpmu->max_period >> 1;
+
+	local64_set(&hwc->prev_count, (u64)-left);
+
+	armpmu->write_counter(event, (u64)(-left) & 0xffffffff);
+```

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Arbitrary Code Execution vulnerability via eval function with user input.
+
+EXPLANATION:
+The eval function in Perl interprets the string passed to it as Perl code and executes it. In this code snippet, the eval function is used to dynamically call one of the config_file_* functions with arguments passed from user input. However, this allows an attacker to inject arbitrary code by manipulating the 'action' parameter. Since the 'action' parameter is not properly sanitized, an attacker can inject malicious Perl code, potentially leading to arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, instead of using the eval function to dynamically call a function, consider using a dispatch table or a lookup table to map the 'action' parameter to a predefined set of allowed functions. This approach limits the functions that can be called to only those that are defined and intended to be used, preventing an attacker from injecting arbitrary code.
+
+Additionally, consider validating and sanitizing the 'action' parameter to prevent any unexpected input from being used.
+
+ ORIGINAL CODE:
+```perl
+use CGI qw(:standard);
+sub config_file_add_key {
+    my ($fname, $key, $arg) = @_;
+    # code to add a field/key to a file goes here
+}
+sub config_file_set_key {
+    my ($fname, $key, $arg) = @_;
+    # code to set key to a particular file goes here
+}
+sub config_file_delete_key {
+    my ($fname, $key, $arg) = @_;
+    # code to delete key from a particular file goes here
+}
+sub handleConfigAction {
+    my ($fname, $action) = @_;
+    my $key = param('key');
+    my $val = param('val');
+    
+    # this is super-efficient code, especially if you have to invoke
+    # any one of dozens of different functions!
+    my $code = "config_file_${action}_key(\$fname, \$key, \$val);";
+    eval($code);
+}
+$configfile = "/home/cwe/config.txt";
+print header;
+if (defined(param('action'))) {
+    handleConfigAction($configfile, param('action'));
+} else {
+    print "No action specified!\n";
+}
+```

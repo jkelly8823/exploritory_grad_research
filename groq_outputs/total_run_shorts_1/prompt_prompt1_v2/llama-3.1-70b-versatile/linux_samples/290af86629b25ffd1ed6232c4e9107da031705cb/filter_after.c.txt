@@ -1,0 +1,18 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Resource Error in the code.
+EXPLANATION:
+The code snippet contains an uncontrolled resource error, specifically when calling `bpf_prog_select_runtime(fp, &err)`. If the `err` returns a non-zero value, the function will call `goto out_err_free;` and skip freeing the `old_prog` memory. However, if the `bpf_prog_select_runtime(fp, &err)` call is successful, the `old_prog` is freed correctly with `kfree(old_prog);`. A potential vulnerability exists if there are other paths in the code not shown that could lead to `old_prog` not being freed.
+RECOMMENDATIONS:
+To resolve this vulnerability, ensure that all possible paths that allocate resources also properly deallocate them. We recommend adding additional error checking code before each return or exit, or modify the control flow to properly handle deallocations. It is essential to ensure `old_prog` is always freed, even if an error occurs. This can be achieved by also moving the `kfree(old_prog);` before the `goto out_err_free;` statement.
+ORIGINAL CODE:
+		 */
+		goto out_err_free;
+
+	fp = bpf_prog_select_runtime(fp, &err);
+	if (err)
+		goto out_err_free;
+
+	kfree(old_prog);
+	return fp;

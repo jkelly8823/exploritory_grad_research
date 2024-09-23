@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a buffer overflow attack due to a lack of bounds checking on the `WidgetList` array.
+
+EXPLANATION:
+The code allocates memory for `numWidgets` pointers to `Widget` objects, but then assigns a value to `WidgetList[numWidgets]`, which is out of bounds of the allocated array. This can cause memory corruption and potentially lead to arbitrary code execution. Additionally, `GetUntrustedSizeValue()` is assumed to return an untrusted value, which means it can be subjected to manipulation by an attacker.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the loop should be changed to ensure it does not assign a value to `WidgetList[numWidgets]`, which is out of bounds of the allocated array. Also, the `numWidgets` variable should be validated before using it, to ensure it does not exceed the maximum allowed value.
+
+Here's a possible fix:
+
+```c
+int i;
+unsigned int numWidgets = GetUntrustedSizeValue();
+if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {
+    ExitError("Incorrect number of widgets requested!");
+}
+Widget **WidgetList = (Widget **)malloc((numWidgets) * sizeof(Widget *));
+printf("WidgetList ptr=%p\n", WidgetList);
+for(i=0; i<numWidgets; i++) {
+    WidgetList[i] = InitializeWidget();
+}
+// avoid out of bounds assignment
+WidgetList = realloc(WidgetList, (numWidgets + 1) * sizeof(Widget *));
+WidgetList[numWidgets] = NULL;
+showWidgets(WidgetList);
+```
+
+Alternatively, the null-terminated assignment can be avoided altogether and instead consider alternative ways to track the array length.
+
+ORIGINAL CODE:
+
+```c
+int i;unsigned int numWidgets;Widget **WidgetList;
+numWidgets = GetUntrustedSizeValue();if ((numWidgets == 0) || (numWidgets > MAX_NUM_WIDGETS)) {ExitError("Incorrect number of widgets requested!");}WidgetList = (Widget **)malloc(numWidgets * sizeof(Widget *));printf("WidgetList ptr=%p\n", WidgetList);for(i=0; i<numWidgets; i++) {WidgetList[i] = InitializeWidget();}WidgetList[numWidgets] = NULL;showWidgets(WidgetList);
+```

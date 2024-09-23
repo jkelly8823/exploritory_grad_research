@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to a potential integer overflow and buffer overflow attacks.
+
+EXPLANATION:
+The code snippet doesn't properly check the bounds of the input parameters before using them. The `sizeof(*req)` is used to copy data from `req` to `smp->preq[1]`. However, there is no check that `req` and `smp->preq[1]` are large enough to hold the data being copied. This can lead to a buffer overflow if the data being copied is larger than the allocated space. Additionally, the use of `skb_pull(skb, sizeof(*req))` can lead to an integer overflow if the value of `sizeof(*req)` exceeds the remaining length of the skb data structure.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, we recommend:
+
+* Verifying the length of the `skb` data structure before calling `skb_pull(skb, sizeof(*req))`.
+* Validating the size of `req` and `smp->preq[1]` before copying data.
+* Ensuring that `smp->preq[0]` is initialized and not accessed before its allocation.
+* Adding error checking to ensure that `smp` and `req` are not null before accessing them.
+
+Here is an example of how this could be done:
+```c
+if (smp != NULL && req != NULL && skb->len >= sizeof(*req)) {
+    smp->preq[0] = SMP_CMD_PAIRING_REQ;
+    memcpy(&smp->preq[1], req, sizeof(*req));
+    skb_pull(skb, sizeof(*req));
+} else {
+    // Handle error
+}
+```
+ORIGINAL CODE:
+```c
+	if (!test_and_set_bit(HCI_CONN_LE_SMP_PEND, &conn->hcon->flags))
+		smp = smp_chan_create(conn);
+
+	smp = conn->smp_chan;
+
+	smp->preq[0] = SMP_CMD_PAIRING_REQ;
+	memcpy(&smp->preq[1], req, sizeof(*req));
+	skb_pull(skb, sizeof(*req));
+```

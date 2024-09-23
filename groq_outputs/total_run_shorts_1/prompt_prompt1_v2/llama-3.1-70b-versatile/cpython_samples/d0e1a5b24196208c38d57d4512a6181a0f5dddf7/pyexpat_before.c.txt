@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Use After Free in Py_XINCREF without bounds checking on return of intern assignment prior to reference increment.
+
+EXPLANATION:
+The issue is that Py_XINCREF(self->intern) increases the reference count of the object pointed to by self->intern. However, the code does not check if self->intern is NULL or if an exception occurred before the Py_XINCREF call. In Python, if an exception occurs and the intern object is deallocated during the exception handling without the reference count being adjusted, a "use after free" can occur when Py_XINCREF attempts to increase the reference count on the now freed memory.
+
+RECOMMENDATIONS:
+Before calling Py_XINCREF(self->intern), check that self->intern is not NULL and that the return value of intern is properly checked. A possible solution would be to wrap the assignment to self->intern and Py_XINCREF(self->intern) in a try/except block to handle any exceptions that may occur during this operation:
+```python
+try:
+    self->intern = intern;
+    if (self->intern == NULL) {
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate intern");
+        return NULL;
+    }
+    Py_XINCREF(self->intern);
+except Exception as e:
+    PyErr_SetFromException(e);
+    return NULL;
+```
+
+ORIGINAL CODE:
+```c
+else {
+    self->itself = XML_ParserCreate(encoding);
+}
+self->intern = intern;
+Py_XINCREF(self->intern);
+#ifdef Py_TPFLAGS_HAVE_GC
+PyObject_GC_Track(self);
+```

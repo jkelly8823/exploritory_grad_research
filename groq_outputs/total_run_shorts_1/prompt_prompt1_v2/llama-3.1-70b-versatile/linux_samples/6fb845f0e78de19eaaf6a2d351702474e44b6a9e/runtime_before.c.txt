@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17
+VULNERABILITY_DESCRIPTION:
+A potential race condition vulnerability exists in the provided code snippet. The timer expiration value is checked and then updated without proper synchronization.
+
+EXPLANATION:
+In the code, the `expires` value is checked against the current time to determine if a timer has expired. However, this check and the subsequent update of `dev->timer_expires` are not properly synchronized. If the timer expires between the time of the check and the update, the timer expiration will not be detected. This can result in unexpected behavior and potentially security issues.
+
+Furthermore, in the `pm_schedule_suspend` function, the `expires` value is calculated and stored in `dev->power.timer_expires`. However, this update is not properly synchronized with the check at the beginning of the code snippet.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the timer expiration value should be updated atomically with the check. This can be achieved by using a spinlock to protect both the check and update. Additionally, the use of atomic operations can also be considered.
+
+The `pm_schedule_suspend` function also needs to acquire the same lock before updating the `dev->timer_expires` value to ensure proper synchronization.
+
+ORIGINAL CODE:
+```c
+{
+	int autosuspend_delay;
+	u64 last_busy, expires = 0;
+	u64 now = ktime_to_ns(ktime_get());
+
+	if (!dev->power.use_autosuspend)
+		goto out;
+
+	 * If 'expires' is after the current time, we've been called
+	 * too early.
+	 */
+	if (expires > 0 && expires < ktime_to_ns(ktime_get())) {
+		dev->power.timer_expires = 0;
+		rpm_suspend(dev, dev->power.timer_autosuspends ?
+		    (RPM_ASYNC | RPM_AUTO) : RPM_ASYNC);
+	}
+int pm_schedule_suspend(struct device *dev, unsigned int delay)
+{
+	unsigned long flags;
+	ktime_t expires;
+	int retval;
+
+	spin_lock_irqsave(&dev->power.lock, flags);
+
+	/* Other scheduled or pending requests need to be canceled. */
+	pm_runtime_cancel_pending(dev);
+
+	expires = ktime_add(ktime_get(), ms_to_ktime(delay));
+	dev->power.timer_expires = ktime_to_ns(expires);
+	dev->power.timer_autosuspends = 0;
+	hrtimer_start(&dev->power.suspend_timer, expires, HRTIMER_MODE_ABS);
+
+ out:
+```

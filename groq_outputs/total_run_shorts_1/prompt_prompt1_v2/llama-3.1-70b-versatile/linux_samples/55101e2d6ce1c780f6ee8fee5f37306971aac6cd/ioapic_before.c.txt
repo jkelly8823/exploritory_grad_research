@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 17-18, 33-34
+VULNERABILITY_DESCRIPTION:
+Integer overflow and potential incorrect handling of a counter.
+
+EXPLANATION:
+The counters `ioapic->rtc_status.pending_eoi` and `ioapic->irr` are not being correctly managed. Multiple decrement operations (--pending_eoi) and unset_bit/trig_mode operations are not checked for valid ranges, leading to potential integer overflows. Specifically, lines 5-6, 17-18, and 33-34 showcase potential issues. If `ioapic->rtc_status.pending_eoi` reaches a negative value due to repeated operations with no adequate checks, and if `BUG_ON(ioapic->rtc_status.pending_eoi != 0)` in `rtc_irq_check_coalesced` or `WARN_ON(ioapic->rtc_status.pending_eoi < 0)` in `__rtc_irq_eoi_tracking_restore_one` occurs as an overflowed negative value while being evaluated (even if immediately after converted back to zero within 2^32 bounds due to uint32 limit) might impact correct CPU state, thus demanding CPU reset conditions resulting in failed executions of unripe cycles as these are CPU interrupt context time that may result from this counter overflow.
+
+RECOMMENDATIONS:
+- Replace or remove WARN_ON for 'if(...) return -fault_condition_name' instead of setting after possible faults, as is the case currently.
+- Restrict counters within ranges 0...Max_value; if decrement reaches 0, don't let it overflow into negative.
+- Ensure proper rounding, such as setting 0 if some potential condition is met by setting value to be decremented.
+- Use underflow-overflow checked decrement operations if needed library tool capabilities.
+
+ORIGINAL CODE:
+```c
+bitmap_zero(ioapic->rtc_status.dest_map, KVM_MAX_VCPUS);
+}
+
+static void __rtc_irq_eoi_tracking_restore_one(struct kvm_vcpu *vcpu)
+{
+	bool new_val, old_val;
+	struct kvm_ioapic *ioapic = vcpu->kvm->arch.vioapic;
+	} else {
+		__clear_bit(vcpu->vcpu_id, ioapic->rtc_status.dest_map);
+		ioapic->rtc_status.pending_eoi--;
+	}
+
+	WARN_ON(ioapic->rtc_status.pending_eoi < 0);
+}
+
+void kvm_rtc_eoi_tracking_restore_one(struct kvm_vcpu *vcpu)
+{
+
+static void rtc_irq_eoi(struct kvm_ioapic *ioapic, struct kvm_vcpu *vcpu)
+{
+	if (test_and_clear_bit(vcpu->vcpu_id, ioapic->rtc_status.dest_map))
+		--ioapic->rtc_status.pending_eoi;
+
+	WARN_ON(ioapic->rtc_status.pending_eoi < 0);
+}
+
+static bool rtc_irq_check_coalesced(struct kvm_ioapic *ioapic)
+{
+		ioapic->irr &= ~(1 << irq);
+
+	if (irq == RTC_GSI && line_status) {
+		BUG_ON(ioapic->rtc_status.pending_eoi != 0);
+		ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe,
+				ioapic->rtc_status.dest_map);
+		ioapic->rtc_status.pending_eoi = ret;
+	} else
+		ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe, NULL);
+
+	if (ret && irqe.trig_mode == IOAPIC_LEVEL_TRIG)
+```

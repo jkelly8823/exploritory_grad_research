@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-15
+VULNERABILITY_DESCRIPTION:
+Infinite recursion vulnerability in the drop_one_stripe function due to a recursive call without proper base case or termination condition. This can lead to a stack overflow and potentially cause a denial-of-service (DoS) condition.
+
+EXPLANATION:
+The function `drop_one_stripe` calls itself recursively without a proper base case or termination condition. This recursive call can continue indefinitely until the stack is exhausted, leading to a stack overflow. This can happen if the `drop_one_stripe` function is unable to drop a stripe for any reason, and the calling code does not handle this condition properly. Additionally, the recursive call is made while holding a mutex lock, which further exacerbates the issue.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider the following recommendations:
+
+1.  Implement a proper base case or termination condition for the recursive call. This could involve checking whether the maximum number of stripes has been reduced to the desired level, or whether a certain timeout has expired.
+
+2.  Use an iterative approach instead of recursion to achieve the desired functionality. This would eliminate the risk of a stack overflow.
+
+3.  Ensure that the function properly handles the case where it is unable to drop a stripe. This could involve releasing the mutex lock and allowing the calling code to handle the failure condition.
+
+4.  Consider adding a timeout or a maximum recursion depth limit to prevent indefinite recursion.
+
+ORIGINAL CODE:
+```c
+static int drop_one_stripe(struct r5conf *conf)
+{
+	struct stripe_head *sh;
+	int hash = (conf->max_nr_stripes - 1) & STRIPE_HASH_LOCKS_MASK;
+
+	spin_lock_irq(conf->hash_locks + hash);
+	sh = get_free_stripe(conf, hash);
+	spin_unlock_irq(conf->hash_locks + hash);
+
+	if (mutex_trylock(&conf->cache_size_mutex)) {
+		ret= 0;
+		while (ret < sc->nr_to_scan &&
+		       conf->max_nr_stripes > conf->min_nr_stripes) {
+			if (drop_one_stripe(conf) == 0) {
+				ret = SHRINK_STOP;
+				break;
+			}
+```

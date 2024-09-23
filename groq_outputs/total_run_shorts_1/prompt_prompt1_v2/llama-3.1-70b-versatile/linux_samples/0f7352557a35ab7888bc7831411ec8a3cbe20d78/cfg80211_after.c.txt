@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7, 8, 9
+VULNERABILITY_DESCRIPTION:
+Use of freed memory through dangling pointers.
+
+EXPLANATION:
+In the given code snippet, the `cfg->wiphy` is freed at line 6 (`brcmf_free_wiphy(cfg->wiphy);`), but before this, lines 7-9 use this freed memory. Specifically, line 7 uses `cfg->wiphy` to call `wiphy_unregister(cfg->wiphy)`, and then line 8 uses another freed memory (`cfg`) to call `wl_deinit_priv(cfg)` and line 9 again uses a freed memory (`cfg`) to call `cancel_work_sync(&cfg->escan_timeout_work)`. Finally, at line 10, `cfg` is freed itself (`kfree(cfg)`), but after being used in lines 7-9.
+
+RECOMMENDATIONS:
+These issues can be resolved by rearranging the code so that the `cfg->wiphy` and `cfg` are not used after being freed. The correct sequence of free operations is crucial. To correct this, move `wiphy_unregister(cfg->wiphy)` before `brcmf_free_wiphy(cfg->wiphy)`, and move `wl_deinit_priv(cfg)` and `cancel_work_sync(&cfg->escan_timeout_work)` before `kfree(cfg)`.
+
+Here's a suggested corrected version:
+
+```c
+scan_request = cfg->scan_request;
+cfg->scan_request = NULL;
+
+timer_delete_sync(&cfg->escan_timeout);
+
+if (fw_abort) {
+    /* Do a scan abort to stop the driver's scan engine */
+    brcmf_dbg(SCAN, "ABORT scan in firmware\n");
+    wiphy_unregister(cfg->wiphy);  // unregister before free
+    brcmf_free_wiphy(cfg->wiphy);
+    wl_deinit_priv(cfg);  // deinit before free
+    cancel_work_sync(&cfg->escan_timeout_work);  // cancel work before free
+    brcmf_btcoex_detach(cfg);
+    kfree(cfg);  // Now safe to free
+}
+```
+
+ORIGINAL CODE:
+    scan_request = cfg->scan_request;
+    cfg->scan_request = NULL;
+
+    timer_delete_sync(&cfg->escan_timeout);
+
+    if (fw_abort) {
+        /* Do a scan abort to stop the driver's scan engine */
+        brcmf_dbg(SCAN, "ABORT scan in firmware\n");
+        brcmf_btcoex_detach(cfg);
+        wiphy_unregister(cfg->wiphy);
+        wl_deinit_priv(cfg);
+        cancel_work_sync(&cfg->escan_timeout_work);
+        brcmf_free_wiphy(cfg->wiphy);
+        kfree(cfg);
+    }

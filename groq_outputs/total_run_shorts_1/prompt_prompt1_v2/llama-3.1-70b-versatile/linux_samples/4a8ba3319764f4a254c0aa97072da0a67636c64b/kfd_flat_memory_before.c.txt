@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 13
+VULNERABILITY_DESCRIPTION:
+The code contains a potential null pointer dereference and a possible integer overflow.
+
+EXPLANATION:
+The code calls `kfd_get_process_device_data(dev, process, 1)` and assigns the result to `pdd` without checking if `dev` or `process` is null before passing them as function arguments. If either `dev` or `process` is null, the function call could dereference a null pointer, potentially causing the program to crash.
+
+Additionally, the variable `id` is incremented within the loop without being checked if it reaches the maximum value that can be represented by its type. If `id` overflows, it could lead to incorrect results or crashes.
+
+However, it's also worth noting that the function call `kfd_get_process_device_data(dev, process, 1)` is not checked for a null return value before assigning it to `pdd`. If `kfd_get_process_device_data` returns null, it could also lead to a null pointer dereference when using `pdd` later.
+
+RECOMMENDATIONS:
+1. Add null checks for `dev` and `process` before calling `kfd_get_process_device_data`.
+2. Check the return value of `kfd_get_process_device_data` and ensure it's not null before assigning it to `pdd`.
+3. Ensure that `id` is checked for overflow before incrementing it to prevent integer overflows.
+
+ORIGINAL CODE:
+```
+struct kfd_dev *dev;
+struct kfd_process_device *pdd;
+
+mutex_lock(&process->mutex);
+
+/*Iterating over all devices*/
+while ((dev = kfd_topology_enum_kfd_devices(id)) != NULL &&
+    id < NUM_OF_SUPPORTED_GPUS) {
+
+    pdd = kfd_get_process_device_data(dev, process, 1);
+
+    /*
+     * For 64 bit process aperture will be statically reserved in
+     * the x86_64 non canonical process address space
+    id++;
+}
+
+mutex_unlock(&process->mutex);
+
+return 0;
+}
+```

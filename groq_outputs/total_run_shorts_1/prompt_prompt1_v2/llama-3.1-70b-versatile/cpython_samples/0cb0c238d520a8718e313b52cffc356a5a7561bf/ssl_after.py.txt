@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9, 18-34
+VULNERABILITY_DESCRIPTION:
+The code has potential issues with error handling, socket management, and potential timing attacks. Specifically, there are edge cases where socket operations may raise unexpected errors, or not behave as expected, potentially revealing information about the socket. 
+EXPLANATION:
+The main issue lies in the error handling mechanisms, particularly with respect to the handling of `OSError` in conjunction with `errno.ENOTCONN` and `errno.EINVAL` exceptions. The logic for catching `OSError` exceptions depends on the socket state, leading to complex error flows. Furthermore, the socket operations are not atomic, which may lead to unexpected behavior. This specific code block being reviewed catches certain exceptions and has the potential for execution to continue incorrectly after those catches. In addition, certain socket operations have return data which should always be examined.
+
+
+RECOMMENDATIONS:
+For additional security, consider setting the socket timeout before error handling for better control. Implement try-except blocks more carefully around socket operations to prevent any execution that depends on preceding socket operations. For added safety, introduce some failsafes into operations where an exception might be caught but there is no way to definitively inspect the state of object the original function call was operating on.
+
+
+Moreover, the socket should be managed better to prevent incorrect execution flow after certain exceptions occur. Instead of dealing with all the edge cases manually, wrap your socket operations within a try block and then handle all potential socket-related exceptions at once. This allows the reader to see that socket problems are all handled in a location that can be inspected and validated easily.
+
+
+Avoid methods that can block your execution and perform some event-based programming with your socket, hence you would put it in some kind of not-blocking mode. The most secure approach is the avoid error handling for socket connections as much as possible.
+ 
+
+ORIGINAL CODE:
+ 
+    )
+    self = cls.__new__(cls, **kwargs)
+    super(SSLSocket, self).__init__(**kwargs)
+    sock_timeout = sock.gettimeout()
+    sock.detach()
+
+    self._context = context
+    self._session = session
+    if e.errno != errno.ENOTCONN:
+        raise
+    connected = False
+    blocking = self.getblocking()
+    self.setblocking(False)
+    try:
+        # We are not connected so this is not supposed to block, but
+        # testing revealed otherwise on macOS and Windows so we do
+        # the non-blocking dance regardless. Our raise when any data
+        # is found means consuming the data is harmless.
+        notconn_pre_handshake_data = self.recv(1)
+    except OSError as e:
+        # EINVAL occurs for recv(1) on non-connected on unix sockets.
+        if e.errno not in (errno.ENOTCONN, errno.EINVAL):
+            raise
+        notconn_pre_handshake_data = b''
+    self.setblocking(blocking)
+    if notconn_pre_handshake_data:
+        # This prevents pending data sent to the socket before it was
+        # closed from escaping to the caller who could otherwise
+        # presume it came through a successful TLS connection.
+        reason = "Closed before TLS handshake with data in recv buffer."
+        notconn_pre_handshake_data_error = SSLError(e.errno, reason)
+        # Add the SSLError attributes that _ssl.c always adds.
+        notconn_pre_handshake_data_error.reason = reason
+        notconn_pre_handshake_data_error.library = None
+        try:
+            self.close()
+        except OSError:
+            pass
+        raise notconn_pre_handshake_data_error
+    else:
+        connected = True
+
+    self.settimeout(sock_timeout)  # Must come after setblocking() calls.
+    self._connected = connected
+    if connected:
+        # create the SSL object
+        try:

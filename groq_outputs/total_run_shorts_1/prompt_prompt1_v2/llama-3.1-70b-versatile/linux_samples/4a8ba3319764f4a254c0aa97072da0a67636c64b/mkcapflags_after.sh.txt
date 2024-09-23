@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a shell injection vulnerability.
+
+EXPLANATION:
+The line `VALUE="$(echo "$i" | sed -n 's@.*/\* *\("[^"]*"\).*\*/@\1@p')"` is vulnerable to shell injection. This is because the variable `i` is not sanitized before being passed to `echo`, and from there its output is parsed by `sed`. This could allow an attacker to inject malicious commands into the pipeline. 
+
+While this appears to be parsing a c-style comment block, an untrusted comment block containing the `\*` characters could lead to malicious results.
+
+RECOMMENDATIONS:
+The `echo` command should be replaced with a safer method to parse the string. In this case, using `printf` would remove the potential for shell injection:
+```bash
+VALUE="$(printf '%s' "$i" | sed -n 's@.*/\* *\("[^"]*"\).*\*/@\1@p')"
+```
+
+However, the command is still vulnerable to injection attacks if the data coming from `i` is untrusted. In the best case scenario, you should inspect `i` and make sure it does not contain malicious input. Additionally, look into your regular expression and see if there is any regex injection that could be utilized by a malicious actor.
+
+ORIGINAL CODE:
+```
+        # If the /* comment */ starts with a quote string, grab that.
+        VALUE="$(echo "$i" | sed -n 's@.*/\* *\("[^"]*"\).*\*/@\1@p')"
+        [ -z "$VALUE" ] && VALUE="\"$NAME\""
+        [ "$VALUE" = '""' ] && continue
+
+        # Name is uppercase, VALUE is all lowercase
+        VALUE="$(echo "$VALUE" | tr A-Z a-z)"
+```

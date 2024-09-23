@@ -1,0 +1,84 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13, 19-20, 25-26, 33-34
+VULNERABILITY_DESCRIPTION:
+The code contains multiple buffer overflow vulnerabilities due to the misuse of the memcpy function. The memcpy function can copy a variable amount of data, but it does not perform any boundary checks. This can lead to buffer overflow if the source or destination buffers are smaller than the specified size.
+EXPLANATION:
+The code uses memcpy function to copy data from the 'pos' array to other data structures. However, the code does not check the size of the destination buffer before copying data. This can lead to buffer overflow if the 'pos' array or the destination buffer is smaller than the specified size. Additionally, the 'pos' array is not validated before accessing its elements, which can also lead to buffer overflow or other issues.
+
+For example, in lines 12-13, the code copies 'sizeof(struct ieee80211_ht_cap)' bytes from 'pos' to '&sta_ptr->tdls_cap.ht_capb'. However, it does not check if 'pos' array has at least 'sizeof(struct ieee80211_ht_cap)' bytes. Similarly, in lines 19-20, the code copies 'sizeof(struct ieee80211_ht_operation)' bytes from 'pos' to '&sta_ptr->tdls_cap.ht_oper' without performing any boundary checks.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, you should validate the size of the 'pos' array and the destination buffer before copying data. You should also use safer functions like 'memcpy_s' or 'safecopy' that perform boundary checks and handle errors.
+
+For instance, you can replace lines 12-13 with the following code:
+```c
+if ((pos + sizeof(struct ieee80211_ht_cap)) <= (pos + pos[1] + 2)) {
+    memcpy_s((u8 *)&sta_ptr->tdls_cap.ht_capb, sizeof(struct ieee80211_ht_cap), pos, sizeof(struct ieee80211_ht_cap));
+    sta_ptr->is_11n_enabled = 1;
+} else {
+    // Handle the error
+}
+```
+You should apply similar changes to other memcpy calls in the code.
+
+ORIGINAL CODE:
+```c
+    switch (*pos) {
+    case WLAN_EID_SUPP_RATES:
+        sta_ptr->tdls_cap.rates_len = pos[1];
+        for (i = 0; i < pos[1]; i++)
+            sta_ptr->tdls_cap.rates[i] = pos[i + 2];
+        break;
+
+    case WLAN_EID_EXT_SUPP_RATES:
+        basic = sta_ptr->tdls_cap.rates_len;
+        for (i = 0; i < pos[1]; i++)
+            sta_ptr->tdls_cap.rates[basic + i] = pos[i + 2];
+        sta_ptr->tdls_cap.rates_len += pos[1];
+        break;
+    case WLAN_EID_HT_CAPABILITY:
+        memcpy((u8 *)&sta_ptr->tdls_cap.ht_capb, pos,
+               sizeof(struct ieee80211_ht_cap));
+        sta_ptr->is_11n_enabled = 1;
+        break;
+    case WLAN_EID_HT_OPERATION:
+        memcpy(&sta_ptr->tdls_cap.ht_oper, pos,
+               sizeof(struct ieee80211_ht_operation));
+        break;
+    case WLAN_EID_BSS_COEX_2040:
+        sta_ptr->tdls_cap.coex_2040 = pos[2];
+        break;
+    case WLAN_EID_EXT_CAPABILITY:
+        memcpy((u8 *)&sta_ptr->tdls-cap.extcap, pos,
+               sizeof(struct ieee_types_header) +
+               min_t(u8, pos[1], 8));
+        break;
+    case WLAN_EID_RSN:
+        memcpy((u8 *)&sta_ptr->tdls_cap.rsn_ie, pos,
+               sizeof(struct ieee_types_header) +
+               min_t(u8, pos[1], IEEE_MAX_IE_SIZE -
+                     sizeof(struct ieee_types_header)));
+        break;
+    case WLAN_EID_QOS_CAPA:
+        sta_ptr->tdls_cap.qos_info = pos[2];
+        break;
+    case WLAN_EID_VHT_OPERATION:
+        if (priv->adapter->is_hw_11ac_capable)
+            memcpy(&sta_ptr->tdls_cap.vhtoper, pos,
+                   sizeof(struct ieee80211_vht_operation));
+        break;
+    case WLAN_EID_VHT_CAPABILITY:
+        if (priv->adapter->is_hw_11ac_capable) {
+            memcpy((u8 *)&sta_ptr->tdls_cap.vhtcap, pos,
+                   sizeof(struct ieee80211_vht_cap));
+            sta_ptr->is_11ac_enabled = 1;
+        }
+        break;
+    case WLAN_EID_AID:
+        if (priv->adapter->is_hw_11ac_capable)
+            sta_ptr->tdls_cap.aid =
+                get_unaligned_le16((pos + 2));
+    default:
+        break;
+    }
+}```

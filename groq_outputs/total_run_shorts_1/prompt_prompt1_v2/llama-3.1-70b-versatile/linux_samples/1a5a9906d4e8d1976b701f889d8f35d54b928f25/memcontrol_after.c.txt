@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-15
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability due to missing unlock operation and forgotten return in exceptional case.
+EXPLANATION:
+In the given code snippet, a spinlock is acquired using `pte_offset_map_lock()` which increments the lock counter. However, in the case where an exception occurs within the `for` loop, the lock is not properly unlocked. Additionally, in the original code, there was a premature return at line 3 which suggested that this case could occur. 
+
+On lines 9-15, a second call to `pte_offset_map_lock()` is performed, where `pte_offset_map_lock()` increments a lock, if successful. However, there is no clear code path to decrement or unlock this resource later on. Such scenarios could lead to resource leaks (especially in kernel code) because deadlock is possible. `pte_offset_map_unlock()` unlocks such resources, but a lookup of such call did not find a corresponding `pte_offset_map_unlock()` when one should occur.
+
+RECOMMENDATIONS:
+Always ensure that any locks obtained using `pte_offset_map_lock()` are released using `pte_offset_map_unlock()` to prevent resource leaks. If possible ensure all actions triggered prior to such potential errors be reversed. 
+
+Also, from examining local code snippets is difficult, but in the full code, make certain any and all potential fault prone calls (including especially kernel and/or library calls) should always verify the return code and be considered in Exception cases.
+
+ORIGINAL CODE:
+```
+spinlock_t *ptl;
+split_huge_page_pmd(walk->mm, pmd);
+if (pmd_trans_unstable(pmd))
+	return 0;
+retry:
+pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
+for (; addr != end; addr += PAGE_SIZE) {
+	pte_t ptent = *(pte++);
+```
+Note: The missing code around this code snippet might have `pte_offset_map_unlock()`, in a different location or place. A complete file would validate a true vulnerability of not releasing resources.

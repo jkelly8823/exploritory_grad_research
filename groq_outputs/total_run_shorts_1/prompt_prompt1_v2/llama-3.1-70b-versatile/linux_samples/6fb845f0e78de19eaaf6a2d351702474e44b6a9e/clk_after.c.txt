@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Unvalidated comparison of strings using strcmp() without checking the bounds of the buffers being compared, potentially leading to a buffer overflow or null pointer dereference.
+
+EXPLANATION:
+The code checks if two strings are equal using strcmp(). This is performed on line 8 with the function call "if (!strcmp(parent->name, core->parent_names[i]))". However, prior to this comparison, there is no validation on the input strings to ensure that they are null-terminated and do not exceed a certain length.
+
+RECOMMENDATIONS:
+Before comparing strings, it is recommended that the lengths of parent->name and core->parent_names[i] are checked to prevent potential buffer overflows or null pointer dereferences. This can be done by using strnlen_s() or similar functions depending on the environment being used.
+
+Additionally, using strncpy() with a specified length can be safer when copying strings, instead of direct assignment.
+
+Here's an example of how this may be done:
+```c
+size_t len = strnlen_s(parent->name, NAME_MAX);
+if (len >= NAME_MAX) {
+    // Handle the case where name length exceeds maximum allowed
+    return -EINVAL;
+}
+
+size_t lenCore = strnlen_s(core->parent_names[i], NAME_MAX);
+if (lenCore >= NAME_MAX) {
+    // Handle the case where name length exceeds maximum allowed
+    return -EINVAL;
+}
+
+if (!strncmp(parent->name, core->parent_names[i], len < lenCore ? len : lenCore)) {
+    // rest of the comparison code
+}
+```
+
+ORIGINAL CODE:
+```c
+if (!parent)
+	return -EINVAL;
+
+for (i = 0; i < core->num_parents; i++) {
+	if (core->parents[i] == parent)
+		return i;
+
+	if (core->parents[i])
+		continue;
+
+	/* Fallback to comparing globally unique names */
+	if (!strcmp(parent->name, core->parent_names[i])) {
+		core->parents[i] = parent;
+		return i;
+	}
+}
+
+return -EINVAL;
+```

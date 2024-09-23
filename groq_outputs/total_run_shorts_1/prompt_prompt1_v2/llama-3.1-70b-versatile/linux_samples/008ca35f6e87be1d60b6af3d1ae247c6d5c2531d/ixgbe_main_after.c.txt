@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19
+VULNERABILITY_DESCRIPTION:
+Direct Memory Access (DMA) with PCI Express (PCIe) may be initiated by a malicious virtual function (VF) device before the mandatory software initiated PCI-e Flattened Configuration Space (FCS) checks. Because this VF device has not provided an accurate or false checksum for the PCIe function, an untrusted PCI-e device, such as the VF, may allow software to assume it exists.
+
+EXPLANATION:
+`pci_read_config_word` reads the PCIe configuration space. PCIe virtual functions cannot provide an accurate checksum of its function due to being inherently in a flattened configuration space. Subsequently, this piece of the PCIe configuration space is not protected from being written to or manipulated. Software will assume untrusted VF configuration space after the read, but this is a result of PCI Express and PCIe VF limitations. However, it does create a problem (denial-of-service (DoS)) here in how this specific implementation with PCIe Virtual Functions uses those function registers because the driver is assuming that it is operating on accurate data which could potentially be spoofed or manipulated.
+
+Additionally, if this status (status_reg != IXGBE_FAILED_READ_CFG_WORD) evaluation of the PCIe function is broken it may send PCI-e reset (pcie_flr) unexpectedly. Such an action causes significant instability as this resets the whole function on whichever PCIe bus that VF LAN hardware exists - disrupting normal service.
+
+RECOMMENDATIONS:
+1. Replace `pci_read_config_word` (which is a status of successful read from PCIe configuration space using an error condition) with a method to prevent the PCIe VF from writing 'bad configuration data' before we start evaluating this VF's PCIe register contents and make correct use of these VF state register checks of PCIe configurations states.
+
+2. Check (`if (status_reg != IXGBE_FAILED_READ_CFG_WORD)`) if the VF PCIe configuration space can prevent the writing of both bad states here and PCIe un-protectable writable regions.
+Prioritize all of these checks. PCIe VF space PCIe VF.
+
+3. Also, set an additional configuration on such a check to indicate which PCIe function can provide correct data content checksums including setting the correct configuration of PCIe FLR for Virtual Functions where related PCIe configuration for related PCIe FCS state. Based on above FCS state errors.
+
+ORIGINAL CODE:
+
+```c
+static void ixgbe_bad_vf_abort(struct ixgbe_adapter *adapter, u32 vf)
+{
+	struct ixgbe_hw *hw = &adapter->hw;
+
+	if (adapter->hw.mac.type == ixgbe_mac_82599EB &&
+	    adapter->flags2 & IXGBE_FLAG2_AUTO_DISABLE_VF) {
+		adapter->vfinfo[vf].primary_abort_count++;
+		if (adapter->vfinfo[vf].primary_abort_count ==
+		    IXGBE_PRIMARY_ABORT_LIMIT) {
+			ixgbe_set_vf_link_state(adapter, vf,
+						IFLA_VF_LINK_STATE_DISABLE);
+			adapter->vfinfo[vf].primary_abort_count = 0;
+
+			e_info(drv,
+			       "Malicious Driver Detection event detected on PF %d VF %d MAC: %pM mdd-disable-vf=on",
+			       hw->bus.func, vf,
+			       adapter->vfinfo[vf].vf_mac_addresses);
+		}
+	}
+}
+
+static void ixgbe_check_for_bad_vf(struct ixgbe_adapter *adapter)
+{
+	struct ixgbe_hw *hw = &adapter->hw;
+	struct pci_dev *pdev = adapter->pdev;
+			continue;
+		pci_read_config_word(vfdev, PCI_STATUS, &status_reg);
+		if (status_reg != IXGBE_FAILED_READ_CFG_WORD &&
+		    status_reg & PCI_STATUS_REC_MASTER_ABORT) {
+			ixgbe_bad_vf_abort(adapter, vf);
+			pcie_flr(vfdev);
+		}
+	}
+}
+
+static void ixgbe_spoof_check(struct ixgbe_adapter *adapter)
+	if (err)
+		goto err_sw_init;
+
+	if (adapter->hw.mac.type == ixgbe_mac_82599EB)
+		adapter->flags2 |= IXGBE_FLAG2_AUTO_DISABLE_VF;
+
+	switch (adapter->hw.mac.type) {
+	case ixgbe_mac_X550:
+	case ixgbe_mac_X550EM_x:
+		netdev->udp_tunnel_nic_info = &ixgbe_udp_tunnels_x550;
+```

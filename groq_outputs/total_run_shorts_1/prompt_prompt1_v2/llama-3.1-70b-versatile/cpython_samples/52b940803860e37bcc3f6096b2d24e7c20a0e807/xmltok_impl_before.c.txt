@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1318, 1323
+VULNERABILITY_DESCRIPTION:
+Infinite loop vulnerability in the function `PREFIX(charRefNumber)` when handling an incorrectly formatted character reference.
+
+EXPLANATION:
+The function `PREFIX(charRefNumber)` reads a character reference from the input stream and attempts to parse its numeric value. However, if the input stream contains an infinite sequence of hexadecimal digits, the function will enter an infinite loop, consuming all available resources.
+
+In particular, the function uses the loop condition `!CHAR_MATCHES(enc, ptr, ASCII_SEMI)` to check if the current character is a semicolon, which marks the end of the character reference. However, if the input stream does not contain a semicolon, the function will continue reading hexadecimal digits indefinitely.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the function should be modified to enforce a maximum length for the character reference and to handle the case where the input stream does not contain a semicolon. This can be achieved by introducing a counter to track the number of hexadecimal digits read and stopping the loop when a maximum length is reached or a non-hexadecimal digit character is encountered.
+
+ORIGINAL CODE:
+```c
+static int PTRFASTCALL
+PREFIX(charRefNumber)(const ENCODING *UNUSED_P(enc), const char *ptr)
+{
+  int result = 0;
+  /* skip &# */
+  ptr += 2*MINBPC(enc);
+  if (CHAR_MATCHES(enc, ptr, ASCII_x)) {
+    for (ptr += MINBPC(enc);
+         !CHAR_MATCHES(enc, ptr, ASCII_SEMI);
+         ptr += MINBPC(enc)) {
+      int c = BYTE_TO_ASCII(enc, ptr);
+      switch (c) {
+      case ASCII_0: case ASCII_1: case ASCII_2: case ASCII_3: case ASCII_4:
+      case ASCII_5: case ASCII_6: case ASCII_7: case ASCII_8: case ASCII_9:
+        result <<= 4;
+        result |= (c - ASCII_0);
+        break;
+      case ASCII_A: case ASCII_B: case ASCII_C:
+      case ASCII_D: case ASCII_E: case ASCII_F:
+        result <<= 4;
+        result += 10 + (c - ASCII_A);
+        break;
+      case ASCII_a: case ASCII_b: case ASCII_c:
+      case ASCII_d: case ASCII_e: case ASCII_f:
+        result <<= 4;
+        result += 10 + (c - ASCII_a);
+        break;
+      }
+      if (result >= 0x110000)
+        return -1;
+    }
+  }
+  /* ... */
+}
+```

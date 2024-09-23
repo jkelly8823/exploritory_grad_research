@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+The code vulnerable to Denial of Service (DoS) attacks through resource consumption due to the use of `kfree_skb(skb)` in a conditional statement.
+
+EXPLANATION:
+The code checks if the packet length exceeds the MTU of the device and if the skb is not a Gigabit Segmentation Offload (GSO) packet. If both conditions are met, it frees the skb using `kfree_skb(skb)`. However, this operation can be exploited by an attacker by crafting packets with sizes just above the MTU, causing the skb to be freed and potentially leading to packet drops and a denial of service.
+
+Additionally, the skb is later pushed in the else clause (`skb_push(skb, ETH_HLEN)`) which can indicate modification of the packet's contents. However, there's no validation to ensure that the skb is in a writable state before pushing data onto it, which could result in unpredictable behavior or crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a more defensive approach by validating the skb state and contents before making any changes. Specifically:
+
+1. Before pushing data onto the skb, ensure that it is in a writable state and that the operation won't exceed the skb's capacity.
+
+2. Instead of freeing the skb directly, consider using more robust error handling mechanisms to handle packets that exceed the MTU, such as returning an error to the sender or logging the incident.
+
+3. Implement rate limiting or other anti-DoS measures to prevent abuse of the skb allocation and deallocation mechanisms.
+
+ORIGINAL CODE:
+```c
+{
+	skb->dev = to->dev;
+
+	if (unlikely(netpoll_tx_running(to->br->dev))) {
+		if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb))
+			kfree_skb(skb);
+		else {
+			skb_push(skb, ETH_HLEN);
+```

@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 167, 175, 187
+VULNERABILITY_DESCRIPTION:
+The code is potentially vulnerable to integer overflow attacks in the `vsid_scramble` function calls and the `context` calculation in the `get_kernel_vsid` function.
+
+EXPLANATION:
+In the `get_vsid` function, the `vsid_scramble` function is called with a calculated argument that shifts and combines the `context` and `ea` values. However, the `context` value is not validated or checked for its range. In the `get_kernel_vsid` function, the `context` value is calculated by shifting and adding to the `MAX_USER_CONTEXT` value. However, the `ea` value is not validated and could potentially overflow the calculated `context` value.
+
+In the `get_kernel_vsid` function, the line `context = (MAX_USER_CONTEXT) + ((ea >> 60) - 0xc) + 1;` is vulnerable to an integer overflow attack. If the `ea` value is large enough, the calculated `context` value could overflow and wrap around to a small or negative value, potentially causing the `get_vsid` function to return an incorrect or insecure VSID value.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, the code should be modified to validate the range of the `context` and `ea` values before using them in calculations. Additionally, the `vsid_scramble` function should be reviewed to ensure that it is not vulnerable to integer overflow attacks.
+
+Specifically, the code should be modified as follows:
+
+* Add input validation to the `get_vsid` function to ensure that the `context` and `ea` values are within the expected ranges.
+* Add input validation to the `get_kernel_vsid` function to ensure that the `ea` value is within the expected range.
+* Review the `vsid_scramble` function to ensure that it is not vulnerable to integer overflow attacks and modify it if necessary.
+
+ORIGINAL CODE:
+```
+static inline unsigned long get_vsid(unsigned long context, unsigned long ea,
+				     int ssize)
+{
+	/*
+	 * Bad address. We return VSID 0 for that
+	 */
+	if ((ea & ~REGION_MASK) >= PGTABLE_RANGE)
+		return 0;
+
+	if (ssize == MMU_SEGSIZE_256M)
+		return vsid_scramble((context << ESID_BITS)
+				     | (ea >> SID_SHIFT), 256M);
+	return vsid_scramble((context << ESID_BITS_1T)
+			     | (ea >> SID_SHIFT_1T), 1T);
+}
+
+static inline unsigned long get_kernel_vsid(unsigned long ea, int ssize)
+{
+	unsigned long context;
+
+	/*
+	 * kernel take the top 4 context from the available range
+	 */
+	context = (MAX_USER_CONTEXT) + ((ea >> 60) - 0xc) + 1;
+	return get_vsid(context, ea, ssize);
+}
+```

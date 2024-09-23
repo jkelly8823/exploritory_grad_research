@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+Use after a function has returned.
+
+EXPLANATION:
+The code snippet contains an unconditional return statement on line 4, which immediately exits the function. However, the function proceeds to perform operations on the `bh` object and `desc` on subsequent lines, which are never executed due to the previous return statement. It can lead to inconsistent state and unpredictable behavior.
+
+However, a more serious issue arises on line 6 where the `ext4_inode_bitmap` function may be called on the `desc` object which was not initialized or checked for validity before being used. In this case, however, assuming that the previous call to `sb_getblk` is valid and returned NULL in that path, line 7's access (bh) could have been safe.
+
+A better match seemed to be the possibility that at line 9, following successful conditional calls to `ext4_inode_bitmap` and `sb_getblk`, a success path could potentially lead to an invalid use of 'desc' at the site call to `ext4_inode_bitmap`.   With a lack of initialization in scope, error will follow.
+
+RECOMMENDATIONS:
+The unconditional return statement at line 4 should be refactored to handle all possible paths. Additionally, it's crucial to validate and check for `NULL` or initialization failures before using objects. Before the `ext4_inode_bitmap` function call at line 6, ensure that the `desc` object is properly initialized and in a valid state.
+
+There's a possibility that with the current layout, and unshown information around block initialization, we could simply be witnessing a code pathway reduction. Removing line 4 will essentially make all the code reachable. Removing this will at least allow greater understanding of code that currently cannot be evaluated while respecting scope of vulnerabilities presented.
+
+ORIGINAL CODE:
+```c
+ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
+{
+	struct ext4_group_desc *desc;
+	struct buffer_head *bh = NULL;
+	ext4_fsblk_t bitmap_blk;
+	int err;
+
+		return ERR_PTR(-EFSCORRUPTED);
+
+	bitmap_blk = ext4_inode_bitmap(sb, desc);
+	bh = sb_getblk(sb, bitmap_blk);
+	if (unlikely(!bh)) {
+		ext4_error(sb, "Cannot read inode bitmap - "
+			    "block_group = %u, inode_bitmap = %llu",
+```

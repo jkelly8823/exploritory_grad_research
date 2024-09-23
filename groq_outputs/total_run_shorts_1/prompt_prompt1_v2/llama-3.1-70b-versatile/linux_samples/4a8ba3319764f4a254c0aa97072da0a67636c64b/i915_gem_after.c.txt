@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Potential NULL Pointer Dereference and Uninitialized Use
+EXPLANATION:
+In the provided code snippet, there is a potential NULL pointer dereference in the function i915_gem_create. The variable 'obj' is used without being initialized. Although it is checked if 'obj' is NULL, the function immediately returns an error without setting 'obj'. However, a more severe issue arises in the lines immediately following, where 'obj' is used as if it were initialized. Specifically, 'obj->base' is passed to drm_gem_handle_create, and later drm_gem_object_unreference_unlocked. Additionally, another concern is present as the return value of drm_gem_handle_create is not checked immediately. This can lead to the function continuing with uninitialized 'obj' if drm_gem_handle_create fails.
+
+RECOMMENDATIONS:
+To address this issue, you should ensure 'obj' is properly initialized before using it. You may want to allocate memory for 'obj' using kmalloc or a similar function, and handle potential allocation failures. It is also essential to initialize 'obj' before it is used to prevent potential NULL pointer dereferences and undefined behavior.
+
+Additionally, handling the return value of drm_gem_handle_create immediately can help to ensure that 'obj' is properly set and handled before being used further.
+
+The following lines demonstrate how you might initialize 'obj' safely:
+```c
+struct drm_i915_gem_object *obj = kmalloc(sizeof(struct drm_i915_gem_object), GFP_KERNEL);
+if (!obj) {
+    return -ENOMEM;
+}
+// Initialize obj members (e.g. with memset or direct assignments)
+```
+However, please note that the initialization of 'obj' is highly dependent on your program's context. Ensure that you're handling memory allocation and deallocation according to your application's needs.
+
+ORIGINAL CODE:
+```c
+i915_gem_create(struct drm_file *file,
+        struct drm_device *dev,
+        uint64_t size,
+        uint32_t *handle_p)
+{
+    struct drm_i915_gem_object *obj;
+    int ret;
+    if (obj == NULL)
+        return -ENOMEM;
+
+    ret = drm_gem_handle_create(file, &obj->base, &handle);
+    /* drop reference from allocate - handle holds it now */
+    drm_gem_object_unreference_unlocked(&obj->base);
+    if (ret)
+    args->pitch = ALIGN(args->width * DIV_ROUND_UP(args->bpp, 8), 64);
+    args->size = args->pitch * args->height;
+    return i915_gem_create(file, dev,
+                   args->size, &args->handle);
+}
+```

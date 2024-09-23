@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-13
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to Use After Free (CWE-416) and lack of input validation.
+
+EXPLANATION:
+This vulnerability is caused by the signal handler function 'handler' accessing and freeing the 'logMessage' global variable after it may have been potentially freed by the 'main' function due to concurrent access. This means if the signal handler function 'handler' is executed before 'main' finishes execution, 'logMessage' may be freed twice, resulting in undefined behavior.
+
+Additionally, this code lacks input validation. It uses 'argv[1]' as an input to be logged without any validation, allowing any untrusted data to be accessed. If 'argv[1]' is larger than expected or untrusted, this could lead to unexpected behavior including potential crashes or information disclosure.
+
+Another security concern with this code is that 'malloc' calls are implied through 'strdup' but its error checking is absent. 'strdup' returns NULL if 'malloc' fails but this is not checked. This could result in null pointer dereferences.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, consider these recommendations:
+- Avoid global variables accessed by multiple threads or concurrent parts of the program.
+- Implement synchronization mechanisms such as mutex locks to prevent concurrent access to shared variables.
+- Check return value of 'malloc' and 'strdup' calls and handle failures properly.
+- Validate and filter user inputs, especially in cases where they're used for functions that could have security implications.
+- Avoid executing sensitive code in signal handlers as this could increase the risk of security vulnerabilities.
+- Use async-safe functions within signal handlers. The 'syslog' function is async-safe but the other functions used may not be.
+ 
+ ORIGINAL CODE:
+```
+char *logMessage;
+void handler (int sigNum) {
+    syslog(LOG_NOTICE, "%s\n", logMessage);free(logMessage);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    
+    sleep(10);exit(0);
+}
+int main (int argc, char* argv[]) {
+    logMessage = strdup(argv[1]);
+    /* Register signal handlers. */
+    
+    signal(SIGHUP, handler);signal(SIGTERM, handler);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    
+    sleep(10);
+}
+```

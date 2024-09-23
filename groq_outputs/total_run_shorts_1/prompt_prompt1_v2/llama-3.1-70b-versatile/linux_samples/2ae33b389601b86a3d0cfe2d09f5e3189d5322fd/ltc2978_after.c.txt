@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability.
+
+EXPLANATION:
+The code does not check for integer overflow when reading word data from the device. This could lead to the `ret` variable being less than the actual maximum value read from the device. The lin11_to_val function is then called with the overflowed value which could cause incorrect maximum values to be stored in `data->temp_max[page]` and `data->temp2_max`.
+
+For example, in lines 4-5, the code checks if `lin11_to_val(ret)` is greater than `lin11_to_val(data->temp_max[page])`. However, if `ret` is greater than the maximum 16-bit signed integer value (32767), `lin11_to_val(ret)` could be less than or equal to `lin11_to_val(data->temp_max[page])`, even though `ret` is actually greater than `data->temp_max[page]`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add checks to ensure that `ret` is within the valid range of values before calling `lin11_to_val`. Here's an example of how this can be done:
+
+```c
+if (ret >= 0) {
+    if (ret > INT16_MAX || ret < INT16_MIN) {
+        // handle overflow error
+    } else {
+        if (lin11_to_val(ret) > lin11_to_val(data->temp_max[page]))
+            data->temp_max[page] = ret;
+        ret = data->temp_max[page];
+    }
+}
+```
+
+ORIGINAL CODE:
+(struct ltc2978_data and defines omitted for brevity)
+```c
+ret = pmbus_read_word_data(client, page, LTC2978_MFR_TEMPERATURE_PEAK);
+if (ret >= 0) {
+    if (lin11_to_val(ret)
+        > lin11_to_val(data->temp_max[page]))
+        data->temp_max[page] = ret;
+    ret = data->temp_max[page];
+}
+break;
+case PMBUS_VIRT_RESET_VOUT_HISTORY:
+case PMBUS_VIRT_RESET_VIN_HISTORY:
+ret = pmbus_read_word_data(client, page,
+    LTC3880_MFR_TEMPERATURE2_PEAK);
+if (ret >= 0) {
+    if (lin11_to_val(ret) > lin11_to_val(data->temp2_max))
+        data->temp2_max = ret;
+    ret = data->temp2_max;
+}
+break;
+```

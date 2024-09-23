@@ -1,0 +1,101 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 71-75
+VULNERABILITY_DESCRIPTION: Use After Free Vulnerability
+EXPLANATION:
+The vulnerability is in the `br_netpoll_enable` function. After a successful call to `__netpoll_setup`, the memory allocated for `np` is freed with `__netpoll_free_rcu`. However, the pointer `p->np` is set to `NULL` immediately after freeing `np`. This is incorrect because `np` is not yet freed. It's still in the RCU callback queue. If the RCU callback for `np` is triggered before `p->np` is used, there will be a use after free vulnerability. 
+
+This vulnerability can potentially be exploited if an attacker can trigger the RCU callback before `p->np` is used again, leading to arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should set `p->np = np;` after a successful call to `__netpoll_setup` and then call `__netpoll_free_rcu(p->np)` in the RCU callback queue when it's safe to free the memory.
+
+```c
+int br_netpoll_enable(struct net_bridge_port *p, gfp_t gfp)
+{
+    struct netpoll *np;
+    int err = 0;
+
+    np = kzalloc(sizeof(*p->np), gfp);
+    err = -ENOMEM;
+    if (!np)
+        goto out;
+
+    err = __netpoll_setup(np, p->dev, gfp);
+    if (err) {
+        kfree(np);
+        goto out;
+    }
+
+    p->np = np; // Assign p->np here
+    // Rest of the code...
+```
+
+ORIGINAL CODE:
+
+(struct net_bridge_mdb_entry *mdst;
+struct br_cpu_netstats *brstats = this_cpu_ptr(br->stats);
+
+rcu_read_lock();
+#ifdef CONFIG_BRIDGE_NETFILTER
+if (skb->nf_bridge && (skb->nf_bridge->mask & BRNF_BRIDGED_DNAT)) {
+br_nf_pre_routing_finish_bridge_slow(skb);
+rcu_read_unlock();
+return NETDEV_TX_OK;
+}
+#endif
+
+skb_reset_mac_header(skb);
+skb_pull(skb, ETH_HLEN);
+
+if (is_broadcast_ether_addr(dest))
+br_flood_deliver(br, skb);
+else if (is_multicast_ether_addr(dest)) {
+if (unlikely(netpoll_tx_running(dev))) {
+static void br_netpoll_cleanup(struct net_device *dev)
+{
+    struct net_bridge *br = netdev_priv(dev);
+    struct net_bridge_port *p;
+
+list_for_each_entry(p, &br->port_list, list)
+    br_netpoll_disable(p);
+}
+
+static int br_netpoll_setup(struct net_device *dev, struct netpoll_info *ni,
+                gfp_t gfp)
+{
+    struct net_bridge *br = netdev_priv(dev);
+    struct net_bridge_port *p;
+    int err = 0;
+
+list_for_each_entry(p, &br->port_list, list) {
+    if (!p->dev)
+        continue;
+    err = br_netpoll_enable(p, gfp);
+    if (err)
+        goto fail;
+}
+
+goto out;
+}
+
+int br_netpoll_enable(struct net_bridge_port *p, gfp_t gfp)
+{
+    struct netpoll *np;
+    int err = 0;
+
+    np = kzalloc(sizeof(*p->np), gfp);
+    err = -ENOMEM;
+    if (!np)
+        goto out;
+
+    err = __netpoll_setup(np, p->dev, gfp);
+    if (err) {
+        kfree(np);
+        goto out;
+    }
+
+    p->np = NULL;
+
+    __netpoll_free_rcu(np);
+}
+#endif

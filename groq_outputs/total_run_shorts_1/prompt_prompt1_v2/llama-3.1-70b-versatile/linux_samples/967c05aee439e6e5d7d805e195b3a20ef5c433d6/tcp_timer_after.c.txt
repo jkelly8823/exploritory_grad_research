@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+The code snippet demonstrates potential integer overflow and underflow vulnerabilities in the calculations of the Maximum Segment Size (MSS) value.
+
+EXPLANATION:
+In the given code snippet, the calculations of the MSS value are performed using the `min`, `max`, and bitwise shift operators (`>>`). However, there is no explicit check for the potential integer overflow or underflow that may occur during these calculations. 
+
+Specifically, on line 3, the `max` function returns the maximum of two values, but it does not guarantee that the result is within the valid range of the `mss` variable. Similarly, on line 5, the `max` function with the adjusted `tcp_header_len` value does not prevent a potential integer underflow.
+
+In the absence of integer overflow and underflow checks, there is a possibility that an attacker may cause the `mss` value to be computed as an unusually large or small value. This could result in unexpected behavior in the application, potentially leading to vulnerabilities such as a denial-of-service (DoS) or an unauthorized behavior.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should consider adding explicit integer overflow and underflow checks during the calculation of the MSS value. 
+
+Here is an example of how this could be achieved:
+
+```c
+mss = tcp_mtu_to_mss(sk, icsk->icsk_mtup.search_low) >> 1;
+if (mss < 0 || mss > net->ipv4.sysctl_tcp_base_mss) {
+    // handle error: invalid mss value
+}
+mss = min(net->ipv4.sysctl_tcp_base_mss, mss);
+mss = max(68 - tcp_sk(sk)->tcp_header_len, mss);
+if (mss > net->ipv4.sysctl_tcp_min_snd_mss || mss < 0) {
+    // handle error: invalid mss value
+}
+icsk->icsk_mtup.search_low = tcp_mss_to_mtu(sk, mss);
+```
+
+ORIGINAL CODE:
+
+```
+mss = tcp_mtu_to_mss(sk, icsk->icsk_mtup.search_low) >> 1;
+mss = min(net->ipv4.sysctl_tcp_base_mss, mss);
+mss = max(mss, 68 - tcp_sk(sk)->tcp_header_len);
+mss = max(mss, net->ipv4.sysctl_tcp_min_snd_mss);
+icsk->icsk_mtup.search_low = tcp_mss_to_mtu(sk, mss);
+}
+tcp_sync_mss(sk, icsk->icsk_pmtu_cookie);
+```

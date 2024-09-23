@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+A buffer overflow vulnerability is present in the `Add_Regular_Users` function, allowing for potential memory corruption and arbitrary code execution.
+
+EXPLANATION:
+The issue is with the loop counter initialization and condition in the `while` loop. The loop counter is initialized to `num_users`, but it decrements the counter before accessing the array index, which ranges from `num_users-1` down to 0. The index exceeds the valid range for the `users` array, causing a buffer overflow when writing to `users[num_users-1].privileges`. This can lead to undefined behavior, potentially enabling an attacker to corrupt adjacent memory locations or execute arbitrary code.
+
+RECOMMENDATIONS:
+To fix the vulnerability, change the loop counter initialization and condition as follows:
+```
+int i = 0;
+while (i < num_users) {
+    users[i].privileges = PRIV_REGULAR;
+    users[i].id = i;
+    i++;
+}
+```
+Alternatively, you can use a `for` loop instead of a `while` loop, which is more idiomatic for this use case:
+```
+for (int i = 0; i < num_users; i++) {
+    users[i].privileges = PRIV_REGULAR;
+    users[i].id = i;
+}
+```
+Additionally, consider using a bounds-checking integer type or array indexing function to prevent similar issues in the future.
+
+ORIGINAL CODE:
+```
+#define PRIV_ADMIN 0
+#define PRIV_REGULAR 1
+typedef struct {
+    int privileges;
+    int id;
+} user_t;
+
+user_t* Add_Regular_Users(int num_users) {
+    user_t* users = (user_t*)calloc(num_users, sizeof(user_t));
+    int i = num_users;
+    while (--i && (users[i].privileges = PRIV_REGULAR)) {
+        users[i].id = i;
+    }
+    return users;
+}
+
+int main() {
+    user_t* test;
+    int i;
+    test = Add_Regular_Users(25);
+    for(i = 0; i < 25; i++)
+        printf("user %d has privilege level %d\n", test[i].id, test[i].privileges);
+}
+```

@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Potential Time-of-Check to Time-of-Use (TOCTOU) vulnerability in `validate_creds_for_do_exit` function call.
+
+EXPLANATION:
+The `validate_creds_for_do_exit` function is called after setting `set_fs(USER_DS)`, which changes the file system mode to user mode. This could potentially introduce a Time-of-Check to Time-of-Use (TOCTOU) vulnerability if the function performs any checks that rely on the process's credential state before conducting actions that should only be executed in a certain state. The vulnerability arises because the process's credential state can be changed after the check but before the action.
+
+RECOMMENDATIONS:
+To fix the vulnerability, use a lock or other synchronization mechanism to ensure that the process's credential state does not change between the time it is checked and the time it is used. Alternatively, consider re-ordering the sequence of operations to minimize the window of vulnerability. The exact fix would depend on the implementation of `validate_creds_for_do_exit` and the requirements of the code.
+
+ORIGINAL CODE:
+
+	if (unlikely(!tsk->pid))
+		panic("Attempted to kill the idle task!");
+
+	/*
+	 * If do_exit is called because this processes oopsed, it's possible
+	 * that get_fs() was left as KERNEL_DS, so reset it to USER_DS before
+	 * continuing. Amongst other possible reasons, this is to prevent
+	 * mm_release()->clear_child_tid() from writing to a user-controlled
+	 * kernel address.
+	 */
+	set_fs(USER_DS);
+
+	tracehook_report_exit(&code);
+
+	validate_creds_for_do_exit(tsk);

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code does not check the return value of `kzalloc` before using the allocated memory. The return statement is also misplaced, as it should be conditional and will currently always return -ENOMEM.
+
+EXPLANATION:
+In the given code, `kzalloc` is used to allocate memory for `pi`. However, the return value from `kzalloc` is not properly checked before using `pi`. If `kzalloc` fails to allocate memory, it returns a null pointer. The misplaced return statement after `kzalloc` further complicates this issue.
+
+If `pi` is null and is used without a proper check, this could result in a null pointer dereference error, which could potentially lead to a denial-of-service attack or, in some cases, even a remote code execution vulnerability.
+
+RECOMMENDATIONS:
+1. Properly check the return value of `kzalloc` before using `pi`. This should include returning an error value when `kzalloc` fails, ensuring that the function handles all potential execution paths correctly.
+
+```c
+pi = kzalloc(sizeof(struct ci_power_info), GFP_KERNEL);
+if (pi == NULL) {
+	return -ENOMEM;
+}
+```
+
+2. Remove or modify the misplaced return statement to correctly handle potential errors in memory allocation.
+
+ORIGINAL CODE:
+
+	u16 data_offset, size;
+	u8 frev, crev;
+	struct ci_power_info *pi;
+	enum pci_bus_speed speed_cap;
+	struct pci_dev *root = rdev->pdev->bus->self;
+	int ret;
+
+	pi = kzalloc(sizeof(struct ci_power_info), GFP_KERNEL);
+		return -ENOMEM;
+	rdev->pm.dpm.priv = pi;
+
+	speed_cap = pcie_get_speed_cap(root);
+	if (speed_cap == PCI_SPEED_UNKNOWN) {
+		pi->sys_pcie_mask = 0;
+	} else {
+		if (speed_cap == PCIE_SPEED_8_0GT)

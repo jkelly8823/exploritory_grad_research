@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 15, 16, 17
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability in Rectangle Calculations
+EXPLANATION:
+The code snippet contains an integer overflow vulnerability in the calculation of the required video memory size for a given display mode. The calculation involves multiplying `mode->hdisplay`, `mode->vdisplay`, and `bpp/8`, which could result in an integer overflow when `bpp` is large. The result is then compared to `mdev->mc.vram_size` to determine if the mode is valid. However, if the calculation overflows, it could result in a false positive, allowing an attacker to bypass the validation check.
+
+Additionally, the code does not perform any bounds checking on the `mode->crtc_hdisplay`, `mode->crtc_hsync_start`, `mode->crtc_hsync_end`, and `mode->crtc_htotal` values. Although the code checks if these values exceed certain limits (2048, 4096), it does not prevent integer overflows. This is a vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should use a larger data type (e.g., `uint64_t`) to perform the calculation, and also perform bounds checking on the input values to prevent integer overflows. Additionally, the code should check for potential overflows when multiplying the input values.
+
+Furthermore, the code should also validate the `bpp` value to ensure it is within a reasonable range.
+
+It is also worth noting that this code is written in a way that assumes the input values are within a certain range. Ensuring input validation for `mode->hdisplay`, `mode->vdisplay`, and `bpp` would alleviate the issue of overflows.
+
+ORIGINAL CODE:
+```c
+static int mga_vga_mode_valid(struct drm_connector *connector,
+				 struct drm_display_mode *mode)
+{
+	struct drm_device *dev = connector->dev;
+	struct mga_device *mdev = (struct mga_device*)dev->dev_private;
+	struct mga_fbdev *mfbdev = mdev->mfbdev;
+	struct drm_fb_helper *fb_helper = &mfbdev->helper;
+	struct drm_fb_helper_connector *fb_helper_conn = NULL;
+	int bpp = 32;
+	int i = 0;
+
+	/* FIXME: Add bandwidth and g200se limitations */
+
+	if (mode->crtc_hdisplay > 2048 || mode->crtc_hsync_start > 4096 ||
+	    mode->crtc_hsync_end > 4096 || mode->crtc_htotal > 4096 ||
+		return MODE_BAD;
+	}
+
+	/* Validate the mode input by the user */
+	for (i = 0; i < fb_helper->connector_count; i++) {
+		if (fb_helper->connector_info[i]->connector == connector) {
+			/* Found the helper for this connector */
+			fb_helper_conn = fb_helper->connector_info[i];
+			if (fb_helper_conn->cmdline_mode.specified) {
+				if (fb_helper_conn->cmdline_mode.bpp_specified) {
+					bpp = fb_helper_conn->cmdline_mode.bpp;
+				}
+			}
+		}
+	}
+
+	if ((mode->hdisplay * mode->vdisplay * (bpp/8)) > mdev->mc.vram_size) {
+		if (fb_helper_conn)
+			fb_helper_conn->cmdline_mode.specified = false;
+		return MODE_BAD;
+	}
+
+	return MODE_OK;
+}
+
+struct drm_encoder *mga_connector_best_encoder(struct drm_connector
+```

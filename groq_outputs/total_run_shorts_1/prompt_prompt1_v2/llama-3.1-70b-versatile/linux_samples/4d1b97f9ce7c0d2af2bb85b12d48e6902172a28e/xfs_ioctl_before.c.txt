@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 96-102, 104-112
+VULNERABILITY_DESCRIPTION:
+In the given code snippet, we observe that there is a lack of proper input validation for the `xfs_flock64_t` structure `bf`. This structure contains a `l_start` field which, when used in various calculations and checks, can lead to potential integer overflows. Furthermore, there is also a risk of TOCTOU (Time of check to time of use) bug, as data from user space can be modified during the interval between checks and subsequent uses.
+
+EXPLANATION:
+The vulnerability arises because the `l_start` field in the `xfs_flock64_t` structure is not sufficiently validated, and can potentially be set to an extremely large value. Additionally, this value is used to calculate the allocation size in `xfs_alloc_file_space` call, which could cause integer overflow. Furthermore, user-space data can be modified between checks, such as between the `copy_from_user` call and uses of `bf`.l_whence, `bf->l_start` and other `bf` fields.
+
+RECOMMENDATIONS:
+1. Perform additional validation of the `bf` structure values, especially `bf->l_start`, to prevent potential integer overflows. Consider checking if it does not exceed `inode->i_sb->s_maxbytes`.
+2. Validate the user-space data copied using `copy_from_user` immediately, and verify that it remains unchanged throughout the execution of this function.
+3. Avoid computing potentially dangerous calculations with unchecked data and prefer not to increase data in unchecked computations as it hinders overflow detection.
+
+ORIGINAL CODE:
+```c
+/* ... */
+if (bf->l_whence == 2) /*SEEK_END*/
+    bf->l_start += XFS_ISIZE(ip);
+/* ... */
+
+if (bf->l_start == 0 || bf->l_start > inode->i_sb->s_maxbytes) {
+    error = -EINVAL;
+    goto out_unlock;
+}
+
+if (bf->l_start > XFS_ISIZE(ip)) {
+    error = xfs_alloc_file_space(ip, XFS_ISIZE(ip),
+            bf->l_start - XFS_ISIZE(ip), 0);
+    if (error)
+        goto out_unlock;
+}
+
+/* ... */
+
+switch (bf->l_whence) {
+case 0: /*SEEK_SET*/
+    break;
+case 1: /*SEEK_CUR*/
+    bf->l_start += filp->f_pos;
+    break;
+case 2: /*SEEK_END*/
+    bf->l_start += XFS_ISIZE(ip);
+    break;
+default:
+    error = -EINVAL;
+    goto out_unlock;
+}
+```

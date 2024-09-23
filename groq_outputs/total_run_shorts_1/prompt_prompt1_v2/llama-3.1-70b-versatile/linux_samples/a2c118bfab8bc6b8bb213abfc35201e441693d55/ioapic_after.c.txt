@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds array access vulnerability.
+
+EXPLANATION:
+In this code snippet, there is a potential out-of-bounds array access vulnerability. If `redir_index` is equal to or greater than the size of the `ioapic->redirtbl` array, it may result in accessing memory that is not part of the array, potentially leading to undefined behavior.
+
+In this specific code, it checks if `redir_index` is less than `IOAPIC_NUM_PINS` before accessing the `ioapic->redirtbl` array. However, it assumes that the size of the `ioapic->redirtbl` array is exactly `IOAPIC_NUM_PINS`. If the actual size of the array is less than `IOAPIC_NUM_PINS`, this check may not prevent out-of-bounds access.
+
+Additionally, the code does not check for buffer overflow when shifting bits from `redir_content`. If the shift value is greater than the size of `redir_content`, it may result in undefined behavior.
+
+RECOMMENDATIONS:
+1. Verify the actual size of the `ioapic->redirtbl` array and update the condition `redir_index < IOAPIC_NUM_PINS` to reflect the actual size.
+2. Ensure that the `ioapic->redirtbl` array has the correct size and alignment before accessing it.
+3. Add a check to prevent buffer overflow when shifting bits from `redir_content`.
+
+ORIGINAL CODE:
+```c
+u32 redir_index = (ioapic->ioregsel - 0x10) >> 1;
+u64 redir_content;
+
+if (redir_index < IOAPIC_NUM_PINS)
+    redir_content = ioapic->redirtbl[redir_index].bits;
+else
+    redir_content = ~0ULL;
+
+result = (ioapic->ioregsel & 0x1) ?
+    (redir_content >> 32) & 0xffffffff :
+    redir_content & 0xffffffff;
+break;
+```

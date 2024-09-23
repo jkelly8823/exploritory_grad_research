@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+In the given code snippet, there is a buffer overflow vulnerability in the `encrypt_authorizer` function. Specifically, on lines 5-7, `p` is incremented by `ret`, which is the return value of the `ceph_x_encrypt` function. However, there is no check to ensure that `ret` is not less than `0`, which could cause `p` to point to an address before the start of the buffer, leading to a buffer overflow when writing to `msg_b->struct_v` and `msg_b->nonce`.
+
+Furthermore, even though `ret` is checked for negative values, `ceph_x_encrypt` is assumed to return the number of bytes written to the buffer. However, if `ceph_x_encrypt` writes less than `sizeof(*msg_b)`, the remaining bytes in `msg_b` will not be initialized, potentially leaving sensitive data in the buffer.
+
+Additionally, there is a `WARN_ON(p > end)` statement that checks if `p` exceeds the end of the buffer, but it's not an assertion or an error check that stops the execution of the program if the condition is met. It's just a warning, which suggests that this code assumes that `end` will always be greater than `p` and that this warning will never be triggered.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following steps can be taken:
+
+1. Add a check to ensure that `ret` is not less than `0` to prevent buffer underflow.
+2. Validate the return value of `ceph_x_encrypt` to ensure that it has written at least `sizeof(*msg_b)` bytes to the buffer.
+3. Replace `WARN_ON(p > end)` with a proper error check that stops the execution of the program if the condition is met.
+4. Add bounds checking to prevent buffer overflow when writing to `msg_b->struct_v` and `msg_b->nonce`.
+
+ORIGINAL CODE:
+```c
+static int encrypt_authorizer(struct ceph_x_authorizer *au)
+{
+        struct ceph_x_authorize_a *msg_a;
+        struct ceph_x_authorize_b *msg_b;
+        void *p, *end;
+        end = au->buf->vec.iov_base + au->buf->vec.iov_len;
+
+        msg_b = p + ceph_x_encrypt_offset();
+        msg_b->struct_v = 1;
+        msg_b->nonce = cpu_to_le64(au->nonce);
+
+        ret = ceph_x_encrypt(&au->session_key, p, end - p, sizeof(*msg_b));
+        if (ret < 0)
+                return ret;
+
+        p += ret;
+        WARN_ON(p > end);
+        au->buf->vec.iov_len = p - au->buf->vec.iov_base;
+
+        return 0;
+}
+```

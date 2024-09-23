@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability due to skb_put() and kfree_skb(skb) operations.
+
+EXPLANATION:
+The vulnerable lines 13-14 contain the `skb_put(skb, len)` and `kfree_skb(skb)` operations. The `skb_put(skb, len)` function adds data to the skb (socket buffer) structure, increasing its length by 'len'. However, after calling `memcpy_fromiovec()`, `kfree_skb(skb)` is called, which will free the skb structure, even if `memcpy_fromiovec()` fails and sets 'err' to -EFAULT. 
+
+This sequence of operations creates a potential use-after-free vulnerability, where a subsequent operation could attempt to access the already-freed skb structure.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it's crucial to move the `kfree_skb(skb)` call to after the successful return of `memcpy_fromiovec()`. The fixed code would look like this:
+
+```c
+err = -EFAULT;
+if (!memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len)) {
+    // The original code did not handle errors in memcpy_fromiovec
+    /* success */
+} else {
+    kfree_skb(skb); // Move the free operation inside the error block
+}
+```
+
+ORIGINAL CODE:
+```c
+bool __netlink_ns_capable(const struct netlink_skb_parms *nsp,
+			struct user_namespace *user_ns, int cap)
+{
+	return sk_ns_capable(nsp->sk, user_ns, cap);
+}
+EXPORT_SYMBOL(__netlink_ns_capable);
+
+/**
+	struct sk_buff *skb;
+	int err;
+	struct scm_cookie scm;
+
+	if (msg->msg_flags&MSG_OOB)
+		return -EOPNOTSUPP;
+
+		if ((dst_group || dst_portid) &&
+		    !netlink_allowed(sock, NL_CFG_F_NONROOT_SEND))
+			goto out;
+	} else {
+		dst_portid = nlk->dst_portid;
+		dst_group = nlk->dst_group;
+	}
+	NETLINK_CB(skb).portid	= nlk->portid;
+	NETLINK_CB(skb).dst_group = dst_group;
+	NETLINK_CB(skb).creds	= siocb->scm->creds;
+
+	err = -EFAULT;
+	if (memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len)) {
+		kfree_skb(skb);
+```

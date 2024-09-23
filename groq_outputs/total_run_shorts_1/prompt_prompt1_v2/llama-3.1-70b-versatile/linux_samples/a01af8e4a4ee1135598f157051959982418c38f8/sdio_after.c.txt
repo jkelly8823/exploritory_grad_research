@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+The code contains a potential double-free vulnerability. This vulnerability arises when the same memory address is freed more than once.
+
+EXPLANATION:
+The code snippet is from a function that appears to be handling error cases. In the `err_free_ssb` label, the `sdio` pointer is freed with `kfree(sdio);`. However, after freeing `sdio`, the function continues to use this pointer in subsequent labels, specifically in `err_disable_func` and `err_release_host`. If `kfree(sdio);` actually frees the memory, then using the pointer `sdio` afterwards constitutes a use-after-free vulnerability. It's also possible that this could lead to a double-free condition if the memory was previously freed elsewhere but the pointer wasn't set to NULL. Both scenarios lead to problematic situations that could allow an attacker to exploit this code for malicious purposes.
+
+RECOMMENDATIONS:
+The bug can be fixed by not using `sdio` pointer after it has been freed. Here are possible ways to address this issue:
+
+1. Avoid freeing the `sdio` pointer and instead use it for the subsequent operations. Make sure the pointer is actually freed later in the correct location where it's last used.
+
+2. Set the `sdio` pointer to NULL immediately after kfree. This way, any use of the `sdio` pointer later on will be immediately noticeable since you would be accessing a NULL pointer.
+
+```c
+err_free_ssb:
+	kfree(sdio);
+	sdio = NULL;  // recommended
+err_disable_func:
+	sdio_claim_host(func);
+	sdio_disable_func(func);
+err_release_host:
+	sdio_release_host(func);
+out:
+```
+
+If the 'func' variable holds the actual reference to 'sdio', ensure that 'func' is not being set to 'sdio' anywhere in the rest of the file. Additionally, ensure that nothing else in the code tries to free the 'sdio' or 'func' (if 'func' holds 'sdio') variables.
+
+ORIGINAL CODE:
+```c
+err_free_ssb:
+	kfree(sdio);
+err_disable_func:
+	sdio_claim_host(func);
+	sdio_disable_func(func);
+err_release_host:
+	sdio_release_host(func);
+out:
+```

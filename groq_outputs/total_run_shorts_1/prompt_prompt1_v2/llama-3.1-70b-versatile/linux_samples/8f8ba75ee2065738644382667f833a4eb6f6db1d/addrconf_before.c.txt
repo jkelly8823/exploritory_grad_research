@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+The code performs an assignment to `idev->cnf.forwarding` without acquiring a sufficient lock, potentially leading to a data race.
+
+EXPLANATION:
+The code iterates over a list of network devices using `for_each_netdev_rcu()` while holding an RCU read lock, which allows other threads to concurrently access and modify the `idev->cnf.forwarding` field. However, the assignment `idev->cnf.forwarding = newf;` is not atomic, and the lack of proper synchronization may result in data corruption or inconsistent state.
+
+RECOMMENDATIONS:
+To fix this vulnerability, acquire a lock that protects the `idev->cnf.forwarding` field. Considering the code's context, it might be suitable to use a spinlock, mutex, or the existing RCU mechanism, depending on the specific requirements. One possible solution is to use the `spin_lock()` function to acquire a lock before assigning the new value:
+
+```c
+spin_lock(&idev->lock); // Assuming idev->lock is a spinlock
+idev->cnf.forwarding = newf;
+spin_unlock(&idev->lock);
+```
+
+Alternatively, consider using an atomic operation to update the `idev->cnf.forwarding` field:
+
+```c
+atomic_exchange(&idev->cnf.forwarding, newf);
+```
+
+ORIGINAL CODE:
+```c
+struct net_device *dev;
+struct inet6_dev *idev;
+
+rcu_read_lock();
+for_each_netdev_rcu(net, dev) {
+	idev = __in6_dev_get(dev);
+	if (idev) {
+		int changed = (!idev->cnf.forwarding) ^ (!newf);
+		idev->cnf.forwarding = newf;
+			dev_forward_change(idev);
+	}
+}
+rcu_read_unlock();
+}
+static int addrconf_fixup_forwarding(struct ctl_table *table, int *p, int newf)
+```

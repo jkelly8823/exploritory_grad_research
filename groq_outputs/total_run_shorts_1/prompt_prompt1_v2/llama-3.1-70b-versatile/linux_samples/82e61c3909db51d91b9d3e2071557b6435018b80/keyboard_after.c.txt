@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14, 22-23
+VULNERABILITY_DESCRIPTION:
+The provided code snippet has potential issues with null pointer dereference and buffer overflow.
+
+EXPLANATION:
+In the given code, there are a few lines where the code does not handle potential errors robustly.
+
+Firstly, at lines 9-14, the `spin_lock_irqsave` and `spin_unlock_irqrestore` calls are properly used to lock and unlock, but there is no error checking on the `func_table` pointer before using it in the `puts_queue` function and `spin_lock_irqsave`. This could result in a null pointer dereference if `func_table` has not been initialized or assigned correctly.
+
+Secondly, at line 22-23, the `strlcpy` function call does not check if `kbs->kb_string` can hold the maximum amount of characters that will be copied from `func_table[i]`. Although `strlcpy` does limit the amount of characters to be copied, it relies on the `len` parameter to prevent buffer overflow. However, the code only checks the size of `user_kdgkb->kb_string` but not whether the actual buffer `kbs->kb_string` can hold that many characters.
+
+Additionally, `copy_to_user` may also result in a potential buffer overflow if the size of `user_kdgkb->kb_string` is larger than the size of `kbs->kb_string`. The `copy_to_user` function only checks whether the destination is in userspace, but it does not check whether the size exceeds the actual buffer.
+
+RECOMMENDATIONS:
+- Initialize the `func_table` pointer correctly and check for null pointer dereferences before using it.
+- Before calling `strlcpy`, ensure that `kbs->kb_string` has enough space to hold the data.
+- Check the size of `kbs->kb_string` before copying data into it.
+- Check the size of `user_kdgkb->kb_string` to prevent potential buffer overflow when using `copy_to_user`.
+
+ORIGINAL CODE:
+
+    return;
+
+    if ((unsigned)value < ARRAY_SIZE(func_table)) {
+        unsigned long flags;
+
+        spin_lock_irqsave(&func_buf_lock, flags);
+        if (func_table[value])
+            puts_queue(vc, func_table[value]);
+        spin_unlock_irqrestore(&func_buf_lock, flags);
+
+    } else
+        pr_err("k_fn called with value=%d\n", value);
+}
+
+#undef s
+#undef v
+
+/* FIXME: This one needs untangling */
+int vt_do_kdgkb_ioctl(int cmd, struct kbsentry __user *user_kdgkb, int perm)
+{
+    struct kbsentry *kbs;
+    u_char *q;
+    switch (cmd) {
+    case KDGKBSENT: {
+        /* size should have been a struct member */
+        ssize_t len = sizeof(user_kdgkb->kb_string);
+
+        spin_lock_irqsave(&func_buf_lock, flags);
+        len = strlcpy(kbs->kb_string, func_table[i] ? : "", len);
+        spin_unlock_irqrestore(&func_buf_lock, flags);
+
+        ret = copy_to_user(user_kdgkb->kb_string, kbs->kb_string,
+                len + 1) ? -EFAULT : 0;
+
+        goto reterr;
+    }
+    case KDSKBSENT:

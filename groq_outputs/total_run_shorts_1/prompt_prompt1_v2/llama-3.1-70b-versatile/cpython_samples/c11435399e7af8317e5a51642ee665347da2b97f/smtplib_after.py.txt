@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumbers: 22-23
+VULNERABILITY_DESCRIPTION:
+The vulnerability in the given code snippet is a potential DoS (Denial of Service) vulnerability caused by a `raise` statement inside an exception handling block. This can lead to an exception being lost and a subsequent exception being raised, potentially allowing an attacker to cause a denial of service.
+
+EXPLANATION:
+In the given code snippet, there is a `try` block with an exception handling block that catches a `socket.error`. In the exception handling block, the code raises an `SMTPServerDisconnected` exception twice in a row. This will cause the first exception to be lost and the second exception to be raised. This is problematic because it can allow an attacker who controls the input (e.g., the line received from the socket) to force the code to repeatedly raise exceptions and potentially cause a denial of service.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the second `raise` statement should be removed. The `close` method can be called separately if needed. Also, the error message in the `SMTPServerDisconnected` exception should include the original exception to provide more information about what went wrong.
+
+The corrected code should look something like this:
+
+```python
+except socket.error as e:
+    self.close()
+    raise SMTPServerDisconnected("Connection unexpectedly closed: " + str(e))
+```
+
+ORIGINAL CODE:
+
+```python
+SMTP_SSL_PORT = 465
+CRLF = "\r\n"
+bCRLF = b"\r\n"
+_MAXLINE = 8192 # more than 8 times larger than RFC 821, 4.5.3
+
+OLDSTYLE_AUTH = re.compile(r"auth=(.*)", re.I)
+
+# Exception classes used by this module.
+            self.file = self.sock.makefile('rb')
+        while 1:
+            try:
+                line = self.file.readline(_MAXLINE + 1)
+            except socket.error as e:
+                self.close()
+                raise SMTPServerDisconnected("Connection unexpectedly closed: "
+                                             + str(e))
+                raise SMTPServerDisconnected("Connection unexpectedly closed")
+            if self.debuglevel > 0:
+                print('reply:', repr(line), file=stderr)
+            if len(line) > _MAXLINE:
+                raise SMTPResponseException(500, "Line too long.")
+            resp.append(line[4:].strip(b' \t\r\n'))
+            code = line[:3]
+            # Check that the error code is syntactically correct.
+            # Don't attempt to read a continuation line if it is broken.
+```

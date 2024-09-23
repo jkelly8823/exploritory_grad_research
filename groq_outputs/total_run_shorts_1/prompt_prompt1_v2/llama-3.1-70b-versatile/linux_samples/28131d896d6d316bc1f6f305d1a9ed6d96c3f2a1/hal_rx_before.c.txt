@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 9
+VULNERABILITY_DESCRIPTION:
+Uninitialized variable and use of potentially unverified data
+
+EXPLANATION:
+The variable `rel_src` is not initialized before it is used in the line `if (rel_src != HAL_WBM_REL_SRC_MODULE_REO)`. Additionally, in the line `if (FIELD_GET(BUFFER_ADDR_INFO1_RET_BUF_MGR, wbm_desc->buf_addr_info.info1) != HAL_RX_BUF_RBM_SW3_BM)`, the data from `wbm_desc->buf_addr_info.info1` is not verified before being used.
+
+In a well-structured code, any data that is used should have its origin and integrity verified to avoid potential security risks.
+
+The bug is then further complicated by the context that `wbm_desc` is assigned a value from the `desc` variable which is nowhere defined in the given snippet.
+
+RECOMMENDATIONS:
+Before using the `rel_src`, initialize it with a default value. If it is expected to be assigned a value from an external source, verify that the source is trusted and the data is correctly loaded.
+
+Additionally, before using `wbm_desc->buf_addr_info.info1`, verify the integrity and origin of the data to ensure it is safe to use.
+
+Also, there seems to be an issue with missing bracket in the if condition. If this is the actual code, it might cause unexpected results. 
+
+The corrected block would look something like this:
+
+    enum hal_wbm_rel_src_module rel_src = 0;
+    rel_src = FIELD_GET(HAL_WBM_RELEASE_INFO0_REL_SRC,
+                         wbm_desc->info0);
+    
+    if (rel_src != HAL_WBM_REL_SRC_MODULE_REO) {
+        // handle error
+    }
+
+    if (FIELD_GET(BUFFER_ADDR_INFO1_RET_BUF_MGR,
+                  wbm_desc->buf_addr_info.info1) == HAL_RX_BUF_RBM_SW3_BM) {
+        // expected value
+    } else {
+        // handle unexpected value
+        ab->soc_stats.invalid_rbm++;
+        return -EINVAL;
+    }
+
+ORIGINAL CODE:
+    struct hal_wbm_release_ring *wbm_desc = desc;
+    enum hal_wbm_rel_desc_type type;
+    enum hal_wbm_rel_src_module rel_src;
+
+    type = FIELD_GET(HAL_WBM_RELEASE_INFO0_DESC_TYPE,
+                      wbm_desc->info0);
+    /* We expect only WBM_REL buffer type */
+        rel_src != HAL_WBM_REL_SRC_MODULE_REO)
+        return -EINVAL;
+
+    if (FIELD_GET(BUFFER_ADDR_INFO1_RET_BUF_MGR,
+                  wbm_desc->buf_addr_info.info1) != HAL_RX_BUF_RBM_SW3_BM) {
+        ab->soc_stats.invalid_rbm++;
+        return -EINVAL;
+    }

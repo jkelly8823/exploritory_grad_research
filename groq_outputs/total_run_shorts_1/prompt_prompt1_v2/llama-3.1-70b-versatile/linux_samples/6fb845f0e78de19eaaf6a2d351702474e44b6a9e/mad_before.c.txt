@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-17, 25-27
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability due to accessing memory after it has been freed.
+
+EXPLANATION:
+The provided code snippet appears to handle InfiniBand operations. In the given code, there are instances where an address handle (`ah`) is set to `NULL` after it's been destroyed using `rdma_destroy_ah`. However, there are subsequent uses of `sqp->tx_ring` without any checks to ensure that the memory it points to has not been freed, which could result in a use-after-free vulnerability. The malicious usage of an InfiniBand context to access an address handle that has already been destroyed may result in undefined behavior and potentially exposed sensitive data.
+
+Additionally, the snippet does not follow proper locking behavior in certain code paths, making the parallel access and subsequent state transitions concerning. There is no clear lock acquisition when accessing shared memory before setting `ah` to `NULL`, only within one portion of the `if (wc.status == IB_WC_SUCCESS)` code block.
+
+RECOMMENDATIONS:
+ Ensure all the necessary locks are properly acquired before and released after accessing shared states and memory, especially before setting `ah` to `NULL` or reusing the freed `ah`.
+
+Verify that the memory has not been freed before using `sqp->tx_ring`. Perform an early check for `sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah` not being `NULL` to prevent accessing memory after it's been freed.
+
+Using synchronization mechanisms and atomic operations can further help resolve shared memory access issues. However, the recommended fix should be examined for potential performance as well as safety.
+
+ORIGINAL CODE:
+
+
+    sqp_mad = (struct mlx4_mad_snd_buf *) (sqp->tx_ring[wire_tx_ix].buf.addr);
+    if (sqp->tx_ring[wire_tx_ix].ah)
+        rdma_destroy_ah(sqp->tx_ring[wire_tx_ix].ah, 0);
+    sqp->tx_ring[wire_tx_ix].ah = ah;
+    ib_dma_sync_single_for_cpu(&dev->ib_dev,
+                               sqp->tx_ring[wire_tx_ix].buf.map,
+                               sizeof (struct mlx4_mad_snd_buf),
+    if (wc.status == IB_WC_SUCCESS) {
+        switch (wc.opcode) {
+        case IB_WC_SEND:
+            rdma_destroy_ah(sqp->tx_ring[wc.wr_id &
+                          (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+            sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah
+                = NULL;
+            spin_lock(&sqp->tx_lock);
+                " status = %d, wrid = 0x%llx\n",
+                ctx->slave, wc.status, wc.wr_id);
+        if (!MLX4_TUN_IS_RECV(wc.wr_id)) {
+            rdma_destroy_ah(sqp->tx_ring[wc.wr_id &
+                          (MLX4_NUM_TUNNEL_BUFS - 1)].ah, 0);
+            sqp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah
+                = NULL;
+            spin_lock(&sqp->tx_lock);

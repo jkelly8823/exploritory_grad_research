@@ -1,0 +1,35 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No apparent vulnerability in the given code snippet.
+
+EXPLANATION:
+Upon reviewing the provided code snippet, it appears to be implementing a low-level kernel operation involving memory segmentation. The `current->thread.mm_segment` variable is modified and used to check for a specific condition. Although the operation is low-level and error-prone, no obvious vulnerability could be identified.
+
+The code snippet performs a state change to enable secondary address compatibility extension (SACF), given certain conditions. It sets and clears control registers carefully and does not seem to open any paths for potential exploits.
+
+One possible concern is that no validation of `old_fs` is performed before returning it at the end. However, since `old_fs` is restored back from `current->thread.mm_segment` at the start, its integrity is preserved throughout the function.
+
+RECOMMENDATIONS:
+Given the lack of a vulnerability in the code snippet, there are no specific recommendations to address vulnerabilities. However, the overall advice for coding low-level operations like these is to maintain defensive programming and be aware of potential operations on registers and memory. Applying address and access validation checks further down the call chain may prevent indirect vulnerabilities.
+
+ORIGINAL CODE:
+```c
+{
+	mm_segment_t old_fs;
+	unsigned long asce, cr;
+
+	old_fs = current->thread.mm_segment;
+	if (old_fs & 1)
+		return old_fs;
+	current->thread.mm_segment |= 1;
+	asce = S390_lowcore.kernel_asce;
+	if (likely(old_fs == USER_DS)) {
+		__ctl_store(cr, 1, 1);
+		__ctl_load(asce, 7, 7);
+		set_cpu_flag(CIF_ASCE_SECONDARY);
+	}
+	return old_fs;
+}
+EXPORT_SYMBOL(enable_sacf_uaccess);
+```

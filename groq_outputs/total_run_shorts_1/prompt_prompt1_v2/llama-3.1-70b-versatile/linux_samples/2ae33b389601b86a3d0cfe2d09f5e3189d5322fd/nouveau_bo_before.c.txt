@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7, 11-12
+VULNERABILITY_DESCRIPTION: 
+Uncontrolled command execution, specifically multiple calls to RING_SPACE and OUT_RING functions are chained without validation in between.
+
+EXPLANATION:
+The provided code snippet contains two potential vulnerabilities, both of which are found within each of the if statements. It appears that these if statements are likely error checking to ensure sufficient space in a buffer before passing it to a OUT_RING function which consumes a varying amount of space in the ring buffer.
+
+However, a serious potential issue exists where uncontrolled commands can be potentially chained together without a proper check for resulting buffer space after the first OUT_RING and preceding the next RING_SPACE check. 
+
+For instance, 'OUT_RING  (chan, 1);' is assumed to complete before 'ret = RING_SPACE(chan, 8);' tries to check for the buffer space to consume 8 slots in 'chan', without however validating that OUT_RING did not already overconsume 'chan' ring buffer beyond 'chan' actual capacity minus '8', thus introducing space in between OUT_RING and RING_SPACE. 
+
+Similar issues could occur for all of the 'chan'.
+
+RECOMMENDATIONS:
+Between calls to Ring functions, such as OUT_RING and on to RING_SPACE and RETURN operations, and buffer consumption operations in the code chain provided, there needs to be more safe handling for validation error messages after operations are run as compared to currently presented operation order. Introducing checks to confirm buffer consumption fits ring allocation expectations and operation capacities reduces risk to an uncontrollable operation executing on a buffer under the current logic conditions. Safe operation dictates ring checks via such function entries and messages for error confirmation per every consecutive 'chan' memory block.
+
+
+ORIGINAL CODE:
+
+		stride  = 16 * 4;
+		height  = amount / stride;
+
+		if (new_mem->mem_type == TTM_PL_VRAM &&
+		    nouveau_bo_tile_layout(nvbo)) {
+			ret = RING_SPACE(chan, 8);
+			if (ret)
+				return ret;
+			BEGIN_NV04(chan, NvSubCopy, 0x0200, 1);
+			OUT_RING  (chan, 1);
+		}
+		if (old_mem->mem_type == TTM_PL_VRAM &&
+		    nouveau_bo_tile_layout(nvbo)) {
+			ret = RING_SPACE(chan, 8);
+			if (ret)
+				return ret;

@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 19-20
+VULNERABILITY_DESCRIPTION:
+Integer Overflow in memcpy and Out-of-Bounds Write.
+
+EXPLANATION:
+The code snippet appears to be a part of a switch statement that handles different cases for L2CAP configuration options. In the cases L2CAP_CONF_EFS, the code checks if the length of the data (olen) is equal to the size of a variable (efs), and then uses memcpy to copy the data into the variable. However, if olen is larger than the size of efs, it would cause an integer overflow, potentially leading to an out-of-bounds write. 
+
+While the code checks for the correct length before copying the data in the cases L2CAP_CONF_EFS, there are two instances where this check is performed (lines 7-8 and 19-20), and if the first instance is bypassed or modified to skip this check, the code will still perform the copy operation, leading to an out-of-bounds write.
+
+RECOMMENDATIONS:
+1. Ensure that the variable olen is checked against overflow before performing the memcpy operation. This can be achieved by verifying that olen does not exceed the maximum value allowed for the variable efs.
+
+2. Consistent checking for olen is required throughout the code to prevent out-of-bounds writes.
+
+3. Always use safe functions like memmove, strcpy_s, etc., or manual loops instead of memcpy, and implement bounds checking on both input and output pointers to prevent integer overflows.
+
+4. Consistent error handling for all potential overflow errors would be recommended.
+
+ORIGINAL CODE:
+			break;
+
+		case L2CAP_CONF_EFS:
+			remote_efs = 1;
+			if (olen == sizeof(efs))
+				memcpy(&efs, (void *) val, olen);
+			break;
+
+		case L2CAP_CONF_EWS:
+			if (!(chan->conn->local_fixed_chan & L2CAP_FC_A2MP))
+			break;
+
+		case L2CAP_CONF_EFS:
+			if (olen == sizeof(efs))
+				memcpy(&efs, (void *)val, olen);
+
+			if (chan->local_stype != L2CAP_SERV_NOTRAFIC &&
+			    efs.stype != L2CAP_SERV_NOTRAFIC &&
+			    efs.stype != chan->local_stype)
+				return -ECONNREFUSED;
+
+			l2cap_add_conf_opt(&ptr, L2CAP_CONF_EFS, sizeof(efs),
+					   (unsigned long) &efs, endptr - ptr);
+			break;
+
+		case L2CAP_CONF_FCS:
+			if (*result == L2CAP_CONF_PENDING)

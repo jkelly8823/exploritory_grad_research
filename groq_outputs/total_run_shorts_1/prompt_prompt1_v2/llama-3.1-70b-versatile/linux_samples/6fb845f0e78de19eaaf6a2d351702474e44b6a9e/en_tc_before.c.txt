@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 84, 104
+VULNERABILITY_DESCRIPTION:
+The code contains potential buffer overflow vulnerabilities in the `offload_pedit_fields` function.
+EXPLANATION:
+In the `offload_pedit_fields` function, the `masks` and `vals` parameters are used to parse pedit actions. The function iterates over the `fields` array and uses the `masks` and `vals` to access memory. However, there is no bounds checking on the `masks` and `vals` pointers, which could lead to buffer overflows if they point to memory locations outside the allocated space.
+
+Additionally, the function uses the `parse_attr->mod_hdr_actions` pointer to access memory, which is allocated in the `alloc_mod_hdr_actions` function. However, there is no validation on the returned pointer to ensure that it is not NULL, which could lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, add bounds checking for the `masks` and `vals` pointers to ensure that they point to valid memory locations. Also, validate the returned pointer from the `alloc_mod_hdr_actions` function to ensure that it is not NULL before using it.
+
+Here's an example of how to add bounds checking:
+```c
+static int offload_pedit_fields(struct pedit_headers *masks,
+				struct pedit_headers *vals,
+				struct mlx5e_tc_flow_parse_attr *parse_attr,
+				struct netlink_ext_ack *extack)
+{
+	if (!masks || !vals) {
+		// handle error
+		return -ENOMEM;
+	}
+
+	size_t max_size = parse_attr->num_mod_hdr_actions * sizeof(struct pedit_headers);
+	if ((size_t)masks > max_size || (size_t)vals > max_size) {
+		// handle error
+		return -EINVAL;
+	}
+
+	// rest of the function remains the same
+}
+```
+Here's an example of how to validate the returned pointer from the `alloc_mod_hdr_actions` function:
+```c
+static int offload_pedit_fields(struct pedit_headers *masks,
+				struct pedit_headers *vals,
+				struct mlx5e_tc_flow_parse_attr *parse_attr,
+				struct netlink_ext_ack *extack)
+{
+	void *action = parse_attr->mod_hdr_actions;
+	if (!action) {
+		// handle error
+		return -ENOMEM;
+	}
+
+	// rest of the function remains the same
+}
+```
+ORIGINAL CODE:
+The original code is the provided code snippet.

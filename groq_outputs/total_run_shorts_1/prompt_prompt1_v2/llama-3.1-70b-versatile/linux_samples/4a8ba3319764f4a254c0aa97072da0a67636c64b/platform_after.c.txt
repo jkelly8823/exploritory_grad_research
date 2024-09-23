@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Resource leak due to missing error handling
+
+EXPLANATION:
+The code snippet is missing proper error handling in the `dw_dma_probe` call. If `dw_dma_probe` fails, the function will attempt to release resources such as disabling power management and unpreparing the clock. However, the resource `chip->clk` is also disabled and unprepared in a separate block of code, but its counterpart `clk_prepare_enable` is not shown. If a failure occurs in `dw_dma_probe`, this counterpart may not have been executed, potentially causing the clock to remain unprepared. This could cause resource leaks.
+
+Additionally, `dw_dma_remove` may potentially fail and return an error, but it is not handled. This could also cause resources to not be cleaned up properly.
+
+Lastly, `of_dma_controller_free` may potentially return an error, but it is not checked and no error handling is performed. 
+
+RECOMMENDATIONS:
+1) Verify that `clk_prepare_enable` is called and is checked before attempting to use `chip->clk` by adding the necessary error handling to ensure this resource is correctly prepared and later cleaned up.
+2) Check the return value of `dw_dma_remove` and perform proper error handling to prevent resource leaks.
+3) Check the return value of `of_dma_controller_free` and perform proper error handling.
+
+ORIGINAL CODE:
+
+```
+if (err)
+	return err;
+
+pm_runtime_enable(&pdev->dev);
+
+err = dw_dma_probe(chip, pdata);
+if (err)
+	goto err_dw_dma_probe;
+
+return 0;
+
+err_dw_dma_probe:
+pm_runtime_disable(&pdev->dev);
+clk_disable_unprepare(chip->clk);
+return err;
+}
+
+of_dma_controller_free(pdev->dev.of_node);
+
+dw_dma_remove(chip);
+pm_runtime_disable(&pdev->dev);
+clk_disable_unprepare(chip->clk);
+
+return 0;
+} 
+```

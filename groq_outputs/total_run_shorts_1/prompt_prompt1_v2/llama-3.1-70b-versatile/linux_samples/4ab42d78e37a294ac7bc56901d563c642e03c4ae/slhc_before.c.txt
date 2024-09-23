@@ -1,0 +1,94 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+Double-free vulnerability
+
+EXPLANATION:
+In the provided code snippet, a double-free vulnerability is present in the `slhc_init` function. If `comp->tstate` allocation fails and `comp` is not NULL, the code will free `comp` twice when `tslots > 0`. The label `out_free` is also referenced from within the second allocation, which may lead to confusion about the code flow and contribute to the vulnerability. However, if `comp->rstate` is not NULL, the `comp->rstate` will be freed in case of failure but `comp->tstate` is not freed which will result into memory leak.
+
+RECOMMENDATIONS:
+To fix the double-free vulnerability, we need to free `comp->tstate` before jumping to the `out_free` label if `comp->tstate` is allocated successfully but `comp->rstate` allocation fails. If `comp->rstate` is allocated but `comp->tstate` fails we should free `comp->rstate` too before freeing `comp`. We can fix this by introducing new goto labels. Also we should consider freeing `comp->tstate` in the error path. Here is the fixed code:
+
+```c
+static unsigned char * put16(unsigned char *cp, unsigned short x);
+static unsigned short pull16(unsigned char **cpp);
+
+/* Initialize compression data structure
+ *	slots must be in range 0 to 255 (zero meaning no compression)
+ */
+struct slcompress *
+slhc_init(int rslots, int tslots)
+{
+	register struct cstate *ts;
+	struct slcompress *comp;
+
+	comp = kzalloc(sizeof(struct slcompress), GFP_KERNEL);
+	if (! comp)
+		goto out_fail;
+
+	if ( rslots > 0  &&  rslots < 256 ) {
+		size_t rsize = rslots * sizeof(struct cstate);
+		comp->rstate = kzalloc(rsize, GFP_KERNEL);
+		if (! comp->rstate)
+			goto out_rstate_fail;
+		comp->rslot_limit = rslots - 1;
+	}
+
+	if ( tslots > 0  &&  tslots < 256 ) {
+		size_t tsize = tslots * sizeof(struct cstate);
+		comp->tstate = kzalloc(tsize, GFP_KERNEL);
+		if (! comp->tstate)
+			goto out_tstate_fail;
+	}
+
+	return comp;
+
+out_tstate_fail:
+    kfree(comp->rstate);
+out_rstate_fail:
+    kfree(comp);
+out_fail:
+	return NULL;
+}
+
+/* Free a compression data structure */
+```
+
+ORIGINAL CODE:
+```c
+static unsigned char * put16(unsigned char *cp, unsigned short x);
+static unsigned short pull16(unsigned char **cpp);
+
+/* Initialize compression data structure
+ *	slots must be in range 0 to 255 (zero meaning no compression)
+ */
+struct slcompress *
+slhc_init(int rslots, int tslots)
+{
+	register struct cstate *ts;
+	struct slcompress *comp;
+
+	comp = kzalloc(sizeof(struct slcompress), GFP_KERNEL);
+	if (! comp)
+		goto out_fail;
+
+	if ( rslots > 0  &&  rslots < 256 ) {
+		size_t rsize = rslots * sizeof(struct cstate);
+		comp->rstate = kzalloc(rsize, GFP_KERNEL);
+		if (! comp->rstate)
+			goto out_free;
+		comp->rslot_limit = rslots - 1;
+	}
+
+	if ( tslots > 0  &&  tslots < 256 ) {
+		size_t tsize = tslots * sizeof(struct cstate);
+		comp->tstate = kzalloc(tsize, GFP_KERNEL);
+		if (! comp->tstate)
+			goto out_free2;
+out_free:
+	kfree(comp);
+out_fail:
+	return NULL;
+}
+/* Free a compression data structure */
+```

@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-4
+VULNERABILITY_DESCRIPTION:  Directory Traversal vulnerability via unvalidated input.
+
+EXPLANATION:
+The vulnerability arises from the unsanitized user input ($Username) being used to construct a file path. Even though the code appears to attempt to strip out the ".." directory traversal sequence at the start of the string, this is not sufficient. For example, if the user were to input ".././../" (which the s/// statement would not catch), this would allow access to files above the "/home/user/" directory.
+
+Furthermore, the use of an untrusted input function (GetUntrustedInput()) implies that the code is actively seeking to incorporate user-supplied data into the execution path. 
+
+Lastly, the fact that theconstructed filename is used as the argument to ReadAndSendFile() implies that the contents of the file at the maliciously altered path will be sent to a remote user, which could result in sensitive data exposure.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the untrusted input is properly sanitized before being used in security-critical operations. This can include using more strict and comprehensive checks than the regex operation in place. However, due diligence must be conducted to properly encode and validate all data used in your program.
+
+In this context, one recommendation could be to use a secure implementation of a chroot() function in perl to jail your process to a directory or sub-tree, in combination with strict input validation to ensure that your process does not leave the desired location. Note that doing so will prevent access to files outside of this chosen directory tree.
+
+ORIGINAL CODE:
+                  my $Username = GetUntrustedInput();
+$Username =~ s/^\.\.\///;
+my $filename = "/home/user/" . $Username;
+ReadAndSendFile($filename);
+              

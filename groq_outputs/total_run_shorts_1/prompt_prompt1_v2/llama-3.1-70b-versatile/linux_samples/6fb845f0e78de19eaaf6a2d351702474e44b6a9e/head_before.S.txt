@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 8, 9
+VULNERABILITY_DESCRIPTION:
+A potential Deadlock and/or Starvation vulnerability exists due to busy waiting in a loop without proper synchronization.
+
+EXPLANATION:
+The code snippet appears to be a critical section of code as it is accessing and modifying shared resources. The code is using busy-waiting (spinlocks) to wait for certain conditions to be met. This is inherently non-deterministic and can lead to Deadlocks and/or Starvation if not properly synchronized.
+
+Specifically, in lines 4-5 and 8-9, the code is busy-waiting in a loop on the same condition, which is not synchronized. This can cause multiple CPU cores to be stuck in the same loop indefinitely, leading to Deadlock. Furthermore, this non-deterministic behavior can lead to Starvation, where one or more CPU cores are unable to make progress due to other CPU cores holding onto shared resources.
+
+RECOMMENDATIONS:
+- Implement proper synchronization using mutex locks or semaphores to protect shared resources.
+- Use event-driven programming to avoid busy waiting in loops.
+- If the wait condition is expected to be short-lived, consider using a backoff strategy to reduce the likelihood of multiple CPU cores contending for the same shared resource.
+
+ORIGINAL CODE:
+
+
+	movi	a2, cpu_start_ccount
+1:
+	l32i	a3, a2, 0
+	beqi	a3, 0, 1b
+	movi	a3, 0
+	s32i	a3, a2, 0
+	memw
+1:
+	l32i	a3, a2, 0
+	beqi	a3, 0, 1b
+	wsr	a3, ccount
+	movi	a3, 0
+	rsr	a0, prid
+	neg	a2, a0
+	movi	a3, cpu_start_id
+	s32i	a2, a3, 0
+#if XCHAL_DCACHE_IS_WRITEBACK
+	dhwbi	a3, 0
+#endif
+1:
+	l32i	a2, a3, 0
+	dhi	a3, 0
+	bne	a2, a0, 1b

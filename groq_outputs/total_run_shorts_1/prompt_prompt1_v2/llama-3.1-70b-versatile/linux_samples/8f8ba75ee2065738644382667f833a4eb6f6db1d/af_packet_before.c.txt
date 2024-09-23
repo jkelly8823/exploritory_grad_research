@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Uninitialized Use of Pointer or Structure Member
+
+EXPLANATION:
+In the given code snippet, the pointer `match` is used without initialization. It is used to set the `prot_hook.dev`, `prot_hook.func`, `prot_hook.af_packet_priv`, and to add it to the `fanout_list`. However, there is no initialization of the `match` structure before its use. This can lead to unpredictable behavior and potential crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to initialize the `match` pointer before its use. It's also recommended to check if the `match` pointer is not NULL before using it to prevent null pointer dereferences. Additionally, it would be beneficial to check if the memory allocation for the `match` structure was successful.
+
+Here's a sample fix:
+```c
+// Allocate memory for match
+match = kmalloc(sizeof(struct packet_fanout), GFP_KERNEL);
+if (!match) {
+    err = -ENOMEM;
+    goto error;
+}
+
+// Initialize match
+match->prot_hook.dev = po->prot_hook.dev;
+match->prot_hook.func = packet_rcv_fanout;
+match->prot_hook.af_packet_priv = match;
+dev_add_pack(&match->prot_hook);
+list_add(&match->list, &fanout_list);
+```
+ORIGINAL CODE:
+
+```c
+spin_unlock(&f->lock);
+}
+
+static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
+{
+	struct packet_sock *po = pkt_sk(sk);
+	struct packet_fanout *f, *match;
+		match->prot_hook.dev = po->prot_hook.dev;
+		match->prot_hook.func = packet_rcv_fanout;
+		match->prot_hook.af_packet_priv = match;
+		dev_add_pack(&match->prot_hook);
+		list_add(&match->list, &fanout_list);
+	}
+	err = -EINVAL;
+```

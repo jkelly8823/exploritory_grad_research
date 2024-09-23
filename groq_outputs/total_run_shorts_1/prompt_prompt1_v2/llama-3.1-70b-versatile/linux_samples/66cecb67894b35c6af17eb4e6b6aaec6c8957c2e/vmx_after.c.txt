@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 154-155, 169-170
+VULNERABILITY_DESCRIPTION:
+The code contains vulnerable conditions in the form of bounds-checking failure in two different locations.
+
+EXPLANATION:
+In the function nested_vmx_failValid(vcpu, VMXERR_INVALID_OPERAND_TO_INVEPT_INVVPID), there are two pieces of code that do not properly check the bounds of 'type'. 
+
+In the first instance (lines 154-155), the code checks if 'type' is less than 32 and if the bitwise AND operation of 'type' with 'types' results in a non-zero value. However, if 'type' is 32 or greater, the function will not check the bitwise AND operation with 'types'. This could potentially lead to a bounds-checking failure.
+
+Similarly, in the second instance (lines 169-170), the code performs the same check on 'type', but it does not properly handle the case where 'type' is 32 or greater.
+
+RECOMMENDATIONS:
+To prevent bounds-checking failure, the code should properly check the bounds of 'type' in both instances. This can be achieved by adding additional checks to ensure 'type' is within the valid range.
+
+For instance, in the first occurrence:
+
+```c
+if (type < 0 || type >= 32 || !(types & (1 << type))) {
+	nested_vmx_failValid(vcpu, VMXERR_INVALID_OPERAND_TO_INVEPT_INVVPID);
+	skip_emulated_instruction(vcpu);
+	return 1;
+}
+```
+
+And in the second occurrence:
+
+```c
+if (type < 0 || type >= 32 || !(types & (1 << type))) {
+	nested_vmx_failValid(vcpu, VMXERR_INVALID_OPERAND_TO_INVEPT_INVVPID);
+	skip_emulated_instruction(vcpu);
+	return 1;
+}
+```
+
+ORIGINAL CODE:
+
+This response contains a truncated version of the code for brevity.
+
+```c
+types = (vmx->nested.nested_vmx_ept_caps >> VMX_EPT_EXTENT_SHIFT) & 6;
+
+if (type >= 32 || !(types & (1 << type))) {
+	nested_vmx_failValid(vcpu,
+			VMXERR_INVALID_OPERAND_TO_INVEPT_INVVPID);
+	skip_emulated_instruction(vcpu);
+	return 1;
+
+types = (vmx->nested.nested_vmx_vpid_caps >> 8) & 0x7;
+
+if (type >= 32 || !(types & (1 << type))) {
+	nested_vmx_failValid(vcpu,
+		VMXERR_INVALID_OPERAND_TO_INVEPT_INVVPID);
+	skip_emulated_instruction(vcpu);
+	return 1;
+```

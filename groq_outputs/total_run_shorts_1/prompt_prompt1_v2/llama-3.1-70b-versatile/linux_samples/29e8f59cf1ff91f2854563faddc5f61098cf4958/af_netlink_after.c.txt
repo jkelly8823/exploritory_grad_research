@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 46-59
+VULNERABILITY_DESCRIPTION:
+Inconsistent permission checks for superuser.
+
+EXPLANATION: 
+The provided code snippet checks for the superuser permission "CAP_NET_ADMIN" when verifying if a netlink operation is allowed. However, these checks are not performed consistently. For some operations (like those involving NL_CFG_F_NONROOT_RECV and NL_CFG_F_NONROOT_SEND), the check is performed only for specific cases (e.g., when nladdr->nl_groups or nladdr->nl_pid is set), while for others, it is not performed at all. This inconsistency in permission checks could lead to unauthorized operations by non-root users.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that permission checks for superuser are performed consistently for all netlink operations. The code should verify the "CAP_NET_ADMIN" capability for the socket's user namespace (using ns_capable(sock_net(sock->sk)->user_ns, CAP_NET_ADMIN)) before allowing any operations that require superuser privileges.
+
+Additionally, review the logic behind the permission checks to ensure that it aligns with the intended security policies for the netlink socket. Ensure that all operations that require superuser privileges are properly checked and enforced.
+
+ORIGINAL CODE:
+```
+/* ... (rest of the code remains the same) ... */
+
+    /* Only superuser is allowed to listen multicasts */
+    if (nladdr->nl_groups) {
+        if (!netlink_allowed(sock, NL_CFG_F_NONROOT_RECV))
+            return -EPERM;
+        err = netlink_realloc_groups(sk);
+        if (err)
+            return err;
+        return -EINVAL;
+
+    if ((nladdr->nl_groups || nladdr->nl_pid) &&
+        !netlink_allowed(sock, NL_CFG_F_NONROOT_SEND))
+        return -EPERM;
+
+    if (!nlk->portid)
+        err = netlink_autobind(sock);
+        break;
+    case NETLINK_ADD_MEMBERSHIP:
+    case NETLINK_DROP_MEMBERSHIP: {
+        if (!netlink_allowed(sock, NL_CFG_F_NONROOT_RECV))
+            return -EPERM;
+        err = netlink_realloc_groups(sk);
+        if (err)
+            return err;
+        dst_group = ffs(addr->nl_groups);
+        err =  -EPERM;
+        if ((dst_group || dst_portid) &&
+            !netlink_allowed(sock, NL_CFG_F_NONROOT_SEND))
+            goto out;
+    } else {
+        dst_portid = nlk->dst_portid;
+        dst_group = nlk->dst_group;
+```

@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 11
+VULNERABILITY_DESCRIPTION:
+Double DRM modeset lock acquisition vulnerability
+EXPLANATION:
+The provided code snippet includes two calls to `__drm_modeset_lock_all` with the same argument parameters. The second call to acquire the lock is not checked for whether the lock is already held by the current thread. This can lead to a situation where the lock is double-locked, causing a deadlock.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should verify whether the lock is already held before attempting to acquire it a second time. The lock can be checked using a global or per-thread variable that tracks the lock's current state. Alternatively, the second call to `__drm_modeset_lock_all` can be removed to prevent unnecessary locking.
+
+Additionally, if the lock is intended to be reentrant, the implementation of `__drm_modeset_lock_all` should be thread-aware to prevent deadlocks.
+
+ORIGINAL CODE:
+```c
+	int i, j, rc = 0;
+	int start;
+
+	if (__drm_modeset_lock_all(dev, !!oops_in_progress)) {
+		return -EBUSY;
+	}
+	if (!drm_fb_helper_is_bound(fb_helper)) {
+		drm_modeset_unlock_all(dev);
+		return -EBUSY;
+	}
+	int ret = 0;
+	int i;
+
+	if (__drm_modeset_lock_all(dev, !!oops_in_progress)) {
+		return -EBUSY;
+	}
+	if (!drm_fb_helper_is_bound(fb_helper)) {
+		drm_modeset_unlock_all(dev);
+		return -EBUSY;
+	}
+```

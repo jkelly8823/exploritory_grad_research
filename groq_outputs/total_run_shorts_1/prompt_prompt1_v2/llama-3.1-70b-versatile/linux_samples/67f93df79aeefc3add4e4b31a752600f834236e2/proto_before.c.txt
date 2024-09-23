@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference and information leak due to an incorrect error handling in `memcpy_from_msg`.
+
+EXPLANATION:
+The function `memcpy_from_msg` is used to copy data from user space to kernel space, and if it fails (i.e., `rc != 0`), the function returns without releasing the reserved memory block created by `skb_reserve(skb, sk->sk_prot->max_header)`. This can lead to a memory leak. Additionally, an attacker could exploit the `skb` buffer overflow vulnerability if `skb_reserve` and `skb_put` are not properly validated, potentially leading to a buffer overflow. Furthermore, because the failed `memcpy_from_msg` condition does not propagate all the way up to the function's caller for example with a pointer, potential critical error can arise if the error state is further neglected.
+ 
+RECOMMENDATIONS:
+You should free the reserved skb buffer to avoid memory leaks in the error path. Also, the skb buffer needs more verification as it may allow kernel resources to be exploited if userspace code injects malicious input:
+
+```c
+if (skb == NULL)
+    goto out_release;
+
+skb_reserve(skb, sk->sk_prot->max_header);
+rc = memcpy_from_msg(skb_put(skb, len), msg, len);
+if (rc != 0) {
+    skb_trim(skb, 0); // Free reserved skb buffer.
+    goto out_discard;
+}
+```
+Validate the skb after `skb_reserve` with `skb->head + sk->sk_prot->max_header <= skb->tail`. Validate `skb_put(skb, len)` does not cause overruns.
+
+
+ORIGINAL CODE:
+
+```c
+if (skb == NULL)
+    goto out_release;
+
+skb_reserve(skb, sk->sk_prot->max_header);
+rc = memcpy_from_msg(skb_put(skb, len), msg, len);
+if (rc != 0)
+    goto out_discard;
+```

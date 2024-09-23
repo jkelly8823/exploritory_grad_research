@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential Use After Free issue.
+
+EXPLANATION:
+In the code snippet, `ioapic-> rtc_status.pending_eoi` is assigned the return value of `kvm_irq_delivery_to_apic` function call. However, it is unclear if the function modifies the `irge` structure, which might lead to a use-after-free vulnerability if `irge` is freed before its contents are used again. Although, it seems less probable because `irge` is defined just before the snippet, there's still a chance that this structure is freed somewhere else in the code not visible in this snippet.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to:
+- Analyze the function call `kvm_irq_delivery_to_apic` and ensure it does not modify `irge` structure in a way that it could lead to use-after-free.
+- Consider re-arranging code to avoid using `irge` after `kvm_irq_delivery_to_apic` is called.
+- Perform careful memory management of `irge` structure.
+
+ORIGINAL CODE:
+```
+BUG_ON(ioapic->rtc_status.pending_eoi != 0);
+ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe,
+		ioapic->rtc_status.dest_map);
+ioapic->rtc_status.pending_eoi = ret;
+} else
+	ret = kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe, NULL);
+
+if (ret && irqe.trig_mode == IOAPIC_LEVEL_TRIG)
+```

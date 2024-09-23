@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 27-28
+VULNERABILITY_DESCRIPTION:
+Resource leak and file descriptor leak due to missing `close()` calls.
+
+EXPLANATION:
+The provided code snippet appears to be a part of an FTP client implementation. In the `getline()` method, file-like objects (`conn` and `fp`) are created but not properly closed. Although the `with` statement is used, it's not applied consistently throughout the method. The file-like object `fp` is created inside a loop but its closing is not handled correctly. Additionally, the `close()` method is not explicitly called on the `conn` and `fp` objects in case of exceptions, which can lead to resource leaks and file descriptor leaks.
+
+RECOMMENDATIONS:
+1. Ensure that all file-like objects are properly closed. In this case, `conn` and `fp` objects should be closed in a `finally` block to handle exceptions.
+2. Use a `try-finally` block to close the file-like objects, if not using a `with` statement.
+3. Apply the `with` statement consistently throughout the `getline()` method to ensure that resources are properly cleaned up.
+
+Here is a corrected version of the vulnerable lines:
+
+```python
+def getline(self):
+    line = self.file.readline()
+    if self.debugging > 1:
+        print('*get*', self.sanitize(line))
+    if not line:
+        raise EOFError
+    with self.transfercmd(cmd) as conn:
+        with conn.makefile('r', encoding=self.encoding) as fp:
+            while 1:
+                line = fp.readline()
+                if self.debugging > 2:
+                    print('*retr*', repr(line))
+                if not line:
+                    break
+    with self.transfercmd(cmd) as conn:
+        try:
+            while 1:
+                buf = conn.readline()
+                if not buf:
+                    break
+                if buf[-2:] != B_CRLF:
+                    if buf[-1] in B_CRLF: buf = buf[:-1]
+        except Exception:
+            pass  # handle exceptions
+        finally:
+            conn.close()  # close conn in a finally block
+```
+
+ORIGINAL CODE:
+```
+# The standard FTP server control port
+FTP_PORT = 21
+
+# Exception raised when an error or invalid response is received
+class Error(Exception): pass
+    debugging = 0
+    host = ''
+    port = FTP_PORT
+    sock = None
+    file = None
+    welcome = None
+    passiveserver = 1
+    # Internal: return one line from the server, stripping CRLF.
+    # Raise EOFError if the connection is closed
+    def getline(self):
+        line = self.file.readline()
+        if self.debugging > 1:
+            print('*get*', self.sanitize(line))
+        if not line:
+            raise EOFError
+        with self.transfercmd(cmd) as conn, \
+                 conn.makefile('r', encoding=self.encoding) as fp:
+            while 1:
+                line = fp.readline()
+                if self.debugging > 2:
+                    print('*retr*', repr(line))
+                if not line:
+                    break
+        self.voidcmd('TYPE A')
+        with self.transfercmd(cmd) as conn:
+            while 1:
+                buf = fp.readline()
+                if not buf:
+                    break
+                if buf[-2:] != B_CRLF:
+                    if buf[-1] in B_CRLF: buf = buf[:-1]
+```

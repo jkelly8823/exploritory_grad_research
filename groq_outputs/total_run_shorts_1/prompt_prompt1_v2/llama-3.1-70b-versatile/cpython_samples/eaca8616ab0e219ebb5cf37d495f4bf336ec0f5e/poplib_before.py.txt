@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5,6
+VULNERABILITY_DESCRIPTION:
+Improper Handling of Extra CRs in POP3 Server Responses
+
+EXPLANATION:
+The `_getline` method in the POP3 class appears to be vulnerable to improper handling of extra CRs in server responses. The code assumes that a line is terminated with a single CRLF sequence, but POP3 servers may use either CR or LF as line terminators, and CR can be repeated. This can lead to incorrect parsing of the server response.
+
+The potential issue arises when a POP3 server sends multiple CRs before the actual message is sent. The readline() function in this code does not handle this scenario correctly, potentially causing incorrect handling of responses that contain extra CRs.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should handle server responses that use repeated CRs or different line terminators. This can be done by using a regular expression to parse the response lines, or by manually handling CR and LF characters. 
+
+Here's a possible fix:
+
+```python
+def _getline(self):
+    # Read a line, handling repeated CRs
+    while True:
+        line = self.file.readline()
+        # Replace repeated CRs with a single LF
+        line = line.replace(CR*2, CR+LF)
+        line = line.replace(CRLF+CR, CRLF)
+        if self._debugging > 1: print('*get*', repr(line))
+        if not line: raise error_proto('-ERR EOF')
+        octets = len(line)
+        break
+    return line
+```
+
+ORIGINAL CODE:
+```python
+LF = b'\n'
+CRLF = CR+LF
+
+
+class POP3:
+
+    """This class supports both the minimal and optional command sets.
+    # Raise error_proto('-ERR EOF') if the connection is closed.
+
+    def _getline(self):
+        line = self.file.readline()
+        if self._debugging > 1: print('*get*', repr(line))
+        if not line: raise error_proto('-ERR EOF')
+        octets = len(line)
+        # server can send any combination of CR & LF
+```

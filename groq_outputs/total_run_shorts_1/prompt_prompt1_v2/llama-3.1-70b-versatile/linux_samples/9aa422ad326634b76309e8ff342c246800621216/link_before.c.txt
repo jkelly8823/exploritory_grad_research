@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 11
+VULNERABILITY_DESCRIPTION: Potential Use-After-Free vulnerability
+EXPLANATION:
+The issue arises from the fact that the 'data' pointer is used without being assigned a value. If 'tipc_own_addr(l->net) > msg_prevnode(hdr)' is true, 'data' is used in the 'tipc_mon_rcv' function call. However, it is not clear how 'data' is being initialized or assigned a valid memory location. If 'data' is not a valid pointer, this could result in a Use-After-Free vulnerability, potentially allowing an attacker to execute arbitrary code.
+
+Moreover, there seems to be an assumption that 'data' points to a valid memory location, and the code is trying to access 'glen' bytes past this location. This is also a potential Out-of-Bounds Read vulnerability. However, without knowing the definition of the 'data' variable, it is hard to say for certain.
+
+It's worth noting that the vulnerability might not be present if 'data' is assigned a valid value somewhere else in the code.
+
+RECOMMENDATIONS:
+- Ensure that the 'data' variable is assigned a valid memory location before it is used.
+- If 'data' is supposed to point to the 'skb' buffer, consider using the 'skb->data' pointer instead.
+- Verify that 'glen' does not exceed the length of the buffer 'skb' to avoid an Out-of-Bounds Read vulnerability.
+
+ORIGINAL CODE:
+
+```c
+struct tipc_msg *hdr = buf_msg(skb);
+struct tipc_gap_ack_blks *ga = NULL;
+bool reply = msg_probe(hdr), retransmitted = false;
+u16 dlen = msg_data_sz(hdr), glen = 0;
+u16 peers_snd_nxt =  msg_next_sent(hdr);
+u16 peers_tol = msg_link_tolerance(hdr);
+u16 peers_prio = msg_linkprio(hdr);
+u16 gap = msg_seq_gap(hdr);
+void *data;
+
+trace_tipc_proto_rcv(skb, false, l->name);
+if (tipc_link_is_blocked(l) || !xmitq)
+	goto exit;
+
+if (tipc_own_addr(l->net) > msg_prevnode(hdr))
+
+		/* Receive Gap ACK blocks from peer if any */
+		glen = tipc_get_gap_ack_blks(&ga, l, hdr, true);
+
+		tipc_mon_rcv(l->net, data + glen, dlen - glen, l->addr,
+			     &l->mon_state, l->bearer_id);
+
+		/* Send NACK if peer has sent pkts we haven't received yet */
+```

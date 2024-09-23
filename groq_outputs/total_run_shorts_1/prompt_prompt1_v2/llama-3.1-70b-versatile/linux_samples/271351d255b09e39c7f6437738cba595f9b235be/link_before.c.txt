@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION: 
+Potential unsecured memory access due to unchecked(skb) being passed to kfree_skb(skb).
+
+EXPLANATION:
+The code checks the message type using a switch case statement. When the type matches MSG_CRYPTO, the message is processed by tipc_crypto_msg_rcv function. However, if the type is MSG_CRYPTO but CONFIG_TIPC_CRYPTO is not defined, the skb pointer will be consumed by kfree_skb(skb) within the default branch. If skb was not properly checked before entering this function, this could potentially result in freeing of memory that had been freed before, or an allocation that didn't exist.
+
+RECOMMENDATIONS:
+Always verify if skb pointer is set and valid before calling kfree_skb(skb). An additional check of 'skb' at the beginning of this block would help prevent potential memory-related bugs. Here is an example of this verification:
+ 
+    if(skb == NULL){
+        pr_err("skb pointer is null");
+        return false;
+    }
+
+Additionally, skb pointer should be set to NULL after being passed to kfree_skb(skb) to prevent double free issues.
+
+Here's how to use these recommendations with the previous code:
+    
+    if(skb){
+        switch (type){
+            ...
+        }
+    } else {
+        pr_err("skb pointer is null");
+        return false;
+    }
+    
+    // Within default branch:
+    if(skb){
+        kfree_skb(skb);
+        skb = NULL;
+    }
+
+ORIGINAL CODE:
+
+    return false;
+#ifdef CONFIG_TIPC_CRYPTO
+    case MSG_CRYPTO:
+        tipc_crypto_msg_rcv(l->net, skb);
+        return true;
+#endif
+    default:
+        pr_warn("Dropping received illegal msg type\n");
+        kfree_skb(skb);

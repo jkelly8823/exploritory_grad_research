@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Command Injection Vulnerability
+
+EXPLANATION:
+The vulnerability arises from the use of the `system()` function to execute a command constructed by concatenating user-provided input (`argv[1]`) with a hardcoded string. This allows an attacker to inject arbitrary commands, potentially leading to code execution and elevation of privileges.
+
+The `strcat()` function appends the user-provided input to the `cmd` buffer without proper validation or sanitization, making it vulnerable to buffer overflow and command injection attacks.
+
+Despite the hardcoded prefix `/usr/bin/cat`, an attacker can inject malicious commands by exploiting the space character at the end of the hardcoded string. For example, if the user input is `; rm -rf /`, the resulting command would be `/usr/bin/cat ; rm -rf /`, which would execute the malicious `rm -rf /` command.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using the `exec()` family of functions instead of `system()`, which allows for more granular control over the execution environment. Additionally, implement proper input validation and sanitization to prevent buffer overflows and command injection.
+
+Here's an example of a rewritten version of the code using `exec()):
+```c
+#include <unistd.h>
+int main(int argc, char** argv) {
+    char* cmd[] = {"/usr/bin/cat", argv[1], NULL};
+    execv(cmd[0], cmd);
+}
+```
+Alternatively, if `system()` must be used, ensure that the user input is properly sanitized and validated before construction the command string:
+```c
+#include <ctype.h>
+int main(int argc, char** argv) {
+    char cmd[CMD_MAX];
+    strcpy(cmd, "/usr/bin/cat ");
+    // Sanitize and validate user input
+    for (char* p = argv[1]; *p; ++p) {
+        if (!isalnum(*p)) {
+            // Handle invalid character
+        }
+        strncat(cmd, p, 1);
+    }
+    system(cmd);
+}
+```
+ORIGINAL CODE:
+```c
+int main(int argc, char** argv) { char cmd[CMD_MAX] = "/usr/bin/cat "; strcat(cmd, argv[1]); system(cmd); }
+```

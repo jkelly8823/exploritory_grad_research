@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Command Injection Vulnerability
+
+EXPLANATION:
+The `print` function contains a vulnerability that could lead to a buffer overflow and command injection attack. The function iterates over the input string `string` without checking its length or null-termination, potentially leading to a buffer overflow. Furthermore, the `sleep(1)` statement introduces a timing side-channel vulnerability. However, the more significant issue is the potential buffer overflow and command injection.
+
+In the `main` function, the `fork` call is used to create a child process. If the `pid` is -1 (error), the program exits with a non-zero status code. However, the `print` function is called with literal strings, which is not the source of the vulnerability. The vulnerability arises from the possibility of passing untrusted or user-controlled input to the `print` function. 
+
+RECOMMENDATIONS:
+1.  Use `strnlen` instead of `strlen` to prevent buffer overflows. However, as the original code was just checking if it was null-terminated, we will keep the same logic but add a check for null pointer, also, we will change the loop termination logic from checking for null-termination only, we will add a limit on the number of iterations.
+2.  Always validate and sanitize user input to prevent command injection. However, in this snippet, the input to `print` is hardcoded. For this example, we assume that in the future it could be a user input.
+
+Here's the updated code snippet:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+
+#define MAX_LENGTH 256
+
+static void print (const char * string) {
+    if (string == NULL) {
+        fprintf(stderr, "Error in print: null pointer");
+        exit(1);
+    }
+    char counter; int i = 0;
+    for (counter = *string++; counter != '\0' && i < MAX_LENGTH; counter = *string++) {
+        putc(counter, stdout);
+        fflush(stdout);
+        /* Make timing window a little larger... */
+        usleep(1000);
+        i++;
+    }
+}
+
+int main(void) {
+    pid_t pid;
+
+    pid = fork();
+    if (pid == -1) {
+        exit(-2);
+    } else if (pid == 0) {
+        print("child\n");
+    } else {
+        print("PARENT\n");
+    }
+    exit(0);
+}
+```
+
+ORIGINAL CODE:
+
+```c
+static void print (char * string) {
+    char * word;int counter;for (word = string; counter = *word++; ) {
+        putc(counter, stdout);fflush(stdout);
+        /* Make timing window a little larger... */
+        sleep(1);
+    }
+}
+int main(void) {
+    pid_t pid;
+    pid = fork();if (pid == -1) {exit(-2);}else if (pid == 0) {print("child\n");}else {print("PARENT\n");}exit(0);
+}
+```

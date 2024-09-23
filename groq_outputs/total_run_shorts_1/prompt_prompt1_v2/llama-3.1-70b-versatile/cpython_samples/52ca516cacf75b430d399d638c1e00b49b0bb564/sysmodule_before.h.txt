@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The function `PySys_WriteStdout` is vulnerable to a format string vulnerability.
+EXPLANATION:
+The function `PySys_WriteStdout` uses a variable format string and the `...` syntax, allowing the caller to specify additional arguments that will be used to format the string. This allows an attacker to inject malicious format specifiers, such as `%s` or `%n`, which can cause the program to crash, leak memory, or even execute arbitrary code. The use of the `format(printf, 1, 2)` attribute suggests that the function is intended to be used with a format string, but the variable function signature allows an attacker to bypass this protection.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the function should be modified to use a constant format string, or to properly validate and sanitize the format string and its arguments. Alternatively, the function could be modified to use a safer alternatives such as `vsnprintf` or `snprintf`. For example:
+
+```c
+PyAPI_FUNC(void) PySys_WriteStdout(const char *message)
+{
+    PyObject *stdio = _PySys_GetStdio();
+    // ...
+    FILE *output = _PySys_GetFile(stdin_name, stdin);
+    fputs(message, output);
+    // ...
+}
+```
+In this example, the function is modified to take a constant string message, rather than a format string and variable arguments.
+
+ORIGINAL CODE:
+```c
+PyAPI_FUNC(int) PySys_SetObject(char *, PyObject *);
+PyAPI_FUNC(FILE *) PySys_GetFile(char *, FILE *);
+PyAPI_FUNC(void) PySys_SetArgv(int, char **);
+PyAPI_FUNC(void) PySys_SetPath(char *);
+
+PyAPI_FUNC(void) PySys_WriteStdout(const char *format, ...)
+			Py_GCC_ATTRIBUTE((format(printf, 1, 2)));
+```

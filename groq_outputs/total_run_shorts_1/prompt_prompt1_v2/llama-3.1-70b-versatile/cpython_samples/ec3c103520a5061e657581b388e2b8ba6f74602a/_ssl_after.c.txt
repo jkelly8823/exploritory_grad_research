@@ -1,0 +1,114 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-44, 53-54
+VULNERABILITY_DESCRIPTION:
+Insecure use of ASN1_STRING_data() and BIO_gets() without proper bounds checking and error handling.
+
+EXPLANATION:
+The code uses ASN1_STRING_data() to get a pointer to the data of an ASN.1 string, but does not check for null pointer or ensure that the data is properly null-terminated. This can lead to a null pointer dereference or reading past the end of the buffer. Additionally, BIO_gets() is used to read a string from a memory BIO, but the return value is not properly checked for errors. This can lead to a buffer overflow if the data exceeds the length of the buffer.
+
+Furthermore, the code does not check for errors when decoding the ASN.1 string using PyUnicode_FromStringAndSize(). If the decoding fails, a null pointer will be returned, which can lead to a null pointer dereference.
+
+Finally, the code does not properly handle errors when using PyTuple_SET_ITEM() and PyTuple_New(). If these functions fail, the code will leak memory and continue execution without noticing.
+
+RECOMMENDATIONS:
+1. Check the return value of ASN1_STRING_data() for null pointer and ensure that the data is properly null-terminated.
+2. Use ASN1_STRING_get0_data() instead of ASN1_STRING_data() to get the data of an ASN.1 string, as it provides more safety guarantees.
+3. Use BIO_get_partial_data() instead of BIO_gets() to read a string from a memory BIO, as it provides more safety guarantees.
+4. Check the return value of PyUnicode_FromStringAndSize() for errors and handle the case where the decoding fails.
+5. Check the return value of PyTuple_SET_ITEM() and PyTuple_New() for errors and handle the case where these functions fail.
+
+ORIGINAL CODE:
+
+
+    int i, j;
+    PyObject *peer_alt_names = Py_None;
+    PyObject *v = NULL, *t;
+    X509_EXTENSION *ext = NULL;
+    GENERAL_NAMES *names = NULL;
+    GENERAL_NAME *name;
+    const X509V3_EXT_METHOD *method;
+                           ext->value->length));
+
+        for(j = 0; j < sk_GENERAL_NAME_num(names); j++) {
+            /* get a rendering of each name in the set of names */
+            int gntype;
+            ASN1_STRING *as = NULL;
+
+            name = sk_GENERAL_NAME_value(names, j);
+            gntype = name-> type;
+            switch (gntype) {
+            case GEN_DIRNAME:
+                /* we special-case DirName as a tuple of
+                   tuples of attributes */
+
+                t = PyTuple_New(2);
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 1, v);
+                break;
+
+            case GEN_EMAIL:
+            case GEN_DNS:
+            case GEN_URI:
+                /* GENERAL_NAME_print() doesn't handle NUL bytes in ASN1_string
+                   correctly. */
+                t = PyTuple_New(2);
+                if (t == NULL)
+                    goto fail;
+                switch (gntype) {
+                case GEN_EMAIL:
+                    v = PyUnicode_FromString("email");
+                    as = name->d.rfc822Name;
+                    break;
+                case GEN_DNS:
+                    v = PyUnicode_FromString("DNS");
+                    as = name->d.dNSName;
+                    break;
+                case GEN_URI:
+                    v = PyUnicode_FromString("URI");
+                    as = name->d.uniformResourceIdentifier;
+                    break;
+                }
+                if (v == NULL) {
+                    Py_DECREF(t);
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 0, v);
+                v = PyUnicode_FromStringAndSize((char *)ASN1_STRING_data(as),
+                                                ASN1_STRING_length(as));
+                if (v == NULL) {
+                    Py_DECREF(t);
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 1, v);
+                break;
+
+            default:
+                /* for everything else, we use the OpenSSL print form */
+                switch (gntype) {
+                    /* check for new general name type */
+                    case GEN_OTHERNAME:
+                    case GEN_X400:
+                    case GEN_EDIPARTY:
+                    case GEN_IPADD:
+                    case GEN_RID:
+                        break;
+                    default:
+                        if (PyErr_WarnFormat(PyExc_RuntimeWarning, 1,
+                                             "Unknown general name type %d",
+                                             gntype) == -1) {
+                            goto fail;
+                        }
+                        break;
+                }
+                (void) BIO_reset(biobuf);
+                GENERAL_NAME_print(biobuf, name);
+                len = BIO_gets(biobuf, buf, sizeof(buf)-1);
+                if (len < 0) {
+                    goto fail;
+                }
+                PyTuple_SET_ITEM(t, 1, v);
+                break;
+            }
+
+            /* and add that rendering to the list */

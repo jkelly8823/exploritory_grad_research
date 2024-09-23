@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 32
+VULNERABILITY_DESCRIPTION:
+The code uses `kfree` on a pointer after checking for its existence, and then later uses `irq_alloc_descs` without checking for errors. However, a significant issue here is the incorrect handling of pointers, particularly with `prcm_irq_setup->priority_mask`. Moreover, an error code is returned even though the function does not specify a return type of `int`.
+ 
+EXPLANATION:
+The `prcm_irq_setup->priority_mask` pointer is used after being freed, which could lead to a use-after-free vulnerability. This can be exploited by attackers to cause unpredictable behavior in the system. Additionally, potential memory leaks may occur because the function does not handle memory allocation errors correctly.
+
+Moreover, error codes should not be returned in functions declared to return `void`. 
+Finally, reusing variables like `i`, `irq`, and `offset` can be confusing and potentially introduce bugs.
+
+RECOMMENDATIONS:
+1. Remove `kfree(prcm_irq_setup->priority_mask);` to prevent the use-after-free vulnerability.
+2. Set `prcm_irq_setup->priority_mask` to `NULL` before returning from the function if it was not already set.
+3. Improve error handling for `irq_alloc_descs` and `irq_free_descs` by checking the return values.
+4. Adjust the return type of the function to accommodate the returned error code or change the function to handle errors without returning them.
+5. Refactor the code to avoid reusing variable names.
+6. Check the `prcm_irq_setup` pointer before accessing its members to avoid potential null pointer dereferences.
+
+ORIGINAL CODE:
+```c
+void omap_prcm_irq_cleanup(void)
+{
+	unsigned int irq;
+	int i;
+
+	if (!prcm_irq_setup) {
+		pr_err("PRCM: IRQ handler not initialized; cannot cleanup\n");
+	kfree(prcm_irq_setup->priority_mask);
+	prcm_irq_setup->priority_mask = NULL;
+
+	if (prcm_irq_setup->xlate_irq)
+		irq = prcm_irq_setup->xlate_irq(prcm_irq_setup->irq);
+	else
+		irq = prcm_irq_setup->irq;
+	irq_set_chained_handler(irq, NULL);
+
+	if (prcm_irq_setup->base_irq > 0)
+		irq_free_descs(prcm_irq_setup->base_irq,
+			prcm_irq_setup->nr_regs * 32);
+	int offset, i;
+	struct irq_chip_generic *gc;
+	struct irq_chip_type *ct;
+	unsigned int irq;
+
+	if (!irq_setup)
+		return -EINVAL;
+
+				1 << (offset & 0x1f);
+	}
+
+	if (irq_setup->xlate_irq)
+		irq = irq_setup->xlate_irq(irq_setup->irq);
+	else
+		irq = irq_setup->irq;
+	irq_set_chained_handler(irq, omap_prcm_irq_handler);
+
+	irq_setup->base_irq = irq_alloc_descs(-1, 0, irq_setup->nr_regs * 32,
+		0);
+```

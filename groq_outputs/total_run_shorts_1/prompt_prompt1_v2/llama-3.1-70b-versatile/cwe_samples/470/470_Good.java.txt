@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-5
+VULNERABILITY_DESCRIPTION:
+Unvalidated Direct Object Reference (IDOR) and Insecure Direct Object References vulnerabilities.
+
+EXPLANATION:
+The code snippet is vulnerable to both IDOR and Insecure Direct Object References. The 'ctl' parameter is taken directly from the request without any validation or whitelisting of permitted actions. This can allow an attacker to potentially inject malicious commands into the application. Additionally, the lack of proper validation can lead to uncontrolled object access, enabling an attacker to invoke unintended methods or actions. 
+
+Furthermore, since the 'ctl' parameter is directly influencing the creation of an object, a potential attacker could leverage this to launch a more sophisticated attack. 
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, proper input validation should be implemented on the 'ctl' parameter to ensure it only accepts expected values ('Add' or 'Modify'). Additionally, instead of using a string to dictate which object to create, consider using an enum or a fixed set of permitted actions.
+
+A suggested improvement could look like this:
+
+```java
+private enum CommandType {
+    ADD("Add"),
+    MODIFY("Modify");
+
+    private final String value;
+
+    CommandType(String value) {
+        this.value = value;
+    }
+
+    public static CommandType fromString(String value) {
+        for (CommandType commandType : values()) {
+            if (commandType.value.equalsIgnoreCase(value)) {
+                return commandType;
+            }
+        }
+        throw new UnknownActionError();
+    }
+}
+
+// ... 
+String ctl = request.getParameter("ctl");
+
+try {
+    CommandType commandType = CommandType.fromString(ctl);
+
+    Worker ao;
+    switch (commandType) {
+        case ADD:
+            ao = new AddCommand();
+            break;
+        case MODIFY:
+            ao = new ModifyCommand();
+            break;
+        default:
+            throw new UnknownActionError();
+    }
+    ao.doAction(request);
+} catch (UnknownActionError e) {
+    // Handle unknown action error
+}
+```
+
+ORIGINAL CODE:
+```java
+String ctl = request.getParameter("ctl");Worker ao = null;if (ctl.equals("Add")) {ao = new AddCommand();}else if (ctl.equals("Modify")) {ao = new ModifyCommand();}else {throw new UnknownActionError();}ao.doAction(request);
+```

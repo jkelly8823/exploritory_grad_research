@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 27, 28, 29
+VULNERABILITY_DESCRIPTION:
+Use-after-free vulnerability in conjunction with double-free vulnerability.
+
+EXPLANATION:
+The provided code snippet appears to be part of a Linux kernel module. The vulnerability exists because there are double-free and use-after-free conditions that can occur. In the first case, a `kfree` is called for `dma` after `put_task_struct(dma->task)`, and `vfio_unlink_dma(iommu, dma)` without verifying whether `dma` is still valid or not. 
+
+If `dma` has been freed before these functions are called, `vfio_unlink_dma` and `put_task_struct` would be accessing memory after it has been freed. This could potentially cause crashes or execute arbitrary code when `dma` is accessed after its memory has been freed.
+
+Furthermore, even if `dma` is valid at the moment, `put_task_struct` decrements a reference counter. If `dma->task` has already been freed before `put_task_struct(dma->task)`, `dma` could potentially be freed by another thread before the `put_task_struct(dma->task)` is done, and then `put_task_struct(dma->task)` attempts to decrement its reference counter, again potentially causing crashes.
+
+However, the code also calls `kfree` for `dma`, which indicates that `dma`'s memory has been allocated and then released. Considering this pattern, `put_task_struct(dma->task)` appears to be part of it.
+
+However, another possible double-free condition could be caused by `vfio_unlink_dma(iommu, dma)` and `kfree(dma)` which might both attempt to release `dma`'s resources. This would also cause undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, verify `dma`'s validity before `vfio_unlink_dma` and `put_task_struct`, and remove `kfree(dma)` from this code snippet as it's already releasing the `dma`'s resources in `vfio_unlink_dma` function. Double-check whether these calls are truly redundant, but it seems that way.
+
+```
+if (dma) {
+    vfio_unlink_dma(iommu, dma);
+    put_task_struct(dma->task);
+    // kfree(dma);  // Possible double-free, and/or use-after-free condition.
+}
+```
+
+Keep in mind that there is incomplete information. You should probably keep a closer look at complete code which contains this snippet, along with checking references and contexts.
+
+ORIGINAL CODE:
+
+MODULE_PARM_DESC(disable_hugepages,
+		 "Disable VFIO IOMMU support for IOMMU hugepages.");
+
+struct vfio_iommu {
+	struct list_head	domain_list;
+	struct vfio_domain	*external_domain; /* domain for external user */
+	struct mutex		lock;
+	struct rb_root		dma_list;
+	struct blocking_notifier_head notifier;
+	bool			v2;
+	bool			nesting;
+};
+
+	vfio_unlink_dma(iommu, dma);
+	put_task_struct(dma->task);
+	kfree(dma);
+}
+
+static unsigned long vfio_pgsize_bitmap(struct vfio_iommu *iommu)
+{
+		goto out_unlock;
+	}
+
+	dma = kzalloc(sizeof(*dma), GFP_KERNEL);
+	if (!dma) {
+		ret = -ENOMEM;
+		goto out_unlock;
+	}
+
+	dma->iova = iova;
+	dma->vaddr = vaddr;
+	dma->prot = prot;
+
+
+	INIT_LIST_HEAD(&iommu->domain_list);
+	iommu->dma_list = RB_ROOT;
+	mutex_init(&iommu->lock);
+	BLOCKING_INIT_NOTIFIER_HEAD(&iommu->notifier);
+
+	return iommu;

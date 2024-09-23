@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Use of Inconsistently Updated Shared Variables
+EXPLANATION:
+In the given code snippet, the `svm` struct is accessed and modified. However, it appears that multiple fields within this struct are being updated in different parts of the code. On line 8, specifically, the `int_ctl` field of `svm->vmcb->control` is updated based on the value of `svm->nested.ctl.int_ctl`. However, there is no guarantee that the update operation is thread-safe or that it will be executed atomically. This inconsistency can lead to unexpected behavior or data corruption, especially in a multi-threaded or concurrent environment.
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to implement locking or synchronization mechanisms when accessing and updating shared variables. This can be achieved by introducing a mutex or lock that ensures exclusive access to the `svm` struct during the update operation. Additionally, atomic operations or transactional memory should be considered to ensure the update is executed as a single, uninterruptible unit.
+ORIGINAL CODE:
+```c
+static void svm_clear_vintr(struct vcpu_svm *svm)
+{
+	svm_clr_intercept(svm, INTERCEPT_VINTR);
+
+	/* Drop int_ctl fields related to VINTR injection.  */
+	svm->vmcb->control.int_ctl &= ~V_IRQ_INJECTION_BITS_MASK;
+	if (is_guest_mode(&svm->vcpu)) {
+		svm->vmcb01.ptr->control.int_ctl &= ~V_IRQ_INJECTION_BITS_MASK;
+
+		WARN_ON((svm->vmcb->control.int_ctl & V_TPR_MASK) !=
+			(svm->nested.ctl.int_ctl & V_TPR_MASK));
+
+		svm->vmcb->control.int_ctl |= svm->nested.ctl.int_ctl &
+			V_IRQ_INJECTION_BITS_MASK;
+	}
+
+	vmcb_mark_dirty(svm->vmcb, VMCB_INTR);
+}
+```

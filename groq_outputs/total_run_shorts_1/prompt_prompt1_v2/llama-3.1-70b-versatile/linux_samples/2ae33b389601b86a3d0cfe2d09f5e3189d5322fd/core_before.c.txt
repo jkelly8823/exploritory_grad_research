@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+Unsecured usage of user-space input with potential for time-of-check-time-of-use (TOCTOU) vulnerability and string comparison vulnerability.
+
+EXPLANATION:
+The code checks the list of registered RNGs for a name clash. However, the input for the comparison comes from user-space (`rng->name`) and the code does not validate or sanitize this input properly before passing it to `strcmp()`, which can lead to undefined behavior if the input is a null-terminated string that has undergone manipulation. Additionally, the state of `tmp->name` is not synchronized, thus enabling TOCTOU vulnerabilities.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the input `rng->name` before passing it to `strcmp()`. This can be achieved by checking if the input string is a null-terminated string and ensuring that it does not exceed the maximum allowed length for a string.
+2. Use `strscmp()` from `linux/string.c` library instead of `strcmp()` to mitigate string comparison vulnerabilities, as `strscmp()` has built-in security features to prevent buffer overflows.
+3. Consider using `mutex_lock()` before accessing `rng_list` to prevent TOCTOU vulnerabilities.
+4. Validate that the `tmp->name` string pointer is valid before passing it to `strcmp()`. 
+
+ORIGINAL CODE:
+```c
+#include <linux/init.h>
+#include <linux/miscdevice.h>
+#include <linux/delay.h>
+#include <asm/uaccess.h>
+
+
+#define RNG_MODULE_NAME		"hw_random"
+static LIST_HEAD(rng_list);
+static DEFINE_MUTEX(rng_mutex);
+static int data_avail;
+static u8 rng_buffer[SMP_CACHE_BYTES < 32 ? 32 : SMP_CACHE_BYTES]
+	__cacheline_aligned;
+
+static inline int hwrng_init(struct hwrng *rng)
+{
+	if (!rng->init)
+
+		if (!data_avail) {
+			bytes_read = rng_get_data(current_rng, rng_buffer,
+				sizeof(rng_buffer),
+				!(filp->f_flags & O_NONBLOCK));
+			if (bytes_read < 0) {
+				err = bytes_read;
+				goto out_unlock;
+
+	mutex_lock(&rng_mutex);
+
+	/* Must not register two RNGs with the same name. */
+	err = -EEXIST;
+	list_for_each_entry(tmp, &rng_list, list) {
+		if (strcmp(tmp->name, rng->name) == 0)
+```

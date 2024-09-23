@@ -1,0 +1,86 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-18, 23-25
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Uninitialized Variable Use Vulnerabilities
+
+EXPLANATION:
+The code snippet is vulnerable to buffer overflow and uninitialized variable use vulnerabilities in the provided code. The function `iwl_mvm_ftm_resp_size_validation` uses a switch statement to check the version and then validates the packet length against hardcoded values. However, it does not handle unknown values of `ver` and uses `notif_ver` in the `iwl_mvm_ftm_pasn_update_pn` function call without validation.
+
+Additionally, the function uses `fw_resp_v7` and `fw_resp_v8` without checking if they are initialized or not, which can lead to a segmentation fault.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, you should add default cases to handle unknown values of `ver` and validate the pointers before using them. Here's an updated version of the function:
+
+```
+static bool iwl_mvm_ftm_resp_size_validation(u8 ver, unsigned int pkt_len)
+{
+    switch (ver) {
+    case 9:
+    case 8:
+        return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v8);
+    case 7:
+        return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v7);
+    default:
+        // Handle unknown versions
+        IWL_WARN(mvm, "Unknown version %d\n", ver);
+        return false;
+    }
+
+    // Add null checks for pointers before using them
+    if (new_api) {
+        if (notif_ver >= 8 && fw_resp_v8) {
+            fw_ap = &fw_resp_v8->ap[i];
+            iwl_mvm_ftm_pasn_update_pn(mvm, fw_ap);
+        } else if (notif_ver == 7 && fw_resp_v7) {
+            fw_ap = (void *)&fw_resp_v7->ap[i];
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```
+u8 *ctrl_ch_position)
+{
+    u32 freq = peer->chandef.chan->center_freq;
+    u8 cmd_ver;
+
+    *channel = ieee80211_frequency_to_channel(freq);
+
+    switch (peer->chandef.width) {
+    *format_bw = IWL_LOCATION_FRAME_FORMAT_VHT;
+    *format_bw |= IWL_LOCATION_BW_80MHZ << LOCATION_BW_POS;
+    break;
+case NL80211_CHAN_WIDTH_160:
+    cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, LOCATION_GROUP,
+            TOF_RANGE_REQ_CMD,
+            IWL_FW_CMD_VER_UNKNOWN);
+
+    if (cmd_ver >= 13) {
+        *format_bw = IWL_LOCATION_FRAME_FORMAT_HE;
+        *format_bw |= IWL_LOCATION_BW_160MHZ << LOCATION_BW_POS;
+        break;
+    }
+    fallthrough;
+default:
+    IWL_ERR(mvm, "Unsupported BW in FTM request (%d)\n",
+        peer->chandef.width);
+    return -EINVAL;
+static bool iwl_mvm_ftm_resp_size_validation(u8 ver, unsigned int pkt_len)
+{
+    switch (ver) {
+    case 9:
+    case 8:
+        return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v8);
+    case 7:
+        return pkt_len == sizeof(struct iwl_tof_range_rsp_ntfy_v7);
+        int peer_idx;
+
+        if (new_api) {
+            if (notif_ver >= 8) {
+                fw_ap = &fw_resp_v8->ap[i];
+                iwl_mvm_ftm_pasn_update_pn(mvm, fw_ap);
+            } else if (notif_ver == 7) {
+                fw_ap = (void *)&fw_resp_v7->ap[i];
+            }
+```

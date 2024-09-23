@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to potential HTTP Header injection through user input. This is a type of security vulnerability that occurs when an attacker is able to inject malicious input that is then included in an HTTP request. This code is checking if the name ends with '_proxy' and then modifying the proxies dictionary with user input.
+
+EXPLANATION:
+The vulnerability arises from the line `proxies[name[:-6]] = value` where user input `name` is used as a key to the `proxies` dictionary. This input is only validated by checking if it ends with '_proxy' but does not perform any additional validation on the value of `name`. This makes it possible for an attacker to inject malicious values that could lead to security vulnerabilities such as Server-Side Request Forgery (SSRF) attacks or Cross-Site Request Forgery (CSRF) attacks. Additionally, this vulnerability is further exacerbated by the fact that the input `name` is only converted to lowercase but no validation is performed on the contents of `name` or `value`.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, we recommend validating both the contents of `name` and `value` before using them in the `proxies` dictionary. We also recommend using a whitelisting approach where only specific values are allowed instead of using the blacklisting approach of only checking for specific suffixes. Additionally, ensure that user input is sanitized and validated before using it.
+
+ORIGINAL CODE:
+```python
+        name = name.lower()
+        if value and name[-6:] == '_proxy':
+            proxies[name[:-6]] = value
+
+    # CVE-2016-1000110 - If we are running as CGI script, forget HTTP_PROXY
+    # (non-all-lowercase) as it may be set from the web server by a "Proxy:"
+    # header from the client
+    if 'REQUEST_METHOD' in os.environ:
+        proxies.pop('http', None)
+
+    return proxies
+
+def proxy_bypass_environment(host):
+    """Test if proxies should not be used for a particular host.
+```
+Example of how the code could be modified to mitigate the vulnerability:
+```python
+# List of allowed proxy types
+ALLOWED_PROXIES = ['http', 'https', 'ftp']
+
+name = name.lower()
+if value and name.endswith('_proxy') and name[:-6] in ALLOWED_PROXIES:
+    proxies[name[:-6]] = value
+```

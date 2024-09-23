@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 14
+VULNERABILITY_DESCRIPTION: 
+Potential NULL Pointer Dereference.
+
+EXPLANATION:
+The vulnerability is present in the `pmd_bad` and `pmd_access_permitted` functions. The code does not check if `pmd` is NULL before calling functions like `pmd_raw(pmd)`, `radix__pmd_bad(pmd)`, and `pmdp_invalidate`. If `pmd` is NULL, this could lead to a segmentation fault or null pointer dereference.
+
+In `pmd_access_permitted`, it also calls `pmd_is_serializing(pmd)` without a NULL check. This may not be an issue if `pmd_is_serializing` is specifically designed to handle NULL inputs, but without access to the implementation, we cannot confirm this.
+
+In addition to the missing NULL checks, the macro redefinition of `pmd_access_permitted` can be problematic if it's not correctly replaced in all places. If an old definition is left in place and still calls the old function, this will lead to unexpected behavior.
+
+RECOMMENDATIONS:
+1. Add NULL checks before using the `pmd` pointer to prevent potential null pointer dereferences.
+
+Example:
+```c
+static inline int pmd_is_serializing(pmd_t pmd)
+{
+    if (pmd == NULL)
+        return false;
+
+    // existing code...
+}
+```
+
+2. Verify that all functions called with `pmd` as an argument are designed to handle NULL inputs.
+
+3. Remove the macro redefinition of `pmd_access_permitted` unless you're certain that all places that call it will use the new definition correctly.
+
+ORIGINAL CODE:
+```c
+return false;
+}
+
+static inline int pmd_is_serializing(pmd_t pmd)
+{
+    /*
+     * If the pmd is undergoing a split, the _PAGE_PRESENT bit is clear
+     * and _PAGE_INVALID is set (see pmd_present, pmdp_invalidate).
+     *
+     * This condition may also occur when flushing a pmd while flushing
+     * it (see ptep_modify_prot_start), so callers must ensure this
+     * case is fine as well.
+     */
+    if ((pmd_raw(pmd) & cpu_to_be64(_PAGE_PRESENT | _PAGE_INVALID)) ==
+                        cpu_to_be64(_PAGE_INVALID))
+        return true;
+
+    return false;
+}
+
+static inline int pmd_bad(pmd_t pmd)
+{
+    if (radix_enabled())
+        return radix__pmd_bad(pmd);
+#define pmd_access_permitted pmd_access_permitted
+static inline bool pmd_access_permitted(pmd_t pmd, bool write)
+{
+    /*
+     * pmdp_invalidate sets this combination (which is not caught by
+     * !pte_present() check in pte_access_permitted), to prevent
+     * lock-free lookups, as part of the serialize_against_pte_lookup()
+     * synchronisation.
+     *
+     * This also catches the case where the PTE's hardware PRESENT bit is
+     * cleared while TLB is flushed, which is suboptimal but should not
+     * be frequent.
+     */
+    if (pmd_is_serializing(pmd))
+        return false;
+
+    return pte_access_permitted(pmd_pte(pmd), write);
+}
+
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+```

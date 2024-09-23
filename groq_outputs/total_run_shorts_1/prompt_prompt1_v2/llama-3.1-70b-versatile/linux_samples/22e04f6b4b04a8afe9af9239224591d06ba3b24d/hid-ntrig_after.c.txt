@@ -1,0 +1,73 @@
+VULNERABLE: YES/NO
+VULNERABLE_LINES: Multiple occurrences, specific lines 24, 29, 34, 39, 44, 49, and also duplication mentioned below
+VULNERABILITY_DESCRIPTION:
+ Duplicate code for parsing and validating input leads to unnecessary repetition and potential maintenance issues.
+EXPLANATION:
+The code evaluates input in multiple place with mostly identical code blocks. There are multiple occurrences of the same unconditional definition 'unsigned long val;' followed by calls to kstrtoul() and followed by conditional statements. However, potential duplicate definition and redefinition of 'val' causes unused redefinitions.
+Duplicate definitions and assignments of the same variable are technically a problem as this might end up evaluating to true always and cause problems in different scenarios.
+
+Even when the definitions are legal, we still have  duplicate blocks which will have a hard work handling when more lines are added to this as these will needlessly need to be modified in every places and re-duplicated.
+
+RECOMMENDATIONS:
+The duplicate code blocks should be extracted into a separate function that can be called from where necessary. For this to be accurate and successfully executed, re-usable variables from these functions will be required only once at the top as long as this continues in the broader part of the code. Additionally, add a loop handling the expected occurrences to reduce the amount of redundant and duplicated code. Consider renaming variables to describe what the value actually is (i.e. sensor width/height).
+
+ORIGINAL CODE:
+```c
+struct hid_report *report = hdev->report_enum[HID_FEATURE_REPORT].
+				    report_id_hash[0x0d];
+
+if (!report || report->maxfield < 1 ||
+    report->field[0]->report_count < 1)
+	return -EINVAL;
+
+hid_hw_request(hdev, report, HID_REQ_GET_REPORT);
+hid_hw_wait(hdev);
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+if (val > nd->sensor_physical_width)
+	return -EINVAL;
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+if (val > nd->sensor_physical_height)
+	return -EINVAL;
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+if (val > 0x7f)
+	return -EINVAL;
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+if (val > nd->sensor_physical_width)
+	return -EINVAL;
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+if (val > nd->sensor_physical_height)
+	return -EINVAL;
+
+unsigned long val;
+
+if (kstrtoul(buf, 0, &val))
+	return -EINVAL;
+
+/*
+ * No more than 8 terminal frames have been observed so far
+```

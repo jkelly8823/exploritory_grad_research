@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION:
+Potential Unchecked Error Code Vulnerability.
+
+EXPLANATION:
+The code appears to be responsible for binding memory in a virtualized environment. However, after calling the `cond_resched()` function, it is not verified if the current function call was interrupted or any context switch occurred. This function does not return any value, but it can reschedule the current process if it is necessary to do so.
+
+The issue is that this function can potentially be interrupted in this condition after `cond_resched()`. However, this potential and context will not be rescheduled without calling a function with a return value. However, the current problem does exist, if it happens to trigger a transition with some operating systems.
+
+Furthermore, within the loop it checks if `rc` equals `H_BUSY`, but it does not verify how many iterations this loop goes through. Thus, a loop without limitation could potentially trigger denial of service attacks.
+
+
+Later within the function it is found that `dev_dbg()` includes the address of the structure on a Linux system. Therefore uncontrolled print statements to standard error file and debug information on Linux allow the addresses of allocated structures to be printed.
+
+
+RECOMMENDATIONS:
+- The best way to address the `cond_resched()` loop problem is to include an iteration limit in that loop.
+- Ensuring the protection from potential values passed by rescheduling will protect your results.
+- It should not include any `dev_dbg()` with address values.
+- Include a commented-out example so you can change address values as an example if you must leave these values for print statements.
+
+ORIGINAL CODE:
+{
+	unsigned long ret[PLPAR_HCALL_BUFSIZE];
+	uint64_t rc, token;
+	uint64_t saved = 0;
+
+	/*
+	 * When the hypervisor cannot map all the requested memory in a single
+	 * hcall it returns H_BUSY and we call again with the token until
+		rc = plpar_hcall(H_SCM_BIND_MEM, ret, p->drc_index, 0,
+				p->blocks, BIND_ANY_ADDR, token);
+		token = ret[0];
+		if (!saved)
+			saved = ret[1];
+		cond_resched();
+	} while (rc == H_BUSY);
+
+	if (rc) {
+		return -ENXIO;
+	}
+
+	p->bound_addr = saved;
+
+	dev_dbg(&p->pdev->dev, "bound drc %x to %pR\n", p->drc_index, &p->res);
+
+	return 0;

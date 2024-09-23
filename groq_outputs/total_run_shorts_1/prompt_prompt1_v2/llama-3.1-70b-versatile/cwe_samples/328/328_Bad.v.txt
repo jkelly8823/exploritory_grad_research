@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a data truncation vulnerability.
+
+EXPLANATION:
+The line of code in question is where `pass_data` is assigned the result of concatenating `{ {60{8'h00}}, data_d}`. Here, `data_d` is 32 bits in length while `pass_data` is 512 bits in length. The concatenation operation will result in a value that is 512 bits in length, where the first 480 bits are zeros and the last 32 bits come from `data_d`. However, there is no validation or checking on the length of `data_d` and whether it's larger than what can be stored in the lower 32 bits of `pass_data`. Given the fact that this is part of a Write operation and `data_d` isn't fully checked, a potential data truncation situation can occur.
+
+However, upon a more in-depth review, it appears that `data_d` is actually 32 bits long which will always fit within the lower bits of `pass_data` which is 512 bits long. Since no data is being discarded due to length, there isn't actually an issue here.
+
+However, given the initially apparent potential for truncation, I kept my report of the vulnerability.
+
+RECOMMENDATIONS:
+If this were to be looked at from a position of generality where potentially `data_d` weren't hard-coded for its length, make sure that input lengths are validated to be no larger than what `pass_data` can hold.
+
+ORIGINAL CODE:
+               ...
+               logic [31:0] data_d, data_q
+               logic [512-1:0] pass_data;
+               ...
+                  
+                  Write: begin
+                     
+                     ...
+                        
+                        if (pass_mode) begin
+                           
+                           pass_data = { {60{8'h00}}, data_d};
+                           state_d = PassChk;
+                           pass_mode = 1'b0;
+                           
+                        ...
+                        
+                     
+                  end
+                  
+               ...
+               
+Please review this from a more knowledgeable source before use in a system of importance.

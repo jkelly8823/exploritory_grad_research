@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a time-of-check to time-of-use (TOCTOU) bug, as well as potential information disclosure through an uninitialized structure.
+
+EXPLANATION:
+The code uses `__ip_vs_get_timeouts` to populate the `t` structure, and then copies the structure to user space using `copy_to_user`. However, between the call to `__ip_vs_get_timeouts` and `copy_to_user`, the structure's contents may change, leading to a TOCTOU bug. Additionally, the `memset` call initializes the structure with zeros, but the `__ip_vs_get_timeouts` function may not initialize all fields of the structure. If the structure contains padding or uninitialized fields, sensitive information may be leaked to the user.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should ensure that the structure is fully initialized or zeroized before copying it to user space. Additionally, the code should avoid using `__ip_vs_get_timeouts` and `copy_to_user` in a TOCTOU manner.
+
+Here is an example of how the code could be fixed:
+```c
+{
+    struct ip_vs_timeout_user t;
+
+    memset(&t, 0, sizeof(t));
+    if (__ip_vs_get_timeouts(net, &t) != 0) {
+        ret = -EFAULT;
+    } else if (copy_to_user(user, &t, sizeof(t)) != 0) {
+        ret = -EFAULT;
+    }
+}
+```
+However, it is recommended to use a more secure approach, such as using a secure copy function that checks for errors and avoids TOCTOU bugs.
+
+ORIGINAL CODE:
+```c
+{
+    struct ip_vs_timeout_user t;
+
+    memset(&t, 0, sizeof(t));
+    __ip_vs_get_timeouts(net, &t);
+    if (copy_to_user(user, &t, sizeof(t)) != 0)
+        ret = -EFAULT;
+}
+```

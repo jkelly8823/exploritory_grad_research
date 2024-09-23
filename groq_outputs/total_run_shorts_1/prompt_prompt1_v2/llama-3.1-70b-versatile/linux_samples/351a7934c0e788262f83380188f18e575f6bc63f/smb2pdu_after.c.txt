@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to a type of buffer overflow vulnerability due to the lack of validation on the received values from the 'rsp' structure.
+
+EXPLANATION:
+The code does not validate the values received from the 'rsp' structure before assigning them to the 'maxBuf', 'max_read', and 'max_write' variables. The 'maxBuf' calculation uses 'min_t' to limit the value, but 'max_read' and 'max_write' are not validated in this snippet. 
+
+There is a potential vulnerability if the 'max_read' or 'max_write' values are larger than the actual buffer size, or if the 'maxBuf' calculation is manipulated to exceed the 'SMB2_MAX_BUFFER_SIZE' due to an attacker-controlled 'rsp->MaxTransactSize' value.
+
+Additionally, the comment "BB Do we need to validate the SecurityMode?" suggests that there might be another vulnerability related to the 'SecurityMode' field.
+
+RECOMMENDATIONS:
+To fix this vulnerability:
+- Add validation for 'rsp->MaxReadSize' and 'rsp->MaxWriteSize' to ensure they do not exceed the actual buffer size.
+- Validate ' rsp->MaxTransactSize' to prevent manipulation of the 'maxBuf' calculation.
+- Validate the 'SecurityMode' field to ensure it is within a valid range or values.
+
+ORIGINAL CODE:
+
+    /* SMB2 only has an extended negflavor */
+    server->negflavor = CIFS_NEGFLAVOR_EXTENDED;
+    /* set it to the maximum buffer size value we can send with 1 credit */
+    server->maxBuf = min_t(unsigned int, le32_to_cpu(rsp->MaxTransactSize),
+                       SMB2_MAX_BUFFER_SIZE);
+    server->max_read = le32_to_cpu(rsp->MaxReadSize);
+    server->max_write = le32_to_cpu(rsp->MaxWriteSize);
+    /* BB Do we need to validate the SecurityMode? */
+    server->sec_mode = le16_to_cpu(rsp->SecurityMode);

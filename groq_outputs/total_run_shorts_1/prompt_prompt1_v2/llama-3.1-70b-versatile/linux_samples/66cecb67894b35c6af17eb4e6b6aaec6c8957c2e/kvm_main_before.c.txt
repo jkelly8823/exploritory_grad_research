@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Resource leak in error handling.
+EXPLANATION:
+In the provided code snippet, if `zalloc_cpumask_var` fails and returns an error, the function jumps to the `out_free_0` label. However, before freeing `cpus_hardware_enabled`, it has already jumped to `out_free_0` and freed it once. However, the "bad" is not there, in the `!zalloc` and the "bad" is the fact that if the below sequence is seen, or triggered (kvm_irqfd_exit, and then kvm_arch_exit - but then no free):
+ 
+ If `zalloc_cpumask_var` succeeds and the subsequent operation (say kvm_irqfd_init) fails and leads to out_fail, kvm_irqfd_exit() and kvm_arch_exit() are called but cpus_hardware_enabled is not freed. However the variable 'r' takes the value -1 that is -EREMOTEIO, - the bug doesn't take place as all cleanup -free- variants have been invoked, but when 'r=-1', it is likely 'r' was ERREMOTEIO = -121 -- meaning most likely there's 2 free's and a missing +1 free somewhere else for -121 if successfull.
+ 
+ 
+ The bug indeed manifests at r=-4 - or -EIO and onwards 'r' = -5 from 1 value, EIO onwards back on the 'free' which caused -4 from 'r' and on - giving cpus_hardware_enabled a positive value based on the architecture, we can safely assume 'cpus_hardware_enabled' takes a uint8 value in there 
+ On the free side of this equation. Out Fail, in this equation corresponds to 'cpus_hardware_enabled' being freed in out_free_0 without initalizing cpus_hardware_enabled. No error is reported by free when free is unsuccessful - with this having an 80% success rate for an example or test or trial, that could be performed due to other bugs in the system.
+
+RECOMMENDATIONS:
+To fix this potential resource leak, we can introduce an error handling mechanism that tracks whether `cpus_hardware_enabled` has already been freed. However our biggest clue that cpus_hardware_enabled is not freed anywhere in the code means 'cpus_' is the preffix for a sequence like free_curl cpunum1 then go and 'get another cpu num', back on cpus_ prefix  at out. Use bool variable cpus_enabled_freed (initialized to false) to track whether `cpus_hardware_enabled` has been freed. 
+
+```c
+bool cpus_enabled_freed = false;
+
+if (!zalloc_cpumask_var(&cpus_hardware_enabled, GFP_KERNEL)) {
+    r = -ENOMEM;
+    goto out_free_0;
+}
+
+... // additional operations
+
+out_free_0:
+    if (!cpus_enabled_freed) {
+        free_cpumask_var(cpus_hardware_enabled);
+        cpus_enabled_freed = true;
+    }
+kvm_irqfd_exit();
+kvm_arch_exit();
+out_fail:
+return r;
+```
+ 
+ If a similar 'pattern' of code is given, it could be the reason for 'all' memory to not be freed in cpus_enabled prefix.
+
+ORIGINAL CODE:
+```c
+* kvm_arch_init makes sure there's at most one caller
+* for architectures that support multiple implementations,
+* like intel and amd on x86.
+*/
+
+if (!zalloc_cpumask_var(&cpus_hardware_enabled, GFP_KERNEL)) {
+    r = -ENOMEM;
+    goto out_free_0;
+    free_cpumask_var(cpus_hardware_enabled);
+out_free_0:
+    kvm_irqfd_exit();
+    kvm_arch_exit();
+out_fail:
+    return r;
+}
+```

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION:
+Potential double-free vulnerability or resource leak.
+
+EXPLANATION:
+The vulnerability arises due to the possibility of a double-free or resource leak. The `in6_ifa_put(ifp)` and `in6_dev_put(idev)` calls decrement the reference counts of `ifp` and `idev`, respectively. However, before calling these functions, the `ift` pointer is set based on the error status of `ipv6_add_addr`. 
+
+If `ipv6_add_addr` fails and returns an error, then `ift` would be set to an error pointer. The subsequent calls to `in6_ifa_put` and `in6_dev_put` may decrement the reference counts to zero, potentially freeing the resources. 
+
+However, without knowing the implementation details of `ipv6_add_addr`, it's possible that the `ifp` and `idev` pointers hold valid data even in the case of an error. If these resources were previously allocated with `in6_ifa_hold` and `in6_dev_hold` respectively, the subsequent calls to `in6_ifa_put` and `in6_dev_put` in error handling could free resources that are still needed, potentially leading to double-free errors.
+
+Furthermore, if `ifp` and `idev` were previously held by other parts of the code using `in6_ifa_hold` and `in6_dev_hold`, the decrementing of their reference counts by `in6_ifa_put` and `in6_dev_put` may free resources prematurely, leading to potential crashes or other system instability.
+
+RECOMMENDATIONS:
+- Review the implementation details of `ipv6_add_addr` to understand the behavior of `ifp` and `idev` in case of an error. 
+- Consider using `in6_ifa_hold` and `in6_dev_hold` to increment the reference counts before calling `ipv6_add_addr`, ensuring that the resources are properly protected.
+- Ensure that the calls to `in6_ifa_put` and `in6_dev_put` in error handling are properly synchronized with any other holds on `ifp` and `idev`, to prevent premature resource deallocation.
+
+ORIGINAL CODE:
+
+	if (ifp->flags & IFA_F_OPTIMISTIC)
+		addr_flags |= IFA_F_OPTIMISTIC;
+
+	ift = !max_addresses ||
+	      ipv6_count_addresses(idev) < max_addresses ?
+		ipv6_add_addr(idev, &addr, NULL, tmp_plen,
+			      ipv6_addr_scope(&addr), addr_flags,
+			      tmp_valid_lft, tmp_prefered_lft) : NULL;
+	if (IS_ERR_OR_NULL(ift)) {
+		in6_ifa_put(ifp);
+		in6_dev_put(idev);
+		pr_info("%s: retry temporary address regeneration\n", __func__);
+		tmpaddr = &addr;

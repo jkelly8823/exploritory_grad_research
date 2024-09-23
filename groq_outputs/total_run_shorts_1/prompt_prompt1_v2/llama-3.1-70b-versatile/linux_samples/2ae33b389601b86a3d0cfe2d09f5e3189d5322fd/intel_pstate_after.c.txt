@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 9
+VULNERABILITY_DESCRIPTION:
+Integer Truncation in Performance Calculation
+
+EXPLANATION:
+Integer truncation occurs when a value is cast from a larger type to a smaller type, potentially losing precision. In the given code snippet, this is seen on lines 8-9 where the calculation of `limits.min_perf_pct` involves integer division and could result in truncation of the performance percentage.
+
+The calculation `policy->min * 100` may cause the multiplication result to exceed the range of an integer type, especially if `policy->min` and `policy->cpuinfo.max_freq` are large values. Additionally, this result is then divided by `policy->cpuinfo.max_freq`, potentially resulting in truncation of the decimal value.
+
+The subsequent line `clamp_t(int, limits.min_perf_pct, 0, 100)` ensures the calculated value does not exceed the range [0, 100], which does mitigate the effects of truncation but not the root cause.
+
+RECOMMENDATIONS:
+1. Use floating-point types for the calculation to maintain precision before converting to an integer. 
+2. Apply rounding to the result of the calculation to minimize the effects of truncation. 
+Example of how to fix:
+```c
+limits.min_perf_pct = (int)((policy->min * 100 + policy->cpuinfo.max_freq / 2) / policy->cpuinfo.max_freq);
+limits.min_perf_pct = clamp_t(int, limits.min_perf_pct, 0, 100);
+```
+This will reduce the potential for truncation errors but requires further evaluation in the context of specific requirements.
+
+ORIGINAL CODE:
+```c
+cpu = all_cpu_data[policy->cpu];
+
+if (!policy->cpuinfo.max_freq)
+	return -ENODEV;
+
+intel_pstate_get_min_max(cpu, &min, &max);
+
+limits.min_perf_pct = (policy->min * 100) / policy->cpuinfo.max_freq;
+limits.min_perf_pct = clamp_t(int, limits.min_perf_pct, 0 , 100);
+ .owner		= THIS_MODULE,
+};
+
+static int __initdata no_load;
+
+static int __init intel_pstate_init(void)
+{
+	int cpu, rc = 0;
+	const struct x86_cpu_id *id;
+
+	if (no_load)
+		return -ENODEV;
+	intel_pstate_sysfs_expose_params();
+	return rc;
+out:
+	get_online_cpus();
+	for_each_online_cpu(cpu) {
+		if (all_cpu_data[cpu]) {
+			del_timer_sync(&all_cpu_data[cpu]->timer);
+			kfree(all_cpu_data[cpu]);
+		}
+	}
+
+	put_online_cpus();
+	vfree(all_cpu_data);
+	return -ENODEV;
+}
+device_initcall(intel_pstate_init);
+```

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 13
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability in for loop condition.
+
+EXPLANATION:
+The vulnerability is present in the for loop condition. The loop iterates over the variable `nr_pages`, which is calculated by right-shifting the `pool->size` by `PAGE_SHIFT`. If `pool->size` is very large and the right-shift operation causes an underflow, the resulting value of `nr_pages` could be a small positive integer. However, in the for loop, `i` is declared as an `int`, and it may cause an integer overflow if `nr_pages` is larger than the maximum value that can be represented by `int`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to use a type that can handle the maximum value of `nr_pages`, such as `size_t` or `unsigned long`. Additionally, it's recommended to check for potential overflows before performing arithmetic operations.
+
+Here is an example of how the for loop could be rewritten:
+```c
+for (size_t i = 0; i < nr_pages; i++) {
+    // ...
+}
+```
+Alternatively, you could also use a more robust method to calculate the loop bounds, such as using a `while` loop and manually incrementing the counter.
+
+ORIGINAL CODE:
+```c
+{
+    struct dma_pool *pool = &atomic_pool;
+    pgprot_t prot = pgprot_dmacoherent(pgprot_kernel);
+    gfp_t gfp = GFP_KERNEL | GFP_DMA;
+    unsigned long nr_pages = pool->size >> PAGE_SHIFT;
+    unsigned long *bitmap;
+    struct page *page;
+    struct page **pages;
+    ptr = __alloc_from_contiguous(NULL, pool->size, prot, &page,
+                              atomic_pool_init);
+else
+    ptr = __alloc_remap_buffer(NULL, pool->size, gfp, prot, &page,
+                           atomic_pool_init);
+if (ptr) {
+    int i;
+
+    for (i = 0; i < nr_pages; i++)
+```

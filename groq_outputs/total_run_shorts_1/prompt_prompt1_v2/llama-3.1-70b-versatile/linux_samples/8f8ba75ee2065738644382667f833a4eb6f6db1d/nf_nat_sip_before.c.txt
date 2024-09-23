@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7, 11-12
+VULNERABILITY_DESCRIPTION:
+Potential format string vulnerability and unsigned integer overflow vulnerability in sprintf calls.
+
+EXPLANATION:
+The code contains two calls to sprintf with a format string that includes the "%pI4" format specifier, which may be used to format IPv4 addresses. While in this context it appears to be legitimate, using sprintf with untrusted or unknown input can lead to format string vulnerabilities. 
+In addition, the size of the buffer (sizeof("nnn.nnn.nnn.nnn:nnnnn")) is fixed and might be not enough to hold the formatted string. It's better to use snprintf to avoid the possibility of buffer overflow.
+Moreover, using unsigned int to store the result of sprintf and other string operations could lead to integer overflows.
+
+RECOMMENDATIONS:
+Use snprintf instead of sprintf to prevent buffer overflows. The format string should be reviewed to ensure that it does not introduce format string vulnerabilities. 
+Also, using size_t for storing the result of snprintf is safer to prevent overflow issues. Here is how you could modify the code:
+
+```c
+size_t buflen;
+char buffer[sizeof("nnn.nnn.nnn.nnn:nnnnn")];
+...
+buflen = snprintf(buffer, sizeof(buffer), "%pI4", &ct->tuplehash[!dir].tuple.dst.u3.ip);
+buflen = snprintf(buffer, sizeof(buffer), "%pI4", &ct->tuplehash[!dir].tuple.src.u3.ip);
+...
+```
+It is crucial to validate the return value of snprintf. The return value should be less than the size of the buffer.
+
+ORIGINAL CODE:
+
+```c
+if (ct_sip_parse_header_uri(ct, *dptr, NULL, *datalen,
+				    hdr, NULL, &matchoff, &matchlen,
+				    &addr, &port) > 0) {
+	unsigned int matchend, poff, plen, buflen, n;
+	char buffer[sizeof("nnn.nnn.nnn.nnn:nnnnn")];
+
+	/* We're only interested in headers related to this
+	 * connection */
+				goto next;
+	}
+
+	if (!map_addr(skb, dataoff, dptr, datalen, matchoff, matchlen,
+		      &addr, port))
+		return NF_DROP;
+
+	matchend = matchoff + matchlen;
+
+	/* The maddr= parameter (RFC 2361) specifies where to send
+	 * the reply. */
+	if (ct_sip_parse_address_param(ct, *dptr, matchend, *datalen,
+				       "maddr=", &poff, &plen,
+				       &addr) > 0 &&
+	    addr.ip == ct->tuplehash[dir].tuple.src.u3.ip &&
+	    addr.ip != ct->tuplehash[!dir].tuple.dst.u3.ip) {
+		buflen = sprintf(buffer, "%pI4",
+				&ct->tuplehash[!dir].tuple.dst.u3.ip);
+		 * from which the server received the request. */
+	if (ct_sip_parse_address_param(ct, *dptr, matchend, *datalen,
+				       "received=", &poff, &plen,
+				       &addr) > 0 &&
+	    addr.ip == ct->tuplehash[dir].tuple.dst.u3.ip &&
+	    addr.ip != ct->tuplehash[!dir].tuple.src.u3.ip) {
+		buflen = sprintf(buffer, "%pI4",
+				&ct->tuplehash[!dir].tuple.src.u3.ip);
+```

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION:
+The code contains a vulnerability related to integer overflow and incomplete copy checks in PCI configuration read operations.
+
+EXPLANATION:
+The code snippet seems to be handling PCI bus and configuration read operations. However, there is an integer overflow vulnerability and incomplete copy checks on lines 7-11. The calculation `where % 4` * 8 can potentially lead to an integer overflow. Furthermore, the function `pci_generic_config_read` seems to return an integer value `ret` which can be subject to incomplete copy checks, allowing malicious input to be copied without validation. 
+
+Additionally, the code lacks proper bounds checking, specifically when accessing `val` which is a pointer to an unsigned 32-bit integer. The pointer `val` might be a buffer that is vulnerable to overwrites and potential overflows.
+
+RECOMMENDATIONS:
+To mitigate the vulnerability:
+
+1. Validate the input parameters, especially `devfn` and `where`, to prevent integer overflow.
+2. Ensure that `pci_generic_config_read` returns a reliable indication of success and validate the return value.
+3. Properly validate and sanitize the data stored in `val`.
+4. Perform bounds checking on `val` before performing operations to prevent potential buffer overflows.
+
+ORIGINAL CODE:
+```c
+} else /* remote PCI bus */
+	base = cnspci->cfg1_regs + ((busno & 0xf) << 20);
+
+	return base + where + (devfn << 12);
+}
+
+static int cns3xxx_pci_read_config(struct pci_bus *bus, unsigned int devfn,
+				   int where, int size, u32 *val)
+	u32 mask = (0x1ull << (size * 8)) - 1;
+	int shift = (where % 4) * 8;
+
+	ret = pci_generic_config_read(bus, devfn, where, size, val);
+
+	if (ret == PCIBIOS_SUCCESSFUL && !bus->number && !devfn &&
+	    (where & 0xffc) == PCI_CLASS_REVISION)
+		/*
+```

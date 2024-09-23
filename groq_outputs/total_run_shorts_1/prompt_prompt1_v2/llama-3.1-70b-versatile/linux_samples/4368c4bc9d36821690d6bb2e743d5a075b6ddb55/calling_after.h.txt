@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-19
+VULNERABILITY_DESCRIPTION:
+Potential stack exposure and memory disclosure vulnerability.
+
+EXPLANATION:
+The `STACKLEAK_ERASE_NOCLOBBER` macro includes a call to `stackleak_erase` when `CONFIG_GCC_PLUGIN_STACKLEAK` is enabled. However, this macro also contains a `PUSH_AND_CLEAR_REGS` directive, which does not clear all registers. This can potentially lead to stack exposure and memory disclosure, as sensitive data may still be present in registers that are not cleared. 
+
+Additionally, the `STACKLEAK_ERASE_NOCLOBBER` macro does not properly erase the stack frame when `CONFIG_GCC_PLUGIN_STACKLEAK` is not enabled. This can also lead to potential stack exposure and memory disclosure.
+
+RECOMMENDATIONS:
+To address this vulnerability, it is recommended to:
+
+1. Update the `STACKLEAK_ERASE_NOCLOBBER` macro to properly clear all registers, not just the ones that are clear by the `PUSH_AND_CLEAR_REGS` directive.
+2. Ensure that the stack frame is erased in all cases, not just when `CONFIG_GCC_PLUGIN_STACKLEAK` is enabled.
+3. Use more robust mechanisms to prevent stack exposure and memory disclosure, such as using a reliable stack erasure algorithm or a memory-safe mechanism to store sensitive data.
+
+ORIGINAL CODE:
+
+
+#endif
+
+/*
+ * Mitigate Spectre v1 for conditional swapgs code paths.
+ *
+ * FENCE_SWAPGS_USER_ENTRY is used in the user entry swapgs code path, to
+ * prevent a speculative swapgs when coming from kernel space.
+ *
+ * FENCE_SWAPGS_KERNEL_ENTRY is used in the kernel entry non-swapgs code path,
+ * to prevent the swapgs from getting speculatively skipped when coming from
+ * user space.
+ */
+.macro FENCE_SWAPGS_USER_ENTRY
+	ALTERNATIVE "", "lfence", X86_FEATURE_FENCE_SWAPGS_USER
+.endm
+.macro FENCE_SWAPGS_KERNEL_ENTRY
+	ALTERNATIVE "", "lfence", X86_FEATURE_FENCE_SWAPGS_KERNEL
+.endm
+
+.macro STACKLEAK_ERASE_NOCLOBBER
+#ifdef CONFIG_GCC_PLUGIN_STACKLEAK
+	PUSH_AND_CLEAR_REGS
+	call stackleak_erase

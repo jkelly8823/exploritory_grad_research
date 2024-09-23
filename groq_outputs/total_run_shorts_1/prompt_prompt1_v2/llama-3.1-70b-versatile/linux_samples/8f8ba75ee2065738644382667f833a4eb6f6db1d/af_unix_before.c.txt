@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 2, 8, 9
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential double-free or use-after-free vulnerability due to the repeated assignment of siocb->scm without proper synchronization or checks.
+
+EXPLANATION:
+The code checks if siocb->scm is NULL and assigns a temporary address (&tmp_scm) to it if it is. However, this assignment is repeated twice in the given code snippet. This could lead to the &tmp_scm address being assigned to siocb->scm multiple times. If this address is freed elsewhere in the code (not shown in the snippet), this could result in a use-after-free vulnerability or a double-free vulnerability if the same address is being assigned again.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that siocb->scm is properly initialized before its use. This can be achieved by:
+1. Moving the initialization outside of the duplicate code block if this code should not be executed twice.
+2. Adding a check to ensure that siocb->scm is not already pointing to &tmp_scm before re-assigning it.
+3. Using dynamic memory allocation instead of a temporary address, to ensure the memory remains valid until it's explicitly freed.
+
+ORIGINAL CODE:
+```
+if (NULL == siocb->scm)
+	siocb->scm = &tmp_scm;
+wait_for_unix_gc();
+err = scm_send(sock, msg, siocb->scm);
+if (err < 0)
+	return err;
+
+err = -EOPNOTSUPP;
+if (NULL == siocb->scm)
+	siocb->scm = &tmp_scm;
+wait_for_unix_gc();
+err = scm_send(sock, msg, siocb->scm);
+if (err < 0)
+	return err;
+
+err = -EOPNOTSUPP;
+```

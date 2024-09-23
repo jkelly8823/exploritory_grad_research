@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-19, 22
+VULNERABILITY_DESCRIPTION:
+ Lack of Error Handling and Potential NULL Pointer Dereferences in cfg80211_get_bss and cfg80211_upload_connect_keys
+
+EXPLANATION:
+ The code snippet evaluates the cfg80211_get_bss function and the cfg80211_upload_connect_keys function. However, it does not check if the cfg80211_get_bss function is successfully returning a valid BSS pointer before passing it to subsequent function calls. If cfg80211_get_bss fails and returns NULL, then cfg80211_hold_bss, bss_from_pub, and cfg80211_upload_connect_keys can potentially be passed a NULL pointer. Furthermore, cfg80211_upload_connect_keys is called without null checking the return value of cfg80211_get_bss or wdev->current_bss, which also could be NULL.
+
+ While on line 7 a "WARN_ON" macro is used to test for a condition (wiphy_to_dev(wdev->wiphy)->ops->connect being NULL), this does not properly protect against a NULL pointer because it is simply a debug tool and does not prevent execution of the program.
+
+ The potential vulnerability exists because cfg80211_upload_connect_keys function may not handle the NULL pointer case and can cause a segmentation fault. Furthermore, the function's behavior is unknown; thus it could result in a denial-of-service or other issues if a NULL value is passed to this function.
+
+RECOMMENDATIONS:
+Validations should be added to ensure that the pointer returned by cfg80211_get_bss is not NULL before using it in the subsequent function calls. 
+
+Additionally, you should validate that the wdev->current_bss pointer is not NULL before passing it to cfg80211_upload_connect_keys.
+
+Validate function return values. The best practice is to check return values for all the function calls.
+
+Here's an example of the updated code:
+
+```c
+if (bss) {
+    cfg80211_hold_bss(bss_from_pub(bss));
+    wdev->current_bss = bss_from_pub(bss);
+    if (wdev->current_bss) {
+        if (cfg80211_upload_connect_keys(wdev) == 0) { //assuming 0 is returned for successful execution of function
+            //handle successful execution of function
+        } else {
+            //handle error accordingly
+        }
+    } else {
+        // handle NULL pointer error
+    }
+} else {
+    // handle bss NULL case and perform appropriate error handling
+}
+```
+
+ORIGINAL CODE:
+    }
+#endif
+
+	if (wdev->current_bss) {
+		cfg80211_unhold_bss(wdev->current_bss);
+		cfg80211_put_bss(wdev->wiphy, &wdev->current_bss->pub);
+		wdev->current_bss = NULL;
+		return;
+	}
+
+	if (!bss) {
+		WARN_ON_ONCE(!wiphy_to_dev(wdev->wiphy)->ops->connect);
+		bss = cfg80211_get_bss(wdev->wiphy, NULL, bssid,
+				       wdev->ssid, wdev->ssid_len,
+				       WLAN_CAPABILITY_ESS,
+				       WLAN_CAPABILITY_ESS);
+		if (WARN_ON(!bss))
+			return;
+		cfg80211_hold_bss(bss_from_pub(bss));
+	}
+
+	wdev->current_bss = bss_from_pub(bss);
+
+	cfg80211_upload_connect_keys(wdev);

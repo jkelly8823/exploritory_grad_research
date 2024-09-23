@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20-22, 26-28
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to buffer overflow attacks due to insufficient bounds checking.
+
+EXPLANATION:
+In the given code snippet, the `ptr` pointer is incremented without proper bounds checking. Specifically, lines 20-22, 26-28 do not check if `ptr` is still within the valid range of `enc` before incrementing and accessing its contents. This can lead to a buffer overflow vulnerability if `ptr` exceeds the valid range of `enc`, allowing an attacker to modify arbitrary memory locations.
+
+Additionally, `HAS_CHAR(enc, ptr, end)` does not provide adequate bounds checking, as it may return false for valid offsets if `ptr` is close to the end of the buffer.
+
+RECOMMENDATIONS:
+1. Implement proper bounds checking for `ptr` and ensure it stays within the valid range of `enc`.
+2. Use a safer way to access `enc` contents, such as using a checked indexing mechanism.
+
+Here is a suggested way to fix the vulnerability:
+
+```c
+if (ptr + MINBPC(enc) < end && HAS_CHAR(enc, ptr + MINBPC(enc), end)) {
+    // Access enc contents safely
+}
+```
+
+ORIGINAL CODE:
+```c
+#ifdef XML_TOK_IMPL_C
+
+#  ifndef IS_INVALID_CHAR // i.e. for UTF-16 and XML_MIN_SIZE not defined
+#    define IS_INVALID_CHAR(enc, ptr, n) (0)
+#  endif
+
+#  define INVALID_LEAD_CASE(n, ptr, nextTokPtr)                                \
+#  define LEAD_CASE(n)                                                         \
+  case BT_LEAD##n:                                                             \
+    ptr += n;                                                                  \
+    pos->columnNumber++;                                                       \
+    break;
+      LEAD_CASE(2)
+      LEAD_CASE(3)
+      LEAD_CASE(4)
+#  undef LEAD_CASE
+    case BT_LF:
+      pos->columnNumber = 0;
+      pos->lineNumber++;
+      ptr += MINBPC(enc);
+      break;
+    case BT_CR:
+      ptr += MINBPC(enc);
+      if (HAS_CHAR(enc, ptr, end) && BYTE_TYPE(enc, ptr) == BT_LF)
+        ptr += MINBPC(enc);
+      pos->columnNumber = 0;
+      break;
+    default:
+      ptr += MINBPC(enc);
+      pos->columnNumber++;
+      break;
+    }
+  }
+}
+
+#  undef DO_LEAD_CASE
+```

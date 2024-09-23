@@ -1,0 +1,135 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9, 14-15
+
+VULNERABILITY_DESCRIPTION:
+Double-Free Vulnerability
+
+EXPLANATION:
+In the given code snippet, a double-free vulnerability has been identified. Specifically, in the `__ns_get_path` function, when a file system error occurs (i.e., `dentry` cannot be allocated), the function calls `iput(inode)` and subsequently returns an error pointer. However, in the success path, `inode` is used to create a new file and then stored in `dentry`. Additionally, in another failure condition (i.e., when `d == 0` after the atomic comparison), the function calls `d_delete(dentry)` and then `dput(dentry)`, effectively freeing the `dentry` and the underlying inode. However, the code does not check if the inode has already been freed before freeing it again in the failure path. This can lead to a double-free vulnerability.
+
+RECOMMENDATIONS:
+To fix the double-free vulnerability, you can:
+
+*   Introduce an additional flag to track whether the inode has been freed. Before freeing the inode in the failure path, check this flag to prevent double-frees.
+*   Store the inode as `path->dentry->d_inode` and then use `dentry` for subsequent operations. This way, the inode will be freed when `dentry` is freed.
+*   Remove the `iput(inode)` call in the error path, as the inode will be freed automatically when `dentry` is freed.
+
+Here is an example of how to implement the recommended fixes:
+
+```c
+// ...
+
+/* Success path */
+inode = new_inode_pseudo(mnt->mnt_sb);
+if (!inode) {
+	return ERR_PTR(-ENOMEM);
+}
+
+/* ... */
+
+dentry = d_alloc_anon(mnt->mnt_sb);
+if (!dentry) {
+	// Remove iput(inode) to prevent double-free
+	path->mnt = NULL;
+	return ERR_PTR(-ENOMEM);
+}
+
+// ...
+
+/* Failure path */
+d = atomic_long_cmpxchg(&ns->stashed, 0, (unsigned long)dentry);
+if (d != 0) {
+	d_delete(dentry);
+	dput(dentry);
+	return ERR_PTR(-EAGAIN);
+}
+goto got_it;
+
+// ...
+```
+
+ORIGINAL CODE:
+```c
+ns->ops->put(ns);
+}
+
+static void *__ns_get_path(struct path *path, struct ns_common *ns)
+{
+	struct vfsmount *mnt = nsfs_mnt;
+	struct dentry *dentry;
+	struct inode *inode;
+got_it:
+	path->mnt = mntget(mnt);
+	path->dentry = dentry;
+	return NULL;
+slow:
+	rcu_read_unlock();
+	inode = new_inode_pseudo(mnt->mnt_sb);
+	if (!inode) {
+		ns->ops->put(ns);
+		return ERR_PTR(-ENOMEM);
+	}
+	inode->i_ino = ns->inum;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
+	inode->i_flags |= S_IMMUTABLE;
+	dentry = d_alloc_anon(mnt->mnt_sb);
+	if (!dentry) {
+		iput(inode); // Double-free vulnerability
+		return ERR_PTR(-ENOMEM);
+	}
+	d_instantiate(dentry, inode);
+	dentry->d_fsdata = (void *)ns->ops;
+	d = atomic_long_cmpxchg(&ns->stashed, 0, (unsigned long)dentry);
+		d_delete(dentry);	/* make sure ->d_prune() does nothing */
+		dput(dentry);
+		cpu_relax();
+		return ERR_PTR(-EAGAIN);
+	}
+	goto got_it;
+}
+
+void *ns_get_path_cb(struct path *path, ns_get_path_helper_t *ns_get_cb,
+		     void *private_data)
+{
+	void *ret;
+
+	do {
+		struct ns_common *ns = ns_get_cb(private_data);
+		if (!ns)
+			return ERR_PTR(-ENOENT);
+
+		ret = __ns_get_path(path, ns);
+	} while (ret == ERR_PTR(-EAGAIN));
+
+	return ret;
+}
+
+	return args->ns_ops->get(args->task);
+}
+
+void *ns_get_path(struct path *path, struct task_struct *task,
+		  const struct proc_ns_operations *ns_ops)
+{
+	struct ns_get_path_task_args args = {
+		.ns_ops	= ns_ops,
+{
+	struct path path = {};
+	struct file *f;
+	void *err;
+	int fd;
+
+	fd = get_unused_fd_flags(O_CLOEXEC);
+	if (fd < 0)
+		}
+
+		err = __ns_get_path(&path, relative);
+	} while (err == ERR_PTR(-EAGAIN));
+
+	if (IS_ERR(err)) {
+		put_unused_fd(fd);
+		return PTR_ERR(err);
+	}
+
+	f = dentry_open(&path, O_RDONLY, current_cred());
+	path_put(&path);
+```

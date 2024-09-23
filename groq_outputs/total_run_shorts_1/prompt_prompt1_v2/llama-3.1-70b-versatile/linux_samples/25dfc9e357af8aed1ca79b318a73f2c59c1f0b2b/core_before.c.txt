@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability.
+EXPLANATION:
+In the given code snippet, an integer overflow vulnerability is present. When the "*left" variable is multiplied by 128 (hidden multiplication by assignment "*left = 128") and then the 6 least significant bits are cleared, there's an opportunity for integer overflow. If "*left" is initially a large value, it can lead to an unintended result. This potentially results in incorrect behavior when "left" is used later on.
+
+However, in the context of perf event handling, "*left" might be bounded or sanitized by system architecture event config. Here, however, with the hunk only available, it could be viewed as a candidate to check.
+
+In general, perf handling in performance handling metrics should account for these potential conditions.
+RECOMMENDATIONS:
+One approach to mitigating this vulnerability is by introducing input validation. Ensure the value of "*left" does not exceed a predefined limit (determined by system constraints or event handling specs), thus preventing overflow. 
+
+Here is an example of a quick patch for validation:
+```c
+if (*left > S64_SAFE_UPPER_LIMIT) {
+  // handle/abort as invalid input
+}
+```
+Keep in mind, that S64_SAFE_UPPER_LIMIT needs to be properly set as per individual perf handling metric.
+
+Also you may want check the function purpose and instead of assigning a value "*left" directly attempt to validate its boundaries on its being assigned. Validate "*left" whenever it crosses the systems boundary when either subtracted, added, or multiplied.
+ 
+
+ORIGINAL CODE:
+```c
+return HYBRID_INTEL_CORE;
+}
+
+/*
+ * Broadwell:
+ *
+ * The INST_RETIRED.ALL period always needs to have lowest 6 bits cleared
+ */
+static void bdw_limit_period(struct perf_event *event, s64 *left)
+{
+	if ((event->hw.config & INTEL_ARCH_EVENT_MASK) ==
+			X86_CONFIG(.event=0xc0, .umask=0x01)) {
+		if (*left < 128)
+			*left = 128;
+		*left &= ~0x3fULL;
+	}
+
+		x86_pmu.hw_config = hsw_hw_config;
+		x86_pmu.get_event_constraints = hsw_get_event_constraints;
+		x86_pmu.lbr_double_abort = true;
+		extra_attr = boot_cpu_has(X86_FEATURE_RTM) ?
+			hsw_format_attr : nhm_format_attr;
+		td_attr  = hsw_events_attrs;
+```

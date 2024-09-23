@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 2
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to a potential buffer overflow in the memcpy_fromio function calls.
+
+EXPLANATION:
+The code uses memcpy_fromio to copy data into the `p` buffer. However, there is no validation to ensure that the `regs->len` value does not exceed the buffer size, and the second memcpy_fromio call assumes that `regs->len - B3_RI_WTO_R1` will be less than or equal to the remaining buffer size. This can lead to a buffer overflow if the `regs->len` value is too large.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate the `regs->len` value to ensure it does not exceed the buffer size before calling memcpy_fromio. You can do this by adding a bounds check before the memcpy_fromio calls. Additionally, consider using safer alternatives to memcpy_fromio, such as memmove or a loop that checks each character as it is copied.
+
+```c
+// Example of a safer version
+if (regs->len > buffer_size || regs->len > (B3_RI_WTO_R1 + (buffer_size - B3_RI_WTO_R1))) {
+    // Handle the error
+    return;
+}
+memset(p, 0, regs->len);
+memcpy_fromio(p, io, B3_RAM_ADDR);
+
+if (regs->len > B3_RI_WTO_R1) {
+    memcpy_fromio(p + B3_RI_WTO_R1, io + B3_RI_WTO_R1,
+                  min(regs->len - B3_RI_WTO_R1, buffer_size - B3_RI_WTO_R1));
+}
+```
+
+ORIGINAL CODE:
+```c
+memset(p, 0, regs->len);
+memcpy_fromio(p, io, B3_RAM_ADDR);
+
+if (regs->len > B3_RI_WTO_R1) {
+    memcpy_fromio(p + B3_RI_WTO_R1, io + B3_RI_WTO_R1,
+                  regs->len - B3_RI_WTO_R1);
+}
+}
+
+/* Wake on Lan only supported on Yukon chips with rev 1 or above */
+static u32 wol_supported(const struct skge_hw *hw)
+```

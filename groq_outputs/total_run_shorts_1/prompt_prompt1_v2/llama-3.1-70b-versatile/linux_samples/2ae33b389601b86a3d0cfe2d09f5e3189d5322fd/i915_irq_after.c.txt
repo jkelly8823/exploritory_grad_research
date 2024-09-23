@@ -1,0 +1,84 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-13, 32-33
+VULNERABILITY_DESCRIPTION:
+The given code snippets contain potential race conditions due to the way interrupts are handled.
+
+EXPLANATION:
+The code appears to be a part of an interrupt handler for an Intel i915 GPU. It attempts to clear and restore interrupts by writing to certain registers, specifically DEIER and SDEIER. However, the handling of interrupts for GTIIR and subsequent write operations to GTIIR can potentially lead to a race condition.
+
+In the first snippet, the function `snb_gt_irq_handler` is called with the `gt_iir` value. However, before calling this function, the GTIIR register is not cleared. After the function call, the GTIIR register is written to, potentially overwriting any new interrupts that occurred since the last read. 
+
+In the second snippet, the GTIIR register is read after restoring SDEIER, which may have caused new interrupts to be generated. These interrupts are then potentially overwritten by the read operation.
+
+RECOMMENDATIONS:
+1. In both snippets, ensure that GTIIR is cleared after handling its interrupts. This should prevent potential overwriting of new interrupts.
+2. Ensure proper synchronization mechanisms are in place to prevent race conditions when handling interrupts.
+
+ORIGINAL CODE:
+(first snippet)
+{
+	struct drm_device *dev = (struct drm_device *) arg;
+	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
+	u32 de_iir, gt_iir, de_ier, pm_iir, sde_ier;
+	irqreturn_t ret = IRQ_NONE;
+	int i;
+
+	atomic_inc(&dev_priv->irq_received);
+	de_ier = I915_READ(DEIER);
+	I915_WRITE(DEIER, de_ier & ~DE_MASTER_IRQ_CONTROL);
+
+	/* Disable south interrupts. We'll only write to SDEIIR once, so further
+	 * interrupts will will be stored on its back queue, and then we'll be
+	 * able to process them after we restore SDEIER (as soon as we restore
+	 * it, we'll get an interrupt if SDEIIR still has something to process
+	 * due to its back queue). */
+	sde_ier = I915_READ(SDEIER);
+	I915_WRITE(SDEIER, 0);
+	POSTING_READ(SDEIER);
+
+	gt_iir = I915_READ(GTIIR);
+	if (gt_iir) {
+		snb_gt_irq_handler(dev, dev_priv, gt_iir);
+		I915_WRITE(GTIIR, gt_iir);
+
+	I915_WRITE(DEIER, de_ier);
+	POSTING_READ(DEIER);
+	I915_WRITE(SDEIER, sde_ier);
+	POSTING_READ(SDEIER);
+
+	return ret;
+}
+
+(second snippet)
+(struct drm_device *dev = (struct drm_device *) arg;
+	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
+	int ret = IRQ_NONE;
+	u32 de_iir, gt_iir, de_ier, pm_iir, sde_ier;
+
+	atomic_inc(&dev_priv->irq_received);
+
+	/* disable master interrupt before clearing iir  */
+	I915_WRITE(DEIER, de_ier & ~DE_MASTER_IRQ_CONTROL);
+	POSTING_READ(DEIER);
+
+	/* Disable south interrupts. We'll only write to SDEIIR once, so further
+	 * interrupts will will be stored on its back queue, and then we'll be
+	 * able to process them after we restore SDEIER (as soon as we restore
+	 * it, we'll get an interrupt if SDEIIR still has something to process
+	 * due to its back queue). */
+	sde_ier = I915_READ(SDEIER);
+	I915_WRITE(SDEIER, 0);
+	POSTING_READ(SDEIER);
+
+	de_iir = I915_READ(DEIIR);
+	gt_iir = I915_READ(GTIIR);
+	pm_iir = I915_READ(GEN6_PMIIR);
+
+done:
+	I915_WRITE(DEIER, de_ier);
+	POSTING_READ(DEIER);
+	I915_WRITE(SDEIER, sde_ier);
+	POSTING_READ(SDEIER);
+
+	return ret;
+)

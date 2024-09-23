@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 6-7
+VULNERABILITY_DESCRIPTION:
+Accessing an array with an unchecked index, potentially leading to a buffer overflow or invalid memory access.
+
+EXPLANATION:
+The code snippet checks if the input 'field' is within the bounds of the 'vmcs_field_to_offset_table' array, and if it is not, returns -ENOENT. However, it does not account for possible integer overflow during the comparison. Furthermore, the code does not perform a bounds check before returning the value at 'vmcs_field_to_offset_table[field]', potentially leading to invalid memory access or buffer overflow. 
+
+RECOMMENDATIONS:
+To fix the vulnerability, we need to add bounds checking before accessing the array. The recommended fix would be to use a more secure method of accessing arrays with checked indices, and handle cases where the index might not fit within the array. The bounds check could also include an ensure to prevent an empty array.
+
+Possible fix:
+```c
+{
+    BUILD_BUG_ON(ARRAY_SIZE(vmcs_field_to_offset_table) > SHRT_MAX);
+
+    if (field < 0 || field >= ARRAY_SIZE(vmcs_field_to_offset_table)) {
+        return -EINVAL;
+    }
+    if (vmcs_field_to_offset_table[field] == 0) {
+        return -ENOENT;
+    }
+
+    return vmcs_field_to_offset_table[field];
+}
+```
+
+ORIGINAL CODE:
+```c
+{
+    BUILD_BUG_ON(ARRAY_SIZE(vmcs_field_to_offset_table) > SHRT_MAX);
+
+    if (field >= ARRAY_SIZE(vmcs_field_to_offset_table) ||
+        vmcs_field_to_offset_table[field] == 0)
+        return -ENOENT;
+
+    return vmcs_field_to_offset_table[field];
+}
+```

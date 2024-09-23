@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Dereference of a pointer without checking for NULL before use.
+
+EXPLANATION:
+The code checks if the `svm->nested.initialized` is false before proceeding. However, it does not check if `svm` itself is NULL. If `svm` is NULL, the program will encounter a segmentation fault when trying to access `svm->nested.initialized`. 
+
+This vulnerability can be exploited if an attacker is able to control the `svm` variable, potentially causing a buffer overflow, code injection, or data corruption.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a NULL check before dereferencing the `svm` pointer:
+```c
+if (svm == NULL) {
+    // Handle the case when svm is NULL
+    // For example, return an error or throw an exception
+    return -EINVAL;
+}
+
+if (!svm->nested.initialized)
+    return;
+```
+Alternatively, consider using a compiler flag to enable warnings for dereferencing NULL pointers and review your code to ensure all pointers are properly initialized before use.
+
+ORIGINAL CODE:
+```c
+if (!svm->nested.initialized)
+    return;
+
+if (WARN_ON_ONCE(svm->vmcb != svm->vmcb01.ptr))
+    svm_switch_vmcb(svm, &svm->vmcb01);
+
+svm_vcpu_free_msrpm(svm->nested.msrpm);
+svm->nested.msrpm = NULL;
+
+__free_page(virt_to_page(svm->nested.vmcb02.ptr));
+```

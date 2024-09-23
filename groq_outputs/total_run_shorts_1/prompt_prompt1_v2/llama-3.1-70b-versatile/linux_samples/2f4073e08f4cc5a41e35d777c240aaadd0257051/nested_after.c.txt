@@ -1,0 +1,81 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereference or uninitalized memory access vulnerability due to missing null checks.
+EXPLANATION:
+The function `prepare_vmcs02_constant_state` assumes that `vmx` and `kvm` are initialized and valid. However, it does not perform any null checks on these variables. This means that if `vmx` or `kvm` is null or points to uninitialized memory, the function will attempt to access its members, potentially resulting in a null pointer dereference or uninitalized memory access.
+
+Specifically, the vulnerable lines are:
+
+- Line 3: `struct kvm *kvm = vmx->vcpu.kvm;` attempts to access `vmx->vcpu.kvm` without checking if `vmx` is null.
+- Line 6: `vmcs_write64(ENCLS_EXITING_BITMAP, INVALID_GPA);` assumes that `cpu_has_vmx_encls_vmexit()` will return a boolean value, but it does not check if the `cpu_has_vmx_encls_vmexit()` function has any issues returning the value.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add null checks for `vmx` and `kvm` before accessing their members. Additionally, it is recommended to check the return value of `cpu_has_vmx_encls_vmexit()` to ensure it is valid.
+
+```c
+static void prepare_vmcs02_constant_state(struct vcpu_vmx *vmx)
+{
+	if (!vmx || !vmx->vcpu.kvm) {
+		/* Handle the error or return early */
+		return;
+	}
+
+	struct kvm *kvm = vmx->vcpu.kvm;
+
+	/*
+	 * If vmcs02 hasn't been initialized, set the constant vmcs02 state
+	 * according to L0's settings (vmcs12 is irrelevant here).  Host
+	 * fields that come from L0 and are not constant, e.g. HOST_CR3,
+	if (cpu_has_vmx_encls_vmexit() != 0)
+		vmcs_write64(ENCLS_EXITING_BITMAP, INVALID_GPA);
+
+	if (kvm_notify_vmexit_enabled(kvm))
+		/* Add null checks here */
+		if (kvm->arch.notify_window)
+			vmcs_write32(NOTIFY_WINDOW, kvm->arch.notify_window);
+
+	/*
+	 * Set the MSR load/store lists to match L0's settings.  Only the
+	 * addresses are constant (for vmcs02), the counts can change based
+	 * on L2's behavior, e.g. switching to/from long mode.
+			SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE);
+	case EXIT_REASON_ENCLS:
+		return nested_vmx_exit_handled_encls(vcpu, vmcs12);
+	case EXIT_REASON_NOTIFY:
+		/* Notify VM exit is not exposed to L1 */
+		return false;
+	default:
+		return true;
+	}
+}
+
+ORIGINAL CODE:
+static void prepare_vmcs02_constant_state(struct vcpu_vmx *vmx)
+{
+	struct kvm *kvm = vmx->vcpu.kvm;
+
+	/*
+	 * If vmcs02 hasn't been initialized, set the constant vmcs02 state
+	 * according to L0's settings (vmcs12 is irrelevant here).  Host
+	 * fields that come from L0 and are not constant, e.g. HOST_CR3,
+	if (cpu_has_vmx_encls_vmexit())
+		vmcs_write64(ENCLS_EXITING_BITMAP, INVALID_GPA);
+
+	if (kvm_notify_vmexit_enabled(kvm))
+		vmcs_write32(NOTIFY_WINDOW, kvm->arch.notify_window);
+
+	/*
+	 * Set the MSR load/store lists to match L0's settings.  Only the
+	 * addresses are constant (for vmcs02), the counts can change based
+	 * on L2's behavior, e.g. switching to/from long mode.
+			SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE);
+	case EXIT_REASON_ENCLS:
+		return nested_vmx_exit_handled_encls(vcpu, vmcs12);
+	case EXIT_REASON_NOTIFY:
+		/* Notify VM exit is not exposed to L1 */
+		return false;
+	default:
+		return true;
+	}
+}

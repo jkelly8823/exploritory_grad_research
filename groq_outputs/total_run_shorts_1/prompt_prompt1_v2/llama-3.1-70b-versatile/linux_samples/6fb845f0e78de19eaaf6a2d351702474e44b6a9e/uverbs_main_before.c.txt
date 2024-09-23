@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-17
+VULNERABILITY_DESCRIPTION:
+A potential use-after-free vulnerability exists due to incorrect synchronization.
+
+EXPLANATION:
+The given code snippet appears to be part of a file closure or cleanup function. The critical section is the lock around accessing the `ufile->umaps` list and retrieving a `mm` pointer. The `mutex_lock(&ufile->umap_lock)` ensures that the list access is thread-safe. However, after releasing the lock, the code continues execution regardless of whether `mm` has been retrieved.
+
+This can lead to a situation where another thread concurrently removes the last `umap` from the list and accesses the `file` structure after the current thread has already unlocked the `ufile->umap_lock`. This can result in accessing memory that has already been freed or reused, leading to undefined behavior.
+
+A second potential use-after-free vulnerability is also present when `file` is freed in the given code but its `ufile` structure is still accessible. After calling `mutex_unlock(&file->device->lists_mutex)`, no further synchronization occurs between the access to `file->async_file` and the call to `kfree(file)`.
+
+Furthermore, another thread could concurrently access `file->list` and attempt to lock the same `lists_mutex` before it has been unlocked by the current thread. This could result in a deadlock or another thread executing concurrently after the current thread has freed `file`.
+
+Lastly, calling `list_del_init` and `kref_put` can allow another thread to access the now removed `file` structure after it has been freed and before the function exits, as `kref_put` may execute in another thread context after the `file` structure has been freed.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, adopt the following recommendations:
+
+- Ensure proper synchronization across all accesses to `file` and its members using locking mechanisms, ensuring that no access occurs after the `file` structure has been freed.
+
+- Verify the return values of functions such as `kref_put` to determine if a structure has already been freed.
+
+- Evaluate the use of read-copy update (RCU) to handle concurrent access to dynamic data structures.
+
+- Use synchronization primitives that will prevent concurrent access to shared data structures until they have been properly freed and initialization is complete.
+
+- Implement reference counting that properly increments or decrements counters when structures are referenced or released.
+
+ORIGINAL CODE:
+```c
+	if (atomic_dec_and_test(&file->device->refcount))
+		ib_uverbs_comp_dev(file->device);
+
+	put_device(&file->device->dev);
+	kfree(file);
+}
+
+		/* Get an arbitrary mm pointer that hasn't been cleaned yet */
+		mutex_lock(&ufile->umap_lock);
+		if (!list_empty(&ufile->umaps)) {
+			mm = list_first_entry(&ufile->umaps,
+					      struct rdma_umap_priv, list)
+				     ->vma->vm_mm;
+			mmget(mm);
+		}
+		mutex_unlock(&ufile->umap_lock);
+		if (!mm)
+			return;
+	list_del_init(&file->list);
+	mutex_unlock(&file->device->lists_mutex);
+
+	if (file->async_file)
+		kref_put(&file->async_file->ref,
+			 ib_uverbs_release_async_event_file);
+
+	kref_put(&file->ref, ib_uverbs_release_file);
+
+	return 0;
+}
+```

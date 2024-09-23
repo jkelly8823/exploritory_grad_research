@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 14-15
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds access vulnerability
+EXPLANATION:
+The provided code snippet checks if the calculated index `idx` is within the bounds of the LDT and GDT entries, but it does not perform a bounds check on the `idx` before accessing the `entries` array in the `ldt_struct` or `gdt_page`. 
+However, a vulnerability is introduced because there is no check to verify if `idx` is greater than or equal to 0. This could lead to accessing an index that is less than 0, resulting in an out-of-bounds access, assuming the `ldt->entries` array or `gdt_page.gdt` array can be accessed with a negative index. 
+Moreover, another potential vulnerability exists due to potential integer overflow in the expression `idx = segment >> 3`. If this expression results in a negative value, this can lead to incorrect array index calculation.
+
+RECOMMENDATIONS:
+Ensure that the `idx` value is within the bounds of the `entries` or `gdt` arrays before accessing them. 
+Add a simple bounds check to ensure `idx` is greater than or equal to 0 before calculating `desc`.
+To prevent potential integer overflow issues, add additional checks to handle the edge cases for the expression `idx = segment >> 3`.
+
+In terms of code adjustments:
+
+- Add a check `if (idx < 0)` before accessing `desc` and return an error or handle accordingly.
+- While shifting bits to the right, perform necessary checks for potential integer overflow.
+
+```cpp
+int idx = segment >> 3;
+
+// Add bounds checks
+if (idx < 0 || (idx > LDT_ENTRIES) || (idx > GDT_ENTRIES)) {
+    return 0;
+}
+
+if ((segment & SEGMENT_TI_MASK) == SEGMENT_LDT) {
+    struct ldt_struct *ldt;
+
+    /* IRQs are off, so this synchronizes with smp_store_release */
+    ldt = lockless_dereference(current->active_mm->context.ldt);
+    if (!ldt || idx > ldt->size)
+        return 0;
+
+    desc = &ldt->entries[idx];
+} else {
+    desc = raw_cpu_ptr(gdt_page.gdt) + idx;
+}
+```
+
+ORIGINAL CODE:
+```c
+int idx = segment >> 3;
+
+if ((segment & SEGMENT_TI_MASK) == SEGMENT_LDT) {
+    struct ldt_struct *ldt;
+
+    if (idx > LDT_ENTRIES)
+        return 0;
+
+    /* IRQs are off, so this synchronizes with smp_store_release */
+    ldt = lockless_dereference(current->active_mm->context.ldt);
+    if (!ldt || idx > ldt->size)
+        return 0;
+
+    desc = &ldt->entries[idx];
+} else {
+    if (idx > GDT_ENTRIES)
+        return 0;
+
+    desc = raw_cpu_ptr(gdt_page.gdt) + idx;
+}
+
+return get_desc_base(desc);
+}
+#ifdef CONFIG_COMPAT
+```

@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a time-of-check-to-time-of-use (TOCTOU) vulnerability when switching between privileged (setuid(0)) and non-privileged (setuid(old_uid)) modes.
+
+EXPLANATION:
+This code snippet attempts to temporarily drop privileges by switching to the `old_uid` after performing some privileged operations. However, this approach is vulnerable to a TOCTOU attack, where an attacker could potentially exploit the time gap between the privileged operations and the call to drop privileges. For example, an attacker might be able to compromise the process between the lines `// Do some important stuff` and `setuid(old_uid);`, allowing them to retain elevated privileges.
+
+Additionally, reverting to the original user using `setuid(old_uid);` without first checking if `old_uid` is actually a valid user ID can lead to potential issues. If `old_uid` is not a valid user ID, this can result in unpredictable behavior or even process crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend the following:
+
+1. Use `seteuid()` instead of `setuid()` to switch between the effective user ID and the real user ID. This helps prevent exploits that rely on `setuid()` returning an error.
+2. Check the return value of `seteuid()` and `setuid()` to ensure the operations were successful.
+3. Use a safer method to switch to a non-privileged mode, such as using Linux capabilities (if available) instead of relying on `setuid()` or `seteuid()`.
+4. Consider using a more robust security framework to manage privileges and access control.
+
+ORIGINAL CODE:
+```c
+setuid(0);
+// Do some important stuff
+setuid(old_uid);
+// Do some non privileged stuff.
+```

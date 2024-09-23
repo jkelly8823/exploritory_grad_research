@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability.
+
+EXPLANATION:
+The given code snippet has potential buffer overflow vulnerability in the `__reloc_toc` function. This function takes an array `toc_entry` and increments it without checking the bounds of the array. This could potentially lead to overwriting memory beyond the end of the array. The issue arises because `nr_entries` is not checked to be within the bounds of the actual array size, leading to potential overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate `nr_entries` to ensure it does not exceed the actual size of the `toc_entry` array. 
+
+The following code change can be done:
+
+```c
+for (i = 0; i < nr_entries && toc_entry < tocstart + offset + nr_entries * sizeof(long); i++) {
+    *toc_entry = *toc_entry + offset;
+    toc_entry++;
+}
+```
+
+This change will ensure that the `toc_entry` does not exceed the bounds of the actual array.
+
+ORIGINAL CODE:
+
+```c
+{
+}
+#else
+static void __reloc_toc(void *tocstart, unsigned long offset,
+			unsigned long nr_entries)
+{
+	unsigned long i;
+	unsigned long *toc_entry = (unsigned long *)tocstart;
+
+	for (i = 0; i < nr_entries; i++) {
+		*toc_entry = *toc_entry + offset;
+		toc_entry++;
+	unsigned long nr_entries =
+		(__prom_init_toc_end - __prom_init_toc_start) / sizeof(long);
+
+	/* Need to add offset to get at __prom_init_toc_start */
+	__reloc_toc(__prom_init_toc_start + offset, offset, nr_entries);
+
+	mb();
+}
+
+
+	mb();
+
+	/* __prom_init_toc_start has been relocated, no need to add offset */
+	__reloc_toc(__prom_init_toc_start, -offset, nr_entries);
+}
+#endif
+#endif
+```

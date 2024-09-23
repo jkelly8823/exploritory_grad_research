@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 15, 22-23, 29
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to potential privileged escalation and denial of service (DoS) attacks due to the handling of netlink capabilities.
+
+EXPLANATION:
+The `netlink_capable` function checks if a socket has netlink capabilities, including non-root receive and send capabilities. However, there are multiple places in the code snippet where `netlink_capable` is called with different flags, and the results are not consistently checked or handled.
+
+The code checks for `NL_CFG_F_NONROOT_RECV` capability in some places (lines 6, 15, and 22) but not in others, potentially allowing non-root users to listen multicasts or join groups without proper authorization.
+
+Additionally, the code checks for `NL_CFG_F_NONROOT_SEND` capability in some places (lines 10 and 29) but returns `EPERM` error in the case of failure, potentially causing DoS attacks.
+
+Furthermore, the usage of `goto out` statement on line 31 might lead to unexpected behavior in error handling, especially when dealing with sensitive netlink operations.
+
+RECOMMENDATIONS:
+1. Consistently check and handle `netlink_capable` results throughout the code snippet to ensure that all netlink operations adhere to proper authorization policies.
+2. Implement proper error handling mechanisms to prevent potential DoS attacks.
+3. Avoid using `goto` statements for error handling in favor of structured error handling practices.
+
+ORIGINAL CODE:
+
+```c
+return err;
+}
+
+static inline int netlink_capable(const struct socket *sock, unsigned int flag)
+{
+	return (nl_table[sock->sk->sk_protocol].flags & flag) ||
+		ns_capable(sock_net(sock->sk)->user_ns, CAP_NET_ADMIN);
+}
+
+	/* Only superuser is allowed to listen multicasts */
+	if (nladdr->nl_groups) {
+		if (!netlink_capable(sock, NL_CFG_F_NONROOT_RECV))
+			return -EPERM;
+		err = netlink_realloc_groups(sk);
+		if (err)
+			return err;
+		return -EINVAL;
+
+	if ((nladdr->nl_groups || nladdr->nl_pid) &&
+	    !netlink_capable(sock, NL_CFG_F_NONROOT_SEND))
+		return -EPERM;
+
+	if (!nlk->portid)
+		err = netlink_autobind(sock);
+		break;
+	case NETLINK_ADD_MEMBERSHIP:
+	case NETLINK_DROP_MEMBERSHIP: {
+		if (!netlink_capable(sock, NL_CFG_F_NONROOT_RECV))
+			return -EPERM;
+		err = netlink_realloc_groups(sk);
+		if (err)
+			return err;
+		dst_group = ffs(addr->nl_groups);
+		err =  -EPERM;
+		if ((dst_group || dst_portid) &&
+		    !netlink_capable(sock, NL_CFG_F_NONROOT_SEND))
+			goto out;
+	} else {
+		dst_portid = nlk->dst_portid;
+		dst_group = nlk->dst_group;
+```

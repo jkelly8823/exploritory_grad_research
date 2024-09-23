@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11-12
+VULNERABILITY_DESCRIPTION:
+TOCTOU (Time of Check to Time of Use) vulnerability, and potential information disclosure in a mismanaged interrupt handling routine.
+
+EXPLANATION:
+In the code provided, we observe two variations of interrupt handling. The second variant appears to fix some issues present in the first. However, there are concerns with the interrupt handling that could potentially lead to undefined behavior and information disclosure. The primary concern is that the first handler function does not clear its interrupt status register (`DEIIR`) before re-enabling interrupts with `I915_WRITE(DEIER, de_ier)` on line 10. Furthermore, its clearing depends on a variable from another procedure call that lacks synchronization in lines 11-12.
+
+Another concern arises from this first function call: the re-enabling of the interrupts before completion of the interrupt handling routine potentially allows future interrupts to interrupt the first, allowing arbitrary access. The potential for concurrent modification while clearing IIR registers in the corrected version is another major point of potential vulnerability.
+
+Additionally, I observed that there may be missing synchronization on shared variables. No explicit locking calls (mutex operations, spinlock calls, etc.) are present in the snippet provided.
+
+RECOMMENDATIONS:
+In the interrupt handling routine, ensure that any necessary work that must be completed before interrupts can be re-enabled is properly synchronized to prevent potential for TOCTOU vulnerabilities. Clear the interrupt status register before re-enabling interrupts.
+
+If shared variables are indeed shared and this interrupt handling routine executes on multiple CPU cores or with other threads, locking operations must be performed to prevent concurrent modifications of shared state.
+
+The revised and corrected version of the interrupt handling routine addresses some of these issues but should also perform explicit synchronization if dealing with shared state to ensure no concurrent modifications occur.
+
+Handling sequence consideration and checking for cases where interrupt routine completion should happen only upon true completion without state inconsistencies related work at the interrupt handling I/O level.
+
+ORIGINAL CODE:
+The provided code snippet is as follows:
+
+{
+	struct drm_device *dev = (struct drm_device *) arg;
+	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
+	u32 de_iir, gt_iir, de_ier, pm_iir;
+	irqreturn_t ret = IRQ_NONE;
+	int i;
+
+	atomic_inc(&dev_priv->irq_received);
+	de_ier = I915_READ(DEIER);
+	I915_WRITE(DEIER, de_ier & ~DE_MASTER_IRQ_CONTROL);
+
+	gt_iir = I915_READ(GTIIR);
+	if (gt_iir) {
+		snb_gt_irq_handler(dev, dev_priv, gt_iir);
+		I915_WRITE(GTIIR, gt_iir);
+
+	I915_WRITE(DEIER, de_ier);
+	POSTING_READ(DEIER);
+
+	return ret;
+}
+
+	struct drm_device *dev = (struct drm_device *) arg;
+	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
+	int ret = IRQ_NONE;
+	u32 de_iir, gt_iir, de_ier, pm_iir;
+
+	atomic_inc(&dev_priv->irq_received);
+
+	/* disable master interrupt before clearing iir  */
+	I915_WRITE(DEIER, de_ier & ~DE_MASTER_IRQ_CONTROL);
+	POSTING_READ(DEIER);
+
+	de_iir = I915_READ(DEIIR);
+	gt_iir = I915_READ(GTIIR);
+	pm_iir = I915_READ(GEN6_PMIIR);
+
+done:
+	I915_WRITE(DEIER, de_ier);
+	POSTING_READ(DEIER);
+
+	return ret;
+}

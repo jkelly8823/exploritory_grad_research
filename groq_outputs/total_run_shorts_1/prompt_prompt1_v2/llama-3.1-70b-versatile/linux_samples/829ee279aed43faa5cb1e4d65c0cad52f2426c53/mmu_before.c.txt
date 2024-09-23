@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9
+VULNERABILITY_DESCRIPTION:
+Potential integer underflow vulnerability
+
+EXPLANATION:
+The issue arises from the fact that `level` is being subtracted from `PT_PAGE_TABLE_LEVEL` and `mmu->last_nonleaf_level` without any prior checks. This can potentially lead to integer underflow if `level` is smaller than either of these values.
+
+In languages like C, where integer underflow occurs, it can lead to unexpected and potentially catastrophic behavior. In this case, if `level` is smaller than `PT_PAGE_TABLE_LEVEL`, it will result in a very large value being assigned to `gpte` because of the way 2's complement arithmetic works in computers.
+
+In addition, the variable `gpte` seems to be handling some form of control information derived from the MMU management structure since it contains information like page table levels and the non-leaf levels of the pagetable management structure.
+
+Also there is an arbitrary choice of value for the numerical representation of the enum. It might sometimes create confusion while referring to page table types.
+
+RECOMMENDATIONS:
+- Verify that `level` is larger than or equal to `PT_PAGE_TABLE_LEVEL` and `mmu->last_nonleaf_level` before performing the subtraction. This can be done by adding simple checks at the beginning of the `is_last_gpte` function.
+- Use unsigned values for the enums, also consider setting actual representation of `PTTYPE_EPT` so as to avoid other interpretation or consideration for its value in calculations
+- Use constants with meaningful names for representing `PT_PAGE_TABLE_LEVEL` (it depends on its source) from where you are defining it
+- More readability would be gained if defined functions named and placed in corresponding sub directories and files like mmu helper functions as it can also come handy for ease of referring system architecture.
+
+ORIGINAL CODE:
+static inline bool is_last_gpte(struct kvm_mmu *mmu,
+				unsigned level, unsigned gpte)
+{
+	/*
+	 * PT_PAGE_TABLE_LEVEL always terminates.  The RHS has bit 7 set
+	 * iff level <= PT_PAGE_TABLE_LEVEL, which for our purpose means
+	 * level == PT_PAGE_TABLE_LEVEL; set PT_PAGE_SIZE_MASK in gpte then.
+	 */
+	gpte |= level - PT_PAGE_TABLE_LEVEL - 1;
+
+	/*
+	 * The RHS has bit 7 set iff level < mmu->last_nonleaf_level.
+	 * If it is clear, there are no large pages at this level, so clear
+	 * PT_PAGE_SIZE_MASK in gpte if that is the case.
+	 */
+	gpte &= level - mmu->last_nonleaf_level;
+
+	return gpte & PT_PAGE_SIZE_MASK;
+}
+
+#define PTTYPE_EPT 18 /* arbitrary */

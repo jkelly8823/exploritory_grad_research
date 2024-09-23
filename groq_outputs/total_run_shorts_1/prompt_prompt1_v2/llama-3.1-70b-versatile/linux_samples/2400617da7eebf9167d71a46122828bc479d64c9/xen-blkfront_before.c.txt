@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 41, 42
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability in indirect grant management
+
+EXPLANATION:
+In the given code snippet, we see that when `info->feature_persistent` is `false`, a gref is assigned to a page in `gnt_list_entry->gref = gnttab_claim_grant_reference(gref_head);`. Later, in the cleanup loop, we see that `list_for_each_entry_safe(indirect_page, n, &rinfo->indirect_pages, lru)` is used to free pages in `&rinfo->indirect_pages`. However, when we reach the line `BUG_ON(gnt_list_entry->gref == -ENOSPC);`, if `gnt_list_entry->gref` indeed equals `-ENOSPC`, we see that `goto out_of_memory` is executed. Following the code, we notice that after `out_of_memory`, we have `list_for_each_entry_safe(gnt_list_entry, n, &rinfo->grants, node)` which frees `gnt_list_entry->page`. 
+
+However, right above `list_for_each_entry_safe(gnt_list_entry, n, &rinfo->grants, node)`, we have `if (info->feature_persistent) __free_page(granted_page);` and then `kfree(gnt_list_entry);`. Here we see a potential problem. If `info->feature_persistent` is `false`, we still have `kfree(gnt_list_entry)`, but we do not free `granted_page`. Then, we eventually reach the line `gnt_list_entry->gref = gnttab_claim_grant_reference(gref_head);`, which will lead to a use-after-free since we freed `gnt_list_entry`, but we still use its pointer. Hence, the code is vulnerable.
+
+RECOMMENDATIONS:
+We recommend adding `__free_page(granted_page)` before `kfree(gnt_list_entry)` to fix the use-after-free vulnerability when `info->feature_persistent` is `false`. Here's the corrected code:
+```c
+if (info->feature_persistent) {
+    granted_page = alloc_page(GFP_NOIO | __GFP_ZERO);
+    if (!granted_page) {
+        kfree(gnt_list_entry);
+        goto out_of_memory;
+    }
+    ...
+} else {
+    kfree(gnt_list_entry);
+    if (granted_page != NULL) {
+        __free_page(granted_page);
+    }
+    ...
+}
+```
+Also we should check in xenbus_read_unsigned function that the max-ring-page-order value read is not zero to prevent potential integer overflow in line 29 'info->nr_ring_pages = 1 << ring_page_order;'.
+
+ORIGINAL CODE:
+(module_param_named and ... beginning of xen_translate_vdev functions provided)

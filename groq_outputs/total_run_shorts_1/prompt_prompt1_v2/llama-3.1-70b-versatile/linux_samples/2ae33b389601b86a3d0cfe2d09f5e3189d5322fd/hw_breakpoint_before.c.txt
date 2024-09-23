@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential crashes or data corruption due to the use of smp_call_function_single with an integer cast from a pointer.
+
+EXPLANATION:
+The potential issue lies in the line where smp_call_function_single is called. The function takes an integer as its first argument, representing the CPU number. However, the argument passed is a casted pointer (`(int)cpu`), which is a `void *` type in the function definition. 
+
+This cast could result in incorrect CPU number being passed if the pointer value is outside the range of a 32-bit integer, potentially leading to a crash or unintended behavior. This could be especially problematic if the code is running on a 64-bit system.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the `cpu` pointer value is properly converted to an integer, and validated before passing it to `smp_call_function_single`. 
+
+Assuming `cpu` is indeed supposed to be a CPU number, it would be better to retrieve the CPU number from the `cpu` pointer using a function that can handle pointer to integer conversion safely, such as `cpu_to_node` or `cpumask_first` and then `cpumask_next`, or directly retrieving the cpu number if `cpu` is a struct with this field.
+
+However, without more context, it is hard to determine the correct fix. The following fix could be applied if `cpu` is supposed to be an integer representing the CPU number:
+
+```c
+int cpu_num = (int)(uintptr_t)cpu;
+smp_call_function_single(cpu_num, reset_ctrl_regs, NULL, 1);
+```
+
+This fix still has the assumption that `cpu` is a valid CPU number.
+
+ORIGINAL CODE:
+```c
+static int __cpuinit dbg_reset_notify(struct notifier_block *self,
+				      unsigned long action, void *cpu)
+{
+	if (action == CPU_ONLINE)
+		smp_call_function_single((int)cpu, reset_ctrl_regs, NULL, 1);
+
+	return NOTIFY_OK;
+}
+```

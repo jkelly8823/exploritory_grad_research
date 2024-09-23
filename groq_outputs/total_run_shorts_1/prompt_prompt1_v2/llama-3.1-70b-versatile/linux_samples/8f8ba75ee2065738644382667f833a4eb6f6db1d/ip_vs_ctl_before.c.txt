@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The provided code is vulnerable to a time-of-check to time-of-use (TOCTOU) attack, potentially allowing a malicious user to read stale data or trigger unexpected behavior.
+
+EXPLANATION:
+The code first calls `__ip_vs_get_timeouts` to retrieve the current timeout values, and then copies the retrieved data to the user space using `copy_to_user`. However, between these two operations, the timeout values might have changed, making the data that is copied to the user space stale. An attacker can exploit this by manipulating the timeout values between the check (`__ip_vs_get_timeouts`) and the use (`copy_to_user`).
+
+Additionally, the code does not properly handle the case where `copy_to_user` fails, as it only sets `ret` to `-EFAULT` but does not immediately return. This could potentially lead to further issues.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use a different approach that avoids the TOCTOU issue. One possible solution is to use a single atomic operation that retrieves the timeout values and copies them to the user space, ensuring that the data is not stale. This can be achieved by using a custom syscall or by redesigning the `__ip_vs_get_timeouts` function to directly copy the data to the user space.
+
+Also, the code should properly handle the error case by immediately returning after setting `ret` to `-EFAULT`.
+
+ORIGINAL CODE:
+```c
+{
+    struct ip_vs_timeout_user t;
+
+    __ip_vs_get_timeouts(net, &t);
+    if (copy_to_user(user, &t, sizeof(t)) != 0)
+        ret = -EFAULT;
+}
+```

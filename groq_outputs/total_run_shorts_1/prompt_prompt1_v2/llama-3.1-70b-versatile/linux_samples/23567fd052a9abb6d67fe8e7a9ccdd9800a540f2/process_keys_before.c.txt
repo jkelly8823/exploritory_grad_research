@@ -1,0 +1,19 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code potentially introduces a Use-After-Free vulnerability when dealing with pointer management.
+
+EXPLANATION:
+The 'keyring' object is checked to see if it is equal to 'new->session_keyring'. If this condition is true, it is assigned a return code of 0. However, earlier in the code, it is shown that 'ret' was being assigned with PTR_ERR(keyring). This suggests that 'keyring' may be a pointer to a dynamically allocated object. If 'keyring' is set to an error value using PTR_ERR, and then 'goto error2', this may lead to 'keyring' being freed, followed by potential reuse of the pointer back at the label, 'new->session_keyring', without proper validation or synchronization. If a malicious user is able to allocate memory to replace the freed, but potentially reused 'keyring' pointer, this may result in elevated privileges.
+
+RECOMMENDATIONS:
+1. Ensure that after PTR_ERR is used, keyring is checked for NULL, and if NULL, properly handle this before continuing execution. Consider using pointer validation or synchronization methods such as locks to prevent concurrent access of the keyring pointer.
+2. Verify that after 'goto error2', keyring is not reused until it is properly reinitialized with a valid object.
+
+ORIGINAL CODE:
+	ret = PTR_ERR(keyring);
+	goto error2;
+} else if (keyring == new->session_keyring) {
+	ret = 0;
+	goto error2;
+}

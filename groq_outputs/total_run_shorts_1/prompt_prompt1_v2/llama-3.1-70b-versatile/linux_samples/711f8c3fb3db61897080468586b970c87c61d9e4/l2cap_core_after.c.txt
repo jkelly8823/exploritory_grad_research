@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19-20, 21
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to potential integer overflow and/or buffer overflow due to signed/unsigned mismatch in the comparison of `psm` variable.
+
+EXPLANATION:
+In this code, the `psm` variable is compared with `L2CAP_PSM_LE_DYN_END` constant.
+`psm` is used in its __le16_to_cpu() form, which might be a 16-bit integer after the conversion. But it's compared with `L2CAP_PSM_LE_DYN_END`, which may be an integer literal. 
+When we do comparison with unsigned and signed number, it leads to conversion of the signed value to unsigned value, this may cause a scenario which will lead to unexpected behavior. This situation is a classical example of integer overflow.
+Moreover, when the `psm` value is assigned directly to `req->psm`, it is not validated if `req->psm` will overflow or not.
+
+RECOMMENDATIONS:
+1. To fix this vulnerability, `req->psm` type should be validated to ensure it won't overflow when assigned with new value. 
+2. Also, the comparison between `psm` and `L2CAP_PSM_LE_DYN_END` should be done using variables of the same signedness to avoid the possibility of an integer overflow. 
+   Validate the data types to ensure both are same signed.
+Here is the modified code:
+   ```c
+if (psm > 0xFFFF || psm < (uint16_t)L2CAP_PSM_LE_DYN_END) {
+   result = L2CAP_CR_LE_BAD_PSM;
+   chan = NULL;
+   goto response;
+}
+...
+uint16_t req_psm;
+req_psm = __le16_to_cpu(psm);
+if(req_psm > 0xFFFF) {
+	// handle the error case
+}
+req->psm = req_psm;
+```
+ORIGINAL CODE:
+```c
+BT_DBG("psm 0x%2.2x scid 0x%4.4x mtu %u mps %u", __le16_to_cpu(psm),
+       scid, mtu, mps);
+
+/* BLUETOOTH CORE SPECIFICATION Version 5.3 | Vol 3, Part A
+ * page 1059:
+ *
+ * Valid range: 0x0001-0x00ff
+ *
+ * Table 4.15: L2CAP_LE_CREDIT_BASED_CONNECTION_REQ SPSM ranges
+ */
+if (!psm || __le16_to_cpu(psm) > L2CAP_PSM_LE_DYN_END) {
+	result = L2CAP_CR_LE_BAD_PSM;
+	chan = NULL;
+	goto response;
+}
+
+/* Check if we have socket listening on psm */
+pchan = l2cap_global_chan_by_psm(BT_LISTEN, psm, &conn->hcon->src,
+				 &conn->hcon->dst, LE_LINK);
+if (!pchan) {
+
+psm  = req->psm;
+
+/* BLUETOOTH CORE SPECIFICATION Version 5.3 | Vol 3, Part A
+ * page 1059:
+ *
+ * Valid range: 0x0001-0x00ff
+ *
+ * Table 4.15: L2CAP_LE_CREDIT_BASED_CONNECTION_REQ SPSM ranges
+ */
+if (!psm || __le16_to_cpu(psm) > L2CAP_PSM_LE_DYN_END) {
+	result = L2CAP_CR_LE_BAD_PSM;
+	goto response;
+}
+
+BT_DBG("psm 0x%2.2x mtu %u mps %u", __le16_to_cpu(psm), mtu, mps);
+
+memset(&pdu, 0, sizeof(pdu));
+```

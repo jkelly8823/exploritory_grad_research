@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-10, 14-17
+VULNERABILITY_DESCRIPTION:
+The code snippet contains potential memory leaks due to kmalloc allocations not being freed in case of errors.
+
+EXPLANATION:
+The code allocate memory using kmalloc for kbuf and sops. However, if an error occurs after these allocations (e.g., kbuf allocation succeeds but sops allocation fails), the previously allocated memory is not freed, resulting in a potential memory leak. Additionally, kmalloc allocations can fail and return NULL, and in such cases, the code checks for NULL before using the allocated memory, but it would be better to handle potential failures for other allocations.
+
+RECOMMENDATIONS:
+1. Always check the return value of kmalloc and handle potential failures.
+2. Use kfree to free the allocated memory in case of errors or if it is no longer needed.
+3. It's recommended to use Linux kernel's memory management APIs such as kmem_cache_alloc() and kmem_cache_free() instead of kmalloc() and kfree().
+4. Use try catch mechanism wherever applicable.
+
+ORIGINAL CODE:
+	mm_segment_t fs;
+	long ret, err, i;
+
+	if (maxevents <= 0 || maxevents > (INT_MAX/sizeof(struct epoll_event)))
+		return -EINVAL;
+	kbuf = kmalloc(sizeof(*kbuf) * maxevents, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+	fs = get_fs();
+
+	if (nsops < 1 || nsops > SEMOPM)
+		return -EINVAL;
+	sops = kmalloc(sizeof(*sops) * nsops, GFP_KERNEL);
+	if (!sops)
+		return -ENOMEM;
+	err = 0;

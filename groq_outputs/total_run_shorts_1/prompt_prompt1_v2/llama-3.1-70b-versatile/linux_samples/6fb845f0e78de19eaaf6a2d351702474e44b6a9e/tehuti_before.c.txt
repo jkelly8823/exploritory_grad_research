@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Use of freed memory
+
+EXPLANATION:
+In the provided code snippet, the line `dev_kfree_skb_irq(db->rptr->addr.skb);` is freeing the skb pointer. However, the following line `bdx_tx_db_inc_rptr(db);` is using the `db->rptr` pointer without reassigning it after freeing the skb. This could potentially cause a use-after-free vulnerability if `db->rptr` is relying on the skb pointer that was just freed.
+
+Additionally, even if `db->rptr` is not reliant on the skb pointer, the line `tx_level -= db->rptr->len;` is also using the `db->rptr` pointer. This pointer could be pointing to freed memory, making the access to `db->rptr->len` a potential use-after-free.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we could ensure that `db->rptr` is not accessed after freeing the skb. One approach is to reorder the operations so that `bdx_tx_db_inc_rptr(db);` is called before freeing the skb:
+
+```
+tx_level -= db->rptr->len;    /* '-' koz len is negative */
+bdx_tx_db_inc_rptr(db);
+dev_kfree_skb_irq(db->rptr->addr.skb);
+```
+
+This would prevent any use-after-free vulnerabilities. Alternatively, if `db->rptr` needs to be accessed after freeing the skb, we would need to ensure that `db->rptr` is reinitialized to point to a valid memory location before accessing it.
+
+ORIGINAL CODE:
+```
+tx_level -= db->rptr->len;    /* '-' koz len is negative */
+
+/* now should come skb pointer - free it */
+dev_kfree_skb_irq(db->rptr->addr.skb);
+bdx_tx_db_inc_rptr(db);
+}
+
+/* let h/w know which TXF descriptors were cleaned */
+```

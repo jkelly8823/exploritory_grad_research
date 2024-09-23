@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable to a buffer overflow attack due to the use of the strcpy function without checking the length of the input string.
+
+EXPLANATION:
+The vulnerability arises from the fact that the `strcpy` function copies the contents of `hp->h_name` into `hostname` without performing any bounds checking. This means that if `hp->h_name` is longer than 64 characters (the size of the `hostname` buffer), it will overflow the buffer, potentially allowing an attacker to execute arbitrary code.
+
+Furthermore, the `inet_addr` function returns a pointer to a static buffer that may be overwritten by subsequent calls to `inet_addr` or other functions. This means that the value of `hp->h_name` is not guaranteed to remain valid for the duration of the function call, which could lead to unexpected behavior if `hp->h_name` is overwritten before it is copied into `hostname`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use a safer string copying function that performs bounds checking, such as `strncpy` or `strcpy_s`. Additionally, you should check the length of `hp->h_name` to ensure it does not exceed the size of the `hostname` buffer. You should also consider using more modern and safer functions for IP address conversion and hostname resolution. Here's an example of how you could modify the code to use `strncpy` and bounds checking:
+
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;
+    in_addr_t *addr;
+    char hostname[64];
+
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+    validate_addr_form(user_supplied_addr);
+
+    addr = inet_addr(user_supplied_addr);
+    hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);
+    size_t len = strnlen(hp->h_name, 64);
+    if (len >= sizeof(hostname)) {
+        // error handling: hostname is too long
+        return;
+    }
+    strncpy(hostname, hp->h_name, 64);
+    hostname[63] = '\0'; // ensure null-terminated string
+    // rest of the function
+}
+```
+
+ORIGINAL CODE:
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+       
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+       
+    validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+}
+```

@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+Resource leak due to missing error handling
+
+EXPLANATION:
+The code assigns resources using `l2cap_chan_holds` function, but in case an error occurs after this point and the function returns, these resources are not released. Although the `l2cap_sock_kill` function is called in the event of an error early in the function, this does not mitigate the error, as it occurs later.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, resources should be properly cleaned up on function exit by introducing additional error handling or using techniques such as RAII (Resource Acquisition Is Initialization). The `l2cap_chan_put` function can be used to release the held resource in error cases.
+
+```c
+chan = l2cap_chan_create();
+if (!chan) {
+    l2cap_sock_kill(sk);
+    return NULL;
+}
+
+l2cap_chan_hold(chan);
+...
+if (some_error_occurs) {
+    l2cap_chan_put(chan);  // This should be called in case of an error
+    return NULL;
+}
+...
+```
+Alternatively, using an RAII approach or introducing a try-catch-finally block can ensure that resources are properly cleaned up regardless of the function's control flow.
+
+ORIGINAL CODE:
+```c
+BT_DBG("sock %p, sk %p", sock, sk);
+
+addr->sa_family = AF_BLUETOOTH;
+*len = sizeof(struct sockaddr_l2);
+
+if (peer) {
+
+chan = l2cap_chan_create();
+if (!chan) {
+    l2cap_sock_kill(sk);
+    return NULL;
+}
+
+l2cap_chan_hold(chan);
+```

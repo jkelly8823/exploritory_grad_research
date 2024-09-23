@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6, 8-10
+VULNERABILITY_DESCRIPTION:
+Uncontrolled use of user-provided data in a function call.
+
+EXPLANATION:
+The code snippet uses unvalidated user-provided data in function calls. In lines 4-6 and 8-10, the `mmsg` variable is directly used as a user-space pointer in the `__sys_recvmmsg` function. However, there is no validation to ensure that `mmsg` is a valid user-space address. This lack of validation can potentially lead to a heap buffer overflow vulnerability if an attacker is able to manipulate the `mmsg` variable.
+
+Additionally, the use of the `get_compat_timespec` and `put_compat_timespec` functions can lead to potential issues. These functions are used to copy data to/from user-space, but if the `timeout` variable is not properly validated, these functions can lead to data corruption or other unexpected behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add validation to ensure that `mmsg` is a valid user-space address. This can be done by using a function such as `user_access_begin` to verify that the user-space address is accessible and does not overlap with internal kernel addresses. Additionally, it is recommended to validate the `timeout` variable to ensure that it is a valid pointer.
+
+It is also recommended to use safer functions such as `copy_from_user` and `copy_to_user` to copy data to/from user-space, rather than using `get_compat_timespec` and `put_compat_timespec`. These functions provide additional safety checks to prevent data corruption or other unexpected behavior.
+
+ORIGINAL CODE:
+```c
+if (flags & MSG_CMSG_COMPAT)
+	return -EINVAL;
+
+if (COMPAT_USE_64BIT_TIME)
+	return __sys_recvmmsg(fd, (struct mmsghdr __user *)mmsg, vlen,
+			      flags | MSG_CMSG_COMPAT,
+			      (struct timespec *) timeout);
+
+if (timeout == NULL)
+	return __sys_recvmmsg(fd, (struct mmsghdr __user *)mmsg, vlen,
+			      flags | MSG_CMSG_COMPAT, NULL);
+
+if (get_compat_timespec(&ktspec, timeout))
+	return -EFAULT;
+
+datagrams = __sys_recvmmsg(fd, (struct mmsghdr __user *)mmsg, vlen,
+			       flags | MSG_CMSG_COMPAT, &ktspec);
+if (datagrams > 0 && put_compat_timespec(&ktspec, timeout))
+	datagrams = -EFAULT;
+
+return datagrams;
+}```

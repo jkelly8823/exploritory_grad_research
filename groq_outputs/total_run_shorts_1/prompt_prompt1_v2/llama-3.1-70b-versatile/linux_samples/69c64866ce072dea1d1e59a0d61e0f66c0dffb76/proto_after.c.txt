@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+The provided code snippet appears to be vulnerable to a potential null pointer dereference.
+
+EXPLANATION:
+In the provided code, there is a check for the `sk->sk_send_head` pointer being `NULL` before attempting to perform some operation on it. However, there is no similar check for the `sk` pointer itself before using it to access various members and methods. If the `sk` pointer is `NULL`, this could result in a null pointer dereference, leading to a crash or potential code execution.
+
+RECOMMENDATIONS:
+The recommended fix for this issue is to add a null check for the `sk` pointer at the beginning of the function. This check should occur before any operations that access members or methods of the `sk` pointer.
+
+```c
+if (sk == NULL) {
+	// handle the error
+}
+```
+
+This check should be placed before the line `struct inet_connection_sock *icsk = inet_csk(sk);` to prevent any potential null pointer dereferences.
+
+ORIGINAL CODE:
+```c
+{
+	struct inet_connection_sock *icsk = inet_csk(sk);
+	struct inet_sock *inet = inet_sk(sk);
+	struct dccp_sock *dp = dccp_sk(sk);
+	int err = 0;
+	const int old_state = sk->sk_state;
+
+	if (old_state != DCCP_CLOSED)
+		sk->sk_err = ECONNRESET;
+
+	dccp_clear_xmit_timers(sk);
+	ccid_hc_rx_delete(dp->dccps_hc_rx_ccid, sk);
+	ccid_hc_tx_delete(dp->dccps_hc_tx_ccid, sk);
+	dp->dccps_hc_rx_ccid = NULL;
+	dp->dccps_hc_tx_ccid = NULL;
+
+	__skb_queue_purge(&sk->sk_receive_queue);
+	__skb_queue_purge(&sk->sk_write_queue);
+	if (sk->sk_send_head != NULL) {
+```

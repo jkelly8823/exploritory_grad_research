@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential buffer overflow and file write vulnerabilities due to unchecked bounds when writing to the temporary file.
+
+EXPLANATION:
+Although the `fwrite()` function does check the number of bytes written to the file, it does not automatically prevent buffer overflows when the destination buffer (in this case, `recvbuf`) is filled with more data than `DATA_SIZE`. However, in this code, the loop condition checks that the number of bytes written to the `recvbuf` does not exceed `DATA_SIZE`, making the buffer overflow less likely.
+
+A more serious vulnerability is present in this code: it does not check if the file was opened successfully before writing to it. When `fopen()` fails, `tmp` will be a null pointer. Then when the code attempts to write to `tmp` through `fwrite()`, this can result in a segmentation fault or undefined behavior.
+
+Additionally, no error handling is performed for possible errors during `fwrite()` such as disk full or write access denied.
+
+RECOMMENDATIONS:
+- Check the return value of `fopen()` before using the returned FILE pointer to avoid potential segmentation faults or null pointer dereferences. 
+- Check the return value of `fwrite()` to ensure the requested number of bytes were written.
+- Consider using a safer function such as `snprintf()` to prevent potential buffer overflows when building file paths.
+
+ORIGINAL CODE:
+```
+if (tmpnam_r(filename)) {
+    FILE* tmp = fopen(filename,"wb+");
+    while((recv(sock,recvbuf,DATA_SIZE, 0) > 0)&(amt!=0)) 
+        amt = fwrite(recvbuf,1,DATA_SIZE,tmp);
+}
+```

@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 146-148
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in the l2cap_config_rsp function.
+
+EXPLANATION:
+The vulnerability is located in the l2cap_config_rsp function where the variable len is calculated as le16_to_cpu(cmd->len) - sizeof(*rsp). This calculation does not take into account the potential for a malicious cmd->len value that could cause len to be a large value, potentially leading to a buffer overflow when used to access the chan->conf_len array.
+
+However, a more significant issue is that the code lacks error handling and validation for the values of cmd->len, rsp->scid, rsp->flags, and rsp->result. The __le16_to_cpu function does not check for overflows or invalid values. A malicious data packet could cause the function to access invalid memory or perform undefined behavior.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the values of cmd->len, rsp->scid, rsp->flags, and rsp->result before using them. This could include checks for valid ranges, overflows, and invalid values.
+2. Implement error handling to handle cases where the values are invalid or out of range.
+3. Use safe functions to handle conversions between endianness.
+4. Consider using AddressSanitizer or other memory error detection tools to detect potential buffer overflows and other memory-related issues.
+
+ORIGINAL CODE:
+(limited to first function to save space)
+static inline int l2cap_command_rej(struct l2cap_conn *conn,
+				    struct l2cap_cmd_hdr *cmd, u8 *data)
+{
+	struct l2cap_cmd_rej_unk *rej = (struct l2cap_cmd_rej_unk *) data;
+
+	if (rej->reason != L2CAP_REJ_NOT_UNDERSTOOD)
+		return 0;
+
+	if ((conn->info_state & L2CAP_INFO_FEAT_MASK_REQ_SENT) &&
+}

@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 56, 57, 58, 59, 60
+VULNERABILITY_DESCRIPTION:
+Insecure Use of Read Lock in an Interrupt-Enabling Function
+EXPLANATION:
+The function `xen_irq_lateeoi` acquires a read lock `&evtchn_rwlock` before accessing the `info_for_irq` function, which returns the irq info associated with the given irq. This function can potentially sleep and call `irq_free_desc` which is not safe under a read lock.
+
+Also, in `xen_free_irq`, a write lock `&evtchn_rwlock` is acquired which can potentially deadlock with a read lock acquired by `xen_irq_lateeoi`. The read lock also holds interrupts disabled. A read lock in an interrupt-enabling function may lead to unexpected behavior.
+
+In addition, we have another issue here in `event_handler_exit` function. The use of read_lock while calling `smp_processor_id` which is interrupt-enabling function is also causing the insecure condition to arise.
+
+RECOMMENDATIONS:
+Avoid calling irq_for_desc() or set_irq_chip() when an interrupt can occur because the read_lock_irqsave() and interrupts can disable. Since xen_irq_lateeoi() will be normally called from an interrupt handler with disabled interrupts, we need to protect read_lock_irqsave from being interrupted. The recommended solution would be to spin_trylock the lock as mentioned in write_lock_irqsave or using spin_lock with spin_lock_irqsave respectively.
+
+Also we found that read_lock can deadlock with spin_lock within interrupt context due to use of nested-lock so here we suggest always handle for use of read_lock before spin_lock because acquiring them in the wrong order can cause deadlock .
+
+In the situation here due to different source locks are taken spin_lock or spin_try_lock could be better alternatives to locks, depending on an optimal performance consideration.
+
+ORIGINAL CODE:
+ 
+...

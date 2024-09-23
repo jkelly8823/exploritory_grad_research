@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+A potential use-after-free vulnerability is present.
+
+EXPLANATION:
+The code initializes a mutex (`mutex_init`) and a completion structure (`init_completion`) before releasing the memory for `odp_data` at labels `out_odp_data` and `out_page_list`. This is concerning because if the thread executing this code were to be interrupted or call another function, it could potentially lead to a use-after-free situation. Specifically, the mutex or completion structure could be accessed after the underlying `odp_data` memory has been freed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended that the mutex and completion structure be destroyed before releasing the underlying `odp_data` memory. This would prevent any potential use-after-free issues.
+
+Here is a possible fix:
+
+```c
+mutex_destroy(&odp_data->umem_mutex);
+destroy_completion(&odp_data->notifier_completion);
+
+out_page_list:
+	vfree(odp_data->page_list);
+out_odp_data:
+	mmdrop(umem->owning_mm);
+	kfree(odp_data);
+	return ERR_PTR(ret);
+}
+EXPORT_SYMBOL(ib_alloc_odp_umem);
+```
+
+ORIGINAL CODE:
+```c
+umem->writable   = 1;
+umem->is_odp = 1;
+odp_data->per_mm = per_mm;
+umem->owning_mm  = per_mm->mm;
+mmgrab(umem->owning_mm);
+
+mutex_init(&odp_data->umem_mutex);
+init_completion(&odp_data->notifier_completion);
+
+out_page_list:
+	vfree(odp_data->page_list);
+out_odp_data:
+	mmdrop(umem->owning_mm);
+	kfree(odp_data);
+	return ERR_PTR(ret);
+}
+EXPORT_SYMBOL(ib_alloc_odp_umem);
+```

@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-13, 18-20, 22-24
+VULNERABILITY_DESCRIPTION:
+Resource Leak and Potential Null Pointer Dereference.
+The function r5c_recovery_alloc_stripe can potentially leak a stripe_head resource and dereference a null pointer.
+
+EXPLANATION:
+In the provided code snippet, there are several instances where a stale pointer to a stripe_head resource is reused in the event of an error. This can lead to a resource leak and potentially result in a null pointer dereference.
+
+When `sh` is not NULL and allocation fails, the stripe_head resource pointed to by `sh` is not freed before it is reassigned (lines 10-13). Additionally, when `sh` is NULL after allocation attempts fail (lines 18-20 and 22-24), it will dereference a null pointer when `list_add_tail` is called or when `sh->lru` is accessed. 
+
+Although checks are in place for these conditions, if `sh` is not freed when not NULL or if the null checks fail, a resource leak and null pointer dereference can occur.
+
+RECOMMENDATIONS:
+When reassigning `sh` (line 10-13), check if the original `sh` is not NULL and free it if necessary. 
+
+Before accessing `sh->lru` or calling `list_add_tail` with `sh`, ensure that `sh` is not NULL to prevent potential null pointer dereferences.
+
+Add checks for the return values of `raid5_get_active_stripe`, `list_add_tail`, and `r5l_recovery_reset_stripe` and handle potential errors accordingly.
+
+ORIGINAL CODE:
+```
+static struct stripe_head *
+r5c_recovery_alloc_stripe(struct r5conf *conf,
+			  sector_t stripe_sect)
+{
+	struct stripe_head *sh;
+
+	sh = raid5_get_active_stripe(conf, stripe_sect, 0, 1, 0);
+	if (!sh)
+		return NULL;  /* no more stripe available */
+
+	r5l_recovery_reset_stripe(sh);
+						stripe_sect);
+
+		if (!sh) {
+			sh = r5c_recovery_alloc_stripe(conf, stripe_sect);
+			/*
+			 * cannot get stripe from raid5_get_active_stripe
+			 * try replay some stripes
+			 */
+				r5c_recovery_replay_stripes(
+					cached_stripe_list, ctx);
+				sh = r5c_recovery_alloc_stripe(
+					conf, stripe_sect);
+			}
+			if (!sh) {
+				pr_debug("md/raid:%s: Increasing stripe cache size to %d to recovery data on journal.\n",
+					mdname(mddev),
+					conf->min_nr_stripes * 2);
+				raid5_set_cache_size(mddev,
+						     conf->min_nr_stripes * 2);
+				sh = r5c_recovery_alloc_stripe(conf,
+							       stripe_sect);
+			}
+			if (!sh) {
+				pr_err("md/raid:%s: Cannot get enough stripes due to memory pressure. Recovery failed.\n",
+				       mdname(mddev));
+				return -ENOMEM;
+			}
+			list_add尾(&sh->lru, cached_stripe_list);
+		}
+}
+```

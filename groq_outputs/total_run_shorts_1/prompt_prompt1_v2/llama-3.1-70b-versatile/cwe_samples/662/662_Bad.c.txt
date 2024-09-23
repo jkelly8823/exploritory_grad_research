@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION: 
+Deadlock Risk Due to Unhandled Errors
+
+EXPLANATION:
+The provided code snippet, `f`, acquires a mutex lock before accessing a shared resource and then releases the lock afterwards. However, there are several potential problems with this code. If the function encounters an error after acquiring the mutex lock but before releasing it, the lock will remain locked indefinitely. This could potentially cause deadlocks in the program. For example, if an error occurs while accessing the shared resource and an error-handler function attempts to acquire the same mutex, it will be blocked forever.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can use a try-catch block (or equivalent error-handling mechanism) to ensure that the mutex is always unlocked when the function exits, regardless of whether an error occurred or not. Alternatively, you can use RAII (Resource Acquisition Is Initialization) idiom to acquire and release the mutex in a way that it is always released even in case of exceptions.
+
+Here's an example of how the code could be rewritten using a try-catch block:
+
+```c
+void f(pthread_mutex_t *mutex) {
+    pthread_mutex_t *mutex_ptr = NULL;
+    char locked = 0;
+    
+    // Initialize a pointer to remember the mutex
+    // in case we need to unlock it in the error handler
+    mutex_ptr = mutex;
+    
+    // Acquire the mutex
+    int ret = pthread_mutex_lock(mutex);
+    
+    // Check if mutex locking failed
+    if (ret != 0) {
+        // If locking failed, do not attempt to access shared resource and do not unlock
+        mutex_ptr = NULL;
+        // Handle the error
+    } else {
+        locked = 1;
+        /* access shared resource */
+    }
+    
+    // Release the mutex if we were able to acquire it
+    if (locked)
+        pthread_mutex_unlock(mutex);
+}
+```
+
+In addition to the above lock/unlock sequence error handling, it's also important to handle errors raised while accessing the shared resource. Depending on the type of error that might occur, the error handling approach may vary.
+
+ORIGINAL CODE:
+void f(pthread_mutex_t *mutex) {
+    pthread_mutex_lock(mutex);
+       /* access shared resource */
+    pthread_mutex_unlock(mutex);
+}

@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-22
+VULNERABILITY_DESCRIPTION: 
+Insecure SSL Context and Potential TLS Version Vulnerabilities.
+
+EXPLANATION:
+The given code snippet is vulnerable because it uses the `wrap_socket` method with insecure defaults. While it does warn about the deprecation of `ssl.wrap_socket()` and suggests using `SSLContext.wrap_socket()`, the code still relies on insecure defaults for the `SSLContext` object. 
+
+Notably, the `ssl_version` parameter defaults to `PROTOCOL_TLS`. Although this is the most secure TLS version available at the time of use, this code does not specify a specific TLS version (e.g., `PROTOCOL_TLSv1_2` or `PROTOCOL_TLSv1_3`) which could be insecure if older versions of TLS are allowed. Additionally, it allows `cert_reqs=CERT_NONE` and does not enforce certificate verification by default. This may lead to potential Man-in-the-Middle (MitM) attacks if the connection is intercepted.
+
+Furthermore, the code does not restrict the ciphers that can be used for the SSL connection. This may lead to using weak or insecure ciphers. Although the `ciphers` parameter allows the specification of secure ciphers, this is not the default behavior and must be manually set.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, consider the following recommendations:
+
+1.  Specify a secure TLS version, such as `PROTOCOL_TLSv1_2` or `PROTOCOL_TLSv1_3`, and disable older versions of TLS.
+
+2.  Set `cert_reqs=CERT_REQUIRED` to enforce certificate verification by default.
+
+3.  Use secure ciphers and set them as the default for the `ciphers` parameter. You can use the list of recommended ciphers from a reliable source such as the Mozilla SSL Configuration Generator.
+
+4.  Set `check_hostname=True` when calling `wrap_socket` to ensure that the hostname matches the certificate's subject or subjectAltName.
+
+5.  Avoid using deprecated functions and methods. Instead, use the latest secure methods to create the `SSLContext` object.
+
+ORIGINAL CODE:
+SSLContext.sslobject_class = SSLObject
+
+def wrap_socket(sock, keyfile=None, certfile=None,
+                server_side=False, cert_reqs=CERT_NONE,
+                ssl_version=PROTOCOL_TLS, ca_certs=None,
+                do_handshake_on_connect=True,
+                suppress_ragged_eofs=True,
+                ciphers=None):
+    warnings.warn(
+        "ssl.wrap_socket() is deprecated, use SSLContext.wrap_socket()",
+        category=DeprecationWarning,
+        stacklevel=2
+    )
+    if server_side and not certfile:
+        raise ValueError("certfile must be specified for server-side "
+                         "operations")
+    if keyfile and not certfile:
+        raise ValueError("certfile must be specified")
+    context = SSLContext(ssl_version)
+    context.verify_mode = cert_reqs
+    if ca_certs:
+        context.load_verify_locations(ca_certs)
+    if certfile:
+        context.load_cert_chain(certfile, keyfile)
+    if ciphers:
+        context.set_ciphers(ciphers)
+    return context.wrap_socket(
+        sock=sock, server_side=server_side,
+        do_handshake_on_connect=do_handshake_on_connect,
+        suppress_ragged_eofs=suppress_ragged_eofs
+    )
+
+# some utility functions
+
+def cert_time_to_seconds(cert_time):
+    """Return the time in seconds since the Epoch, given the timestring

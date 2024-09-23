@@ -1,0 +1,39 @@
+VULNERABLE: YES 
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Memory leak or null pointer dereference vulnerability.
+EXPLANATION:
+In the `hid_register_field` function, the code checks if `report->maxfield` equals `HID_MAX_FIELDS`, and if so, returns `NULL` after printing an error message. However, the return statement is placed inside the if statement without a closing bracket `}`, which means the following statements (`field->value = (s32 *)(field->usage + usages); field->report = report;`) will be executed even when `report->maxfield` equals `HID_MAX_FIELDS`. 
+
+This can lead to a null pointer dereference if the memory allocation for `field` has failed. Additionally, since the `hid_err` function does not exit the function, there will be a resource leak if `field` has already been allocated.
+
+RECOMMENDATIONS:
+To fix this vulnerability, move the return statement to before the functions return `NULL` and add a closing bracket `}` for the if statement:
+
+```c
+if (report->maxfield == HID_MAX_FIELDS) {
+    hid_err(report->device, "too many fields in report\n");
+    return NULL;
+}
+```
+Avoid the following lines of code to be executed after the `NULL` return value has been set.
+
+ORIGINAL CODE:
+```c
+static struct hid_field *hid_register_field(struct hid_report *report, unsigned usages, unsigned values)
+{
+    struct hid_field *field;
+    int i;
+
+    if (report->maxfield == HID_MAX_FIELDS) {
+        hid_err(report->device, "too many fields in report\n");
+        return NULL;
+    field->value = (s32 *)(field->usage + usages);
+    field->report = report;
+
+    for (i = 0; i < usages; i++)
+        field->usage[i].usage_index = i;
+
+    return field;
+}
+```

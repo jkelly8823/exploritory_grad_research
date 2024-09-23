@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Vulnerability: Possible Privilege Escalation via SetUID  Symlink Attack
+EXPLANATION:
+A possible privilege escalation vulnerability exists due to the use of the O_EXCL flag in conjunction with a dynamic filename (cn.corename) and a setUID change (cred->fsuid = GLOBAL_ROOT_UID) while opening a file (filp_open). The O_EXCL flag ensures that if the file already exists, the open will fail, preventing a rewrite attack. However, this does not prevent a symlink attack. An attacker can create a symlink with the same name as the intended filename (cn.corename) and point it to a sensitive file. This could potentially allow the attacker to modify sensitive files, leading to a privilege escalation attack.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider using the following approaches:
+
+- Use the O_NOFOLLOW flag when opening the file to prevent following symlinks.
+- Use a secure directory for dumping core files, with proper permissions.
+- Validate the filename (cn.corename) to ensure it does not contain any malicious paths.
+- Avoid using the O_EXCL flag with dynamic filenames that are exposed to potential attacks.
+
+ORIGINAL CODE:
+```c
+	int retval = 0;
+	int flag = 0;
+	int ispipe;
+	static atomic_t core_dump_count = ATOMIC_INIT(0);
+	struct coredump_params cprm = {
+		.signr = signr,
+		.regs = regs,
+	if (!cred)
+		goto fail;
+	/*
+	 *	We cannot trust fsuid as being the "true" uid of the
+	 *	process nor do we know its entire history. We only know it
+	 *	was tainted so we dump it as root in mode 2.
+	 */
+	if (__get_dumpable(cprm.mm_flags) == 2) {
+		/* Setuid core dump mode */
+		flag = O_EXCL;		/* Stop rewrite attacks */
+		cred->fsuid = GLOBAL_ROOT_UID;	/* Dump root private */
+	}
+
+	retval = coredump_wait(exit_code, &core_state);
+	if (retval < 0)
+		if (cprm.limit < binfmt->min_coredump)
+			goto fail_unlock;
+
+		cprm.file = filp_open(cn.corename,
+				 O_CREAT | 2 | O_NOFOLLOW | O_LARGEFILE | flag,
+				 0600);
+		if (IS_ERR(cprm.file))
+```

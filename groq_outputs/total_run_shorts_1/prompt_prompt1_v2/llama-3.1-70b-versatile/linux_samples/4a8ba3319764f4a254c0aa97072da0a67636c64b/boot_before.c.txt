@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-18
+VULNERABILITY_DESCRIPTION: 
+The vulnerability is a potential null pointer dereference in the function acpi_gsi_to_irq.
+
+EXPLANATION:
+The function acpi_gsi_to_irq is vulnerable because it dereferences the pointer irqp without checking if it is null. The function takes a pointer to an unsigned integer as a parameter, and this pointer is used to store the result of the function. If a null pointer is passed to this function, a null pointer dereference will occur when the function tries to store the result, potentially leading to a segmentation fault.
+
+Another issue arises from the functions, acpi_isa_irq_to_gsi, acpi_map_lsapic, acpi_unmap_lsapic, and acpi_register_ioapic. Although these functions' implementations were not fully shown, based on their declarations and usage in kernel code, potential issues could be observed: 
+Most kernel function pointer parameters were missing NULL checks.
+Although kernel code uses, EXPORT_SYMBOL/EXPORT_SYMBOL_GPL to expose kernel symbol to user space; most cases of symbols' type casting from non-negative signed integer to signed integer return type, might later be exposed to userspace using syscalls. They can lead to issues where signed integers can be sign-extended and have an issue of range where returned negative (-1 in most cases) values that can lead to issues because many operating systems also provide userspace functions (like the itimerspec) can then call kernel space interfaces and silently truncate the length. Although casting a 64-bit value to a 32-bit value is not an issue, it is in such API interfaces where Linux never accepts negative addresses.
+
+Additionally, review lines where unsigned types are being passed as parameters with negative values because when they cast to unsigned values eventually used in shift operations it silently wrap around. Although the latter may not lead to a segmentation fault, problems of incorrect return results will be triggered.
+
+RECOMMENDATIONS:
+1. To fix the null pointer dereference in acpi_gsi_to_irq, you should add a null pointer check for irqp at the beginning of the function. If irqp is null, the function should return an error code.
+2. To prevent integer type change/silence and result of value casting interface signature, Linux kernel recommendations must be applied for API design. Suggest strongly adhering to kernel coding standards including sparse and kernel documentation.
+3. Suggest Linux kernel documentation shall include functions that kernel developers could consider when we implement kernel exported interfaces and symbols.
+
+ORIGINAL CODE:
+```c
+int acpi_gsi_to_irq(u32 gsi, unsigned int *irqp)
+{
+	int irq;
+
+	if (acpi_irq_model == ACPI_IRQ_MODEL_PIC) {
+		*irqp = gsi;
+	} else {
+		mutex_lock(&acpi_ioapic_lock);
+		irq = mp_map_gsi_to_irq(gsi,
+					IOAPIC_MAP_ALLOC | IOAPIC_MAP_CHECK);
+		mutex_unlock(&acpi_ioapic_lock);
+		if (irq < 0)
+			return -1;
+		*irqp = irq;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(acpi_gsi_to_irq);
+
+int acpi_isa_irq_to_gsi(unsigned isa_irq, u32 *gsi)
+}
+
+/* wrapper to silence section mismatch warning */
+int __ref acpi_map_lsapic(acpi_handle handle, int physid, int *pcpu)
+{
+	return _acpi_map_lsapic(handle, physid, pcpu);
+}
+EXPORT_SYMBOL(acpi_map_lsapic);
+
+int acpi_unmap_lsapic(int cpu)
+{
+#ifdef CONFIG_ACPI_NUMA
+	set_apicid_to_node(per_cpu(x86_cpu_to_apicid, cpu), NUMA_NO_NODE);
+#endif
+
+	return (0);
+}
+
+EXPORT_SYMBOL(acpi_unmap_lsapic);
+#endif				/* CONFIG_ACPI_HOTPLUG_CPU */
+
+int acpi_register_ioapic(acpi_handle handle, u64 phys_addr, u32 gsi_base)
+```

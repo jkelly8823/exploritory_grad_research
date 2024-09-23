@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-12
+VULNERABILITY_DESCRIPTION:
+Uninitialized Memory Read or Data Corruption due to Inadequate Reset.
+
+EXPLANATION:
+The code initializes `acct_mem` with the value 32'hffffffff when the system is in a reset state. However, this initialization is done within an always block that triggers on the positive edge of `clk_i`. If the system enters the reset state while `clk_i` is not clocking (e.g., due to a clock glitch or pause), the initialization may not occur. This could result in `acct_mem` containing unpredictable values, potentially leading to data corruption or other issues when reads are performed.
+
+Additionally, the initial value of `acct_mem` is set to 32'hffffffff, which is not a typical initialization value for a memory. This can lead to issues with algorithms that rely on a zero-initialized memory.
+
+RECOMMENDATIONS:
+To fix this issue, consider the following:
+
+1. Introduce a synchronous reset mechanism that resets `acct_mem` to a safe value (e.g., 0) when `rst_ni` is low and `clk_i` is ticking. This will ensure `acct_mem` is properly initialized regardless of the `clk_i` state.
+2. Use a more robust initialization method, such as using a power-on reset or a CPU-driven initialization routine, to ensure `acct_mem` is properly initialized before use.
+3. Consider replacing the magic value 32'hffffffff with a more explicit and safer initialization value (e.g., 0).
+
+ORIGINAL CODE:
+```verilog
+module acct_wrapper #(
+  ...
+  
+  always @(posedge clk_i)
+  begin
+    if(~(rst_ni && ~rst_6))
+    begin
+      for (j=0; j < AcCt_MEM_SIZE; j=j+1)
+      begin
+        acct_mem[j] <= 32'hffffffff;
+      end
+    end
+  ...
+```

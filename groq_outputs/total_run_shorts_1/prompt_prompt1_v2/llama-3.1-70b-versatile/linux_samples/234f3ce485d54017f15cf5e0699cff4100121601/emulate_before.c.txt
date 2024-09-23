@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability
+
+The function `assign_eip_near` is vulnerable to a buffer overflow attack. This function assigns the value of `dst` to `ctxt->_eip`, but it does not perform any bounds checking. 
+
+If `dst` is a large value, it can cause `ctxt->_eip` to overflow, potentially allowing an attacker to execute arbitrary code.
+
+EXPLANATION: 
+The function `assign_eip_near` takes a `dst` value as an argument and assigns it to `ctxt->_eip`. The assignment is done without any bounds checking, which can lead to a buffer overflow.
+
+The vulnerability can be triggered by passing a large value to `dst`. This can cause `ctxt->_eip` to overflow, potentially allowing an attacker to execute arbitrary code.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, the `assign_eip_near` function should be modified to perform bounds checking on the `dst` value. This can be done by checking if the `dst` value is within the valid range for `ctxt->_eip`.
+
+Additionally, the `dst` value should be validated to ensure it is not tainted with user input. This can be done by checking the origin of the `dst` value and ensuring it is not controlled by an attacker.
+
+ORIGINAL CODE: 
+```c
+static inline void assign_eip_near(struct x86_emulate_ctxt *ctxt, ulong dst)
+{
+	switch (ctxt->op_bytes) {
+	case 2:
+		ctxt->_eip = (u16)dst;
+		ctxt->_eip = (u32)dst;
+		break;
+	case 8:
+		ctxt->_eip = dst;
+		break;
+	default:
+		WARN(1, "unsupported eip assignment size\n");
+	}
+}
+```
+RECOMMENDED FIXES:
+```c
+static inline void assign_eip_near(struct x86_emulate_ctxt *ctxt, ulong dst)
+{
+	if (dst > MAX_EIP_VALUE) {
+		// Handle error
+		return;
+	}
+
+	switch (ctxt->op_bytes) {
+	case 2:
+		ctxt->_eip = (u16)dst;
+		ctxt->_eip = (u32)dst;
+		break;
+	case 8:
+		ctxt->_eip = dst;
+		break;
+	default:
+		WARN(1, "unsupported eip assignment size\n");
+	}
+}
+```

@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 40-42, 44
+VULNERABILITY_DESCRIPTION: 
+Potential double-free and use-after-free vulnerabilities in dsi_uninit_output() function.
+ 
+EXPLANATION:
+The code appears to be disabling runtime power management for a device (`pdev->dev`) and then calling `dsi_uninit_output(dsi)` to uninitialize the output component. However, immediately after this, the code checks for the existence of a specific regulator (`dsi->vdds_dsi_reg`) and, if present, disables the regulator. 
+
+This sequence of operations could potentially lead to a double-free or use-after-free vulnerability if `dsi_uninit_output(dsi)` attempts to free memory that is still being referenced by the subsequent check or if `dsi_uninit_output(dsi)` modifies the state of `dsi->vdds_dsi_reg` in a way that would make the disable operation invalid.
+
+RECOMMENDATIONS:
+To mitigate this potential vulnerability, we can reorder the operations to ensure that the regulator is disabled before the output component is uninitialized. This can be achieved by adding checks to prevent the regulator from being accessed after the output component has been uninitialized.
+
+The modified code would look like this:
+
+```c
+if (dsi->vdds_dsi_reg != NULL && dsi->vdds_dsi_enabled) {
+    regulator_disable(dsi->vdds_dsi_reg);
+}
+dsi_uninit_output(dsi);
+pm_runtime_disable(&pdev->dev);
+```
+
+Additionally, we should review the implementation of `dsi_uninit_output(dsi)` to ensure that it correctly handles any state transitions and frees any related resources.
+
+ORIGINAL CODE:
+(stripped for brevity, this would be the original code provided)

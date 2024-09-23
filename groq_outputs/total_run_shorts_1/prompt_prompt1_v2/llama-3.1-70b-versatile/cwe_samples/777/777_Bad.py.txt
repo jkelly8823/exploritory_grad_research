@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The given code is vulnerable to Command Injection.
+
+EXPLANATION:
+The vulnerability is present in the `run_ping_regex` function where the `subprocess.call` function is used. The input IP address is validated by a regular expression, but it is not properly quoted or sanitized. This could allow an attacker to inject malicious commands to the underlying operating system by providing a specially crafted IP address.
+
+For example, an attacker could provide an IP address like "127.0.0.1; ls -l" which would result in the command "ping 127.0.0.1; ls -l" being executed, revealing the directory listings of the server.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the input IP address should be properly quoted and sanitized before being passed to the `subprocess.call` function. It is also recommended to use the `shutil` module's `which` function to validate the existence of the "ping" command. Additionally, the `subprocess` module's `call` function should be replaced with `run` function which provides better error handling.
+
+Here's a recommended fix:
+```python
+import subprocess
+import shlex
+import re
+
+def validate_ip_regex(ip: str):
+    ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+    if ip_validator.match(ip):
+        return ip
+    else:
+        raise ValueError("IP address does not match valid pattern.")
+
+def run_ping_regex(ip: str):
+    validated = validate_ip_regex(ip)
+    # Quote the validated IP address to prevent command injection
+    args = ["ping", shlex.quote(validated)]
+    # Use subprocess.run function instead of subprocess.call for better error handling
+    result = subprocess.run(args, capture_output=True, text=True)
+    print(result)
+```
+ORIGINAL CODE:
+
+
+```python
+import subprocess
+import re
+
+def validate_ip_regex(ip: str):
+    ip_validator = re.compile(r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}")
+    if ip_validator.match(ip):
+        return ip
+    else:
+        raise ValueError("IP address does not match valid pattern.")
+
+
+def run_ping_regex(ip: str):
+    validated = validate_ip_regex(ip)
+    # The ping command treats zero-prepended IP addresses as octal
+    result = subprocess.call(["ping", validated])
+    print(result)
+```

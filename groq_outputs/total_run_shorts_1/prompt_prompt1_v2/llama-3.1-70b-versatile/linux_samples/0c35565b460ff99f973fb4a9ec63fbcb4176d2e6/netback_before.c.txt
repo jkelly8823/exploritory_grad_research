@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 114-115
+VULNERABILITY_DESCRIPTION: 
+Potential buffer overflow vulnerability in the xen_netbk_get_extras function.
+
+EXPLANATION:
+The xen_netbk_get_extras function does not check if the cons variable has exceeded the maximum allowed index of the RING_GET_REQUEST buffer before calling the memcpy function. This could lead to a buffer overflow if the cons variable is incremented beyond the maximum allowed index, potentially allowing an attacker to overwrite adjacent memory locations.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a check before calling the memcpy function to ensure that the cons variable does not exceed the maximum allowed index. 
+
+RECOMMENDED CHANGES:
+```c
+static int xen_netbk_get_extras(struct xenvif *vif, ...) {
+    ...
+    do {
+        ...
+        if (unlikely(work_to_do-- <= 0)) {
+            netdev_dbg(vif->dev, "Missing extra info\n");
+            return -EBADR;
+        }
+        if (cons >= (sizeof(RING_GET_REQUEST(&vif->tx)) / sizeof(struct xen_netif_extra_info))) {
+            netdev_dbg(vif->dev, "Invalid extra index\n");
+            return -EINVAL;
+        }
+        memcpy(&extra, RING_GET_REQUEST(&vif->tx, cons),
+        ...
+```
+ORIGINAL CODE:
+```c
+static int xen_netbk_get_extras(struct xenvif *vif, ...) {
+    ...
+    do {
+        if (unlikely(work_to_do-- <= 0)) {
+            netdev_dbg(vif->dev, "Missing extra info\n");
+            return -EBADR;
+        }
+        memcpy(&extra, RING_GET_REQUEST(&vif->tx, cons),
+        ...
+```
+
+Note that the vulnerable code could be an entire code base due to some of the items listed in your submission missing that is typically used in the start of this GitHub API.

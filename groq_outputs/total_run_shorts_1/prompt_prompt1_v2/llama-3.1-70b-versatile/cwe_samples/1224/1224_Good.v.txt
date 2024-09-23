@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-20
+VULNERABILITY_DESCRIPTION:
+The provided Verilog code is vulnerable to a read-after-write latch condition. This can cause the Data_out signal to retain its previous value when the write signal is deasserted.
+
+EXPLANATION:
+The always block in the code is sensitive to the posedge of the clock (Clk) or the negedge of the ip_resetn signal. When the ip_resetn signal is low, the Data_out signal is reset to zero. However, when the write signal is high and the ip_resetn signal is high, Data_out is updated with the Data_in value. The issue arises when the write signal is deasserted. In this case, the Data_out signal is not directly updated with a new value; instead, it is updated by copying its own value (lines 18-20). This can cause the Data_out signal to retain its previous value when the write signal is deasserted. This behavior can result in unpredictable behavior if Data_out is read by other modules while the write signal is low.
+
+RECOMMENDATIONS:
+To avoid this issue, you should ensure that Data_out is updated correctly when the write signal is deasserted. One way to do this is to add a default value for Data_out when the write signal is low. Here is an updated version of the code:
+
+```verilog
+module register_write_once_example 
+( 
+input [15:0] Data_in, 
+input Clk, 
+input ip_resetn, 
+input global_resetn, 
+input write, 
+output reg [15:0] Data_out 
+); 
+
+reg Write_once_status; 
+
+always @(posedge Clk or negedge ip_resetn) 
+
+  if (~ip_resetn) 
+  begin 
+  
+    Data_out <= 16'h0000; 
+    Write_once_status <= 1'b0; 
+  
+  end 
+  else if (write & ~Write_once_status) 
+  begin 
+  
+    Data_out <= Data_in & 16'hFFFE; 
+    Write_once_status <= 1'b1; 
+  
+  end 
+  else if (~write) 
+  begin 
+  
+    Data_out <= 16'h0000; // Update Data_out with a default value
+  
+  end 
+
+endmodule
+```
+
+Alternatively, you could re-design the logic to avoid using the copy method for Data_out when the write signal is deasserted. This may involve re-thinking how Data_out is updated and when it is updated.
+
+ORIGINAL CODE:
+```verilog
+module register_write_once_example 
+( 
+input [15:0] Data_in, 
+input Clk, 
+input ip_resetn, 
+input global_resetn, 
+input write, 
+output reg [15:0] Data_out 
+); 
+
+reg Write_once_status; 
+
+always @(posedge Clk or negedge ip_resetn) 
+
+  if (~ip_resetn) 
+  begin 
+  
+    Data_out <= 16'h0000; 
+    Write_once_status <= 1'b0; 
+  
+  end 
+  else if (write & ~Write_once_status) 
+  begin 
+  
+    Data_out <= Data_in & 16'hFFFE; 
+    Write_once_status <= 1'b1; // Write once status set on first write, independent of input 
+  
+  end 
+  else if (~write) 
+  begin 
+  
+    Data_out[15:1] <= Data_out[15:1]; 
+    Data_out[0] <= Write_once_status; 
+  
+  end 
+
+
+endmodule
+```

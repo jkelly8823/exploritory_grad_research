@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION: Insecure Comparison of Hash Values
+EXPLANATION:
+This vulnerability is present in the code due to the insecure comparison of hash values using memcmp. This function is not designed for comparing cryptographic hash values, as it is vulnerable to timing attacks. The memcmp function is designed to stop as soon as a difference is found, which can reveal information about the hash values through timing analysis. 
+
+Furthermore, this code does not check the lengths of both hash values before comparison, which could potentially lead to security issues if they do not match.
+
+RECOMMENDATIONS:
+To securely compare hash values, use a secure comparison function such as crypto_memneq from the Linux kernel's crypto API, or implement a custom equal function that compares hash values securely using the following code:
+```c
+int equal(const void *a, const void *b, size_t len)
+{
+	size_t i;
+	int result = 0;
+	unsigned char *x = (unsigned char *)a;
+	unsigned char *y = (unsigned char *)b;
+	for (i = 0; i < len; i++) {
+		result |= x[i] ^ y[i];
+	}
+	return result;
+}
+```
+or use a library function specifically designed for secure comparison, like memcmp_secure (GNU libc) or crypto_memcmp (OpenBSD).
+
+Here is the secure version of the vulnerable code:
+
+```c
+int equal(const void *a, const void *b, size_t len)
+{
+	size_t i;
+	int result = 0;
+	unsigned char *x = (unsigned char *)a;
+	unsigned char *y = (unsigned char *)b;
+	for (i = 0; i < len; i++) {
+		result |= x[i] ^ y[i];
+	}
+	return result;
+}
+
+...
+
+rc = equal(xattr_data->digest, calc.digest, sizeof(calc.digest));
+```
+
+ORIGINAL CODE:
+```c
+#include <linux/integrity.h>
+#include <linux/evm.h>
+#include <crypto/hash.h>
+#include "evm.h"
+
+int evm_initialized;
+
+				   xattr_value_len, calc.digest);
+		if (rc)
+			break;
+		rc = memcmp(xattr_data->digest, calc.digest,
+			    sizeof(calc.digest));
+		if (rc)
+			rc = -EINVAL;
+		break;
+```

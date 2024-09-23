@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Insecure SSL verification mode configuration
+
+EXPLANATION:
+The code sets the SSL verification mode based on the 'certreq' parameter. If certreq is PY_SSL_CERT_OPTIONAL, the verification mode is set to SSL_VERIFY_PEER; otherwise, it defaults to SSL_VERIFY_NONE. Setting the verification mode to SSL_VERIFY_NONE can lead to an insecure configuration, as it disables all SSL verification. This leaves the connection vulnerable to man-in-the-middle (MITM) attacks.
+
+However, it's worth noting that the mode is set to a secure verification level when 'certreq' is PY_SSL_CERT_OPTIONAL. The issue is the default behavior.
+
+RECOMMENDATIONS:
+To secure the SSL configuration, consider removing the SSL_VERIFY_NONE option or updating the default mode to a secure level, such as SSL_VERIFY_PEER. In addition, you should consider verifying the server's identity by setting the verification mode to SSL_VERIFY_PEER and setting the expected server certificate using the SSL_CTX_load_verify_locations or SSL_CTX_set_default_verify_paths function.
+
+Here's an example of how to secure the configuration:
+```c
+verification_mode = SSL_VERIFY_PEER;
+SSL_CTX_set_verify_depth(self->ctx, 1);
+SSL_CTX_load_verify_locations(self->ctx, cafile, capath);
+```
+ORIGINAL CODE:
+```c
+}
+
+/* ssl compatibility */
+SSL_CTX_set_options(self->ctx,
+                    SSL_OP_ALL & ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
+
+verification_mode = SSL_VERIFY_NONE;
+if (certreq == PY_SSL_CERT_OPTIONAL)
+    verification_mode = SSL_VERIFY_PEER;
+```
+Note that the above recommendations assume the use of OpenSSL. If other libraries are being used, the specific method for setting the verification mode might differ.

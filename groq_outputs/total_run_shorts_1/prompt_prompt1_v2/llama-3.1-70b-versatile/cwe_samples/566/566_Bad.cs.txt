@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+SQL Server connection not being used with a "using" statement, and SQL command being executed with a potentially incorrect variable name.
+
+EXPLANATION:
+The provided code snippet shows a connection to a SQL Server database being established and then used to execute a query. However, upon closer inspection, there are two potential vulnerabilities. 
+
+Firstly, the connection is not being closed, and this is not being handled within a "using" statement. A "using" statement automatically handles both exceptions and disposes off the object, so this could potentially lead to connection leaks.
+
+Secondly, although the query uses a parameterized query, which helps prevent SQL injection, the variable name of the SqlDataReader and the SqlCommand in use seems to be inconsistent. objReader is being used with objCommand when it should be used with query.
+
+RECOMMENDATIONS:
+Firstly, it is recommended that a "using" statement should be used to handle the connection, so that it automatically disposes off once the query is executed. This can be achieved as follows:
+
+```csharp
+using(SqlConnection conn = new SqlConnection(_ConnectionString))
+{
+    conn.Open();
+    int16 id = System.Convert.ToInt16(invoiceID.Text);
+    SqlCommand query = new SqlCommand( "SELECT * FROM invoices WHERE id = @id", conn);
+    query.Parameters.AddWithValue("@id", id);
+    using(SqlDataReader objReader = query.ExecuteReader())
+    {
+        //process the data here
+    }
+}
+```
+
+By this way, the connection is guaranteed to be closed after its usage.
+
+ORIGINAL CODE:
+```csharp
+conn = new SqlConnection(_ConnectionString);
+conn.Open();
+int16 id = System.Convert.ToInt16(invoiceID.Text);
+SqlCommand query = new SqlCommand( "SELECT * FROM invoices WHERE id = @id", conn);
+query.Parameters.AddWithValue("@id", id);
+SqlDataReader objReader = objCommand.ExecuteReader();
+```

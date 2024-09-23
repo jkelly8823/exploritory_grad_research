@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) vulnerability due to inefficient handling of request body data.
+
+EXPLANATION:
+The code snippet is vulnerable to a Denial of Service (DoS) attack because it reads the entire request body into memory before processing it. This is a problem because an attacker can send a large request body that exceeds the available memory, causing the server to crash or become unresponsive. While the code does limit the size of the request body to `MaxRespBodyLength`, it still requires the server to allocate a large amount of memory to store the request body. Additionally, the use of `io.ReadAll` will block the goroutine until all the data is read from the request body, which could lead to a DoS attack if the request body is extremely large or if the request is slowed down on purpose.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a streaming approach to process the request body instead of reading it all into memory at once. This can be done by using the `io.Reader` interface provided by the `http.Request.Body` field. Here is an example of how to do this:
+```
+func serve(w http.ResponseWriter, r *http.Request) {
+    // ...
+    if r.Body != nil {
+        var buffer bytes.Buffer
+        _, err := buffer.ReadFrom(r.Body)
+        if err != nil {
+            // handle error
+        }
+        body = buffer.Bytes()
+    }
+    // ...
+}
+```
+Alternatively, you can use a library like `github.com/klauspost/compress/fs` which provides a `io.Reader` that can limit the amount of data read from the request body.
+
+ORIGINAL CODE:
+```
+func serve(w http.ResponseWriter, r *http.Request) {
+    // 
+    var body []byte
+    const MaxRespBodyLength = 1e6
+    if r.Body != nil {
+        // 
+        r.Body = http.MaxBytesReader(w, r.Body, MaxRespBodyLength)
+        if data, err := io.ReadAll(r.Body); err == nil {
+            // 
+            body = data
+        }
+    }
+}
+```

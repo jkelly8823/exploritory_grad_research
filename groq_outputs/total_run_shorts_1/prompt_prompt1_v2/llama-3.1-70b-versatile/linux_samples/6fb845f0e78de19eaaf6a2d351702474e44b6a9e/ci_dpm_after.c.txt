@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Resource leak and incorrect error handling in memory allocation.
+
+EXPLANATION: 
+The code allocates memory using kzalloc, but the return statement is outside the conditional block to check the result of the allocation. This implies that if kzalloc fails and returns -ENOMEM, it will be an unreachable statement, thus not even letting the function know about the memory allocation failure.
+
+RECOMMENDATIONS: 
+To address this vulnerability, ensure that the return statement is inside a conditional block to handle the error correctly. The function should return immediately if kzalloc fails. 
+
+```c
+pi = kzalloc(sizeof(struct ci_power_info), GFP_KERNEL);
+if (!pi)
+	return -ENOMEM;
+```
+
+Additionally, it is good practice to check the pointer value immediately after the allocation to ensure the memory was allocated successfully.
+
+ORIGINAL CODE:
+
+	u16 data_offset, size;
+	u8 frev, crev;
+	struct ci_power_info *pi;
+	enum pci_bus_speed speed_cap = PCI_SPEED_UNKNOWN;
+	struct pci_dev *root = rdev->pdev->bus->self;
+	int ret;
+
+	pi = kzalloc(sizeof(struct ci_power_info), GFP_KERNEL);
+		return -ENOMEM;
+	rdev->pm.dpm.priv = pi;
+
+	if (!pci_is_root_bus(rdev->pdev->bus))
+		speed_cap = pcie_get_speed_cap(root);
+	if (speed_cap == PCI_SPEED_UNKNOWN) {
+		pi->sys_pcie_mask = 0;
+	} else {
+		if (speed_cap == PCIE_SPEED_8_0GT)

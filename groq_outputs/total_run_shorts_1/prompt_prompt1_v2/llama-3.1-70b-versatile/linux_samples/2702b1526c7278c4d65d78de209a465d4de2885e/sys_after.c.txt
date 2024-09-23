@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 15
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds write vulnerability through incorrect `copy_to_user` usage.
+
+EXPLANATION:
+The code uses `scnprintf` to format a string into the `buf` array, and `scnprintf` returns the number of characters written, excluding the null terminator. However, when using `copy_to_user`, the `len` parameter should be the number of bytes to copy, including the null terminator. When the formatted string is longer than `copy - 1`, this results in an out-of-bounds write, as `copy + 1` may exceed the buffer size. 
+
+Additionally, the `rest` pointer is used without bounds checking, although in this case it's limited by the `UTS_RELEASE` string. 
+
+Furthermore, there's no validation of `current->personality` or `release`, which may also be vulnerabilities if these are used without proper validation in the larger codebase.
+
+RECOMMENDATIONS:
+1. In the `copy_to_user` call, remove the `+ 1` increment to ensure that we don't copy more bytes than the buffer size.
+2. Validate `current->personality` and `release` to ensure they're valid before using them.
+3. Validate the input `len` to ensure it's within the buffer size.
+4. Consider replacing the `scnprintf` call with a safer function like `snprintf` and use the return value to check for buffer size errors.
+
+ORIGINAL CODE:
+```c
+static int override_release(char __user *release, size_t len)
+{
+	int ret = 0;
+
+	if (current->personality & UNAME26) {
+		const char *rest = UTS_RELEASE;
+		char buf[65] = { 0 };
+		int ndots = 0;
+		unsigned v;
+		size_t copy;
+
+		while (*rest) {
+			if (*rest == '.' && ++ndots >= 3)
+				break;
+			rest++;
+		}
+		v = ((LINUX_VERSION_CODE >> 8) & 0xff) + 40;
+		copy = min(sizeof(buf), max_t(size_t, 1, len));
+		copy = scnprintf(buf, copy, "2.6.%u%s", v, rest);
+		ret = copy_to_user(release, buf, copy + 1);
+	}
+	return ret;
+}
+```

@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a race condition in a 64-bit free-running counter read operation.
+
+EXPLANATION:
+The given code snippet is attempting to read a 64-bit free-running counter value from a hardware timer. To ensure atomicity, the code checks whether the most significant word (MSW) of the counter has changed between two consecutive reads. If the MSW remains the same, it is considered a valid read and the function breaks out of the loop. However, there is still a race condition vulnerability in the following lines:
+
+```
+*msw = readl(base + KONA_GPTIMER_STCHI_OFFSET);
+*lsw = readl(base + KONA_GPTIMER_STCLO_OFFSET);
+```
+
+In between these two read operations, the 64-bit counter may have been incremented, resulting in an inconsistent value being written to `msw` and `lsw`. This is because the read operation has been split into two separate operations.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the code should perform the read operation as an atomic operation, if possible. This might involve a hardware-specific solution to read the entire 64-bit counter value in a single operation or ensure that a consistent view is maintained between multiple operations.
+
+Alternatively, you can use a retry mechanism and increase the loop limit to a higher number to account for possible missed reads, but this still won't ensure atomicity:
+
+```c
+int loop_limit = 100; // Increase the retry limit
+while (--loop_limit) {
+    *msw = readl(base + KONA_GPTIMER_STCHI_OFFSET);
+    *lsw = readl(base + KONA_GPTIMER_STCLO_OFFSET);
+    if (*msw == readl(base + KONA_GPTIMER_STCHI_OFFSET) &&
+        *lsw == readl(base + KONA_GPTIMER_STCLO_OFFSET))
+        break;
+}
+```
+
+Keep in mind that even this approach may not guarantee atomicity and a hardware-specific solution is likely the only correct one.
+
+ORIGINAL CODE:
+```c
+static void
+kona_timer_get_counter(void *timer_base, uint32_t *msw, uint32_t *lsw)
+{
+    void __iomem *base = IOMEM(timer_base);
+    int loop_limit = 4;
+
+    /*
+     * Read 64-bit free running counter
+     */
+
+    while (--loop_limit) {
+        *msw = readl(base + KONA_GPTIMER_STCHI_OFFSET);
+        *lsw = readl(base + KONA_GPTIMER_STCLO_OFFSET);
+        if (*msw == readl(base + KONA_GPTIMER_STCHI_OFFSET))
+            break;
+    }
+    if (!loop_limit) {
+        pr_err("bcm_kona_timer: getting counter failed.\n");
+```

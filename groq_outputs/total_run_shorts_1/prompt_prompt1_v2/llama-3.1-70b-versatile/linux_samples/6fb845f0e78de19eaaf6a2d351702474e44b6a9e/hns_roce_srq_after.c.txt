@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Uninitialized Use of Pointer.
+
+EXPLANATION:
+The `srq` pointer is used without being initialized. It is used to access its members `srq->event`, `srq->srqn`, and `srq->ibsrq.ext.xrc.srq_num`. However, the pointer `srq` is not initialized until the line `structure hns_roce_srq *srq;` is executed, and the value of `srq` is unknown at this point. 
+
+This could lead to undefined behavior if `srq` is used to access memory that it should not access. The initialization of `srq` should be done before it is used to access its members.
+
+RECOMMENDATIONS:
+1. Initialize the `srq` pointer before using it. It could be initialized with a valid address of a `struct hns_roce_srq`.
+
+```c
+struct hns_roce_srq *srq = kmalloc(sizeof(struct hns_roce_srq), GFP_KERNEL);
+if (!srq) {
+    // handle memory allocation error
+}
+```
+
+2. Use secure allocation functions like `kmalloc` or `kzalloc` to prevent heap overflows.
+
+ORIGINAL CODE:
+```c
+struct ib_udata *udata)
+{
+    struct hns_roce_dev *hr_dev = to_hr_dev(pd->device);
+    struct hns_roce_ib_create_srq_resp resp = {};
+    struct hns_roce_srq *srq;
+    int srq_desc_size;
+    int srq_buf_size;
+    u32 page_shift;
+
+    srq->event = hns_roce_ib_srq_event;
+    srq->ibsrq.ext.xrc.srq_num = srq->srqn;
+    resp.srqn = srq->srqn;
+
+    if (udata) {
+        if (ib_copy_to_udata(udata, &resp,
+                    min(udata->outlen, sizeof(resp)))) {
+            ret = -EFAULT;
+            goto err_srqc_alloc;
+        }
+    }
+
+    return &srq->ibsrq;
+
+err_srqc_alloc:
+    hns_roce_srq_free(hr_dev, srq);
+
+err_wrid:
+    kvfree(srq->wrid);
+
+err_idx_buf:
+```

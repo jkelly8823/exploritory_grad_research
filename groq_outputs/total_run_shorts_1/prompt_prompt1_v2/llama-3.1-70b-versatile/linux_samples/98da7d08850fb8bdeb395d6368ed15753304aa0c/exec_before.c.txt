@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+In the given code snippet, there is a calculation of `size` as the difference between `vm_end` and `vm_start`. This difference is then divided by `PAGE_SIZE` and assigned to the `size` variable. Later on, `size` is compared to the current stack size limit (`rlim[RLIMIT_STACK].rlim_cur`) divided by 4. However, if the result of the subtraction `vm_end - vm_start` is very large, it may exceed the maximum value that can be represented by an `unsigned long` integer. When this value is later divided by `PAGE_SIZE`, it can lead to an integer overflow.
+
+In the event of an overflow, `size` would be assigned a smaller value than expected. This can cause the comparison `size > ACCESS_ONCE(rlim[RLIMIT_STACK].rlim_cur) / 4` to evaluate to `false` when it should have evaluated to `true`. This could potentially allow a large amount of memory to be allocated on the stack, leading to a stack overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should perform a bounds check before performing the division. This can be accomplished by adding a check to ensure that `vm_end - vm_start` is within the valid range for `vm_size`.
+
+```c
+if (vm_end - vm_start > ULONG_MAX || (vm_end - vm_start) % PAGE_SIZE != 0) {
+    // Handle invalid vm_size or PAGE_SIZE that does not perfectly divide vm_size
+}
+
+unsigned long size;
+if (vm_end - vm_start <= ULONG_MAX - PAGE_SIZE) {
+    size = (vm_end - vm_start) / PAGE_SIZE;
+} else {
+    // Handle the case where the vm_size cannot be divided by PAGE_SIZE
+}
+```
+
+Additionally, consider using a safer division function that can handle overflow cases.
+
+ORIGINAL CODE:
+```c
+if (write) {
+    unsigned long size = bprm->vma->vm_end - bprm->vma->vm_start;
+    struct rlimit *rlim;
+
+    acct_arg_size(bprm, size / PAGE_SIZE);
+
+    /*
+     * We've historically supported up to 32 pages (ARG_MAX)
+     *    to work from.
+     */
+    rlim = current->signal->rlim;
+    if (size > ACCESS_ONCE(rlim[RLIMIT_STACK].rlim_cur) / 4) {
+        put_page(page);
+        return NULL;
+    }
+}
+
+return page;
+}
+
+static void put_arg_page(struct page *page)
+{
+```

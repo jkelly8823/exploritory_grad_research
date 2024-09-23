@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) via potential memory leak.
+
+EXPLANATION:
+In this code snippet, there is a potential memory leak that could lead to a denial of service (DoS) attack. The code gets a reference to the namespace using `aa_get_current_ns()` and stores it in `ns`. This increments the reference count for the namespace. However, if `mntget(aafs_mnt)` fails and returns an error, the `ns` reference will not be released, resulting in a memory leak.
+
+While there is no indication that `mntget(aafs_mnt)` will fail in this case, it is still considered a best practice to release any acquired resources in error paths.
+
+RECOMMENDATIONS:
+In the error path, the `ns` reference should be released using `aa_put_ns(ns)` to prevent a potential memory leak. Here's the updated code:
+
+```c
+{
+    struct aa_ns *ns;
+    struct path path;
+    int error;
+
+    if (!dentry)
+        return ERR_PTR(-ECHILD);
+
+    ns = aa_get_current_ns();
+    if (unlikely(!mntget(aafs_mnt))) {
+        aa_put_ns(ns);
+        return ERR_PTR(-ENOMEM);
+    }
+    path.mnt = mntget(aafs_mnt);
+    path.dentry = dget(ns_dir(ns));
+    error = nd_jump_link(&path);
+    aa_put_ns(ns);
+    mntput(path.mnt);
+
+    return ERR_PTR(error);
+}
+
+// Rest of the code...
+```
+ORIGINAL CODE:
+```c
+{
+    struct aa_ns *ns;
+    struct path path;
+    int error;
+
+    if (!dentry)
+        return ERR_PTR(-ECHILD);
+
+    ns = aa_get_current_ns();
+    path.mnt = mntget(aafs_mnt);
+    path.dentry = dget(ns_dir(ns));
+    error = nd_jump_link(&path);
+    aa_put_ns(ns);
+
+    return ERR_PTR(error);
+}
+
+static int policy_readlink(struct dentry *dentry, char __user *buffer,
+                           int buflen)
+```

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Unlocked access to memory region and potential double free
+
+EXPLANATION:
+The identified vulnerability stems from the release of a memory region (`release_mem_region(res->start, resource_size(res))`) without a corresponding lock to prevent concurrent access. In addition, the clock put (`clk_put(ssp->clk)`) is performed on a pointer that was already proven to not be NULL at the beginning of this function, but it doesn't check whether the clock has been taken by another function or thread beforehand. There is no way for us to confirm that's the case in this snippet. More concerning is line `release_mem_region`, unlocking that region of memory here without a check as to whether it was already released elsewhere in the code will result in a double free error.
+
+RECOMMENDATIONS:
+1. Use a locking mechanism to synchronize access to the memory region.
+2. Move the unlocking of the clock resource (`clk_put(ssp->clk)`) before accessing any shared resources related to the clock.
+3. Before releasing the memory region with `release_mem_region`, check if it's already been released.
+
+ORIGINAL CODE:
+
+	if (ssp == NULL)
+		return -ENODEV;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	release_mem_region(res->start, resource_size(res));
+
+	clk_put(ssp->clk);
+	list_del(&ssp->node);
+	mutex_unlock(&ssp_lock);
+
+	return 0;
+}
+
+static const struct platform_device_id ssp_id_table[] = {

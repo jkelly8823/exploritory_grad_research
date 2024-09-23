@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: syscall_call: and 7
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential integer overflow in the indirect call operation when invoking the system call table. The address used in the indirect call is calculated by multiplying the value in `eax` with 4 and then offsetting it with the base address of the system call table. However, there is no proper validation of the `eax` value before using it for this calculation.
+
+EXPLANATION:
+The indirect call instruction in x86 uses the calculated address directly, without performing any validation on the value used for the calculation. An integer overflow can occur when the value in `eax` exceeds the valid index range of the system call table, potentially leading to an exploit when an attacker can manipulate this value to execute arbitrary code.
+
+RECOMMENDATIONS:
+1. Perform bounds checking on the `eax` value to prevent exceeding the maximum valid index of the system call table.
+   ```assembly
+cmp $(NR_syscalls), %eax
+jb safe_syscall
+```
+   You may need to define `safe_syscall` label, depending on the desired behavior when encountering invalid `eax` value.
+
+2. If possible, consider using a safer calling convention for system calls that uses more robust validation of the system call number.
+
+3. Consider using non-executable pages to limit the impact of a successful exploit.
+
+ORIGINAL CODE:
+```
+cmpl $(NR_syscalls), %eax
+jae sysenter_badsys
+call *sys_call_table(,%eax,4)
+movl %eax,PT_EAX(%esp)
+sysenter_after_call:
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
+	movl TI_flags(%ebp), %ecx
+	jae syscall_badsys
+syscall_call:
+	call *sys_call_table(,%eax,4)
+	movl %eax,PT_EAX(%esp)        # store the return value
+syscall_exit:
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)    # make sure we don't miss an interrupt
+END(syscall_fault)
+
+syscall_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp syscall_exit
+END(syscall_badsys)
+
+sysenter_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp sysenter_after_call
+END(syscall_badsys)
+	CFI_ENDPROC
+```

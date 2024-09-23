@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-14, 16-20
+VULNERABILITY_DESCRIPTION:
+Use of Unvalidated User Input in File System Operations and Potential Resource Leak
+
+EXPLANATION:
+This code uses unvalidated user input `muxname` in file system operations without proper sanitization or validation. The variable `muxname` is passed directly to `debugfs_create_file` which may lead to a potential security vulnerability. 
+Additionally, the code does not handle the potential error cases when creating debugfs files. If errors occur during file creation, it may result in resource leaks.
+
+In lines 11-14, the function `debugfs_create_file` uses `muxname` without proper validation or sanitization. While this vulnerability may be mitigated by the nature of this being a debugfs, other sections of this code (like `pr_err` on lines 16-20) directly print `muxname` without validation, which could allow an attacker to inject nefarious user strings into these logs.
+
+Furthermore, the return value of `debugfs_create_file` is cast to `(void)`, which means it ignores any error that might have occurred during the creation of the file.
+
+RECOMMENDATIONS:
+1. Validate and sanitize user input `muxname` before passing it to `debugfs_create_file` or using it in `pr_err`.
+2. Handle potential error cases when creating debugfs files.
+3. Consider using more robust logging mechanisms instead of `pr_err`.
+
+ORIGINAL CODE:
+```c
+	return -EINVAL;
+}
+
+	return -ENODEV;
+}
+
+int __init omap_mux_get_by_name(const char *muxname,
+	return mux_mode;
+}
+
+	pr_err("%s: Could not find signal %s\n", __func__, muxname);
+
+	return -ENODEV;
+}
+
+int __init omap_mux_init_signal(const char *muxname, int val)
+	list_for_each_entry(e, &partition->muxmodes, node) {
+		struct omap_mux *m = &e->mux;
+
+		(void)debugfs_create_file(m->muxnames[0], S_IWUSR | S_IRUGO,
+					  mux_dbg_dir, m,
+					  &omap_mux_dbg_signal_fops);
+	}
+}
+
+static void __init omap_mux_dbg_init(void)
+```

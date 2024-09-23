@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19, 20, 21, 23, 24, 25, 26 and various other places (Due to the repetitive nature of the code snippet and restrictions that this format can not be dynamically updated the the line numbers are for example purposes only. These line numbers match the beginning of each excerpt.)
+VULNERABILITY_DESCRIPTION:
+Insecure deserialization and unchecked buffer read.
+
+EXPLANATION:
+The code uses PyArg_ParseTuple many times without checking if the memory location has valid or expected data. Furthermore, PyArg_ParseTuple may lead to arbitrary data deserialization if a malicious actor controls the data.
+
+Additionally, while accessing memory locations with CHARP(cp, i), SHORTP(cp, i), or LONGP(cp, i) and performing casts, there is no bounds checking on i in the array access before these calls. Even though the loop guards these values with `i < len`, len does not restrict the valid ranges of size which are set later in the code (lines like `val = (int)*CHARP(cp, i);`). Therefore resulting in an unchecked operation which might exceed the memory limits when using dynamically sized types.
+
+
+RECOMMENDATIONS:
+
+To fix the insecure deserialization issue consider implementing proper validation on the input data that is passed to PyArg_ParseTuple.
+
+To alleviate the unchecked buffer read, implement additional bounds checking that considers both `len` and `size` when accessing `cp` array elements. Consider raising an exception with PyErr_SetString when `len` or `i` overflow or result in an invalid memory access.
+
+```python
+    if i >= len or i + size > len:
+        PyErr_SetString(PyExc_MemoryError,
+                        "Could not allocate buffer for data operation")
+        return NULL;
+```
+
+You may apply these fixes by implementing runtime bounds checking with exception handling in order to limit the memory access location of `cp` array, increasing your program's stability and overall protection.

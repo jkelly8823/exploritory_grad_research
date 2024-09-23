@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Time-of-check to time-of-use (TOCTOU) vulnerability
+
+EXPLANATION:
+This vulnerability is caused by the gap between the time when the inode's last changed time is checked (lines 3-4) and the time when the ACL is updated and cached (lines 5-6). A time-of-check to time-of-use vulnerability can occur when an attacker modifies the inode's ctime attribute between the check and the use. This can potentially lead to an attacker manipulating the system's behavior.
+
+However, it's essential to note that the provided snippet does not fully capture the execution flow and surroundings of this code, which may mitigate this TOCTOU vulnerability (e.g., proper inode locking and synchronization mechanisms could prevent this issue). Given the code snippet, this vulnerability cannot be definitively ruled out.
+
+RECOMMENDATIONS:
+The main recommendation would be to validate the time between the check and the use of the inode's ctime attribute. Here are some possible approaches:
+
+1. **Use atomic operations or locks**: Implement synchronization mechanisms to ensure that once an operation starts, it is executed as an atomic unit without giving an opportunity for other threads to intervene. If a lock mechanism is used, ensure proper lock handling to prevent deadlocks.
+
+2. **Additional checks**: Re-validate the inode's ctime before proceeding to update or cache the ACL to prevent manipulation.
+
+3. **Re-evaluate system calls**: Using specific system calls like openat with O_PATH would avoid TOCTOU and similar vulnerabilities as long as proper locking is done.
+
+Note: Since this evaluation is based on an incomplete view of the system and without explicit context, it is crucial to consider these findings and implement a system-wide check to confirm the presence or absence of this type of vulnerability.
+
+ORIGINAL CODE:
+```c
+int error;
+
+if (type == ACL_TYPE_ACCESS) {
+    error = posix_acl_update_mode(inode,
+            &inode->i_mode, &acl);
+    if (error)
+        return error;
+}
+
+inode->i_ctime = current_time(inode);
+set_cached_acl(inode, type, acl);
+```

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION:
+Buffer overflow via integer overflow due to unchecked increment operation.
+
+EXPLANAGEMENT:
+The code snippet provided includes a for loop that increments each byte in the `pn` array. However, the code does not prevent the increment operation from causing an integer overflow, which could potentially lead to a buffer overflow attack when used in conjunction with the previously copied data. This could allow an attacker to possibly execute arbitrary code.
+
+A more specific concern arises from the potential usage of the incremented `pn` array later in the function, potentially in a way that could lead to a buffer overflow. Although the snippet does not show the full usage of the `pn` array, it's crucial to ensure the incremented value is properly validated and sanitized.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we must validate the incremented value and prevent integer overflows. This can be achieved by:
+
+1. Checking for integer overflow before incrementing `pn[i]`.
+2. Validating and sanitizing the data stored in the `pn` array.
+3. Ensuring that the incremented `pn` array does not overflow the buffer later in the function.
+
+Example of how this can be fixed:
+```c
+for (i = IEEE80211_CCMP_PN_LEN - 1; i >= 0; i--) {
+    if (pn[i] == 255) {
+        pn[i] = 0;
+    } else {
+        pn[i]++;
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+    * next fragment has a sequential PN value.
+    */
+    entry->check_sequential_pn = true;
+    entry->key_color = rx->key->color;
+    memcpy(entry->last_pn,
+        rx->key->u.ccmp.rx_pn[queue],
+        IEEE80211_CCMP_PN_LEN);
+    BUILD_BUG_ON(offsetof(struct ieee80211_key,
+
+    if (!requires_sequential_pn(rx, fc))
+        return RX_DROP_UNUSABLE;
+
+    /* Prevent mixed key and fragment cache attacks */
+    if (entry->key_color != rx->key->color)
+        return RX_DROP_UNUSABLE;
+
+    memcpy(pn, entry->last_pn, IEEE80211_CCMP_PN_LEN);
+    for (i = IEEE80211_CCMP_PN_LEN - 1; i >= 0; i--) {
+        pn[i]++;
+        if (pn[i])
+```

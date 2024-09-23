@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 23-25, 34-36, 37-39, 47-48
+VULNERABILITY_DESCRIPTION:
+Potential Authentication Bypass and Information Disclosure due to Lack of Input Validation.
+
+EXPLANATION:
+The code snippet appears to be responsible for managing virtual ports in a network switch. However, there are several instances where the code fails to validate user input, specifically the MAC addresses. In lines 7-8, the code checks if the MAC address is valid using the `is_valid_ether_addr` function, but it does not prevent the use of an invalid MAC address. 
+
+In lines 23-25, the code modifies the NIC vport MAC address without validating the input. In lines 34-36, the code warns about an invalid MAC address but does not prevent its use. In lines 37-39, the code again warns about an invalid MAC address but does not prevent its use.
+
+In lines 47-48, the code enables the ingress configuration for the vport without validating the input. This could lead to an attacker being able to spoof the MAC address, gaining unauthorized access to the network.
+
+Additionally, the code uses several variables without checking if they are null or not, which could lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+1. Validate all input parameters, including MAC addresses, to prevent spoofing and unauthorized access.
+2. Use secure coding practices to prevent common vulnerabilities such as null pointer dereferences.
+3. Implement authentication mechanisms to ensure that only authorized users can access and modify the vport configurations.
+4. Use logging mechanisms to track any security-related events, such as failed authentication attempts or invalid MAC addresses.
+
+ORIGINAL CODE:
+
+```c
+int err = 0;
+u8 *smac_v;
+
+esw_vport_cleanup_ingress_rules(esw, vport);
+
+if (!vport->info.vlan && !vport->info.qos && !vport->info.spoofchk) {
+    esw_vport_disable_ingress_acl(esw, vport);
+    int vport_num;
+    int err;
+
+    if (!MLX5_VPORT_MANAGER(dev))
+        return 0;
+
+    esw_info(dev,
+             "Total vports %d, per vport: max uc(%d) max mc(%d)\n",
+
+    void mlx5_eswitch_cleanup(struct mlx5_eswitch *esw)
+    {
+        if (!esw || !MLX5_VPORT_MANAGER(esw->dev))
+            return;
+
+        esw_info(esw->dev, "cleanup\n");
+
+        mutex_lock(&esw->state_lock);
+        evport = &esw->vports[vport];
+
+        if (evport->info.spoofchk && !is_valid_ether_addr(mac))
+            mlx5_core_warn(esw->dev,
+                   "Set invalid MAC while spoofchk is on, vport(%d)\n",
+                   vport);
+
+        err = mlx5_modify_nic_vport_mac_address(esw->dev, vport, mac);
+        if (err) {
+            mlx5_core_warn(esw->dev,
+            evport = &esw->vports[vport];
+            pschk = evport->info.spoofchk;
+            evport->info.spoofchk = spoofchk;
+            if (pschk && !is_valid_ether_addr(evport->info.mac))
+                mlx5_core_warn(esw->dev,
+                       "Spoofchk in set while MAC is invalid, vport(%d)\n",
+                       evport->vport);
+            if (evport->enabled && esw->mode == SRIOV_LEGACY)
+                err = esw_vport_ingress_config(esw, evport);
+            if (err)
+                evport->info.spoofchk = pschk;
+```

@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 25-28
+VULNERABILITY_DESCRIPTION:
+The code uses the `get_random_int()` function to generate a random offset for the VDSO address. However, the code does not check if the generated random offset would cause the VDSO to be placed at an address that is not page-aligned or would result in an address that is not within a valid range.
+
+EXPLANATION:
+The code uses `get_random_int()` to generate a random offset, but it uses the modulo operator with `(((end - start) >> PAGE_SHIFT) + 1)` as the divisor. This operation can result in a remainder that is not page-aligned, as the divisor is not guaranteed to be a power of 2. This could result in the VDSO being placed at an address that is not page-aligned, potentially leading to a crash or undefined behavior.
+
+Additionally, the generated random offset is not validated against a minimum or maximum allowed value. This could result in the VDSO being placed at an address that is not within a valid range, such as an address that overlaps with another mapped region or an address that is too close to the stack.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use a different approach to generate a random offset that is guaranteed to be page-aligned and within a valid range. One approach could be to use the `get_random_u32()` function to generate a random 32-bit unsigned integer, and then shift the result by `PAGE_SHIFT` bits to align it to a page boundary.
+
+Additionally, it is recommended to validate the generated random offset against a minimum and maximum allowed value to ensure that the VDSO is placed at an address that is within a valid range.
+
+ORIGINAL CODE:
+```c
+struct linux_binprm;
+
+/*
+ * Put the vdso above the (randomized) stack with another randomized
+ * offset.  This way there is no hole in the middle of address space.
+ * To save memory make sure it is still in the same PTE as the stack
+ * top.  This doesn't give that many random bits.
+ *
+ * Note that this algorithm is imperfect: the distribution of the vdso
+ * start address within a PMD is biased toward the end.
+ *
+ * Only used for the 64-bit and x32 vdsos.
+ */
+static unsigned long vdso_addr(unsigned long start, unsigned len)
+{
+#ifdef CONFIG_X86_32
+	return 0;
+#else
+	unsigned long addr, end;
+	unsigned offset;
+
+	/*
+	 * Round up the start address.  It can start out unaligned as a result
+	 * of stack start randomization.
+	 */
+	start = PAGE_ALIGN(start);
+
+	/* Round the lowest possible end address up to a PMD boundary. */
+	end = (start + len + PMD_SIZE - 1) & PMD_MASK;
+	if (end >= TASK_SIZE_MAX)
+		end = TASK_SIZE_MAX;
+	end -= len;
+
+	if (end > start) {
+		offset = get_random_int() % (((end - start) >> PAGE_SHIFT) + 1);
+		addr = start + (offset << PAGE_SHIFT);
+	} else {
+		addr = start;
+	}
+
+	/*
+	 * Forcibly align the final address in case we have a hardware
+	 * issue that requires alignment for performance reasons.
+	 */
+	addr = align_vdso_addr(addr);
+
+	return addr;
+#endif
+```

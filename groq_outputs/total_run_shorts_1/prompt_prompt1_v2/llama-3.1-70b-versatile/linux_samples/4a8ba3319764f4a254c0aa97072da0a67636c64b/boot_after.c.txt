@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-15
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a resource leak vulnerability in the `acpi_register_gsi` function call.
+
+EXPLANATION:
+The `acpi_register_gsi` function call in the `acpi_gsi_to_irq` function may return a negative value indicating an error. However, the code snippet does not check for all possible error cases. It only checks if the returned `irq` is greater than or equal to zero. If any error occurs during the execution of `acpi_register_gsi`, the function will not handle the error properly and will directly return -1. This may cause the resource allocated by `acpi_register_gsi` to leak, leading to potential security vulnerabilities or system crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to properly check the return value of `acpi_register_gsi` and handle all possible error cases. If an error occurs, the allocated resource should be released to prevent resource leakage.
+```c
+irq = acpi_register_gsi(NULL, gsi, trigger, polarity);
+if (irq < 0) {
+    // Handle error and release allocated resource if any
+    // ...
+    return -1;
+}
+```
+
+Alternatively, the `acpi_register_gsi` function can be modified to handle errors internally and do not return error codes that the caller needs to handle. However, without the full code of `acpi_register_gsi`, this cannot be confirmed.
+
+ORIGINAL CODE:
+```c
+int acpi_gsi_to_irq(u32 gsi, unsigned int *irqp)
+{
+	int rc, irq, trigger, polarity;
+
+	rc = acpi_get_override_irq(gsi, &trigger, &polarity);
+	if (rc == 0) {
+		trigger = trigger ? ACPI_LEVEL_SENSITIVE : ACPI_EDGE_SENSITIVE;
+		polarity = polarity ? ACPI_ACTIVE_LOW : ACPI_ACTIVE_HIGH;
+		irq = acpi_register_gsi(NULL, gsi, trigger, polarity);
+		if (irq >= 0) {
+			*irqp = irq;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+EXPORT_SYMBOL_GPL(acpi_gsi_to_irq);
+
+int acpi_isa_irq_to_gsi(unsigned isa_irq, u32 *gsi)
+}
+
+/* wrapper to silence section mismatch warning */
+int __ref acpi_map_cpu(acpi_handle handle, int physid, int *pcpu)
+{
+	return _acpi_map_lsapic(handle, physid, pcpu);
+}
+EXPORT_SYMBOL(acpi_map_cpu);
+
+int acpi_unmap_cpu(int cpu)
+{
+#ifdef CONFIG_ACPI_NUMA
+	set_apicid_to_node(per_cpu(x86_cpu_to_apicid, cpu), NUMA_NO_NODE);
+#endif
+
+	return (0);
+}
+EXPORT_SYMBOL(acpi_unmap_cpu);
+#endif				/* CONFIG_ACPI_HOTPLUG_CPU */
+
+int acpi_register_ioapic(acpi_handle handle, u64 phys_addr, u32 gsi_base)
+```

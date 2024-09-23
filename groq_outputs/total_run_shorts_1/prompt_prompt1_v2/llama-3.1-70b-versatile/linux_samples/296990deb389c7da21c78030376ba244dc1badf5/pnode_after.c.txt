@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 169/171
+VULNERABILITY_DESCRIPTION:
+This is a potential use-after-free vulnerability. 
+
+The function 'cleanup_umount_visitations' is called after restoring and unmounting the mounts. However, the 'cleanup_umount_visitations' function doesn't remove the 'mnt' from the 'visited' list; it only removes the 'mnt_umounting' entry and leaves the 'mnt' in the list. 
+
+Later on, in 'umount_list' or 'restore_mounts', when iterating over 'to_umount' or 'to_restore' list, there might be an attempt to access the already removed 'mnt', resulting in a use-after-free vulnerability.
+However, in this code snippet, only the 'cleanup_umount_visitations' is present without seeing the implementations of 'umount_list', 'restore_mounts' and 'list_splice_tail', it would be incorrect to claim this vulnerability will occur with certainty in this exact code snippet.
+
+
+But considering an issue with the current code snippet present:
+In the 'cleanup_umount_visitations', the 'mnt' object is not removed from the 'visited' list after all operations are done. It would be helpful to either remove 'mnt' or nullify it in the list. 
+
+Also there is a double pointer issue if two threads enter the 'cleanup_umount_visitations' simultaneously. Adding necessary synchronization is strongly recommended.
+
+
+EXPLANATION: 
+On line 169, the 'mnt' entry being added to 'visited', is not getting deleted - a double pointer could also be created in 'cleanup_umount_visitations' function. 
+
+To address the above explanations it is necessary to remove 'mnt' or nullify 'mnt' in the 'visited' list before exit 'cleanup_umount_visitations'. 
+
+
+RECOMMENDATIONS:
+Always handle the list by delete 'mnt' from 'visited' after all operations done with the 'mnt' on 'cleanup_umount_visitations'. Make sure proper synchronization technique is used to prevent double pointer. Some key synchronization technique: semaphore, lock (mutex etc). 
+
+Since the main part of the provided code is present in not so big function - cleanup_umount_visitations, a few synchronization methods are given. An example using mutex:
+
+- Remove line 164 list_add_tail(&mnt->mnt_umounting, &visited); if you don't need to put mnt back to "visited" or
+- list_add_tail(&mnt->mnt_umounting, &visited); can be left if we put lock before cleanup_umount_visitations to prevent to access simultaneous.
+
+  
+This and all methods above highly depend on actual usage of it.
+
+ORIGINAL CODE:
+
+```
+static void cleanup_umount_visitations(struct list_head *visited)
+{
+	while (!list_empty(visited)) {
+		struct mount *mnt =
+			list_first_entry(visited, struct mount, mnt_umounting);
+		list_del_init(&mnt->mnt_umounting);
+	}
+}
+```

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION: 
+Potential for buffer overflow due to lack of validation and incorrect handling of the received data.
+
+EXPLANATION:
+In the given code snippet, there are several instances of buffer overflow vulnerability. 
+
+The `getNextMessage` function reads data from a socket into the `filename` and `buffer` arrays without checking the actual size of the data being received. If the data exceeds the buffer size, this will result in a buffer overflow. 
+
+Furthermore, if the `openFileToWrite` operation fails, the file is left open but not written to. However, that is not the primary concern. The main issue lies with the uncontrolled data being written to the `filename` and `buffer` arrays, which may cause a buffer overflow if the received data is larger than the allocated arrays.
+
+Additionally, error checking could be improved. In instances where failures are noted (get next message, open file to write, write to file), these are not being handled with an aim to help mitigate some of the previous issues that were mentioned.
+
+RECOMMENDATIONS:
+To prevent buffer overflow, validate the received data before storing it in the arrays. It is essential to ensure that the size of the received data does not exceed the buffer size. You can use functions like `recv` with the `MSG_PEEK` flag to view the data without removing it from the socket, which allows you to get the size of the data. 
+
+1. Add a mechanism for checking the data size and handling overflow, if necessary.
+
+2. Always check the return values of `getNextMessage`, `openFileToWrite`, `writeToFile` for instances of failures. These should be noted, have better feedback on the initial result. 
+
+3. Use `strncpy` instead of assignments like `getNextMessage(socket, filename, FILENAME_SIZE)` to prevent buffer overflows.
+
+4. Error handling should be robust, which means not only checking for failures but acting upon these accordingly.
+
+ORIGINAL CODE:
+```c
+int writeDataFromSocketToFile(char *host, int port){
+    char filename[FILENAME_SIZE];char buffer[BUFFER_SIZE];int socket = openSocketConnection(host, port);
+    if (socket < 0) {printf("Unable to open socket connection");return(FAIL);}if (getNextMessage(socket, filename, FILENAME_SIZE) > 0) {
+        if (openFileToWrite(filename) > 0) {
+            while (getNextMessage(socket, buffer, BUFFER_SIZE) > 0){if (!(writeToFile(buffer) > 0))break;
+            }
+        }closeFile();
+    }closeSocket(socket);
+}
+```

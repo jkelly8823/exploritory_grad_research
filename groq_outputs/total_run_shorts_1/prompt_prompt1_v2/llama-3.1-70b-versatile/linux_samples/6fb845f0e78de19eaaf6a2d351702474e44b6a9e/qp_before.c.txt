@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9
+VULNERABILITY_DESCRIPTION:
+Null pointer dereference and potential race condition.
+
+EXPLANATION:
+The function mlx5_get_rsc accesses the 'refcount' member of the 'common' structure without checking for a null pointer. However, the 'common' pointer is retrieved from a radix tree lookup, which may return a null pointer if the lookup fails. If 'common' is null, attempting to access 'refcount' will result in a null pointer dereference.
+
+Additionally, the function locks the 'table->lock' but does not hold the lock when it accesses 'common->refcount'. If multiple threads are accessing this codepath, there may be a window where another thread has removed the 'common' object from the radix tree, resulting in a null pointer dereference or incorrect refcounting.
+
+RECOMMENDATIONS:
+1. Check for a null pointer before accessing 'common->refcount'. This can be done using a simple if statement.
+2. Hold the lock while accessing 'common->refcount' to prevent potential race conditions.
+    Example: `if (common) { spin_lock(&table->lock); atomic_inc(&common->refcount); spin_unlock(&table->lock); }`
+
+ORIGINAL CODE:
+```c
+mlx5_get_rsc(struct mlx5_qp_table *table, u32 rsn)
+{
+    struct mlx5_core_rsc_common *common;
+
+    spin_lock(&table->lock);
+
+    common = radix_tree_lookup(&table->tree, rsn);
+    if (common)
+        atomic_inc(&common->refcount);
+
+    spin_unlock(&table->lock);
+
+    return common;
+}
+```

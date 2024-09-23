@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION:
+Off-by-null or dangling pointer dereference vulnerability in kenter function.
+
+EXPLANATION:
+The `kenter` function is called with `data` as an argument after `data` has been decremented. However, it seems like `data` might be a pointer to a string. If `datalen` is not strictly greater than 1 and `data` does not have a null terminator, calling `kenter` with `data` as an argument can cause an off-by-null or dangling pointer dereference vulnerability.
+
+However, the more significant issue arises from the prior null validation where it explicitly checks for `datalen <= 1 || !data || data[datalen - 1] != '\0'`. The check verifies that `data` is a valid C-style string with a null-terminator. The code still decays to a call that appears to rely on the `data` pointer with an uncertain context afterward.
+
+RECOMMENDATIONS:
+It is necessary to implement one of two things:
+
+- Remove null-terminated checks and make sure the subsequent call would not cause any undefined behavior.
+- Perform null-terminated validation before calling any function that could potentially provoke a null-terminated dereference vulnerability.
+
+Additionally, an explicit bounds validation is recommended in case user-generated inputs manipulate `datalen`.
+
+ORIGINAL CODE:
+```c
+size_t result_len = 0;
+const char *data = _data, *end, *opt;
+
+kenter("%%%d,%s,'%s',%zu",
+       key->serial, key->description, data, datalen);
+
+if (datalen <= 1 || !data || data[datalen - 1] != '\0')
+    return -EINVAL;
+datalen--;
+.seq_printf(m, ": %u", key->datalen);
+}
+
+struct key_type key_type_dns_resolver = {
+        .name        = "dns_resolver",
+        .instantiate = dns_resolver_instantiate,
+        .match       = dns_resolver_match,
+        .revoke      = user_revoke,
+        .destroy     = user_destroy,
+        .describe    = dns_resolver_describe,
+        .read        = user_read,
+};
+
+static int __init init_dns_resolver(void)
+```
+
+Please ensure the findings account for all non-trivial impact considering the above mitigation steps could further trigger an elevated risk.

@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18, 25
+VULNERABILITY_DESCRIPTION:
+Potential resource leaks and incorrect reference counting.
+
+EXPLANATION:
+There are two potential issues in the provided code snippet. 
+
+1. The function `domain_flush_complete(domain)` potentially waits for pending flushes, but if it returns an error (though not shown in this snippet), the subsequent reference decrements (`domain->dev_iommu[iommu->index] -= 1` and `domain->dev_cnt -= 1`) may still occur, potentially leading to incorrect reference counting. 
+
+2. The code snippet is incomplete (it contains code from two different functions), and it seems that if an error occurs before `free_iova_fast`, it might not be freed, leading to a resource leak.
+
+RECOMMENDATIONS:
+1. Check the return value of `domain_flush_complete(domain)` and handle any potential errors before decrementing the reference counters.
+2. Ensure that `free_iova_fast` is called even in the case of an error, to prevent resource leaks. This could be done in the `out_err` label.
+
+ORIGINAL CODE:
+
+
+static void do_detach(struct iommu_dev_data *dev_data)
+{
+	struct protection_domain *domain = dev_data->domain;
+	struct amd_iommu *iommu;
+	u16 alias;
+
+	iommu = amd_iommu_rlookup_table[dev_data->devid];
+	alias = dev_data->alias;
+
+	/* Update data structures */
+	dev_data->domain = NULL;
+	list_del(&dev_data->list);
+	clear_dte_entry(dev_data->devid);
+
+	/* Flush the DTE entry */
+	device_flush_dte(dev_data);
+
+	/* Flush IOTLB */
+	domain_flush_tlb_pde(domain);
+
+	/* Wait for the flushes to finish */
+	domain_flush_complete(domain);
+
+	/* decrease reference counters - needs to happen after the flushes */
+	domain->dev_iommu[iommu->index] -= 1;
+	domain->dev_cnt                 -= 1;
+}
+
+/*
+ * If a device is not yet associated with a domain, this function makes the
+		(bus_addr  = address + s->dma_address + (j << PAGE_SHIFT);
+			iommu_unmap_page(domain, bus_addr, PAGE_SIZE);
+
+			if (--mapped_pages == 0)
+				goto out_free_iova;
+		}
+	}
+
+out_free_iova:
+	free_iova_fast(&dma_dom->iovad, address >> PAGE_SHIFT, npages);
+
+out_err:
+	return 0;
+}

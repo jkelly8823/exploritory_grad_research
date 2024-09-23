@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 9
+VULNERABILITY_DESCRIPTION:
+The code registers a BroadcastReceiver but does not unregister it. Additionally, the BroadcastReceiver relies on a mutable static object (mainActivity), and its instance is not synchronized, potentially causing concurrency issues.
+
+EXPLANATION:
+The BroadcastReceiver is registered with the `registerReceiver(sReceiver, filter)` method. However, the code does not show the corresponding `unregisterReceiver(sReceiver)` call to unregister the BroadcastReceiver when it's no longer needed. This can cause the system to hold onto the BroadcastReceiver and its associated Context even after the activity is destroyed, resulting in memory leaks.
+Furthermore, the BroadcastReceiver accesses and manipulates the static `mainActivity` object, which could lead to threading issues if multiple threads try to access `mainActivity` simultaneously.
+
+RECOMMENDATIONS:
+1. Unregister the BroadcastReceiver in the `onDestroy()` method or when it's no longer needed to prevent memory leaks.
+   For example:
+   ```java
+@Override
+protected void onDestroy() {
+    unregisterReceiver(sReceiver);
+    super.onDestroy();
+}
+```
+2. Ensure that the static `mainActivity` object is thread-safe. This can be achieved by synchronizing access to `mainActivity` or using a technique that allows thread-safe updates to its state.
+
+ORIGINAL CODE:
+```java
+IntentFilter filter = new IntentFilter(Intent.ACTION_SHUTDOWN);
+BroadcastReceiver sReceiver = new ShutDownReceiver();
+registerReceiver(sReceiver, filter);
+...
+public class ShutdownReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(final Context context, final Intent intent) {
+        mainActivity.saveLocalData();
+        mainActivity.stopActivity();
+    }
+}
+```

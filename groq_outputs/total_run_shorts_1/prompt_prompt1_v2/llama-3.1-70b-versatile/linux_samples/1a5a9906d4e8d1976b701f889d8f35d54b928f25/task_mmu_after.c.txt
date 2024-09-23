@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 15, 27
+VULNERABILITY_DESCRIPTION:
+Double Unlock and Potential Use-After-Free.
+
+EXPLANATION:
+The code appears to be part of a routine that handles page table operations in a multi-threaded environment. There are multiple instances where a spin lock is unlocked on a mutex (page_table_lock), which might be reused again later in the code execution. Specifically, on line 11, the spin lock is unlocked, only to be reacquired later on line 15 (pte_offset_map_lock calls spin_lock internally) and again on line 27. This double-unlock situation may cause issues if other threads or the same thread attempt to acquire the same lock. This can lead to unpredictable behavior, and potentially allows for data corruption.
+
+Another concern is that line 20, the page_table_lock is unlocked while the loop continues to execute, potentially accessing or modifying the page table without proper synchronization. If this access/modification occurs concurrently with another thread holding the lock, unexpected behavior and potential crashes can occur.
+
+Additionally, there might be potential use-after-free vulnerabilities related to stale page references after page splitting/modification (e.g., on line 6).
+
+RECOMMENDATIONS:
+To resolve the vulnerability, revisit the synchronization logic to ensure that spin locks are not unlocked and then reacquired while the same critical section of code is being executed. Consider the following modifications:
+
+1. Keep the spin lock (page_table_lock) locked throughout the entire critical section where page tables are being accessed and modified.
+
+2. Use alternative synchronization mechanisms such as lock-free algorithms or other synchronization primitives that are better suited to this scenario.
+
+3. Ensure proper locking in other sections of the code that access shared data.
+
+ORIGINAL CODE:
+
+    } else {
+        spin_unlock(&walk->mm->page_table_lock);
+    }
+
+    if (pmd_trans_unstable(pmd))
+        return 0;
+    /*
+    * The mmap_sem held all the way back in m_start() is what
+    * keeps khugepaged out of here and from collapsing things
+    in here.
+    struct page *page;
+
+    split_huge_page_pmd(walk->mm, pmd);
+    if (pmd_trans_unstable(pmd))
+        return 0;
+
+    pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
+    for (; addr != end; pte++, addr += PAGE_SIZE) {
+        ptent = *pte;
+        int err = 0;
+
+    split_huge_page_pmd(walk->mm, pmd);
+    if (pmd_trans_unstable(pmd))
+        return 0;
+
+    /* find the first VMA at or above 'addr' */
+    vma = find_vma(walk->mm, addr);
+    for (; addr != end; addr += PAGE_SIZE) {
+        spin_unlock(&walk->mm->page_table_lock);
+    }
+
+    if (pmd_trans_unstable(pmd))
+        return 0;
+    orig_pte = pte = pte_offset_map_lock(walk->mm, pmd, addr, &ptl);
+    do {
+        struct page *page = can_gather_numa_stats(*pte, md->vma, addr);
+        if (!page

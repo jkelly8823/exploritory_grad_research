@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-10
+VULNERABILITY_DESCRIPTION:
+ Denial of Service through Integer Overflow in TTY Write Operation
+
+EXPLANATION:
+The provided code snippet appears to be part of a TTY (Teletype) write operation function. The while loop iterates until 'nr' is greater than 0, indicating the remaining amount of data to be written. However, it does not decrement 'nr' in each iteration. Although 'c' (the return value of tty->ops->write(tty, b, nr)) is checked to be less than 0, in case of a successful write operation, 'c' is likely to represent the number of bytes written.
+
+If the write operation does not consume the entire 'nr' bytes, 'nr' remains unchanged and the loop becomes an infinite loop, potentially leading to a Denial of Service (DoS) attack if exploited by an attacker.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, 'nr' should be decremented by the number of bytes written in each iteration of the while loop. A more accurate variable name than 'c' should also be used to represent the number of bytes written.
+
+```
+while (nr > 0) {
+    mutex_lock(&ldata->output_lock);
+    bytes_written = tty->ops->write(tty, b, nr);
+    mutex_unlock(&ldata->output_lock);
+    if (bytes_written < 0) {
+        retval = bytes_written;
+        goto break_out;
+    }
+    if (bytes_written == 0) {
+        // Handle incomplete write operation
+        break;
+    }
+    nr -= bytes_written; // Decrement 'nr' by the number of bytes written
+    b += bytes_written; // Update the write buffer pointer
+}
+```
+
+ORIGINAL CODE:
+```
+if (tty->ops->flush_chars)
+    tty->ops->flush_chars(tty);
+} else {
+    struct n_tty_data *ldata = tty->disc_data;
+
+    while (nr > 0) {
+        mutex_lock(&ldata->output_lock);
+        c = tty->ops->write(tty, b, nr);
+        mutex_unlock(&ldata->output_lock);
+        if (c < 0) {
+            retval = c;
+            goto break_out;
+        }
+```

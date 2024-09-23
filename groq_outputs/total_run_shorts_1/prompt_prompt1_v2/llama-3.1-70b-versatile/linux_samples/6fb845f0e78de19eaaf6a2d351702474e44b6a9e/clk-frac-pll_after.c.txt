@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The code is vulnerable to integer overflow due to the multiplication operations performed on `parent_rate` and `temp64`. In the line `temp64 *= PLL_FRAC_DENOM;`, if the product of `temp64` and `PLL_FRAC_DENOM` exceeds the maximum value that `u64` can hold, it will wrap around, resulting in incorrect values. The following division operation may further exacerbate this issue. 
+
+Furthermore, if `parent_rate` is 0 at this point, the division operation in `do_div(temp64, parent_rate);` will result in a divide-by-zero error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add checks for potential overflows before performing the multiplication operation. Verify that `parent_rate` is non-zero before performing the division operation. 
+
+Replace `temp64 *= PLL_FRAC_DENOM;` with:
+
+```c
+if (temp64 > (UINT64_MAX - PLL_FRAC_DENOM)) {
+    // Handle the overflow error
+} else {
+    temp64 *= PLL_FRAC_DENOM;
+}
+```
+
+Also, before the division operation, verify that `parent_rate` is non-zero:
+
+```c
+if (parent_rate == 0) {
+    // Handle the divide-by-zero error
+} else {
+    do_div(temp64, parent_rate);
+}
+```
+
+ORIGINAL CODE:
+```c
+{
+    struct clk_frac_pll *pll = to_clk_frac_pll(hw);
+    u32 val, divfi, divff;
+    u64 temp64;
+    int ret;
+
+    parent_rate *= 8;
+    rate *= 2;
+    divfi = rate / parent_rate;
+    temp64 = parent_rate * divfi;
+    temp64 = rate - temp64;
+    temp64 *= PLL_FRAC_DENOM;
+    do_div(temp64, parent_rate);
+    divff = temp64;
+}
+```

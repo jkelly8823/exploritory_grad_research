@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+9-18, 20-23
+VULNERABILITY_DESCRIPTION:
+Multiple buffer overflow vulnerabilities ( CWE-119 and CWE-195).
+
+EXPLANATION:
+The `GetUntrustedInt()` function returns an untrusted integer value, which is assigned to the variable `i`. This value is then assigned to the variable `s`, a signed short integer. Due to the integer promotion rule in C, the `if (s > 256)` check does not prevent buffer overflow because the signed value `-1` is sign-extended and treated as an unsigned integer with the maximum value `0xFFFFFFFF` when passed to `strncpy()`.
+
+This allows an attacker to overflow the `path` buffer by potentially exceeding the buffer size. The line `path[255] = '\0';` prevents a null character overflow, but it is insufficient to prevent the overflow itself.
+
+Additionally, the `strncpy()` function itself is vulnerable to buffer overflow when the count parameter `s` exceeds the size of the buffer `path`. In this case, `s` is treated as an unsigned integer and can be used to overflow the buffer.
+
+RECOMMENDATIONS:
+- Use a safer string copying function like `strcpy_s()` or `snprintf()` that enforces a maximum buffer size and ensures null-termination.
+- Always validate the size of user input to prevent buffer overflows.
+- Consider using a safer data type like `size_t` for sizes and counts, which is guaranteed to be an unsigned integer.
+- Perform bounds checking on all index and count variables that are used for buffer access.
+
+ORIGINAL CODE:
+```c
+int GetUntrustedInt () {return(0x0000FFFF);}
+void main (int argc, char **argv) {
+    char path[256];char *input;int i;short s;unsigned int sz;
+    i = GetUntrustedInt();s = i;/* s is -1 so it passes the safety check - CWE-697 */if (s > 256) {DiePainfully("go away!\n");}
+    /* s is sign-extended and saved in sz */sz = s;
+    /* output: i=65535, s=-1, sz=4294967295 - your mileage may vary */printf("i=%d, s=%d, sz=%u\n", i, s, sz);
+    input = GetUserInput("Enter pathname:");
+    /* strncpy interprets s as unsigned int, so it's treated as MAX_INT(CWE-195), enabling buffer overflow (CWE-119) */strncpy(path, input, s);path[255] = '\0'; /* don't want CWE-170 */printf("Path is: %s\n", path);
+}
+```
+Note that this code has multiple issues and should be thoroughly reviewed for security vulnerabilities.

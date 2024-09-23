@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 14-16, 19-22
+VULNERABILITY_DESCRIPTION:
+Insecure Use of skb_pull() and skb_postpull_rcsum() Functions.
+
+EXPLANATION:
+This code snippet is vulnerable because it uses skb_pull() and skb_postpull_rcsum() functions without verifying that the skb data is valid and properly padded. Specifically, it calls skb_pull(skb, ((hdr->hdrlen + 1) << 3)) without verifying that ((hdr->hdrlen + 1) << 3) is within the valid range of skb data. This can cause the skb_pull() function to access memory outside the skb buffer, potentially leading to a buffer overflow or an access to unmapped pages.
+
+Additionally, theskb_postpull_rcsum(skb, oldhdr, ...) function is used to update the checksum of the skb. However, this function does not check whether the skb data has been properly validated or padded. As a result, a malicious actor could potentially manipulate the skb data to cause the checksum update to access memory outside the skb buffer.
+
+Furthermore, the code uses skb_mac_header_rebuild(skb), skb_push(skb, ...) and skb_reset_network_header(skb) functions, without validating the values of the arguments that are passed to these functions. 
+
+RECOMMENDATIONS:
+1. Verify the skb data is valid and properly padded before calling skb_pull() and skb_postpull_rcsum() functions. Ensure that the argument passed to skb_pull() is within the valid range of skb data.
+2. Validate the values of the arguments that are passed to skb_mac_header_rebuild(skb), skb_push(skb, ...) and skb_reset_network_header(skb) functions before calling these functions.
+
+Additionally, it is recommended to use the functions(skb_put() and skb_put_data()) instead of skb_push(skb, ...) for adding more data to an skb and use skb_is_nonlinear() and skb_ensure_linear_data() functions to validate and ensure the linearity of skb.
+
+ORIGINAL CODE:
+```
+	return -1;
+}
+
+if (skb_cloned(skb)) {
+	if (pskb_expand_head(skb, IPV6_RPL_SRH_WORST_SWAP_SIZE, 0,
+				     GFP_ATOMIC)) {
+		__IP6_INC_STATS(net, ip6_dst_idev(skb_dst(skb)),
+				IPSTATS_MIB_OUTDISCARDS);
+		kfree_skb(skb);
+		return -1;
+	}
+} else {
+	err = skb_cow_head(skb, IPV6_RPL_SRH_WORST_SWAP_SIZE);
+	if (unlikely(err)) {
+		kfree_skb(skb);
+		return -1;
+	}
+}
+
+hdr = (struct ipv6_rpl_sr_hdr *)skb_transport_header(skb);
+
+if (!pskb_may_pull(skb, ipv6_rpl_srh_size(n, hdr->cmpri,
+						  hdr->cmpre))) {
+	kfree_skb(skb);
+	return -1;
+skb_pull(skb, ((hdr->hdrlen + 1) << 3));
+skb_postpull_rcsum(skb, oldhdr,
+		   sizeof(struct ipv6hdr) + ((hdr->hdrlen + 1) << 3));
+skb_push(skb, ((chdr->hdrlen + 1) << 3) + sizeof(struct ipv6hdr));
+skb_reset_network_header(skb);
+skb_mac_header_rebuild(skb);
+skb_set_transport_header(skb, sizeof(struct ipv6hdr));
+```

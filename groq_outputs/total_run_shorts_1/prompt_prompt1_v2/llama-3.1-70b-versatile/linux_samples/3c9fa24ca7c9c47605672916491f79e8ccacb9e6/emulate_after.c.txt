@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11, 14-15
+VULNERABILITY_DESCRIPTION:
+Unvalidated and unchecked memory access. The functions do not properly validate the return values of the 'linearize' and 'read_std' functions. This could lead to potential information disclosure or data corruption.
+ 
+EXPLANATION:
+In the given code snippet, several functions read and write data from/to memory. However, they do not properly validate the results of the 'linearize' function, which can indicate whether the operation was successful or not. Moreover, there is no bounds checking on the memory addresses being accessed. This can lead to potential vulnerabilities such as information disclosure or data corruption if an attacker can manipulate the 'linear' and 'data' parameters. Furthermore, potential integer overflow and underflow issues could also exist in the functions 'linearized_read_std' and 'linearized_write_std', given that 'size' can potentially be used to allocate larger or smaller amounts of memory than requested, resulting in incorrect memory access. Finally, the given code does not show any form validation or sanitization to ensure that 'port', 'io_bitmap_ptr', 'perm', and 'desc_limit_scaled(&tr_seg)' are indeed correct assumptions as far as their resulting pointers are concerned, and there are no buffer overflow issues.
+
+RECOMMENDATIONS:
+1. Validate the return value of the 'linearize' function to prevent potential errors.
+2. Implement proper bounds checking to ensure that memory addresses are within valid ranges.
+3. Implement proper error handling to deal with potential integer overflow and underflow issues.
+4. Ensure proper validation/sanitization of all variables and parameters that could result in 'reads or writes' to the data buffer 'data'.
+
+ORIGINAL CODE:
+static int linear_read_system(struct x86_emulate_ctxt *ctxt, ulong linear,
+			      void *data, unsigned size)
+{
+	return ctxt->ops->read_std(ctxt, linear, data, size, &ctxt->exception, true);
+}
+
+static int linear_write_system(struct x86_emulate_ctxt *ctxt,
+			       ulong linear, void *data,
+			       unsigned int size)
+{
+	return ctxt->ops->write_std(ctxt, linear, data, size, &ctxt->exception, true);
+}
+
+static int segmented_read_std(struct x86_emulate_ctxt *ctxt,
+			      struct segmented_address addr,
+	rc = linearize(ctxt, addr, size, false, &linear);
+	if (rc != X86EMUL_CONTINUE)
+		return rc;
+	return ctxt->ops->read_std(ctxt, linear, data, size, &ctxt->exception, false);
+}
+
+static int segmented_write_std(struct x86_emulate_ctxt *ctxt,
+			       struct segmented_address addr,
+	rc = linearize(ctxt, addr, size, true, &linear);
+	if (rc != X86EMUL_CONTINUE)
+		return rc;
+	return ctxt->ops->write_std(ctxt, linear, data, size, &ctxt->exception, false);
+}
+
+/*
+ * Prefetch the remaining bytes of the instruction without crossing page
+#ifdef CONFIG_X86_64
+	base |= ((u64)base3) << 32;
+#endif
+	r = ops->read_std(ctxt, base + 102, &io_bitmap_ptr, 2, NULL, true);
+	if (r != X86EMUL_CONTINUE)
+		return false;
+	if (io_bitmap_ptr + port/8 > desc_limit_scaled(&tr_seg))
+		return false;
+	r = ops->read_std(ctxt, base + io_bitmap_ptr + port/8, &perm, 2, NULL, true);
+	if (r != X86EMUL_CONTINUE)
+		return false;
+	if ((perm >> bit_idx) & mask)
+		return false;

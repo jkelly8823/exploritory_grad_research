@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 18
+VULNERABILITY_DESCRIPTION:
+The code snippet uses the `msr_set_bit` function without proper input validation, which may cause a potential privilege escalation vulnerability.
+
+EXPLANATION:
+On line 12, the `msr_set_bit` function is used to set the 54th bit of the MSR register 0xc0011005. However, there is no validation of the input values, which could potentially be exploited to write arbitrary data to the MSR register. Additionally, the return value of the `msr_set_bit` function is not checked for errors on line 18.
+
+The MSR register 0xc0011005 is related to topology extensions on AMD processors, which could potentially allow an attacker to control or manipulate the CPU topology, leading to unspecified behavior or potentially even a privilege escalation vulnerability.
+
+Furthermore, there is no validation of the processor type before attempting to write to the MSR register. If this code is executed on a processor that does not support this MSR register, it may lead to unexpected behavior or crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to:
+
+- Add proper input validation before calling the `msr_set_bit` function.
+- Check the return value of the `msr_set_bit` function for errors.
+- Validate the processor type before attempting to write to the MSR register.
+- Consider using a more secure function to manipulate the MSR register, if available.
+
+Additionally, it's recommended to:
+
+- Review the usage of `msr_set_bit` function in the entire codebase to ensure it's used securely.
+- Implement additional checks and validation when manipulating MSR registers to prevent similar vulnerabilities.
+
+ORIGINAL CODE:
+
+(c->cpu_core_id %= cus_per_node;
+}
+
+/*
+ * Fixup core topology information for
+ * (1) AMD multi-node processors
+ *     Assumption: Number of cores in each internal node is the same.
+		cpuid(0x8000001e, &eax, &ebx, &ecx, &edx);
+
+		node_id  = ecx & 0xff;
+		smp_num_siblings = ((ebx >> 8) & 0xff) + 1;
+
+		if (c->x86 == 0x15)
+			c->cu_id = ebx & 0xff;
+
+/*
+static void early_init_amd(struct cpuinfo_x86 *c)
+{
+	u32 dummy;
+
+	early_init_amd_mc(c);
+
+		set_cpu_bug(c, X86_BUG_AMD_E400);
+
+	early_detect_mem_encrypt(c);
+}
+
+static void init_amd_k8(struct cpuinfo_x86 *c)
+{
+{
+	u64 value;
+
+	/* re-enable TopologyExtensions if switched off by BIOS */
+	if ((c->x86_model >= 0x10) && (c->x86_model <= 0x6f) &&
+	    !cpu_has(c, X86_FEATURE_TOPOEXT)) {
+
+		if (msr_set_bit(0xc0011005, 54) > 0) {
+			rdmsrl(0xc0011005, value);
+			if (value & BIT_64(54)) {
+				set_cpu_cap(c, X86_FEATURE_TOPOEXT);
+				pr_info_once(FW_INFO "CPU: Re-enabling disabled Topology Extensions Support.\n");
+			}
+		}
+	}
+
+	/*
+	 * The way access filter has a performance penalty on some workloads.
+	 * Disable it on the affected CPUs.
+	*/
+
+	cpu_detect_cache_sizes(c);
+
+	/* Multi core CPU? */
+	if (c->extended_cpuid_level >= 0x80000008) {
+		amd_detect_cmp(c);
+		amd_get_topology(c);
+		srat_detect_node(c);
+	}
+
+#ifdef CONFIG_X86_32
+	detect_ht(c);
+#endif
+
+	init_amd_cacheinfo(c);
+
+	if (cpu_has(c, X86_FEATURE_XMM2)) {

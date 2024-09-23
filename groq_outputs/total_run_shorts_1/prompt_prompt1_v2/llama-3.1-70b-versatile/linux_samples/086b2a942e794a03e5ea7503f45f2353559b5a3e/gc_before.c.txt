@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability.
+EXPLANATION:
+In this code snippet, there is a potential use-after-free vulnerability on line 8. After `key->description` is freed using `kfree(key->description)`, the `key` pointer is still used by setting `key->magic = KEY_DEBUG_MAGIC_X;`. This can lead to unpredictable behavior or crashes if the memory previously occupied by `key` has been reallocated or modified.
+
+RECOMMENDATIONS:
+To fix this issue, the lines using the `key` pointer after it has been freed should be removed or placed before freeing the associated memory. Since `key->description` is freed using `kfree`, it is safe to assume that `key` itself is also freed or about to be freed. Therefore, the line setting `key->magic` should be moved above the `kfree(key->description)` call or removed altogether.
+
+ORIGINAL CODE:
+```c
+	if (test_bit(KEY_FLAG_INSTANTIATED, &key->flags))
+		atomic_dec(&key->user->nikeys);
+
+	key_user_put(key->user);
+
+	/* now throw away the key memory */
+	if (key->type->destroy)
+		key->type->destroy(key);
+
+	kfree(key->description);
+
+#ifdef KEY_DEBUGGING
+	key->magic = KEY_DEBUG_MAGIC_X;
+```
+
+Note: The actual fix will depend on the context in which this code is being used, and it's not possible to provide an exact fix without more information about the codebase. However, moving or removing the line using the `key` pointer after freeing its memory should resolve the issue.

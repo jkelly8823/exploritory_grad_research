@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Leading to Out-of-Bounds Access or Incorrect Behavior
+
+EXPLANATION:
+The code checks if the value of `profile` is greater than 4, but it does not verify if the value can be represented by the underlying integer type. If `profile` is a signed integer type and its value is greater than the maximum value that can be represented, it could lead to an integer overflow. Similarly, if `profile` is an unsigned integer type, values exceeding the range may cause an implicit wraparound.
+
+However, looking at the strict_strtoul function, it appears to be returning an error code if the string does not represent an integer in base 10. If all error codes returned by strict_strtoul are non-zero, it is most-likely a bug not related to integer-overflow.
+
+The variable "profile" is assigned a value from the function 'strict_strtoul'. The 'buf' variable holds a string, which is being converted to an integer.
+
+However, there are other problem areas here, what if the string cannot be parsed into an integer? The number might be really large (like, way larger than INT_MAX) and not be what you would expect.
+
+More insight would be needed into how the program is handling failures from this function, there could be an even bigger issue at play.
+
+Another issue is, how was 'buf' formed, did it come from user input. In a case like that, we really need to think about whether what 'buf' can hold is numeric.
+
+RECOMMENDATIONS:
+- Validate the string `buf` to ensure it only contains numeric characters before passing it to `strict_strtoul`.
+- Check if the result of `strict_strtoul` is within the valid range for the `profile` variable. This should be consistent with the check for `profile > 4`.
+- Ensure `strict_strtoul` returns the actual result of the conversion, not the return code from conversion (since the return code is what was causing us our other bug, not covered here).
+
+ORIGINAL CODE:
+```c
+isku = hid_get_drvdata(dev_get_drvdata(dev));
+usb_dev = interface_to_usbdev(to_usb_interface(dev));
+
+retval = strict_strtoul(buf, 10, &profile);
+if (retval)
+    return retval;
+
+if (profile > 4)
+```

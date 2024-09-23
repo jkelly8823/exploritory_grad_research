@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION: 
+Potential insecure file creation due to lack of permission setting.
+
+EXPLANATION:
+The `createAdminFileIfNotExists` function creates a new file at `/etc/admin-users` using `os.Create`. However, the file is created with the default permissions, which may not be the desired or secure permissions. The subsequent `changeModeOfAdminFile` function attempts to change the file mode to `0440` after the file has already been created. This leaves a window of time where the file exists but does not have the desired permissions, potentially introducing a vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to create the file with the desired permissions from the outset using the `os.OpenFile` function, which allows for the creation of the file with the specified permissions. The corrected `createAdminFileIfNotExists` function would look like this:
+
+```go
+func createAdminFileIfNotExists() error {
+    fileMode := os.FileMode(0440)
+    file, err := os.OpenFile(adminFile, os.O_CREATE|os.O_WRONLY, fileMode)
+    if err != nil {
+        return err
+    }
+    return file.Close()
+}
+```
+Remove the separate `changeModeOfAdminFile` function as it is no longer needed.
+
+ORIGINAL CODE:
+```go
+const adminFile = "/etc/admin-users"
+func createAdminFileIfNotExists() error {
+    file, err := os.Create(adminFile)
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
+func changeModeOfAdminFile() error {
+    fileMode := os.FileMode(0440)
+    if err := os.Chmod(adminFile, fileMode); err != nil {
+        return err
+    }
+    return nil
+}
+```

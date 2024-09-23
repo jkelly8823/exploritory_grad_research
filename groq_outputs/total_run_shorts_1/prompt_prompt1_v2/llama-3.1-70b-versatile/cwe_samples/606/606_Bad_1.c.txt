@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 11-14
+VULNERABILITY_DESCRIPTION: 
+Buffer overflow vulnerability and null-termination out-of-bounds access.
+
+EXPLANATION:
+The code snippet has two potential vulnerabilities. 
+
+1. The buffer overflow vulnerability: When copying message data into the `buffer` array, it ignores the possibility that the buffer size may be exceeded. This can lead to a buffer overflow, potentially causing the program to crash or execute arbitrary code.
+
+2. The null-termination out-of-bounds access: When copying the contents of the `buffer` into the `message` array, it does not check if `msg->msgLength` exceeds the size of the `message` array. This can lead to an out-of-bounds access when attempting to write the null-terminator (`message[index] = '\0'`).
+
+RECOMMENDATIONS:
+To address the buffer overflow vulnerability, the code should check the return value of `getMessage(socket, buffer, BUFFER_SIZE)` and ensure it does not exceed `BUFFER_SIZE - 1` (leaving space for the null-terminator).
+
+To address the null-termination out-of-bounds access, the code should check that `msg->msgLength` does not exceed `MESSAGE_SIZE - 1` before copying the message body into the `message` array.
+
+Additionally, error handling should be improved to handle cases where these checks fail.
+
+Here is a possible fix:
+
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE]; char message[MESSAGE_SIZE];
+
+    int bytesReceived = getMessage(socket, buffer, BUFFER_SIZE - 1);  // Ensure space for null-terminator
+    if (bytesReceived > 0) {
+        buffer[bytesReceived] = '\0';  // Null-terminate the buffer
+
+        ExMessage *msg = recastBuffer(buffer);
+
+        if (msg->msgLength > MESSAGE_SIZE - 1) {  // Check for out-of-bounds access
+            // Handle the error case
+            return -1;
+        }
+
+        for (int index = 0; index < msg->msgLength; index++) {
+            message[index] = msg->msgBody[index];
+        }
+        message[msg->msgLength] = '\0';  // Null-terminate the message
+
+        success = processMessage(message);
+    }
+    return success;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+
+    // get message from socket and store into buffer
+
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+
+        // copy message body into string for processing
+        int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+
+        // process message
+        success = processMessage(message);
+    }
+    return success;
+}
+```

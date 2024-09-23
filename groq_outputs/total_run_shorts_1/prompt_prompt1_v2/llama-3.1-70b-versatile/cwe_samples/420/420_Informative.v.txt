@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 13-14
+VULNERABILITY_DESCRIPTION:
+The given Verilog code is vulnerable due to the use of hardcoded secrets and potential bypassing of authentication logic.
+
+EXPLANATION:
+The vulnerability lies in the hardcoded values used for `acl_oh_allowlist` and the address authentication check (`address == 32'hF00`). Hardcoding secrets like this `acl_oh_allowlist` can be a security risk, especially if the value is not securely generated or stored. 
+
+Moreover, the authentication logic can be potentially bypassed due to the sequential dependency on `addr_auth` and `write_auth`. An attacker might be able to exploit the fact that the `addr_auth` and `write_auth` signals are evaluated separately, which could lead to unauthorized access to the `data_out`.
+
+Additionally, the use of `always @*` to update `acl_oh_allowlist` can lead to unexpected behavior due to the sensitivity of this block to all signals. It is generally better to explicitly specify the sensitivity of such blocks.
+
+RECOMMENDATIONS:
+- Replace the hardcoded secrets with secure, randomly generated values stored in a secure manner, such as a Hardware Security Module (HSM) or an internal secure storage module.
+- Consider re-evaluating the authentication logic to make it more robust and less dependent on sequential checks.
+- Update the sensitivity list of the `always @*` block to only the relevant signals, reducing the risk of unintended behavior.
+- Consider secure storage for sensitive values and ensure secure update mechanisms for such values.
+
+ORIGINAL CODE:
+               module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+               output [31:0] data_out;
+               input [31:0] data_in, incoming_id, address;
+               input clk, rst_n;
+               wire write_auth, addr_auth;
+               reg [31:0] data_out, acl_oh_allowlist, q;
+               assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+               always @*
+               
+                 acl_oh_allowlist <= 32'h8312; 
+               
+               assign addr_auth = (address == 32'hF00) ? 1: 0;
+               always @ (posedge clk or negedge rst_n)
+               
+                 if (!rst_n)
+                 
+                   begin
+                   
+                     q <= 32'h0;
+                     data_out <= 32'h0;
+                   
+                   end
+                 
+                 else
+                 
+                   begin
+                   
+                     q <= (addr_auth & write_auth) ? data_in: q;
+                     data_out <= q;
+                   
+                   end
+                 
+                 end
+               
+               endmodule

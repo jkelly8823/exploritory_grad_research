@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION: Unspecified external lock ordering vulnerability.
+EXPLANATION:
+Based on the given code snippet, a potential issue is observed with the order of acquiring locks. Specifically, the `mutex_lock(&q->sysfs_lock)` and `spin_lock_irq(lock)` are being taken in a different order compared to the one typically used with spinlock-irqsave (`mutex_lock`, followed by `spin_lock_irqsave`) and the fact that `spin_lock_irq` takes an unspecified lock. Given this is in the kernel code space taking an unspecified lock following `mutex_lock(&q->sysfs_lock)` leaves room for the deadlocks which will cause the program to enter into non responsive states or perhaps crash the operating system.
+
+
+RECOMMENDATIONS:
+Change the spin_lock_irq call to either use the correct ordering of operations or use irqsave variants for the locks. The snippet (lock) is not declared anywhere within the function or within the local scope; therefore, we should either know what lock is defined prior to evaluating the snippet or refer to it directly from within this block.
+
+```c
+mutex_lock(&q->sysfs_lock);
+unsigned long flags;
+spin_lock_irqsave(lock, flags);
+
+// At a later point within the code
+spin_unlock_irqrestore(lock, flags);
+
+mutex_unlock(&q->sysfs_lock);
+```    
+ 
+ORIGINAL CODE:
+}
+EXPORT_SYMBOL_GPL(blk_queue_bypass_end);
+
+/**
+ * blk_cleanup_queue - shutdown a request queue
+ * @q: request queue to shutdown
+ *
+
+	/* mark @q DYING, no new request or merges will be allowed afterwards */
+	mutex_lock(&q->sysfs_lock);
+	queue_flag_set_unlocked(QUEUE_FLAG_DYING, q);
+	spin_lock_irq(lock);
+
+	/*
+	 * A dying queue is permanently in bypass mode till released.  Note

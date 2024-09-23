@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Null Pointer Dereference may occur if the current_ei structure or its members have not been properly initialized before being accessed.
+
+EXPLANATION:
+The vulnerability exists in the line where the code checks the value of `current_ei->efi_memmap_size`. In this line, the code accesses the `efi_memmap_size` member of the `current_ei` structure. However, before this line, there are no checks to ensure that the `current_ei` structure has been properly initialized and its members have valid values.
+
+If `current_ei` has not been initialized or its members have not been set to valid values, then accessing `current_ei->efi_memmap_size` could result in a null pointer dereference or access to garbage data. 
+
+It's also worth noting that even if `current_ei` itself is not NULL, its members (such as `efi_memmap_size`) could be NULL or uninitialized. Accessing `efi_memmap_size` in this case would also be a null pointer dereference.
+
+RECOMMENDATIONS:
+Add checks to ensure that `current_ei` is properly initialized and its members are set to valid values before accessing them. For example:
+
+1. Check that `current_ei` is not NULL before accessing its members.
+2. Verify that the members of `current_ei` have been initialized with valid values. 
+
+This may require additional modifications in the code that comes before the provided snippet. The `efi_info` structure should be initialized with default values, or at least, with values that are valid for the context in which this code is being executed. 
+
+For instance:
+```c
+if (current_ei == NULL) {
+    // handle the error, for example:
+    return -EINVAL;
+}
+if (current_ei->efi_memmap_size != 0) {
+    // only access efi_memmap_size when it's initialized
+}
+```
+ORIGINAL CODE:
+```c
+struct efi_info *current_ei = &boot_params.efi_info;
+struct efi_info *ei = &params->efi_info;
+
+if (!current_ei->efi_memmap_size)
+    return 0;
+
+/*

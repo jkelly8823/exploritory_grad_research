@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION: 
+Potential use-after-free vulnerability.
+
+EXPLANATION: 
+In the provided code snippet, there is a purge of `sk_receive_queue` and `sk_write_queue` using `__skb_queue_purge`. However, after the purge, there is a check for `sk->sk_send_head`, which might be referencing memory that has been freed as a result of purging the queue. This could potentially lead to a use-after-free vulnerability if `sk->sk_send_head` is null-checked without properly locking the structure to prevent concurrent access, which might be present but not shown in this code snippet.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, a lock should be held to prevent concurrent access to the socket. Additionally, before checking or using `sk->sk_send_head`, it should be checked if it is null to prevent dereferencing freed memory. 
+
+```c
+spin_lock_bh(&sk->sk_lock.depth);
+if (sk->sk_send_head != NULL) {
+    // access or use sk->sk_send_head
+}
+spin_unlock_bh(&sk->sk_lock.depth);
+```
+It's essential to ensure proper synchronization mechanisms and checks to prevent access to freed memory.
+
+ORIGINAL CODE:
+```
+{
+	struct inet_connection_sock *icsk = inet_csk(sk);
+	struct inet_sock *inet = inet_sk(sk);
+	int err = 0;
+	const int old_state = sk->sk_state;
+
+	if (old_state != DCCP_CLOSED)
+		sk->sk_err = ECONNRESET;
+
+	dccp_clear_xmit_timers(sk);
+
+	__skb_queue_purge(&sk->sk_receive_queue);
+	__skb_queue_purge(&sk->sk_write_queue);
+	if (sk->sk_send_head != NULL) {
+```

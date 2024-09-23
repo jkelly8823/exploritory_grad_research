@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 84-104, 109-113, 118-122
+VULNERABILITY_DESCRIPTION: 
+Uncontrolled or indirect memory access due to incorrect usage of user-access functions, leading to potential data corruption or information disclosure.
+
+EXPLANATION:
+The provided code snippet seems to handle user access to memory. However, there are several areas where the usage of user-access functions may lead to uncontrolled or indirect memory access.
+
+In functions `allow_user_access`, `prevent_user_access_return`, and `restore_user_access`, the `set_kuap` function is called with unvalidated `flags` or `value` parameters. While the values seem to be validated in certain cases, the fact that these values are being directly passed to `set_kuap` raises concerns. If an attacker is able to manipulate these values, they could potentially bypass memory access controls.
+
+Moreover, the `static_branch_unlikely(&uaccess_flush_key)` function seems to be used to determine whether `do_uaccess_flush` should be called. However, this check seems to be based on a branch predictor, which might not always be reliable. If this prediction fails, an attacker could potentially exploit this to execute malicious code.
+
+Furthermore, the `get_kuap` and `set_kuap` functions are used extensively throughout the code, and their usage may lead to incorrect memory access. However, without the definition of these functions, it is hard to provide a definitive assessment.
+
+Lastly, although not explicitly related to memory access, the `isync()` function call seems to be out of place and could potentially be used by an attacker to inject malicious code.
+
+RECOMMENDATIONS:
+1. Validate parameters before passing them to `set_kuap` to ensure they are within expected ranges.
+2. Implement additional checks and balances for `static_branch_unlikely(&uaccess_flush_key)` to ensure its predictions are accurate.
+3. Use secure coding practices for memory access, such as bounds checking and proper handling of user-provided data.
+4. Review the usage of `isync()` and determine if it is required in this context.
+5. Provide clear definitions for `get_kuap` and `set_kuap` functions to ensure proper usage.
+
+ORIGINAL CODE: (original code has been truncated for brevity)
+```
+static __always_inline void allow_user_access(void __user *to, const void __user *from,
+					      unsigned long size, unsigned long dir)
+{
+	// This is written so we can resolve to a single case at build time
+				       unsigned long size, unsigned long dir)
+{
+	set_kuap(AMR_KUAP_BLOCKED);
+	if (static_branch_unlikely(&uaccess_flush_key))
+		do_uaccess_flush();
+}
+
+static inline unsigned long prevent_user_access_return(void)
+{
+	unsigned long flags = get_kuap();
+
+	set_kuap(AMR_KUAP_BLOCKED);
+	if (static_branch_unlikely(&uaccess_flush_key))
+		do_uaccess_flush();
+
+	return flags;
+}
+
+static inline void restore_user_access(unsigned long flags)
+{
+	set_kuap(flags);
+	if (static_branch_unlikely(&uaccess_flush_key) && flags == AMR_KUAP_BLOCKED)
+		do_uaccess_flush();
+}
+```

@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION: 
+This vulnerability involves a potential integer overflow and/or incorrect value assignment error.
+
+EXPLANATION:
+The provided code uses the `strict_strtoul` function to parse the `buf` input into an unsigned long integer (`profile`). However, there is no validation for the upper bound of the value returned by `strtoul`, except that it checks if the value of `profile` is greater than 4 and stops execution if it does. But prior to that there's also absence of value zero check (common use case). The risk here lies in missing the verification if the `strtoul` function successfully returned the result and there are no bounds check other than the hardcoded value 4.
+
+
+RECOMMENDATIONS:
+We should implement a more robust validation on `profile` after calling `strict_strtoul`. Some possible improvements include:
+
+* Handling `errno` checks for all scenarios including, but not limited to, underflow, overflow, and invalid parameter. This could help diagnose any issues relating to converting strings to longs.
+
+```c
+retval = strict_strtoul(buf, 10, &profile);
+if (retval != 0) {
+    if (retval == -EINVAL) {
+        return -EINVAL;  // also known as ERANGE - value too large for defined data type
+    } else if (retval == -ERANGE) {
+        return -ERANGE;
+    }
+}
+```
+
+* Check for all acceptable values for `profile`. A non-zero value check also, for common cases:
+
+```c
+if (profile > 4 || profile < 0 || profile == 0) {
+    return -EINVAL;
+}
+```
+
+
+ORIGINAL CODE:
+```c
+koneplus = hid_get_drvdata(dev_get_drvdata(dev));
+usb_dev = interface_to_usbdev(to_usb_interface(dev));
+
+retval = strict_strtoul(buf, 10, &profile);
+if (retval)
+    return retval;
+
+if (profile > 4)
+```

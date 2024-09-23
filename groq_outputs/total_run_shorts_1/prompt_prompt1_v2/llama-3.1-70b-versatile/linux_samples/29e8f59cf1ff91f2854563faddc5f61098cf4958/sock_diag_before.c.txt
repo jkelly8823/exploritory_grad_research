@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+Insecure Capability Check
+
+EXPLANATION:
+The given code performs a capability check to determine if the current process is authorized to perform a network administration task. However, the capability check is based on the network namespace's user namespace, rather than the process's capability. This may allow a process to bypass the capability check if it is running in a different network namespace.
+
+The `ns_capable` function checks if the process has a certain capability within the specified namespace. In this case, it is checking for the `CAP_NET_ADMIN` capability in the network namespace's user namespace. However, it is possible that the process has the capability in a different namespace, which would not be checked here.
+
+To further exacerbate the issue, there is no additional validation to determine the effectiveness of the check, such as a corresponding `security_capable` call, which would check the process's capability across all user namespaces.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use `security_capable` instead of `ns_capable` to check for the capability across all user namespaces. This will ensure that the capability check is not bypassed by the process running in a different network namespace.
+
+```c
+if (!security_capable(CAP_NET_ADMIN)) {
+    nla_reserve(skb, attrtype, 0);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+}
+EXPORT_SYMBOL_GPL(sock_diag_put_meminfo);
+
+int sock_diag_put_filterinfo(struct sock *sk,
+			     struct sk_buff *skb, int attrtype)
+{
+	struct sock_fprog_kern *fprog;
+	struct sk_filter *filter;
+	unsigned int flen;
+	int err = 0;
+
+	if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)) {
+		nla_reserve(skb, attrtype, 0);
+		return 0;
+	}
+```

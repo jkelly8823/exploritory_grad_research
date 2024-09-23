@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17
+VULNERABILITY_DESCRIPTION:
+Potential memory double-free vulnerability.
+
+EXPLANATION:
+In the function `mt76_rx_release_amsdu`, a check is performed to determine if theskb buffer contains a LLC/SNAP header in the location of the destinationaddress. If this condition is met, the function `dev_kfree_skb(skb)` is called, whichfrees the skb buffer. However, if this condition is not met, the skb buffer is addedto the queue `dev->rx_skb[q]` using `__skb_queue_tail(&dev->rx_skb[q], skb)`. If theskb buffer is not freed in the first condition and later removed from the queue andfreed again, this could result in a double-free vulnerability.
+
+Additionally, if the skb buffer is not freed in the first condition but later accessed or freed incorrectly, this could also lead to undefined behavior.
+
+RECOMMENDATIONS:
+To address this potential vulnerability, it is recommended to add a check to ensurethat the skb buffer is not freed twice. One way to do this is to set the skb buffer to NULL after it is freed, so that any subsequent frees will not attempt to free the same memory location again. Here is an example of how this can be done:
+
+```c
+if (ether_addr_equal(skb->data + offset, rfc1042_header)) {
+    dev_kfree_skb(skb);
+    skb = NULL;  // Set skb to NULL after freeing
+    return;
+}
+```
+
+Another recommendation is to ensure that the skb buffer is properly initialized and validated before it is used. This includes checking for any errors or invalid states that may occur when the skb buffer is created or processed.
+
+ORIGINAL CODE:
+```c
+static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
+{
+    struct sk_buff *skb = phy->rx_amsdu[q].head;
+    struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
+    struct mt76_dev *dev = phy->dev;
+
+    phy->rx_amsdu[q].head = NULL;
+    phy->rx_amsdu[q].tail = NULL;
+
+    /*
+     * Validate if the amsdu has a proper first subframe.
+     * A single MSDU can be parsed as A-MSDU when the unauthenticated A-MSDU
+     * flag of the QoS header gets flipped. In such cases, the first
+     * subframe has a LLC/SNAP header in the location of the destination
+     * address.
+     */
+    if (skb_shinfo(skb)->frag_list) {
+        int offset = 0;
+
+        if (!(status->flag & RX_FLAG_8023)) {
+            offset = ieee80211_get_hdrlen_from_skb(skb);
+
+            if ((status->flag &
+                 (RX_FLAG_DECRYPTED | RX_FLAG_IV_STRIPPED)) ==
+                RX_FLAG_DECRYPTED)
+                offset += 8;
+        }
+
+        if (ether_addr_equal(skb->data + offset, rfc1042_header)) {
+            dev_kfree_skb(skb);
+            return;
+        }
+    }
+    __skb_queue_tail(&dev->rx_skb[q], skb);
+}
+
+static void mt76_rx_release_burst(struct mt76_phy *phy, enum mt76_rxq_id q,
+```

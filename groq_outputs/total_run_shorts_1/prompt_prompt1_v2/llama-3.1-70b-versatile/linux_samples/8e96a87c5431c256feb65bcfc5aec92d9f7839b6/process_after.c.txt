@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-14
+VULNERABILITY_DESCRIPTION:
+ Buffer Clear Vulnerability
+
+EXPLANATION:
+ The code snippet found has a buffer-clear vulnerability. It clears some registers using memset but leaves other registers untouched. This can potentially lead to unintended behavior and security issues. Specifically, the registers 'gpr', 'ctr', 'link', and 'xer' are cleared, but the code doesn't seem to reset other registers.
+
+ The memset operation or explicit register clears only reset 'regs->gpr' with size 'sizeof(regs->gpr)'. However, 'regs->ctr', 'regs->link', and 'regs->xer' are also explicitly reset manually to 0. But registers that might exist in 'regs' beyond 'gpr', 'ctr', 'link', and 'xer' are not reset.
+
+ Additionally, this specific problem exists if 'regs' has different registers. For instance, PowerPC SPE, VMX, VSX or AltiVec registers that might hold different addresses and so on that a process can execute with potentially sensitive data. If structures exist within that register that keep data sensitive or function pointers inside them this might lead to vulnerability situations and such memory can be considered as tainted data.
+
+RECOMMENDATIONS:
+ To resolve the identified issue, we suggest initializing (zeros) or clearing all the registers of the 'regs' data structure after 'regs' gets loaded.
+
+ Instead of only zeroing specific registers and executing memset in some part of the structure. All referenced items that belong to 'regs' data structure should have their contents explicitly set to zero or a safe value to avoid leaving sensitive data on the registers.
+An example fix could be implementing a loop to efficiently zero all the referenced areas.
+```C
+// Recommended initial fix example
+for(int i=0; i < sizeof(structregs_struc)/sizeof(regs_struc.element_type); i++){
+    memset(&regs[i], 0, sizeof(regs_struc.element_type));
+}
+```
+
+ Moreover, be cautious about the definition of 'regs' struct in the implementation file to be able to know the fields accurately that are involved and should be cleared.
+
+ORIGINAL CODE:
+
+    current->thread.regs = regs - 1;
+    }
+
+#ifdef CONFIG_PPC_TRANSACTIONAL_MEM
+    /*
+     * Clear any transactional state, we're exec()ing. The cause is
+     * not important as there will never be a recheckpoint so it's not
+     * user visible.
+     */
+    if (MSR_TM_SUSPENDED(mfmsr()))
+        tm_reclaim_current(0);
+#endif
+
+    memset(regs->gpr, 0, sizeof(regs->gpr));
+    regs->ctr = 0;
+    regs->link = 0;
+    regs->xer = 0;

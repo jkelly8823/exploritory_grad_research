@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+The code has a potential vulnerability in that it does not check the error code returned from copy_from_user before using the data.
+
+EXPLANATION:
+The code uses copy_from_user, which is a kernel function that can potentially return an error, but it does not check the result immediately after the function call. If an error occurs, it sets err to 0 and then ORs the result of copy_from_user into err. This means that if a partial copy occurs, it will not be immediately apparent. This can lead to the use of partially overwritten or corrupted data.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should check the return value of copy_from_user and handle any errors that occur. Here is an example of how to do this:
+
+    int err;
+    u32 cp;
+
+    memset(&arg64, 0, sizeof(arg64));
+    err = 0;
+    err = copy_from_user(&arg64.LUN_info, &arg32->LUN_info, sizeof(arg64.LUN_info));
+    if (err != 0) {
+        // Handle error condition here
+    }
+
+Alternatively, you could also check the value of err after the OR assignment to see if an error occurred:
+
+    int err;
+    u32 cp;
+
+    memset(&arg64, 0, sizeof(arg64));
+    err = 0;
+    err |= copy_from_user(&arg64.LUN_info, &arg32->LUN_info, sizeof(arg64.LUN_info));
+    if (err != 0) {
+        // Handle error condition here
+    }
+
+ORIGINAL CODE:
+	int err;
+	u32 cp;
+
+	memset(&arg64, 0, sizeof(arg64));
+	err = 0;
+	err |=
+	    copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
+			   sizeof(arg64.LUN_info));

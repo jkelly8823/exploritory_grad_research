@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-14
+VULNERABILITY_DESCRIPTION:
+The provided code snippet has a memory leak and uses a deprecated catch mechanism for exceptions, which can cause undefined behavior.
+
+EXPLANATION:
+The code opens a file, allocates memory to read its contents, and reads the file into the allocated memory. However, in the event of an exception, the memory allocated for the file buffer is not freed, causing a memory leak. Additionally, the code uses `throw "Unable to open file " + filename;` and `throw str;` to re-throw exceptions. These exceptions are of type `const char*` but are being caught with a deprecated `(char *str)` and `(const char *)`, respectively. This can lead to undefined behavior, and the recommended approach is to use `std::string` or `std::exception` for exception handling.
+
+RECOMMENDATIONS:
+- Always free allocated memory in all possible execution paths using `delete[]` or a smart pointer like `std::unique_ptr`.
+- Instead of throwing `const char*`, consider using `std::runtime_error` or a custom exception class that inherits from `std::exception`.
+- Remove the deprecated catch `(char *str)` and replace it with `(const std::exception& e)` to ensure that all exceptions are handled correctly.
+- Prefer `std::string` over C-style strings to avoid memory management issues.
+
+ORIGINAL CODE:
+```
+char* readFile (char *filename) {
+    try {
+        // open input file
+        ifstream infile;
+        infile.open(filename);
+        if (!infile.is_open()) {throw "Unable to open file " + filename;}
+        // get length of file
+        infile.seekg (0, ios::end);int length = infile.tellg();infile.seekg (0, ios::beg);
+        // allocate memory
+        char *buffer = new char [length];
+        // read data from file
+        infile.read (buffer,length);
+        if (!infile.good()) {throw "Unable to read from file " + filename;}infile.close();
+        return buffer;
+    }catch (char *str) {printf("Error: %s \n", str);infile.close();throw str;}catch (...) {printf("Error occurred trying to read from file \n");infile.close();throw;}
+}
+```

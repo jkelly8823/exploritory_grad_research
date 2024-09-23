@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 157, 158
+VULNERABILITY_DESCRIPTION: Potential Information Leak due to Unhandled Error Conditions in dln2_gpio_event function
+
+EXPLANATION:
+In the dln2_gpio_event function, the switch-case statement does not have a default branch. This means that if dln2->irq_type[pin] does not match any of the cases, the function will silently exit without handling the event. This could potentially lead to an information leak because the function does not return an error code to the caller, and the caller may assume that the event was handled successfully.
+
+In addition, the function does not check the return value of the generic_handle_irq function, which means that if this function fails, the error will not be propagated to the caller.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a default branch should be added to the switch-case statement to handle unexpected values of dln2->irq_type[pin]. Additionally, the return value of generic_handle_irq should be checked and an error code should be returned to the caller if the function fails.
+
+Here is an updated version of the dln2_gpio_event function that addresses this vulnerability:
+```c
+static void dln2_gpio_event(struct platform_device *pdev, u16 echo,
+			    const void *data, int len)
+{
+    ...
+	switch (dln2->irq_type[pin]) {
+	case DLN2_GPIO_EVENT_CHANGE_RISING:
+		if (event->value) {
+			int ret = generic_handle_irq(irq);
+			if (ret) {
+				dev_err(dev, "failed to handle irq: %d\n", ret);
+			}
+		}
+		break;
+	default:
+		dev_err(dev, "unknown irq type: %d\n", dln2->irq_type[pin]);
+	}
+    ...
+}
+```
+ORIGINAL CODE:
+Please note that the code you provided is incomplete and does not include the entire dln2_gpio_event function. However, based on the code you did provide, the updated version above should address the potential information leak due to unhandled error conditions in the function.

@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+Memory leak in error handling.
+
+EXPLANATION:
+In the given code snippet, memory is allocated using `kzalloc` for the `match` struct. However, if an error occurs after the memory allocation and before the `list_add` and assignment to `match->handle` and `match->band`, the allocated memory is not freed. This will result in a memory leak.
+
+RECOMMENDATIONS:
+To fix this issue, it's recommended to add a check to free the allocated memory for `match` in the error handling path.
+
+i.e., add the following code before the `goto err_delete;` statement when the allocation fails:
+
+```c
+if (!match) {
+    err = -ENOMEM;
+    goto err_delete;
+}
+```
+ should be modified to:
+
+```c
+if (!match) {
+    err = -ENOMEM;
+    // Add the freeing of match here if it is allocated previously
+    if(match)
+        kfree(match);
+    goto err_delete;
+}
+```
+Additionally, before the `err_delete` label, you should also add a check to free the `match` if it's already allocated but not yet added to the list. This ensures that the memory is freed in all error paths.
+
+```c
+err_delete:
+if (match && !list_empty(&match->list))
+    list_del(&match->list);
+if(match)
+    kfree(match);
+nfp_abm_u32_knode_delete(alink, knode);
+return err;
+```
+ORIGINAL CODE:
+```c
+u8 mask, val;
+int err;
+
+if (!nfp_abm_u32_check_knode(alink->abm, knode, proto, extack)) {
+    err = -EOPNOTSUPP;
+    goto err_delete;
+}
+
+tos_off = proto == htons(ETH_P_IP) ? 16 : 20;
+
+    /* Extract the DSCP Class Selector bits */
+        if ((iter->val & cmask) == (val & cmask) &&
+            iter->band != knode->res->classid) {
+            NL_SET_ERR_MSG_MOD(extack, "conflict with already offloaded filter");
+            err = -EOPNOTSUPP;
+            goto err_delete;
+        }
+    }
+
+if (!match) {
+    match = kzalloc(sizeof(*match), GFP_KERNEL);
+    if (!match) {
+        err = -ENOMEM;
+        goto err_delete;
+    }
+
+    list_add(&match->list, &alink->dscp_map);
+}
+match->handle = knode->handle;
+match->band = knode->res->classid;
+
+err_delete:
+nfp_abm_u32_knode_delete(alink, knode);
+return err;
+}
+
+static int nfp_abm_setup_tc_block_cb(enum tc_setup_type type,
+                    void *type_data, void *cb_priv)
+```

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+
+VULNERABILITY_DESCRIPTION:
+The code does not properly check if the skb pointer is NULL before attempting to access its member 'len' and calling the function dev_kfree_skb_irq(skb).
+
+EXPLANATION:
+The skb pointer is initially checked if it is not NULL before proceeding with the operations inside the if condition. However, if the skb pointer is not NULL, it is immediately freed using the function dev_kfree_skb_irq(skb). Subsequent access to the skb pointer after freeing it is undefined behavior and may result in a crash or unexpected behavior.
+
+In this specific code snippet, the potential problem is not immediately obvious since we don't see the call to skb->len after it's freed. However, accessing the freed memory skb->len could result in a segmentation fault or data corruption if executed out of order. 
+
+RECOMMENDATIONS:
+To prevent this vulnerability, we can reorder the operations so that skb->len is accessed before skb is freed. We should do the following:
+
+```c
+		if (skb) {
+			dev->stats.tx_packets++;
+			u32 length = skb->len;
+			if (length != 0) {
+				dev->stats.tx_bytes += length;
+			}
+			dev_kfree_skb_irq(skb);
+			info->skb = NULL;
+		}
+```
+By doing this, we ensure that skb->len is accessed before skb is freed, and we can also check for potential issues where skb->len is 0 or an invalid value.
+
+ORIGINAL CODE:
+```c
+		if (skb) {
+			dev->stats.tx_packets++;
+			dev->stats.tx_bytes += skb->len;
+			dev_kfree_skb_irq(skb);
+			info->skb = NULL;
+		}
+
+		idx = (idx + 1) % ACE_TX_RING_ENTRIES(ap);
+```

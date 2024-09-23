@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 30-32
+VULNERABILITY_DESCRIPTION: Execution of unvalidated system commands, allowing for Command Injection vulnerability.
+EXPLANATION:
+The `run_ping` function calls `subprocess.call` with a system command that includes an IP address validated by the `validate_ip` function. However, the `validate_ip` function does not protect against IP addresses containing spoofed packets or malicious hostnames. Furthermore, the ping function may be subject to exploitation based on the specifics of how ping handles the address, which may be nonstandard depending on platform or version. A malicious actor could potentially execute arbitrary operating system commands by crafting specific IP addresses that, when used as arguments, could lead to unintended command execution.
+
+RECOMMENDATIONS:
+The recommended approach is to validate and sanitize the input IP address further to prevent IP addresses from being used as vectors for command injection attacks. An improvement could also involve using a safer API for pinging IP addresses that are part of a standard networking library, rather than relying on the ping command directly.
+
+```python
+# modified version could use the python buildin socket library for better safety
+import socket
+
+def ping_ip(ip):
+    # Try to establish a TCP connection to port 1
+    # If successful, this is similar to pinging, but can run in user space
+    try:
+        s = socket.socket()
+        s.settimeout(0.2)
+        s.connect((ip, 1))
+        print(f'IP {ip} is reachable')
+        s.close()
+    except socket.error:
+        print(f'IP {ip} is not reachable')
+```
+
+ORIGINAL CODE:
+
+```python
+import subprocess
+
+def validate_ip(ip: str):
+    split_ip = ip.split('.')
+    if len(split_ip) > 4 or len(split_ip) == 0:
+        raise ValueError("Invalid IP length")
+
+    for octet in split_ip:
+        try:
+            int(octet, 10)
+        except ValueError as e:
+            raise ValueError(f"Cannot convert IP octet to int - {e}")
+
+    return ip
+
+def run_ping(ip: str):
+    validated = validate_ip(ip)
+    result = subprocess.call(["ping", validated])
+    print(result)
+```

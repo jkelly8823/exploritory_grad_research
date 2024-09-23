@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+Potential permission escalation vulnerability through unchecked CAP_SYS ADMIN capability and potential integer underflow due to unchecked bit mask operation.
+
+EXPLANATION:
+This vulnerability arises due to the potential misuse of the CAP_SYS_ADMIN capability. In Linux, CAP_SYS_ADMIN is responsible for many critical operations and can be used for privilege escalation. 
+
+However, the code used here seems secure initially, but there is still potential for exploitability. If the conditions are crafted carefully to bypass this permission check (i.e., there is another way to enable ftrace without being root), an attacker may be able to execute the subsequent code blocks without adequate permissions.
+
+Moreover, on line 5, an unchecked bit mask operation is performed with the 'sample_type' attribute. If 'sample_type' contains values outside the valid bit mask, the operation could lead to unexpected results due to the bit masking rules, resulting in possible incorrect or unintended results.
+
+RECOMMENDATIONS:
+To avoid potential permission escalation vulnerability and ensure the bit masking operation does not result in any unexpected results:
+- Implement a robust CAP_SYS_ADMIN validation to prevent exploitation and privilege escalation.
+- Verify the valid range and values of 'sample_type' before performing bit masking operations to avoid unexpected behavior.
+- Improve the error checking and exception handling to handle unforeseen situations.
+- Rework the conditions to mitigate the risk of bypassing permission checks.
+
+ORIGINAL CODE:
+{
+	/* The ftrace function trace is allowed only for root. */
+	if (ftrace_event_is_function(tp_event) &&
+	    perf_paranoid_tracepoint_raw() && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	/* No tracing, just counting, so no obvious leak */
+	if (!(p_event->attr.sample_type & PERF_SAMPLE_RAW))

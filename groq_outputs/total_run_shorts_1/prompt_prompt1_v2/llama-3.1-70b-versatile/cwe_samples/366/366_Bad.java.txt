@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a race condition where the variable 'foo' is accessed by multiple threads without proper synchronization.
+
+EXPLANATION:
+The provided code creates a new thread and immediately sets the value of 'foo' to 1 in the main thread. However, the thread 'Threader' tries to print the value of 'foo'. Since there is no guarantee on the order of execution between these two threads, it is possible for the main thread to set 'foo' to 1 before the 'Threader' thread tries to print it, but it is also possible for the 'Threader' thread to try to print 'foo' before the main thread sets it to 1. This can result in unpredictable behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, synchronization should be used to ensure that 'foo' is not accessed until it has been initialized to the desired value. This can be achieved by using the 'synchronized' keyword or using a 'Lock' object. An example of how the code could be fixed is:
+
+```java
+public class Race {
+    static int foo = 0;
+    static Object lock = new Object();
+
+    public static void main() {
+        synchronized (lock) {
+            new Threader().start();
+            try {
+                lock.wait();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    public static class Threader extends Thread {
+        @Override
+        public void run() {
+            synchronized (lock) {
+                foo = 1;
+                lock.notifyAll();
+            }
+            System.out.println(foo);
+        }
+    }
+}
+```
+This code ensures that 'foo' is set to 1 before it is printed, eliminating the possibility of a race condition.
+
+ORIGINAL CODE:
+
+```java
+public class Race {
+    static int foo = 0;
+    public static void main() {
+        new Threader().start();
+        foo = 1;
+    }
+    public static class Threader extends Thread {
+        public void run() {
+            System.out.println(foo);
+        }
+    }
+}
+```

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 17
+VULNERABILITY_DESCRIPTION:
+Potential Denial of Service (DoS) vulnerability via overly permissive line length.
+
+EXPLANATION:
+The code sets `_MAXLINE` to 8192, which is more than 8 times larger than the recommended value in RFC 821. This value is then used as a limit for reading lines from the SMTP server response. However, it does not correctly handle the case where a line exceeds this limit, but is still within the allowed range of `_MAXLINE + 1`. In this scenario, a line length check is performed, but an exception is raised with a generic 500 error code instead of a more specific error code. Furthermore, this code also allows for data to be read beyond the specified `_MAXLINE` value when `self.file.readline(_MAXLINE + 1)` is called.
+
+RECOMMENDATIONS:
+To prevent potential DoS attacks, we recommend that the code be modified to handle overly long lines more robustly. Specifically, we suggest:
+
+* Increase the `_MAXLINE` limit to a more reasonable value and actually enforce it by ensuring that `self.file.readline(_MAXLINE + 1)` is not called.
+* Handle cases where lines exceed the `_MAXLINE` value more specifically, raising an error that is more informative about the problem that occurred.
+
+ORIGINAL CODE:
+```python
+SMTP_SSL_PORT = 465
+CRLF = "\r\n"
+bCRLF = b"\r\n"
+_MAXLINE = 8192 # more than 8 times larger than RFC 821, 4.5.3
+
+OLDSTYLE_AUTH = re.compile(r"auth=(.*)", re.I)
+
+# Exception classes used by this module.
+            self.file = self.sock.makefile('rb')
+        while 1:
+            try:
+                line = self.file.readline(_MAXLINE + 1)
+            except socket.error as e:
+                self.close()
+                raise SMTPServerDisconnected("Connection unexpectedly closed: "
+                                             + str(e))
+                raise SMTPServerDisconnected("Connection unexpectedly closed")
+            if self.debuglevel > 0:
+                print('reply:', repr(line), file=stderr)
+            if len(line) > _MAXLINE:
+                raise SMTPResponseException(500, "Line too long.")
+            resp.append(line[4:].strip(b' \t\r\n'))
+            code = line[:3]
+            # Check that the error code is syntactically correct.
+            # Don't attempt to read a continuation line if it is broken.
+```

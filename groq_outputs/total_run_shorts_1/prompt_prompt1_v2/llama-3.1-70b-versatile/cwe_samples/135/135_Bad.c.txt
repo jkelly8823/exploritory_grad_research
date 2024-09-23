@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION: 
+ Integer overflow vulnerability in memory allocation due to signed integer arithmetic. 
+
+EXPLANATION:
+The code has multiple attempts at allocating memory for `newString` and in the final correct allocation line (line 9), the `wcslen` function is used to determine the length of `wideString`. The `wcslen` function returns the number of wide characters in the string, not the number of bytes. The multiplication by `sizeof(wchar_t)` correctly calculates the total size in bytes. However, in the lines above, different methods of calculating the memory size were used, and a signed integer arithmetic mistake was made by not adding one to include the memory needed for the null terminator in the memory allocation.
+
+The initial allocation attempt used `strlen` which is incorrect as it works on bytes, not wide characters. The next two allocation attempts were incorrect as they used `wcslen` but it returns the number of wide characters without including the null terminator, so it was multiplied by `sizeof(wchar_t)`. 
+
+The successful attempt multiplies the result of `wcslen(wideString)` by the size of a wide character, then adds 1 to account for the null terminator, preventing integer overflow. 
+
+However, between the different allocations, a mistake could be made in an actual application, as comments might get confused or removed.
+
+RECOMMENDATIONS:
+1) Ensure correct handling of wide character arithmetic in the allocation and perform a sanity check.
+2) Include a space between the first two `#include` statements and use header guard.
+3) Reduce repetitions in allocation attempts by accepting best practice immediately.
+4) Maintain knowledge that `wcslen` returns the count of the wide characters, and the size of this in bytes may be `wcslen * sizeof(wchar_t)`.
+5) Ensure code quality by following the best practices (extracted in many guidelines as examples provided online) by any companies. Not everything seen can be trusted and so must make sure safe to include any possible outcome.
+
+ORIGINAL CODE:
+```c
+#include <stdio.h>#include <strings.h>#include <wchar.h>
+int main() {
+    
+wchar_t wideString[] = L"The spazzy orange tiger jumped " \"over the tawny jaguar.";wchar_t *newString;
+printf("Strlen() output: %d\nWcslen() output: %d\n",strlen(wideString), wcslen(wideString));
+/* Wrong because the number of chars in a string isn't related to its length in bytes //newString = (wchar_t *) malloc(strlen(wideString));*/
+/* Wrong because wide characters aren't 1 byte long! //newString = (wchar_t *) malloc(wcslen(wideString));*/
+/* Wrong because wcslen does not include the terminating null */newString = (wchar_t *) malloc(wcslen(wideString) * sizeof(wchar_t));
+/* correct! */newString = (wchar_t *) malloc((wcslen(wideString) + 1) * sizeof(wchar_t));
+/* ... */
+```
+Changes may be implemented at several points but should still stay between # and 13 of the above line number locations. The actual change required to mitigate vulnerability in this application for actual problems is single correct memory allocation.

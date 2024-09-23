@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Unvalidated Use of KVM Para Feature
+
+EXPLANATION:
+The code uses the `kvm_para_has_feature` function to check for the existence of the `KVM_FEATURE_NOP_IO_DELAY` feature. However, it does not validate the result of the feature availability check before assigning a function pointer to `pv_cpu_ops.io_delay`. This function pointer is likely used for input/output (IO) operations, and if the feature is not available, using this function pointer can result in undefined behavior.
+
+If the `KVM_FEATURE_NOP_IO_DELAY` feature is not present, but the function pointer is assigned anyway, it can lead to a crash or unintended behavior when the `pv_cpu_ops.io_delay` function is called.
+
+RECOMMENDATIONS:
+The code should validate the result of the `kvm_para_has_feature` function and ensure that the feature is available before assigning the function pointer. If the feature is not available, an alternative implementation or error handling mechanism should be implemented.
+
+A possible fix could be:
+
+```c
+if (kvm_para_has_feature(KVM_FEATURE_NOP_IO_DELAY)) {
+    pv_cpu_ops.io_delay = kvm_io_delay;
+} else {
+    // Handle the case where KVM_FEATURE_NOP_IO_DELAY is not available
+    // For example, use a different implementation or log an error
+}
+```
+
+ORIGINAL CODE:
+```c
+static void __init paravirt_ops_setup(void)
+{
+	pv_info.name = "KVM";
+	pv_info.paravirt_enabled = 1;
+
+	if (kvm_para_has_feature(KVM_FEATURE_NOP_IO_DELAY))
+		pv_cpu_ops.io_delay = kvm_io_delay;
+}
+```

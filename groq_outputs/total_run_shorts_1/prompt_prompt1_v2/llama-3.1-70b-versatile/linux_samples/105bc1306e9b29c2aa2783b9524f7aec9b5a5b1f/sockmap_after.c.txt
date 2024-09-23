@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 11-12
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability in the `consume_skb` function calls, and a Double Free vulnerability in the `consume_skb` and `kfree` functions.
+
+EXPLANATION:
+The code snippet contains two potential vulnerabilities. The first is a Use After Free vulnerability. In the `consume_skb` function calls, the `skb` is being consumed after the `md` pointer has been either processed in a loop and its memory possibly freed or explicitly freed with `kfree`. However, the `consume_skb` function is called without checking if `md->skb` is still valid. 
+
+The second potential vulnerability is a Double Free vulnerability in the same two `consume_skb` and `kfree` function calls. The `consume_skb` function call sets the `skb` pointer to null and frees the memory it points to, but later, `kfree(md)` is called on the `md` pointer. This may not result in a double free if the consume_skb sets md->skb to null and also frees md->skb but if not, it can cause undefined behavior.
+
+RECOMMENDATIONS:
+To fix these potential vulnerabilities, the following recommendations should be followed:
+1. Ensure that `consume_skb(md->skb)` is not called after `md` has been freed or is about to be freed.
+2. Add checks to verify if `md->skb` is valid before calling `consume_skb(md->skb)`.
+3. Set `md->skb = NULL` after calling `consume_skb(md->skb)` to prevent any potential double frees.
+4. Remove any calls to free `md` when it has already been freed by `consume_skb`, assuming consume_skb sets md->skb to null.
+
+ORIGINAL CODE:
+
+```c
+	if (i == MAX_SKB_FRAGS)
+		i = 0;
+	}
+	consume_skb(md->skb);
+
+	return free;
+}
+
+
+		if (!sg->length && md->sg_start == md->sg_end) {
+			list_del(&md->list);
+			consume_skb(md->skb);
+			kfree(md);
+		}
+	}
+```

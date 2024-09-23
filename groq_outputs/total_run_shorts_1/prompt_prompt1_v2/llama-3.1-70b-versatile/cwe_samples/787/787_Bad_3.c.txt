@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-14, 18-19
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow vulnerability. The `dst_buf` is allocated with a fixed size (`4*sizeof(char) * MAX_SIZE`), but the loop copies characters from the `user_supplied_string` without checking the length of the output. If the output length exceeds the allocated buffer size, it will cause a buffer overflow, which can lead to arbitrary code execution.
+
+EXPLANATION:
+The vulnerability arises from the fact that the `dst_buf` is allocated with a fixed size, but the loop copies characters from the `user_supplied_string` without checking the length of the output. If the `user_supplied_string` contains multiple '&' or '<' characters, the output length will exceed the allocated buffer size. This can lead to a buffer overflow, which can cause the program to crash or execute arbitrary code. Additionally, the code does not check if the `malloc` call succeeds, which can lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following changes are recommended:
+1. Check the output length before copying characters to the `dst_buf`. This can be done by keeping a counter of the output length and checking if it exceeds the allocated buffer size.
+2. Use a dynamically allocated buffer that can grow as needed, such as a `malloc` call with a dynamically calculated size.
+3. Check the return value of the `malloc` call to ensure that it succeeds.
+4. Consider using a safer string handling function, such as `snprintf` or `strcpy_s`, that can prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+char * copy_input(char *user_supplied_string){
+    int i, dst_index;
+    char *dst_buf = (char*)malloc(4*sizeof(char) * MAX_SIZE);
+    if ( MAX_SIZE <= strlen(user_supplied_string) ){
+        die("user string too long, die evil hacker!");
+    }
+    dst_index = 0;
+    for ( i = 0; i < strlen(user_supplied_string); i++ ){
+        if( '&' == user_supplied_string[i] ){
+            dst_buf[dst_index++] = '&';
+            dst_buf[dst_index++] = 'a';
+            dst_buf[dst_index++] = 'm';
+            dst_buf[dst_index++] = 'p';
+            dst_buf[dst_index++] = ';';
+        }else if ('<' == user_supplied_string[i] ){
+            /* encode to &lt; */
+        }else
+            dst_buf[dst_index++] = user_supplied_string[i];
+    }
+    return dst_buf;
+}
+```

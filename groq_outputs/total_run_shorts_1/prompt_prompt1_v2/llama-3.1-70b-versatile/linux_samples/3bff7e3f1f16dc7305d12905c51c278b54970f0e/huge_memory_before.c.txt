@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-18
+VULNERABILITY_DESCRIPTION: Lack of input validation for the reuse_swap_page function may lead to incorrect reuse of a page in memory management.
+
+EXPLANATION:
+The reuse_swap_page function is called on the page, and if it returns true, the code proceeds to reuse the page. However, there is no validation on the return value of reuse_swap_page. This function could potentially return true even when the page is not safe to be reused, leading to data corruption. 
+
+Furthermore, the pmd_mkyoung and maybe_pmd_mkwrite functions are called on the orig_pmd without validating the results, potentially leading to unintended behavior.
+
+RECOMMENDATIONS:
+The return value of the reuse_swap_page function should be validated to ensure that the page is safe to reuse before proceeding. 
+
+```c
+	if (reuse_swap_page(page) && !page_is_valid_to_reuse(page)) {
+		// page reuse failed, proceed to the fallback option
+		goto fallback;
+	}
+```
+
+Additionally, input validation should be performed on the orig_pmd before passing it to pmd_mkyoung and maybe_pmd_mkwrite.
+
+```c
+	pmd_t entry;
+	if (!pmd_valid(orig_pmd)) {
+		// invalid pmd value, proceed to the fallback option
+		goto fallback;
+	}
+	entry = pmd_mkyoung(orig_pmd);
+	if (!pmd_valid(entry)) {
+		// invalid entry value, proceed to the fallback option
+		goto fallback;
+	}
+	entry = maybe_pmd_mkwrite(pmd_mkdirty(entry), vma);
+```
+
+ORIGINAL CODE:
+```c
+	page = pmd_page(orig_pmd);
+	VM_BUG_ON_PAGE(!PageHead(page), page);
+
+	/* Lock page for reuse_swap_page() */
+	if (!trylock_page(page)) {
+		get_page(page);
+		spin_unlock(vmf->ptl);
+		lock_page(page);
+	}
+
+	/*
+	 * We can only reuse the page if nobody else maps the huge page or it's
+	 * part.
+	 */
+	if (reuse_swap_page(page)) {
+		pmd_t entry;
+		entry = pmd_mkyoung(orig_pmd);
+		entry = maybe_pmd_mkwrite(pmd_mkdirty(entry), vma);
+		if (pmdp_set_access_flags(vma, haddr, vmf->pmd, entry, 1))
+		return VM_FAULT_WRITE;
+	}
+
+	unlock_page(page);
+	spin_unlock(vmf->ptl);
+fallback:
+	__split_huge_pmd(vma, vmf->pmd, vmf->address, false, NULL);
+```

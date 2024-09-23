@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to a Time-of-Check-To-Time-of-Use (TOCTOU) vulnerability. The code checks the validity of the page directory mapping entry (`pmd_none_or_clear_bad(pmd)`) before splitting the huge page (`split_huge_page_pmd(vma->vm_mm, pmd)`). However, between these two operations, there is a possibility that the page directory mapping entry (`pmd`) could be modified by another process, leading to inconsistent behavior.
+
+EXPLANATION:
+The code first checks the validity of the page directory mapping entry (pmd) with `pmd_none_or_clear_bad(pmd)`. If it is valid, the code then proceeds to split the huge page using `split_huge_page_pmd(vma->vm_mm, pmd)`. However, this introduces a TOCTOU vulnerability. Another process could potentially modify the page directory mapping entry (`pmd`) between these two operations, making the initial check meaningless. This can lead to an inconsistent and potentially insecure state.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider atomically checking and then splitting the huge page. One way to achieve this is to use a lock or a critical section that prevents other processes from modifying the page directory mapping entry while this operation is being performed. Another approach is to use a temporary mapping for the operation, and then replacing the original mapping with the new one, reducing the time window during which the vulnerability can be exploited.
+
+ORIGINAL CODE:
+```
+do {
+	next = pmd_addr_end(addr, end);
+	split_huge_page_pmd(vma->vm_mm, pmd);
+	if (pmd_none_or_clear_bad(pmd))
+		continue;
+	if (check_pte_range(vma, pmd, addr, next, nodes,
+				flags, private))
+		return -EIO;
+```

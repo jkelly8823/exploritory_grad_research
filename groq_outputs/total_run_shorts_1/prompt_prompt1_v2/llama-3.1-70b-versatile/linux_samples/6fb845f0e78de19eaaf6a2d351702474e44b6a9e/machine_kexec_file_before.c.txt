@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack if the calculated buffer size exceeds the maximum allowed size for a `vmalloc` call, potentially causing memory corruption or a denial-of-service.
+
+EXPLANATION:
+In the given code snippet, the `buf_size` is calculated by summing up the total size of the `initial_boot_params`, the length of the `cmdline` string, and `DTB_EXTRA_SPACE`. If this sum exceeds the maximum allowed size for a `vmalloc` call, calling `vmalloc` with this size may result in an error or undefined behavior. This can be exploited by an attacker who controls the input data (e.g., `cmdline`) to cause a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate the calculated `buf_size` against the maximum allowed size for a `vmalloc` call before calling `vmalloc`. You can use the `PAGE_ALIGN()` or `round_up()` macros to ensure alignment. Additionally, instead of retrying indefinitely, consider adding a mechanism to handle the error and free any previously allocated resources.
+
+```c
+buf_size = fdt_totalsize(initial_boot_params)
+		+ strlen(cmdline) + DTB_EXTRA_SPACE;
+// Validate the buffer size
+if (buf_size > VMALLOC_MAX_SIZE || buf_size > PAGE_ALIGN(buf_size)) {
+	// Handle error, return or exit
+}
+for (;;) {
+	buf = vmalloc(PAGE_ALIGN(buf_size));
+	// ...
+```
+
+ORIGINAL CODE:
+```c
+{
+	void *buf;
+	size_t buf_size;
+	int ret;
+
+	buf_size = fdt_totalsize(initial_boot_params)
+			+ strlen(cmdline) + DTB_EXTRA_SPACE;
+
+	for (;;) {
+		buf = vmalloc(buf_size);
+		if (!buf)
+```

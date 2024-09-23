@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds read dereference. Accessing memory beyond a buffer or data structure can cause memory corruption, crashes, data disclosure, and lead to arbitrary code execution.
+EXPLANATION:
+In this code, the function mvebu_mbus_window_is_free seems to check if a given window number is available. However, in the function, the line `ctrl = readl(addr + WIN_CTRL_OFF);` accesses memory directly without proper validation of the `addr` pointer. The pointer `addr` is calculated as an offset from `mbus->mbuswins_base` and `mbus->soc->win_cfg_offset(win)`. However, there is no validation to ensure that the calculated address `addr + WIN_CTRL_OFF` does not exceed the bounds of a valid data structure or a buffer.
+
+If an attacker is able to manipulate the `mbus` structure or the `win` value, they could potentially cause the code to access memory outside the bounds of a valid data structure, leading to a crash or arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add proper validation to ensure that the calculated address `addr + WIN_CTRL_OFF` does not exceed the bounds of a valid data structure or buffer. This could be achieved by:
+
+1. Validating the `mbus` pointer before accessing its members.
+2. Checking the bounds of the `mbuswins_base` memory region before accessing it.
+3. Implementing bounds checking on the `win` value to prevent it from causing an out-of-bounds access.
+
+Additionally, consider using address sanitizer or similar tools to detect undefined behavior in your code.
+
+ORIGINAL CODE:
+```c
+}
+
+/* Checks whether the given window number is available */
+
+/* On Armada XP, 375 and 38x the MBus window 13 has the remap
+ * capability, like windows 0 to 7. However, the mvebu-mbus driver
+ * isn't currently taking into account this special case, which means
+ * that when window 13 is actually used, the remap registers are left
+ * to 0, making the device using this MBus window unavailable. The
+ * quick fix for stable is to not use window 13. A follow up patch
+ * will correctly handle this window.
+*/
+static int mvebu_mbus_window_is_free(struct mvebu_mbus_state *mbus,
+				     const int win)
+{
+	void __iomem *addr = mbus->mbuswins_base +
+		mbus->soc->win_cfg_offset(win);
+	u32 ctrl = readl(addr + WIN_CTRL_OFF);
+
+	if (win == 13)
+		return false;
+
+	return !(ctrl & WIN_CTRL_ENABLE);
+}
+
+/* 
+```

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Information Disclosure Vulnerability through Uninitialized Memory Leak
+
+EXPLANATION:
+This vulnerability occurs on line 4, where the memset call initializes the 'exception' structure with zeros. However, this memset call is intended to mitigate an issue where uninitialized kernel stack memory is leaked into 'cr2' and the error code in the 'exception' structure. This indicates that without the memset call, the 'exception' structure would contain uninitialized memory, potentially leaking sensitive information to the attacker. Furthermore, this information disclosure vulnerability could be triggered by any return value other than X86EMUL_IO_NEEDED.
+
+RECOMMENDATIONS:
+- Ensure that 'exception' is properly initialized in all scenarios.
+- Verify that all caller functions of this function properly handle and clean the 'exception' structure before returning.
+- Investigate and consider fixing the issue mentioned in the FIXME comment to properly handle X86EMUL_IO_NEEDED.
+- Always sanitize or zero-fill any structures or variables that might be exposed to untrusted users, and carefully review the logic to identify any similar potential issues.
+
+ORIGINAL CODE:
+{
+	u32 access = (kvm_x86_ops->get_cpl(vcpu) == 3) ? PFERR_USER_MASK : 0;
+
+	/*
+	 * FIXME: this should call handle_emulation_failure if X86EMUL_IO_NEEDED
+	 * is returned, but our callers are not ready for that and they blindly
+	 * call kvm_inject_page_fault.  Ensure that they at least do not leak
+	 * uninitialized kernel stack memory into cr2 and error code.
+	 */
+	memset(exception, 0, sizeof(*exception));
+	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, access,
+					  exception);
+}
+EXPORT_SYMBOL_GPL(kvm_read_guest_virt);

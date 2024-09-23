@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 25-27
+VULNERABILITY_DESCRIPTION:
+Resource leak due to lack of proper error handling in memory deallocation.
+EXPLANATION:
+In the function _add_windows_config, the code properly decrements references to objects when they are no longer needed, with one exception: if `dict` is not NULL but `_add_windows_config(dict)` fails and returns -1. In this case, `PyDict_SetItemString(configs, "windows", dict)` fails and a MemoryError is raised, but `Py_DECREF(dict)` is not called, resulting in a resource leak. 
+However, another issue is observed where the `dict` object is being cleared from the `get_configs` function while still holding onto a non-zero reference count after `_add_windows_config(dict)` returns -1; when `Py_CLEAR(dict)` is called it will do `dict->ob_refcnt = (refcnt != -1) - 1`, thus decrementing the refcount. This will then cause issues when `Py_DECREF(dict)` is subsequently called on a decremented object that's already at 0, thus creating another resource leak and calling for undefined behavior.
+
+RECOMMENDATIONS:
+The proper fix to handle potential memory leaks is to properly decrement the refcount of the object after it is no longer needed or to do away with manually adjusting refcounts altogether if using internal non-managed APIs.
+Add `Py_DECREF(dict)` within the error branch right after `Py_CLEAR(dict)` to ensure the ref count reaches zero, as in:
+```
+static PyObject *
+get_configs(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    PyObject *dict = _Py_GetConfigsAsDict();
+#ifdef MS_WINDOWS
+    if (dict) {
+        if (_add_windows_config(dict) < 0) {
+            Py_CLEAR(dict);
+            Py_DECREF(dict);  # new decrement to zero
+        }
+    }
+#endif
+    return dict;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include "pycore_gc.h"           // PyGC_Head
+
+
+#ifdef MS_WINDOWS
+#include <windows.h>
+
+static int
+_add_windows_config(PyObject *configs)
+{
+    HMODULE hPython3;
+    wchar_t py3path[MAX_PATH];
+    PyObject *dict = PyDict_New();
+    PyObject *obj = NULL;
+    if (!dict) {
+        return -1;
+    }
+
+    hPython3 = GetModuleHandleW(PY3_DLLNAME);
+    if (hPython3 && GetModuleFileNameW(hPython3, py3path, MAX_PATH)) {
+        obj = PyUnicode_FromWideChar(py3path, -1);
+    } else {
+        obj = Py_None;
+        Py_INCREF(obj);
+    }
+    if (obj &&
+        !PyDict_SetItemString(dict, "python3_dll", obj) &&
+        !PyDict_SetItemString(configs, "windows", dict)) {
+        Py_DECREF(obj);
+        Py_DECREF(dict);
+        return 0;
+    }
+    Py_DECREF(obj);
+    Py_DECREF(dict);
+    return -1;
+}
+#endif
+
+
+static PyObject *
+get_configs(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    PyObject *dict = _Py_GetConfigsAsDict();
+#ifdef MS_WINDOWS
+    if (dict) {
+        if (_add_windows_config(dict) < 0) {
+            Py_CLEAR(dict);
+        }
+    }
+#endif
+    return dict;
+}
+
+
+static PyObject*
+```

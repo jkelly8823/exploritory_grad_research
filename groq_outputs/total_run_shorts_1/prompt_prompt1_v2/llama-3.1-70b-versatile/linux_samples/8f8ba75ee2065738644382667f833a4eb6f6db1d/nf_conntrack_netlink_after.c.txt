@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Use of Nested Locks with Unlocked Critical Sections
+
+EXPLANATION:
+The code snippet shows the use of a spin lock, which is a type of lock that can cause the current thread to spin in a loop waiting for the lock to be released. However, the spin lock here is only being used to protect a single function call. The critical section that the lock is supposed to protect is effectively the entire system's connection tracking state.  However, errors may allow other threads to enter that critical section without the lock by using different paths in code that are not presented in this code snippet.
+
+If in a connected critical section somewhere, we fail to acquire this lock, other threads will have a legitimate way into the critical section without the lock.  Typically it is recommended that critical sections should not have unlocked paths for entry.
+
+RECOMMENDATIONS:
+First, reevaluate the system design to ensure that the spin_lock_bh is indeed protecting all critical sections that can enter the spin_unlock_bh function. Then once evaluated to make sure you've found everything you should document this information into properly formatted comments.  Proper and correct use of these spin locks include acquiring this lock before entering, using mutexes as need be when available, and making sure the acquiring of the spin-lock encompasses all critical sections.
+
+
+ORIGINAL CODE:
+
+```c
+ctnetlink_nfqueue_parse(const struct nlattr *attr, struct nf_conn *ct)
+{
+	struct nlattr *cda[CTA_MAX+1];
+	int ret;
+
+	nla_parse_nested(cda, CTA_MAX, attr, ct_nla_policy);
+
+	spin_lock_bh(&nf_conntrack_lock);
+	ret = ctnetlink_nfqueue_parse_ct((const struct nlattr **)cda, ct);
+	spin_unlock_bh(&nf_conntrack_lock);
+
+	return ret;
+}
+
+static struct nfq_ct_hook ctnetlink_nfqueue_hook = {
+	.build_size	= ctnetlink_nfqueue_build_size,
+```

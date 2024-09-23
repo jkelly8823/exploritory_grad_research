@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 11-12
+VULNERABILITY_DESCRIPTION:
+ Potential MSRs (Model-Specific Registers) vulnerabilities and uncontrolled data usage.
+EXPLANATION:
+The potential vulnerability here lies in the way the developers are accessing and modifying the MSRs (model-specific registers) on the system. The lines `rdmsr` and `wrmsr` are used without sufficient checks to ensure the correctness and integrity of the data being read from and written to. Additionally, the variables used to hold the MSR values are used without validation.
+
+The main problem is with `rdmsr` and `wrmsr` instructions. If the `%ecx` register holds an invalid MSR, the instructions may still generate an exception or silently execute with undefined behavior. This is especially critical when handling MSRs related to memory management and protection.
+
+The lines `cmypl	$0, %edx` is incomplete since it seems like there should be a jump if condition met; `jz	1f` indicates jumping if a zero flag is set on compare equality, however the flag hasn't been set in previous instruction. Furthermore the label "1f" seems incomplete; this might not be an incomplete snippet and will depend on remainder of source.
+
+The problematic nature of these instructions needs a careful analysis of corresponding parts of the surrounding source.
+
+RECOMMENDATIONS:
+It is recommended that you use the following as remedies to handle MSR accesses:
+
+1.  Include proper error handling in MSR accesses, specifically for invalid MSR addresses.
+2.  Validate that MSR addresses are correct and correspond to the correct register to avoid unexpected behavior.
+
+Furthermore follow better coding practices and refactor or fix incomplete if conditions.
+
+ORIGINAL CODE:
+```
+leal_trampoline_(TRAMPOLINE_32BIT_PGTABLE_OFFSET)(%ecx), %eax
+movl_%eax, %cr3
+3:
+    /_ Set EFER.LME=1 as a precaution in case hypervisor pulls the rug */
+pushl_%ecx
+pushl_%edx
+movl_$(MSR_EFER, %ecx
+rdmsr
+btsl_$_EFER_LME, %eax
+wrmsr
+popl_%edx
+popl_%ecx
+
+    /_ Enable PAE and LA57 (if required) paging modes */
+movl_$(X86_CR4_PAE, %eax
+cmpl_$0, %edx
+jz_1f
+```

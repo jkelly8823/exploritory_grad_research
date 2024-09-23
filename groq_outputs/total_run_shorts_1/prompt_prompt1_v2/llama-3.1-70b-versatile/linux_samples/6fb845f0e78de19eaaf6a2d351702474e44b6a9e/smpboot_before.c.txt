@@ -1,0 +1,39 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No vulnerabilities were identified in the code snippet.
+
+EXPLANATION:
+This code snippet appears to be part of the Linux kernel's RISC-V CPU handling code. It iterates over the device tree nodes of type "cpu" and performs actions such as mapping the CPU ID to HART ID, setting CPU possibility and presence, and terminating if certain conditions are not met. The `BUG_ON` statements suggest that this code is used to enforce certain invariants, but these are not indicative of vulnerabilities. The code uses the `of_node_put` function to properly put the device tree node after use, which avoids potential memory leaks.
+
+The lack of error handling for the `of_find_node_by_type` and `riscv_of_processor_hartid` functions could potentially lead to crashes if they return NULL, but without more context on how these functions behave in case of errors, it is not possible to determine this for certain. However, this is not necessarily a vulnerability but rather an issue of reliability in case of errors.
+
+RECOMMENDATIONS:
+None
+
+ORIGINAL CODE:
+```
+	while ((dn = of_find_node_by_type(dn, "cpu"))) {
+		hart = riscv_of_processor_hartid(dn);
+		if (hart < 0) {
+			of_node_put(dn);
+			continue;
+		}
+
+		if (hart == cpuid_to_hartid_map(0)) {
+			BUG_ON(found_boot_cpu);
+			found_boot_cpu = 1;
+			of_node_put(dn);
+			continue;
+		}
+
+		cpuid_to_hartid_map(cpuid) = hart;
+		set_cpu_possible(cpuid, true);
+		set_cpu_present(cpuid, true);
+		cpuid++;
+		of_node_put(dn);
+	}
+
+	BUG_ON(!found_boot_cpu);
+}
+```

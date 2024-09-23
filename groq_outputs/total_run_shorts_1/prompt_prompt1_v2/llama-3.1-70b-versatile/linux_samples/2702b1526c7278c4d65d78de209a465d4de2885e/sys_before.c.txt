@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The `snprintf` function in C does not guarantee null-termination if the buffer is filled to its capacity. In this case, the buffer `buf` has a size of 65 characters. However, the `snprintf` function does not perform any checks to ensure that the buffer will not overflow when copying the string "2.6.%u%s" into it. This can potentially lead to a buffer overflow attack if an attacker can control the `len` or `rest` variables.
+
+Additionally, the `copy_to_user` function does not perform any checks on the `len` variable, which could also lead to an out-of-bounds write if it exceeds the size of the `release` buffer.
+
+RECOMMENDATIONS:
+1. Use the `snprintf` function with the correct buffer size to avoid potential buffer overflows. In this case, you should use `snprintf(buf, sizeof(buf), "2.6.%u%s", v, rest)`.
+
+2. Check the length of `rest` before copying it into the `buf` to ensure it will not cause an overflow.
+
+3. Validate the `len` variable to ensure it is not larger than the `buf` size before calling `copy_to_user`.
+
+ORIGINAL CODE:
+```c
+ * Work around broken programs that cannot handle "Linux 3.0".
+ * Instead we map 3.x to 2.6.40+x, so e.g. 3.0 would be 2.6.40
+ */
+static int override_release(char __user *release, int len)
+{
+	int ret = 0;
+	char buf[65];
+
+	if (current->personality & UNAME26) {
+		char *rest = UTS_RELEASE;
+		int ndots = 0;
+		unsigned v;
+
+		while (*rest) {
+			if (*rest == '.' && ++ndots >= 3)
+				break;
+			rest++;
+		}
+		v = ((LINUX_VERSION_CODE >> 8) & 0xff) + 40;
+		snprintf(buf, len, "2.6.%u%s", v, rest);
+		ret = copy_to_user(release, buf, len);
+	}
+	return ret;
+}
+```

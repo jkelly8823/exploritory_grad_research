@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The vulnerability is that sensitive information about the file system (i_size) might be logged in an error message.
+
+EXPLANATION:
+The code uses the `ext4_error_inode` function to log an error message with debug-level information about an inconsistency in the directory block. This error message is passed the value of `inode->i_size` which could potentially contain sensitive information. In certain scenarios, such as logging to an insecure location or logging in a debug environment where logs might be exposed, this could potentially leak sensitive file system information.
+
+RECOMMENDATIONS:
+Mask or remove the sensitive `inode->i_size` value from the error message. Consider logging only the relevant, non-sensitive information. For example:
+
+```c
+ext4_error_inode(inode, func, line, block,
+             "Attempting to read directory block (%u) that is past i_size",
+             block);
+```
+
+Also, ensure that error messages are handled and logged securely according to your specific use case.
+
+ORIGINAL CODE:
+```c
+struct ext4_dir_entry *dirent;
+int is_dx_block = 0;
+
+if (block >= inode->i_size) {
+	ext4_error_inode(inode, func, line, block,
+	       "Attempting to read directory block (%u) that is past i_size (%llu)",
+	       block, inode->i_size);
+	return ERR_PTR(-EFSCORRUPTED);
+```

@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3, 5-8, 9-10
+VULNERABILITY_DESCRIPTION:
+Resource leaks and potential null pointer dereferences due to missing error checking.
+
+EXPLANATION:
+The provided code snippet lacks proper error checking and resource management. There are several potential issues:
+
+- The pointer `ldev->states[last_idx]` is not checked for null before it's dereferenced. If `last_index` is out of bounds or if `ldev->states` is null, this would result in a null pointer dereference.
+- The function `cpuidle_get_last_residency(dev)` is called without error checking its return value. If this function returns an error, it may cause undefined behavior when used in the following operations.
+- The code modifies `last_residency` based on `drv->states[last_idx].exit_latency`. However, there is no check if `drv->states[last_idx].exit_latency` is a valid value. If it is an extremely large value or negative, this could cause an integer overflow.
+- The code does not verify the boundaries of `drv->state_count` and `drv->states[last_idx + 1]` before accessing them. This may result in out-of-bounds access or null pointer dereferences.
+
+RECOMMENDATIONS:
+To fix the issues mentioned above, the following changes can be made:
+
+- Before dereferencing `ldev->states[last_idx]`, check if it's null or if `last_idx` is within the bounds of `ldev->states`.
+- Check the return value of `cpuidle_get_last_residency(dev)` and handle potential errors.
+- Validate `drv->states[last_idx].exit_latency` before using it.
+- Ensure `last_idx` is within valid bounds before accessing `drv->states[last_idx + 1]`.
+
+Here is an example of how the updated code could look like:
+
+```c
+if (ldev->states != NULL && last_idx >= 0 && last_idx < drv->state_count) {
+    last_state = &ldev->states[last_idx];
+    // ...
+} else {
+    // Handle error or edge case
+}
+
+last_residency = cpuidle_get_last_residency(dev);
+if (last_residency < 0) {
+    // Handle error
+} else if (!(drv->states[last_idx].flags & CPUIDLE_FLAG_TIME_INVALID)) {
+    // ...
+}
+
+if (last_idx >= 0 && last_idx < drv->state_count - 1 &&
+    drv->states != NULL && !drv->states[last_idx + 1].disabled) {
+    // ...
+}
+```
+
+ORIGINAL CODE:
+```c
+	last_state = &ldev->states[last_idx];
+
+	if (!(drv->states[last_idx].flags & CPUIDLE_FLAG_TIME_INVALID)) {
+		last_residency = cpuidle_get_last_residency(dev) - \
+					 drv->states[last_idx].exit_latency;
+	}
+	else
+		last_residency = last_state->threshold.promotion_time + 1;
+
+	/* consider promotion */
+	if (last_idx < drv->state_count - 1 &&
+	    !drv->states[last_idx + 1].disabled &&
+```

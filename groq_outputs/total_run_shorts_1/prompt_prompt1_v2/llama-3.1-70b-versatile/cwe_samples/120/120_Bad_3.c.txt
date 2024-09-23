@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to a buffer overflow attack due to the use of strcpy() to copy data from the client's hostname to a fixed-size buffer.
+
+EXPLANATION:
+In the code snippet, the strcpy() function is used to copy the client's hostname from the hostent structure to a fixed-size buffer called hostname of size MAX_LEN. This can lead to a buffer overflow attack if the client provides a hostname longer than MAX_LEN bytes. This can allow an attacker to overwrite adjacent memory locations, potentially leading to a denial of service or code execution.
+
+The problem is exacerbated by the fact that that gethostbyaddr() can return NULL, which would cause a segmentation fault when trying to access the h_name field. This is on top of the fact that the return value of gethostbyaddr() must be checked for NULL, but doing so does not even appear in this code sample.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use the safer strncpy() function to limit the amount of data copied to the buffer. Additionally, always check the return value of gethostbyaddr() to prevent null pointer dereferences. 
+
+The snippet should be modified as follows:
+```c
+int res = gethostbyaddr((char*) &clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+if (res == NULL) {
+    logOutput("Failed to get hostname");
+    // Handle error and exit
+}
+
+size_t hostname_len = strnlen(res->h_name, MAX_LEN);
+if (hostname_len >= MAX_LEN) {
+    logOutput("Hostname truncated");
+}
+
+strncpy(hostname, res->h_name, MAX_LEN);
+hostname[MAX_LEN-1] = '\0';
+logOutput("Accepted client connection from host ", hostname);
+```
+Also, don't forget that error handling must be performed for every function call, to handle error cases and potential security issues.
+
+ORIGINAL CODE:
+```c
+struct hostent *clienthp;char hostname[MAX_LEN];
+// create server socket, bind to server address and listen on socket...
+// accept client connections and process requestsint count = 0;for (count = 0; count < MAX_CONNECTIONS; count++) {
+    
+    int clientlen = sizeof(struct sockaddr_in);int clientsocket = accept(serversocket, (struct sockaddr *)&clientaddr, &clientlen);
+    if (clientsocket >= 0) {
+        clienthp = gethostbyaddr((char*) &clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);strcpy(hostname, clienthp->h_name);logOutput("Accepted client connection from host ", hostname);
+        // process client request...close(clientsocket);
+    }
+}close(serversocket);
+```

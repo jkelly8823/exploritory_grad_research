@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-18,23-29
+VULNERABILITY_DESCRIPTION:
+Potential infinite recursion via `bl .+4` loop
+EXPLANATION:
+The provided code snippet includes two repetitive blocks using the PowerPC assembly instruction `bl .+4`, one with a repeat count of 32 and another that is conditionally executed based on `CPU_FTR_ARCH_300`. The `bl .+4` instruction is used to invoke a procedure by branching to the address of the next instruction plus 4 bytes. However, these loops are using this instruction to recursively branch to themselves, leading to a potential infinite recursion or stack overflow.
+
+In the specific implementation in this code, it's possible to see that `bl .+4` is trying to flush the link stack. However, this recursion can result in adding 32 or 64 additional stack frames for just a single instruction. It's not recommended to directly rely on this instruction to flush the stack.
+ 
+RECOMMENDATIONS:
+One recommended approach is to rewrite these loops to avoid recursion and use a non-recursive alternative instead. Using a loop that stores the stack pointer in a register before entering the loop can mitigate the stack overflow issue. 
+
+Moreover, even with recursive function calls, PowerPC architecture supports interrupt handling that will occur in case of stack overflow. However, implementing these mechanisms should be thoroughly discussed and tested since different scenarios can crop up in your execution routine and can cause the program to misbehave in the long run.
+ 
+Another point to ponder over would be implementing some system level checks i.e doing periodic system checks to monitor program memory size from exceeding well under threshold limits thereby guarding stack overflows completely.
+
+ORIGINAL CODE:
+```cpp
+#include <asm/ppc_asm.h>
+#include <asm/code-patching-asm.h>
+#include <asm/kvm_asm.h>
+#include <asm/reg.h>
+#include <asm/mmu.h>
+#include <asm/page.h>
+1:
+#endif /* CONFIG_KVM_XICS */
+
+	/*
+	 * Possibly flush the link stack here, before we do a blr in
+	 * guest_exit_short_path.
+	 */
+1:	nop
+	patch_site 1b patch__call_kvm_flush_link_stack
+
+	/* If we came in through the P9 short path, go back out to C now */
+	lwz	r0, STACK_SLOT_SHORT_PATH(r1)
+	cmpwi	r0, 0
+	bne	guest_exit_short_path
+	mtlr	r0
+	blr
+
+.balign 32
+.global kvm_flush_link_stack
+kvm_flush_link_stack:
+	/* Save LR into r0 */
+	mflr	r0
+
+	/* Flush the link stack. On Power8 it's up to 32 entries in size. */
+	.rept 32
+	bl	.+4
+	.endr
+
+	/* And on Power9 it's up to 64. */
+BEGIN_FTR_SECTION
+	.rept 32
+	bl	.+4
+	.endr
+END_FTR_SECTION_IFSET(CPU_FTR_ARCH_300)
+
+	/* Restore LR */
+	mtlr	r0
+	blr
+
+kvmppc_guest_external:
+	/* External interrupt, first check for host_ipi. If this is
+	 * set, we know the host wants us out so let's do it now
+	 */
+```

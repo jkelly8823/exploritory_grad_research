@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 98, 224
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to potential memory leaks due to the usage of `skb_queue_tail` without properly checking the queue's size limits.
+
+EXPLANATION:
+In the function `netpoll_poll_dev`, the line `while ((skb = skb_dequeue(&ni->arp_tx)))` dequeues packets from the ARP TX queue and re-queues them to the bond device's ARP TX queue using `skb_queue_tail`. However, there is no check to prevent the queue from growing indefinitely, which could lead to a memory leak.
+
+Additionally, in the function `netpoll_send_skb_on_dev`, the line `skb_queue_tail(&npinfo->txq, skb);` also adds a packet to the TX queue without checking its size limits.
+
+RECOMMENDATIONS:
+To fix the potential memory leak, add checks to ensure that the queue size does not exceed a certain limit before adding new packets. For example, you can add a check to ensure that the queue size does not exceed a certain threshold before queuing a new packet. If the queue is full, consider dropping the packet or implementing a more sophisticated queue management strategy.
+
+Here's an example of how you could modify the code to prevent memory leaks:
+
+```c
+if (skb_queue_len(&ni->arp_tx) < MAX_QUEUE_SIZE) {
+    skb_queue_tail(&bond_ni->arp_tx, skb);
+} else {
+    // drop the packet or implement a more sophisticated queue management strategy
+}
+```
+
+ORIGINAL CODE:
+Please note that the code provided is quite large, and I'll provide the sections that are relevant to the vulnerability.
+
+```c
+static void netpoll_poll_dev(struct net_device *dev)
+{
+    ...
+    while ((skb = skb_dequeue(&ni->arp_tx))) {
+        skb->dev = bond_dev;
+        skb_queue_tail(&bond_ni->arp_tx, skb); // Potential memory leak
+    }
+    ...
+}
+
+void netpoll_send_skb_on_dev(struct netpoll *np, struct sk_buff *skb,
+                             struct net_device *dev)
+{
+    ...
+    if (status != NETDEV_TX_OK) {
+        skb_queue_tail(&npinfo->txq, skb); // Potential memory leak
+    }
+    ...
+}
+```

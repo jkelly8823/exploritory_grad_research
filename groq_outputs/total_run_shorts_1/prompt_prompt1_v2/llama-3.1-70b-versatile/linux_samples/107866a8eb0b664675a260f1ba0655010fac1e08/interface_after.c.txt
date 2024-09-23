@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16
+VULNERABILITY_DESCRIPTION:
+Potential Use After Free vulnerability.
+
+EXPLANATION:
+The vulnerability exists because the code increments the reference count of the task before scheduling the dealloc task using kthread_run. However, after scheduling, if kthread_run returns an error, the reference count of the task is not decremented. As a result, if the error path is taken, the task will not be freed, and if this task is subsequently freed elsewhere in the code, the 'task' variable will hold a pointer to a freed task_struct.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should decrement the task reference count when kthread_run returns an error. This ensures that if the task is later freed, the 'task' variable will not hold a pointer to a freed task_struct. Here's the recommended change:
+```c
+if (IS_ERR(task)) {
+    put_task_struct(task);
+    goto kthread_err;
+}
+```
+
+ORIGINAL CODE:
+```c
+{
+    if (queue->task) {
+        kthread_stop(queue->task);
+        put_task_struct(queue->task);
+        queue->task = NULL;
+    }
+
+    if (queue->dealloc_task) {
+    if (IS_ERR(task))
+        goto kthread_err;
+    queue->task = task;
+    /*
+     * Take a reference to the task in order to prevent it from being freed
+     * if the thread function returns before kthread_stop is called.
+     */
+    get_task_struct(task);
+
+    task = kthread_run(xenvif_dealloc_kthread, queue,
+                   "%s-dealloc", queue->name);
+    if (IS_ERR(task))
+```

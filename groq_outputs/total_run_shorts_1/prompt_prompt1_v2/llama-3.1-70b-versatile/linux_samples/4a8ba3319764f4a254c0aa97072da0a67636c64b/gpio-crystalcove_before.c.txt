@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Improper validation of input data for the BIT() macro, which can lead to an overflow affecting the generic_handle_irq() function call.
+
+EXPLANATION:
+The vulnerability arises from the BIT() macro being called with user-controlled data 'gpio' without proper validation. If the value of 'gpio' exceeds the maximum bit position (e.g., 31 for a 32-bit system or 63 for a 64-bit system), the BIT() macro will return an incorrect mask. This may result in an unintended interrupt being triggered when generic_handle_irq() is called.
+
+RECOMMENDATIONS:
+Before calling the BIT() macro and generic_handle_irq(), validate the 'gpio' value to ensure it doesn't exceed the maximum allowed bit position or any other specific constraints defined by the system architecture and IRQ handling mechanisms. You can use the following code to achieve this:
+
+	if ((gpio >= 0) && (gpio < sizeof(unsigned long) * 8)) {
+		virq = irq_find_mapping(cg->chip.irqdomain, gpio);
+		generic_handle_irq(virq);
+	}
+This code checks if the 'gpio' value is within the valid range for the BIT() macro.
+
+ORIGINAL CODE:
+```
+for (gpio = 0; gpio < CRYSTALCOVE_GPIO_NUM; gpio++) {
+	if (pending & BIT(gpio)) {
+		virq = irq_find_mapping(cg->chip.irqdomain, gpio);
+		generic_handle_irq(virq);
+	}
+}
+
+return IRQ_HANDLED;
+```

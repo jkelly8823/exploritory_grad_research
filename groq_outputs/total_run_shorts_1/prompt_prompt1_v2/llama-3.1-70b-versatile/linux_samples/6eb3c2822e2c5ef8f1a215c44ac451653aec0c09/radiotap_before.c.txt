@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow or Uncontrolled Pointer Increment Vulnerability.
+
+EXPLANATION:
+The given code snippet appears to iterate through a bitmap structure to locate the start of a payload. However, the increment of the `_arg` pointer (`iterator->_arg += sizeof(uint32_t);`) is not validated against the boundaries of the buffer or memory region being accessed. This can lead to a buffer overflow or an uncontrolled pointer increment, potentially resulting in the program accessing or modifying memory outside its allocated bounds.
+
+RECOMMENDATIONS:
+To fix this vulnerability, boundary checks should be added to prevent the `_arg` pointer from incrementing beyond the valid memory region. This can be achieved by testing whether the current `_arg` value plus the increment size (`sizeof(uint32_t)`) does not exceed the end of the buffer.
+
+```c
+/* add boundary check */
+size_t arg_max = /* initialize arg_max to the end of the buffer */;
+while (get_unaligned_le32(iterator->_arg) & (1 << IEEE80211_RADIOTAP_EXT)) {
+    if (iterator->_arg + sizeof(uint32_t) > arg_max) {
+        /* handle buffer overflow/error */
+        break;
+    }
+    iterator->_arg += sizeof(uint32_t);
+}
+```
+Additionally, consider using safer methods for accessing and iterating over the bitmap structure to reduce the risk of similar issues.
+
+ORIGINAL CODE:
+```c
+/* find payload start allowing for extended bitmap(s) */
+
+if (iterator->_bitmap_shifter & (1<<IEEE80211_RADIOTAP_EXT)) {
+    while (get_unaligned_le32(iterator->_arg) &
+            (1 << IEEE80211_RADIOTAP_EXT)) {
+        iterator->_arg += sizeof(uint32_t);
+```
+Please consider thoroughly testing the recommendations and re-examining the entire codebase for potential vulnerabilities before deployment.

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Memory leak due to missing error handling after memory allocation and pointer dereference.
+
+EXPLANATION:
+The code allocates memory for a `struct lg2ff_device` using `kmalloc` and checks for allocation failure. However, if the allocation succeeds, it does not check for failures in the subsequent code. In case of failure (e.g., the function `hid_validate_values` returning `NULL`), the allocated memory is not freed, resulting in a memory leak. Additionally, the function does not check for `NULL` dereference in case `hidinput` or `hidinput->input` is `NULL`.
+
+RECOMMENDATIONS:
+Introduce error handling for `NULL` dereferences by adding checks for `hidinput` and `hidinput->input`. Additionally, ensure that the allocated memory is freed in case of any error or failure. Use a try-except block or error handling mechanism to prevent memory leaks.
+
+An example of how to fix this vulnerability is shown below:
+
+```c
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+	return -ENOMEM;
+
+// ... other code ...
+
+if (!report) {
+	kfree(lg2ff);  // free the memory if report validation fails
+	return -ENODEV;
+}
+```
+
+ORIGINAL CODE:
+```c
+struct hid_report *report;
+struct hid_input *hidinput = list_entry(hid->inputs.next,
+						struct hid_input, list);
+struct input_dev *dev = hidinput->input;
+int error;
+
+/* Check that the report looks ok */
+report = hid_validate_values(hid, HID_OUTPUT_REPORT, 0, 0, 7);
+if (!report)
+	return -ENODEV;
+
+lg2ff = kmalloc(sizeof(struct lg2ff_device), GFP_KERNEL);
+if (!lg2ff)
+	return -ENOMEM;
+```

@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: 
+Integer Overflow (Underflow) Vulnerability
+
+EXPLANATION:
+The code snippet allocates an EDMA slot based on the provided controller and slot number. The vulnerability arises from the fact that the slot is checked for being less than 0 after the EDMA_CHAN_SLOT(slot) function is called. If this function decrements the slot value or does not properly validate its input, a negative value may still occur. In this case, if 'slot' underflows, the check will not catch it and this could potentially lead to out-of-bounds memory access or unexpected behavior later on.
+
+However, the primary concern here is that the function EDMA_CHAN_SLOT(slot) might calculate an underflow if 'slot' is the smallest possible integer value and still passes the 'slot >= 0' check.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to validate the return value of EDMA_CHAN_SLOT(slot) to prevent potential integer underflows:
+
+```c
+int new_slot = EDMA_CHAN_SLOT(slot);
+if (new_slot < 0) {
+    return -EINVAL; // or other suitable error code
+}
+... proceed with the rest of your logic ...
+```
+
+Additionally, consider adding overflow checks when performing any arithmetic operations on the 'slot' variable.
+
+ORIGINAL CODE:
+```c
+int edma_alloc_slot(unsigned ctlr, int slot)
+{
+    if (!edma_cc[ctlr])
+        return -EINVAL;
+
+    if (slot >= 0)
+        slot = EDMA_CHAN_SLOT(slot);
+
+    if (slot < 0) {
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 7, 11, 15
+VULNERABILITY_DESCRIPTION:
+Unbounded Memory Copy Vulnerability
+
+EXPLANATION:
+The code snippet uses `memcpy` to copy data from a source buffer (`rate_ie` and `wmm_ie`) to a destination buffer (`bss_cfg->rates` and `&bss_cfg->wmm_info`). However, the code does not check if the source buffer is null or if the length of the source buffer exceeds the available space in the destination buffer. This could lead to a buffer overflow if the source buffer is larger than the destination buffer, causing unpredictable behavior and potentially allowing an attacker to execute arbitrary code.
+
+The lack of bounds checking for the `rate_ie` and `wmm_ie` pointers also introduces a potential vulnerability. If these pointers are not properly initialized or are corrupted, the `memcpy` function could access memory outside the intended bounds, leading to undefined behavior.
+
+Additionally, the code does not check for integer overflows when calculating the destination buffer offset (`rate_len`) and the length of the source buffer (`rate_ie->len` and `*(wmm_ie + 1)`).
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the code should:
+
+1. Perform bounds checking on the source buffer pointers (`rate_ie` and `wmm_ie`) to ensure they are not null and are within valid memory ranges.
+2. Check the length of the source buffer against the available space in the destination buffer before performing the `memcpy` operation.
+3. Use safe and bounded versions of memory copy functions, such as `memcpy_safe` or `memsafe_copy`, which check for overlapping buffers and buffer overflows.
+4. Validate the integer values used in calculations to prevent integer overflows.
+
+ORIGINAL CODE:
+```c
+rate_ie = (void *)cfg80211_find_ie(WLAN_EID_SUPP_RATES, var_pos, len);
+if (rate_ie) {
+    if (rate_ie->len > MWIFIEX_SUPPORTED_RATES)
+        return;
+    memcpy(bss_cfg->rates, rate_ie + 1, rate_ie->len);
+    rate_len = rate_ie->len;
+}
+
+rate_ie = (void *)cfg80211_find_ie(WLAN_EID_EXT_SUPP_RATES,
+                    params->beacon.tail,
+                    params->beacon.tail_len);
+if (rate_ie) {
+    if (rate_ie->len > MWIFIEX_SUPPORTED_RATES - rate_len)
+        return;
+    memcpy(bss_cfg->rates + rate_len, rate_ie + 1, rate_ie->len);
+}
+
+return;
+}
+
+                    params->beacon.tail_len);
+if (vendor_ie) {
+    wmm_ie = vendor_ie;
+    if (*(wmm_ie + 1) > sizeof(struct mwifiex_types_wmm_info))
+        return;
+    memcpy(&bss_cfg->wmm_info, wmm_ie +
+           sizeof(struct ieee_types_header), *(wmm_ie + 1));
+    priv->wmm_enabled = 1;
+} else {
+```

@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+EXPLANATION:
+The vulnerability exists in the inner loop where it assumes that `elem->datalen - 1` will be greater than or equal to 0. However, if `elem->datalen` is 1, then `elem->datalen - 1` will be 0, and the loop will attempt to iterate over an empty buffer. This may lead to an out-of-bounds access in the `for_each_element` macro, potentially causing a buffer overflow or a segmentation fault. 
+
+Additionally, it appears that the `sub` variable is accessing `elem->data + 1`, which does not check for bounds. If `elem->datalen` is 1, then this access would still be within the bounds of the `elem->data` buffer, but if `elem->datalen` is very large, then this could lead to potential memory issues when trying to copy this data into `new_bssid` if it's not properly checked.
+
+Furthermore, if an attacker can manipulate the `elem->datalen` or `elem->data`, they could exploit this vulnerability to potentially execute arbitrary code or cause a denial-of-service attack.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add additional bounds checking before iterating over the buffer:
+
+* Check that `elem->datalen` is greater than or equal to 2 before accessing `elem->data + 1` and iterating over the buffer.
+* Consider validating the contents of `elem->data` to prevent potential memory issues.
+* Ensure that the `new_bssid` buffer is large enough to hold the copied data.
+
+Additionally, consider using safer functions to copy the data, such as `memcpy`, and always check the return values to prevent potential buffer overflows.
+
+ORIGINAL CODE:
+```c
+for_each_element_id(elem, WLAN_EID_MULTIPLE_BSSID, start, len) {
+	if (elem->datalen < 2)
+		continue;
+
+	for_each_element(sub, elem->data + 1, elem->datalen - 1) {
+		u8 new_bssid[ETH_ALEN];
+		const u8 *index;
+```

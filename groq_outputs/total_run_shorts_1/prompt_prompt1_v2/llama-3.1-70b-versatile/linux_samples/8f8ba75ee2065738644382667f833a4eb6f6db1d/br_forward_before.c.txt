@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 7
+VULNERABILITY_DESCRIPTION:
+Resource Leak and Potential Null Pointer Dereference due to premature skb free and modification.
+EXPLANATION:
+The code is vulnerable to a resource leak and potential null pointer dereference. The skb pointer is freed prematurely on line 4 using `kfree_skb(skb)` and subsequent modification attempts are made on line 7 using `skb_push(skb, ETH_HLEN)`. However, as skb has already been freed, skb pointer becomes a dangling pointer. If `skb_push(skb, ETH_HLEN)` is executed, a null pointer dereference could occur.
+
+Moreover, in line 3, `skb->dev` is accessed without checking whether `skb` or `(skb->dev)` is null, which can also lead to a null pointer dereference.
+
+Additionally, the use of skb_is_gso(skb) on line 3 suggests that skb could be a pointer to a socket buffer that has associated metadata, such as segmentation information. In such cases, kfree_skb(skb) would likely cause resource leaks.
+
+RECOMMENDATIONS:
+1) Remove the `kfree_skb(skb)` call when the packet length exceeds the skb's mtu, or add error checking code that will prevent further access to skb after `kfree_skb(skb)` has been called.
+2) Ensure skb and skb->dev are not null before access.
+
+3) Check for valid GSO skb pointers before freeing skb.
+
+4) Free skb at the end of the function after necessary processing.
+
+ORIGINAL CODE:
+{
+    skb->dev = to->dev;
+
+    if (unlikely(netpoll_tx_running(to->dev))) {
+        if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb))
+            kfree_skb(skb);
+        else {
+            skb_push(skb, ETH_HLEN);

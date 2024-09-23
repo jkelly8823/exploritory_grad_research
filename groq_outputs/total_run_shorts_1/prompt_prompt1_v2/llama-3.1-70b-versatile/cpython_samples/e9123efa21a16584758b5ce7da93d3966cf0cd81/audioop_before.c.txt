@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-349
+VULNERABILITY_DESCRIPTION:
+This code snippet has a potential vulnerability in the form of a memory overflow. Multiple instances of memory allocation using `PyString_FromStringAndSize` are made without checking for integer overflows. If `len` is a large value and `size` is 1, the calculation `len/size` could overflow the maximum value that can be stored in the integer type, causing a successful allocation of a very large amount of memory. This can lead to a denial-of-service (DoS) attack.
+
+EXPLANATION:
+In multiple places in the code, memory is allocated using `PyString_FromStringAndSize` or `PyArg_ParseTuple`. The size of the memory block to be allocated is determined by the formula `len / size`. If `len` is a large value and `size` is 1, the calculation `len / size` could overflow the maximum value that can be stored in the integer type. This could potentially cause the allocation of a huge amount of memory, leading to a crash or a denial-of-service (DoS) attack.
+
+In versions of Python prior to 3.3, integer division and modular arithmetic in C do not check for integer overflow, which makes this vulnerability particularly significant. 
+
+RECOMMENDATIONS:
+To prevent integer overflows, you should add checks to ensure that the calculation `len / size` will not overflow. One way to do this is by checking whether `len` is greater than `INT_MAX / size` before the allocation. If it is, you should raise a `MemoryError`. Additionally, consider using a safer data type for `len` and `size`, such as `size_t`, which is less likely to overflow.
+
+Here's a sample of how you could modify the code to add this check:
+```c
+if (len > INT_MAX / size) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "not enough memory for output buffer");
+    return NULL;
+}
+rv = PyString_FromStringAndSize(NULL, len / size);
+```
+This check will prevent the integer overflow and ensure that the memory allocation does not exceed the maximum limit.

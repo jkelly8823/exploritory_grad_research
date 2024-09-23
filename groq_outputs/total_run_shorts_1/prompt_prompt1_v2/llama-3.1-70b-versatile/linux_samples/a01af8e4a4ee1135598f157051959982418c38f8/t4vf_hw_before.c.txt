@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-18, 23-24, 29-30
+VULNERABILITY_DESCRIPTION:
+Potential out-of-bounds write and use of uninitialized data, and undefined behavior due to incorrect index calculation.
+
+EXPLANATION:
+This code has several potential issues:
+- In the for loop, the variable `i` is used as an index to `cmd.u.exact` without a proper bounds check. Although a check is performed earlier for `naddr`, it's not done for each iteration, and an out-of-bounds write could occur if `naddr` exceeds the actual bounds of `cmd.u.exact`.
+- The `memcpy(p->macaddr, addr[i], sizeof(p->macaddr))` call is vulnerable to a potential out-of-bounds read if `addr[i]` is not a valid address or is smaller than `sizeof(p->macaddr)`. 
+- In the second for loop, if `index >= FW_CLS_TCAM_NUM_ENTRIES`, `idx[i] = 0xffff`. This is assigned without checking whether `idx` is a valid pointer or if `i` is within the bounds of `idx`.
+- In the line `*hash |= (1 << hash_mac_addr(addr[i]))`, `hash` is dereferenced without checking if it's a valid pointer.
+
+RECOMMENDATIONS:
+- Add bounds checking for `i` in the for loops to prevent out-of-bounds access. This should be done in addition to the existing checks for `naddr`.
+- Check if `addr[i]` is a valid address and if it's at least `sizeof(p->macaddr)` bytes long before calling `memcpy`.
+- Check if `idx` and `hash` are valid pointers before dereferencing them.
+- Verify the `fw` variable is valid, even though not used here as it's used for initialization of a field in the CMD.
+
+ORIGINAL CODE:
+			unsigned int naddr, const u8 **addr, u16 *idx,
+			u64 *hash, bool sleep_ok)
+{
+	int i, ret;
+	struct fw_vi_mac_cmd cmd, rpl;
+	struct fw_vi_mac_exact *p;
+	size_t len16;
+
+	if (naddr > ARRAY_SIZE(cmd.u.exact))
+		return -EINVAL;
+	len16 = DIV_ROUND_UP(offsetof(struct fw_vi_mac_cmd,
+				      u.exact[naddr]), 16);
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.op_to_viid = cpu_to_be32(FW_CMD_OP(FW_VI_MAC_CMD) |
+				     FW_CMD_REQUEST |
+				     FW_CMD_WRITE |
+				     (free ? FW_CMD_EXEC : 0) |
+				     FW_VI_MAC_CMD_VIID(viid));
+	cmd.freemacs_to_len16 = cpu_to_be32(FW_VI_MAC_CMD_FREEMACS(free) |
+					    FW_CMD_LEN16(len16));
+
+	for (i = 0, p = cmd.u.exact; i < naddr; i++, p++) {
+		p->valid_to_idx =
+			cpu_to_be16(FW_VI_MAC_CMD_VALID |
+				    FW_VI_MAC_CMD_IDX(FW_VI_MAC_ADD_MAC));
+		memcpy(p->macaddr, addr[i], sizeof(p->macaddr));
+	}
+
+	ret = t4vf_wr_mbox_core(adapter, &cmd, sizeof(cmd), &rpl, sleep_ok);
+	if (ret)
+		return ret;
+
+	for (i = 0, p = rpl.u.exact; i < naddr; i++, p++) {
+		u16 index = FW_VI_MAC_CMD_IDX_GET(be16_to_cpu(p->valid_to_idx));
+
+		if (idx)
+			idx[i] = (index >= FW_CLS_TCAM_NUM_ENTRIES
+				  ? 0xffff
+				  : index);
+		if (index < FW_CLS_TCAM_NUM_ENTRIES)
+			ret++;
+		else if (hash)
+			*hash |= (1 << hash_mac_addr(addr[i]));
+	}
+	return ret;
+}

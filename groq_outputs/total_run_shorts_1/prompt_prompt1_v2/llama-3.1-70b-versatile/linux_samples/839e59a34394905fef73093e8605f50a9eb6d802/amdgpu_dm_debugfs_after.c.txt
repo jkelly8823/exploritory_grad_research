@@ -1,0 +1,102 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-28
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a double-free error, which can cause a program to crash or behave unexpectedly. This occurs when the same block of memory is freed twice.
+
+EXPLANATION:
+In the given code snippet, the `wr_buf` is freed multiple times in a row using `kfree(wr_buf)`. Although there are multiple calls to `parse_write_buffer_into_params` between `kfree(wr_buf)`, this is an indication of multiple paths that attempt to free the same memory. Each time `kfree(wr_buf)` is called, it attempts to free the memory pointed to by `wr_buf`. If `wr_buf` is already `NULL` due to a previous call, this is not an issue, but if `wr_buf` still points to allocated memory, attempting to free this memory again will result in a double-free error.
+
+RECOMMENDATIONS:
+To avoid the double-free error, only call `kfree(wr_buf)` once when the memory is no longer needed. This should typically be done after the last use of the memory. If `wr_buf` is still needed after the last call to `parse_write_buffer_into_params`, then `kfree(wr_buf)` should be moved to a point after `wr_buf` is no longer needed. Additionally, `wr_buf` should be set to `NULL` after the free operation to prevent any accidental re-use of the freed memory.
+
+```c
+if (!wr_buf)
+    return -ENOSPC;
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    // handle error
+}
+
+// Other calls to parse_write_buffer_into_params...
+
+kfree(wr_buf);  // Move free operation to here
+wr_buf = NULL; // Set wr_buf to NULL after free
+```
+ORIGINAL CODE:
+```c
+if (!wr_buf)
+    return -ENOSPC;
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+if (!wr_buf)
+    return -ENOSPC;
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    &param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+        (long *)param, buf,
+        max_param_num,
+        &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+    return -ENOSPC;
+}
+
+if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+    (long *)param, buf,
+    max_param_num,
+    &param_nums)) {
+    kfree(wr_buf);
+}

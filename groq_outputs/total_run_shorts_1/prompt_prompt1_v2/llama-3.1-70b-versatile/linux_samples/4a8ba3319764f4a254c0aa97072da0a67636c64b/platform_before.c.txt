@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 9
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) vulnerability through unchecked error handling and a double-free of a resource.
+ 
+EXPLANATION:
+In this code snippet, the `dw_dma_remove` function and `clk_disable_unprepare` function are called in two different branches of the code, which can result in a double-free of the `chip->clk` resource if an error occurs before the `dw_dma_remove` function is called. This can lead to a Denial of Service (DoS) as the program may crash or experience unpredictable behavior. 
+
+Another issue is that there are no checks in place to ensure that `chip->clk` is not `NULL` before calling `clk_disable_unprepare` on it. This can cause the program to crash with a segmentation fault.
+
+RECOMMENDATIONS:
+To address the double-free issue, ensure that `dw_dma_remove` and `clk_disable_unprepare` are not called from different error paths. Call `dw_dma_remove` and `clk_disable_unprepare` from the same error handler.
+
+To prevent a potential segmentation fault, add a check to ensure that `chip->clk` is not `NULL` before calling `clk_disable_unprepare`. Here is a sample of how this could be fixed:
+
+```c
+if (chip->clk)
+    clk_disable_unprepare(chip->clk);
+```
+
+ORIGINAL CODE:
+```c
+#include <linux/module.h>
+#include <linux/device.h>
+#include <linux/clk.h>
+#include <linux/platform_device.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/of.h>
+if (err)
+    return err;
+
+err = dw_dma_probe(chip, pdata);
+if (err)
+    goto err_dw_dma_probe;
+
+return 0;
+
+err_dw_dma_probe:
+    clk_disable_unprepare(chip->clk);
+return err;
+}
+
+    of_dma_controller_free(pdev->dev.of_node);
+
+dw_dma_remove(chip);
+clk_disable_unprepare(chip->clk);
+
+return 0;
+}
+```

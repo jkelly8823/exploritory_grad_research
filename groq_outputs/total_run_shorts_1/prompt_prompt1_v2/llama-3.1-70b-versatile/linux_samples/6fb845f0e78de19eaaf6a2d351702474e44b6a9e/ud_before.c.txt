@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-6
+VULNERABILITY_DESCRIPTION:
+Potential information disclosure through unvalidated input.
+
+EXPLANATION:
+The code snippet appears to be handling different types of InfiniBand (IB) opcodes, specifically IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE and IB_OPCODE_UD_SEND_ONLY. However, in both cases, the code does not validate the source of the immediate data before assigning it to `wc.ex.imm_data`. This could potentially lead to information disclosure if an attacker can manipulate the contents of `packet->ohdr->u.ud.imm_data`.
+
+Additionally, in the IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE case, the code assumes that the packet data contains a valid `u32` size, and subtracts its size from `tlen` without checking for underflow. This could lead to undefined behavior or information disclosure if `tlen` is not large enough to accommodate the subtraction.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities, it is recommended to:
+1. Validate the source of the immediate data before assigning it to `wc.ex.imm_data`.
+2. Check for underflow when subtracting the size of `u32` from `tlen` to prevent undefined behavior.
+
+Example of the recommended fix:
+```c
+if (opcode == IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE) {
+    // Validate the source of the immediate data
+    if (packet->ohdr->u.ud.imm_data != NULL &&
+        packet->ohdr->u.ud.imm_data < packet->ohdr->u.ud.imm_data + tlen) {
+        wc.ex.imm_data = packet->ohdr->u.ud.imm_data;
+    } else {
+        // Handle invalid or out-of-bounds immediate data
+        wc.ex.imm_data = 0;
+    }
+    wc.wc_flags = IB_WC_WITH_IMM;
+    
+    // Check for underflow when subtracting the size of u32 from tlen
+    if (tlen >= sizeof(u32)) {
+        tlen -= sizeof(u32);
+    } else {
+        // Handle underflow error
+        tlen = 0;
+    }
+} else if (opcode == IB_OPCODE_UD_SEND_ONLY) {
+    wc.ex.imm_data = 0;
+    wc.wc_flags = 0;
+} else {
+    // ...
+}
+```
+
+ORIGINAL CODE:
+
+    opcode == IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE) {
+    wc.ex.imm_data = packet->ohdr->u.ud.imm_data;
+    wc.wc_flags = IB_WC_WITH_IMM;
+    tlen -= sizeof(u32);
+} else if (opcode == IB_OPCODE_UD_SEND_ONLY) {
+    wc.ex.imm_data = 0;
+    wc.wc_flags = 0;
+} else {
