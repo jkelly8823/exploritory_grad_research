@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use-After-Free Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the changeBackgroundImage method of the Widget class. After deleting the backgroundImage, the newImage is assigned to the backgroundImage pointer. However, in the Image class, the click method still has access to its own 'this' pointer, even after deletion in the Widget class. If the Image class's click method is called on an image that has been deleted, this will lead to a use-after-free vulnerability. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, a design change is recommended to ensure that the click method of the Image class cannot be called on a deleted object. One way to achieve this would be to set the backgroundImage pointer to nullptr after deletion and before accessing the newImage, and check if it is nullptr before calling the click method. Another way is to change the design of the classes and use smart pointers to manage the memory.
+
+Here's an example of the recommended fix:
+
+```cpp
+void changeBackgroundImage(Image* newImage){
+    if (backgroundImage){
+        delete backgroundImage;
+        backgroundImage = nullptr; // set to nullptr after deletion
+    }
+    backgroundImage = newImage;
+}
+
+void click(){
+    if (backgroundImage){
+        backgroundImage->click();
+    }
+}
+```
+
+Alternatively, using smart pointers to manage memory is also an effective solution.
+
+ORIGINAL CODE:
+```cpp
+class Widget{
+private:
+    Image* backgroundImage;
+public:
+    void click(){
+        if (backgroundImage){
+            backgroundImage->click();
+        }
+    }
+    void changeBackgroundImage(Image* newImage){
+        if (backgroundImage){
+            delete backgroundImage;
+        }
+        backgroundImage = newImage;
+    }
+}
+
+class Image{
+public:
+    void click(){
+        scriptEngine->fireOnImageClick();
+        /* perform some operations using "this" pointer */
+    }
+}
+```

@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Kernel information leak through the use of READ_ONCE macro on user-controlled data.
+
+EXPLANATION:
+The READ_ONCE macro is used to access the value of a variable in a thread-safe manner, avoiding partial updates or tearing. However, it does not prevent kernel information leaks. In this case, `q->vnet_hdr_sz` is accessed using READ_ONCE, but the value of `q->flags` is checked before this and `q->vnet_hdr_sz` is only accessed if the flag `IFF_VNET_HDR` is set.
+
+This suggests that `q->vnet_hdr_sz` might be a user-controlled value. Accessing this value without validation could potentially leak kernel information to untrusted attackers, which might be useful in exploiting subsequent vulnerabilities.
+
+RECOMMENDATIONS:
+1. Validate the value of `q->vnet_hdr_sz` before accessing it.
+2. If `q->vnet_hdr_sz` is supposed to be a constant value or have a limited set of valid values, consider using a switch or if-else statements to verify its value before using it.
+3. If `q->vnet_hdr_sz` is a user-controlled value, ensure that it does not exceed a maximum allowed value to prevent information leaks.
+
+ORIGINAL CODE:
+	struct sk_buff *skb;
+	int err, depth;
+
+	if (q->flags & IFF_VNET_HDR)
+		vnet_hdr_len = READ_ONCE(q->vnet_hdr_sz);
+
+	skb = build_skb(xdp->data_hard_start, buflen);

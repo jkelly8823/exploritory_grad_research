@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+This code contains a potential buffer overflow vulnerability.
+
+EXPLANATION:
+The line `buf[1][(2 * offset + 1) % 8] = g_u_s;` contains a modulo operation and is accessing the `buf[1]` array. If the buffer size is exactly 8 bytes, this line of code could potentially overflow, as the modulo operation can still result in 7, and `buf[1]` could have been previously accessed using `buf[1][2 * offset]`, which could also end up at index 7 if offset is 3. In general, this indexing is highly specific and dependent on the buffer size, and over or under-estimating this buffer size can easily cause this to represent an out-of-bounds write if additional context is revealed in a full code analysis.
+
+Additionally, there are no visible buffer checks within this snippet, so if buffer size is not sufficiently protected by context in the full program, potential overflows are possible here. If this modulo is used to prevent out-of-bounds access, it needs additional buffer checking code, since `buf[1][2* offset]` could still result in an out-of-bounds write.
+
+RECOMMENDATIONS:
+Before accessing the `buf` array, ensure that the `offset` is within the valid range for the buffer size. Also, since specific requirements of `buf[1][2*offset]` and `(2 * offset + 1) % 8` both accessing `buf[1]` without additional protection provide the potential to cause a buffer overflow, consider passing `-fsanitize=address` to the compiler for runtime checks using the AddressSanitizer feature, which catches out-of-bounds memory access. Adding buffer overflow protection based on the context in which this code executes can further ensure a secure code execution.
+
+ORIGINAL CODE:
+```cpp
+case V4L2_PIX_FMT_NV42:
+    buf[0][offset] = r_y_h;
+    buf[1][2 * offset] = b_v;
+    buf[1][(2 * offset + 1) % 8] = g_u_s;
+    break;
+
+case V4L2_PIX_FMT_YUYV:
+    buf[0][offset] = r_y_h;
+```

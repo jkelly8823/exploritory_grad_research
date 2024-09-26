@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION: 
+Uninitialized Memory Exposure: The code allocates memory using kzalloc, but does not validate or handle potential memory leaks in the case of errors. However, this is not the most critical issue in this code snippet. The issue here is that kzalloc is used, but there is another line of code after kzalloc that does not check if the ath pointer is NULL before dereferencing.
+
+However, a critical issue exists if  an error code happens before  the memory get  deallocated, which implies that, a dangling pointer is created. If kualloc  ends on a code error, the memory is not in use by anyone, but  still holds some old information.
+
+This vulnerability does not exist on a surface level, and requires some deeper knowledge on exploits.
+
+
+EXPLANATION:
+The main issue with this code is that it allocates memory but does not properly clean up resources after an error. The kzalloc function allocates memory for the 'ath' structure. In a real world scenario,  There might be other system requests still on line before this new one gets in with better credentials.
+
+
+
+RECOMMENDATIONS:
+In order to fix this vulnerability, the developer should clean up the allocated memory when an error occurs.  A best practice is to make  use of a TRY- CATCH Statement. That way all types  of errors are taken care of.
+
+One possible fix is to clean up the allocated memory when an error occurs. Here is a possible fix:
+
+```c
+BT_DBG("hu %p", hu);
+
+	if (!hci_uart_has_flow_control(hu))
+		return -EOPNOTSUPP;
+
+	ath = kzalloc(sizeof(*ath), GFP_KERNEL);
+	if (!ath)
+		return -ENOMEM;
+
+	// Code execution should come here
+    if (//if other on going code execution that results on  a negative  return  statement that  did not end with a clean call with    free  ath) {
+       kfree (ath);
+       ath  =  NULL;  }
+
+```
+ORIGINAL CODE:
+```
+BT_DBG("hu %p", hu);
+
+	if (!hci_uart_has_flow_control(hu))
+		return -EOPNOTSUPP;
+
+	ath = kzalloc(sizeof(*ath), GFP_KERNEL);
+	if (!ath)
+		return -ENOMEM;
+```

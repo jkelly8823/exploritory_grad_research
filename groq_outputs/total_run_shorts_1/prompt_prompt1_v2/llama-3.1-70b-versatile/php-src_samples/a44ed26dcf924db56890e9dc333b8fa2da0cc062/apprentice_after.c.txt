@@ -1,0 +1,97 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 196-211, 233-244, 282-301
+VULNERABILITY_DESCRIPTION:
+Multiple buffer overflow vulnerabilities have been identified in the provided code snippet. These vulnerabilities can be exploited to execute arbitrary code, leading to potential security breaches.
+
+EXPLANATION:
+The functions `parse_extra`, `parse_mime`, and `parse_apple` contain buffer overflow vulnerabilities. These functions use `strcpy` or assign values to fixed-size buffers without performing proper bounds checking, which can lead to overwriting adjacent memory locations and causing undefined behavior.
+
+Furthermore, the functions `apprentice_1` and `apprentice_2` contain vulnerabilities related to unchecked user input. The `apprentice_1` function does not check if the `action` parameter is within a valid range, while the `apprentice_2` function does not validate the `m->type` parameter before using it to determine the size of a buffer.
+
+Additionally, the `swap4` and `swap8` functions have buffer overflow vulnerabilities. These functions use pointers to perform byte swapping operations without checking the bounds of the pointers.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it is recommended to:
+
+1.  Use bounds checking and size limits when copying data to fixed-size buffers.
+2.  Validate user input to ensure it is within expected ranges.
+3.  Use safer string manipulation functions such as `strncpy` or `strcpy_s` to prevent buffer overflows.
+4.  Perform pointer bounds checks before performing byte swapping operations.
+
+Here is a corrected version of the code snippet:
+
+```c
+private int parse_extra(struct magic_set *ms, struct magic_entry *me, const char *line,
+    zend_off_t off, size_t len, const char *name, const char *extra, int nt)
+{
+    size_t i;
+    const char *l = line;
+    struct magic *m = &me->mp[me->cont_count == 0 ? 0 : me->cont_count - 1];
+    char *buf = CAST(char *, CAST(void *, m)) + off;
+
+    if (buf[0] != '\0') {
+        len = nt ? strlen(buf) : len;
+        file_magwarn(ms, "Current entry already has a %s type "
+            "`%.*s', new type `%s'", name, (int)len, buf, l);
+        return -1;
+    }
+
+    if (strlen(l) > len - 1) {
+        file_magwarn(ms, "%s type `%s' too long", name, l);
+        return -1;
+    }
+
+    for (i = 0; *l && i < len && goodchar(*l, extra); buf[i++] = *l++)
+        continue;
+
+    buf[i] = '\0';
+
+    // rest of the function remains the same
+}
+
+private size_t file_pstring_length_size(const struct magic *m)
+{
+    switch (m->str_flags & PSTRING_LEN) {
+    case PSTRING_1_LE:
+        return 1;
+    case PSTRING_2_BE:
+    case PSTRING_2_LE:
+        return 2;
+    case PSTRING_4_BE:
+    case PSTRING_4_LE:
+        return 4;
+    default:
+        return 0;
+    }
+}
+
+private void swap4(uint32_t *sv)
+{
+    uint32_t rv;
+    uint8_t *s = (uint8_t *)(void *)sv;
+    uint8_t *d = (uint8_t *)(void *)&rv;
+    d[0] = s[3];
+    d[1] = s[2];
+    d[2] = s[1];
+    d[3] = s[0];
+    *sv = rv;
+}
+
+private void swap8(uint64_t *sv)
+{
+    uint64_t rv;
+    uint8_t *s = (uint8_t *)(void *)sv;
+    uint8_t *d = (uint8_t *)(void *)&rv;
+    d[0] = s[7];
+    d[1] = s[6];
+    d[2] = s[5];
+    d[3] = s[4];
+    d[4] = s[3];
+    d[5] = s[2];
+    d[6] = s[1];
+    d[7] = s[0];
+    *sv = rv;
+}
+```
+ORIGINAL CODE:
+Please refer to the original code snippet provided.

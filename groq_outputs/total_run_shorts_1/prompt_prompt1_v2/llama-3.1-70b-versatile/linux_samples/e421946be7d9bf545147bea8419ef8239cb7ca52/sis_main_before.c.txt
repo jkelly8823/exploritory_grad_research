@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Possible uncontrolled growth of memory allocation leading to a potential buffer overflow or integer overflow vulnerability.
+
+EXPLANATION:
+The variable vtotal is calculated as the sum of var->upper_margin, var->lower_margin, and var->vsync_len. Later, in certain conditions (FB_VMODE_NONINTERLACED mode), vtotal is further increased by var->yres. Without bounds checking, this could lead to vtotal exceeding the maximum limit of an integer in this system.
+
+Since we don't know what type of variable vtotal and var are, we can't be certain if an overflow is possible, but in many programming languages (like C/C++), integers do overflow.
+
+If this addition overflows the expected integer's maximum limit, undefined behavior could occur. This is especially concerning when this variable is used in any array indexing or memory allocation calls that rely on this value.
+
+RECOMMENDATIONS:
+We would recommend introducing overflow checking for the vtotal additions. 
+
+1) Introduce a check to ensure that the total vtotal calculation doesn't exceed the maximum limit for a given integer data type in the system.
+
+Here's a sample fix:
+
+```c
+vtotal = var->upper_margin + var->lower_margin + var->vsync_len;
+if (vtotal + var->yres < vtotal) {  // overflow check
+    // Handle the case when it overflows
+}
+else {
+    if ((var->vmode & FB_VMODE_MASK) == FB_VMODE_NONINTERLACED) {
+        vtotal += var->yres;
+    }
+}
+```
+
+This fix introduces a bounds check and an overflow detection condition.
+
+2) Another solution would be to use a larger integer type for vtotal that has more room for vtotal. Please ensure the new integer type is the same accross the whole file.
+
+ORIGINAL CODE:
+
+
+	vtotal = var->upper_margin + var->lower_margin + var->vsync_len;
+
+    pixclock = var->pixclock;
+
+    if((var->vmode & FB_VMODE_MASK) == FB_VMODE_NONINTERLACED) {
+        vtotal += var->yres;

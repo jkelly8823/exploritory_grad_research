@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 125-126
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) via 'php_url' and potential HTTP request smuggling vulnerability via corrupted HTTP headers.
+
+EXPLANATION:
+The code uses the 'php_url' struct which contains the URL for an HTTP request. However, the code doesn't properly validate or sanitize the 'php_url' before using it in the 'http_connect' function. This could potentially lead to an Insecure Direct Object Reference (IDOR) vulnerability if an attacker is able to manipulate the 'php_url'.
+
+Additionally, in the 'http_context_headers' function, the code appends user-controlled data to the 'soap_headers' smart string. This could lead to HTTP request smuggling vulnerabilities if an attacker is able to inject malicious data into the 'soap_headers'. Specifically, this occurs at lines 125-126 where user-controlled data is directly appended to 'soap_headers' without proper validation.
+
+RECOMMENDATIONS:
+To fix the potential IDOR vulnerability, ensure that the 'php_url' is properly validated and sanitized before using it in the 'http_connect' function.
+
+To fix the potential HTTP request smuggling vulnerability, perform input validation and sanitization on user-controlled data before appending it to the 'soap_headers'. This includes checking for and removing any malicious characters that could be used to inject malicious headers.
+
+ORIGINAL CODE:
+(some lines omitted for brevity)
+
+static php_stream* http_connect(zval* this_ptr, php_url *phpurl, int use_ssl, php_stream_context *context, int *use_proxy TSRMLS_DC)
+...
+		smart_str_append_const(&soap_headers_z,"Content-Encoding: gzip\r\n");
+...
+	http_context_headers(context, has_authorization, has_proxy_authorization, has_cookies, &soap_headers TSRMLS_CC);
+
+void http_context_headers(php_stream_context* context,
+                          zend_bool has_authorization,
+                          zend_bool has_proxy_authorization,
+                          zend_bool has_cookies,
+                          smart_str* soap_headers TSRMLS_DC)
+{
+...
+	char *s = Z_STRVAL_PP(tmp);
+	char *p;
+	int name_len;
+
+	while (*s) {
+		...
+		if ((name_len != sizeof("host")-1 ||
+...
+}s = (*p) ? (p + 1) : p;
+	}
+	/* append user-controlled data to soap_headers */
+	smart_str_appendl(soap_headers, s, p-s); // 125
+	smart_str_append_const(soap_headers, "\r\n"); // 126
+}

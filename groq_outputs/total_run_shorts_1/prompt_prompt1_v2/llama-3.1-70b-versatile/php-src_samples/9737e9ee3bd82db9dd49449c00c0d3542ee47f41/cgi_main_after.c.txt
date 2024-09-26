@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: Out-of-bounds memory access due to unbound null-terminated string assumption.
+EXPLANATION:
+The code assumes that the destination buffer (`path_translated`) will always hold a null-terminated string because `emalloc` allocates `path_translated_len + 1` bytes of memory. However, the `memcpy` function does not explicitly null-terminate the string. This may cause an out-of-bounds memory access if `path_translated` is later used as a null-terminated string, potentially leading to information disclosure, buffer overflow, or program crashes. Furthermore, this snippet's handling of memory may induce heap corruption if there is a subsequent use of functions like `strcmp` or `strcpy`.
+ 
+RECOMMENDATIONS:
+1. Manually null-terminate the destination buffer with an additional line of code:
+```c
+path_translated[path_translated_len] = '\0';
+```
+This ensures `path_translated` is always a null-terminated string.
+
+2. Instead of manual null-termination, consider using `strcpy` instead of `memcpy` for copying string content, assuming that `pt` is a null-terminated string:
+```c
+strcpy(path_translated, pt);
+```
+However, be cautious that `strcpy` has no bounds checking and can cause an overflow.
+
+3. As an additional measure to avoid overflow, it may be desirable to perform a check to ensure `path_translated_len` is within the expected range and will not cause an overflow:
+```c
+if (path_translated_len > INT_MAX - strlen(env_path_info) - 2) {
+    /* error handling */
+}
+```
+This helps prevent integer overflows due to excessive allocation size.
+
+4. Consider employing more modern alternatives for dynamically allocating memory, such as `calloc`, to initialize all bytes of the allocated block to zero, like so:
+```c
+path_translated = (char *) calloc(path_translated_len + 1, sizeof(char));
+```
+However, be aware of potential performance implications.
+
+ORIGINAL CODE:
+```
+) {
+    /* PATH_TRANSLATED = PATH_TRANSLATED - SCRIPT_NAME + PATH_INFO */
+    int ptlen = strlen(pt) - strlen(env_script_name);
+    int path_translated_len = ptlen + (env_path_info ? strlen(env_path_info) : 0);
+    char *path_translated = NULL;
+
+    path_translated = (char *) emalloc(path_translated_len + 1);
+    memcpy(path_translated, pt, ptlen);
+```

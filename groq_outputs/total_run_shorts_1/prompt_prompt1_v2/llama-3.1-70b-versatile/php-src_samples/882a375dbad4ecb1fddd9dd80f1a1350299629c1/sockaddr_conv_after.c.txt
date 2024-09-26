@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+Hostname spoofing vulnerability through potential buffer overflow.
+
+EXPLANATION:
+The code uses the gethostbyname() function, which returns a struct hostent containing information about the host. This function is deprecated because it performs DNS lookups synchronously, which can block your application. Furthermore, it uses a fixed-size buffer (struct hostent), which can lead to a buffer overflow vulnerability. The `strlen(string) > MAXHOSTNAMELEN` check does verify that the hostname is not too large to prevent some buffer overflow issues, but `gethostbyname` can still yield unexpected results with a excessively large DNS response.
+
+Additionally, `inet_aton` does not validate the input as much as modern IPv4 / IPv6 equivalent (`inet_pton`) functions and some invalid inputs may incorrectly pass. However, these issues are not the primary vulnerability here.
+
+RECOMMENDATIONS:
+- Consider upgrading to `getaddrinfo()` to mitigate hostname spoofing and related DNS issues. 
+- Whenever possible use the safer `inet_pton` API instead of `inet_aton`.
+- Implement additional error handling around DNS resolution, rather than assuming DNS resolution is correct.
+- Consider validating and sanitizing input data before passing it to `gethostbyname()` or other system functions.
+
+ORIGINAL CODE:
+```c
+#include <arpa/inet.h>
+#endif
+
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 255
+#endif
+
+extern int php_string_to_if_index(const char *val, unsigned *out TSRMLS_DC);
+
+#if HAVE_IPV6
+/* Sets addr by hostname, or by ip in string form (AF_INET6) */
+	if (inet_aton(string, &tmp)) {
+		sin->sin_addr.s_addr = tmp.s_addr;
+	} else {
+		if (strlen(string) > MAXHOSTNAMELEN || ! (host_entry = gethostbyname(string))) {
+			/* Note: < -10000 indicates a host lookup error */
+#ifdef PHP_WIN32
+			PHP_SOCKET_ERROR(php_sock, "Host lookup failed", WSAGetLastError());
+#else
+```

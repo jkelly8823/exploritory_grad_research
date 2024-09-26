@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 6-7
+VULNERABILITY_DESCRIPTION:
+Improper error handling, potential use-after-free with X509_check_ca and X509_check_issued.
+
+EXPLANATION:
+The given code does not check the return values of X509_check_ca and X509_check_issued, potentially leading to unexpected behavior. Furthermore, these functions can set error information and allocate or free memory. If either of these functions modifies the state of the certificate or the environment, it may cause issues with memory management, especially if an exception is not handled properly. In addition, if an error occurs and is not handled, the method will still attempt to return a value which can cause the application to use invalid or freed memory. 
+
+Additionally, the fact that X509ToObject and Local<Value>.ToLocal require error checking, but not X509_check_ca and X509_check_issued, might indicate that errors from the latter two are not being propagated, potentially masking errors that require handling.
+
+RECOMMENDATIONS:
+- Always check and handle the error returns of X509_check_ca and X509_check_issued, potentially wrapping them in their own exception handling to catch and handle any issues that they may throw.
+- Consider checking if cert is still valid after X509_check_ca and X509_check_issued have been called.
+- X509ToObject and Local<Value>.ToLocal should be checked similarly. This case does show X509ToObject is being checked, but Local<Value>.ToLocal should be checked in other cases if similar functions are used.
+
+
+ORIGINAL CODE:
+```cpp
+void X509Certificate::CheckCA(const FunctionCallbackInfo<Value>& args) {
+  X509Certificate* cert;
+  ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());
+  args.GetReturnValue().Set(X509_check_ca(cert->get()) == 1);
+}
+
+  X509Certificate* issuer;
+  ASSIGN_OR_RETURN_UNWRAP(&issuer, args[0]);
+
+  args.GetReturnValue().Set(
+    X509_check_issued(issuer->get(), cert->get()) == X509_V_OK);
+}
+
+  Environment* env = Environment::GetCurrent(args);
+  X509Certificate* cert;
+  ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());
+  Local<Value> ret;
+  if (X509ToObject(env, cert->get()).ToLocal(&ret))
+    args.GetReturnValue().Set(ret);
+}
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Insufficient Resource Release
+
+EXPLANATION:
+In this code snippet, memory is allocated for `llcp_sock->service_name` using `kmalloc`. However, if an error occurs later in the function (as indicated by the `ret = -EADDRINUSE` statement), the memory is freed with `kfree(llcp_sock->service_name)`, but `llcp_sock->service_name` is not set to `NULL` in all cases. Specifically, if an error occurs before `llcp_sock->ssap` is assigned (i.e., if `llcp_sock->local` is invalid or NULL), the `nfc_llcp_local_put(llcp_sock->local)` call will not execute, but the memory for `llcp_sock->service_name` is still allocated. If `llcp_sock->service_name` is used again later in the function, it will be used without being initialized properly, which can lead to undefined behavior or crashes.
+
+However, there's another potential error. `kfree(llcp_sock->service_name)` statement doesn't check whether `llcp_sock->service_name` is `NULL` or not. This can lead to a double-free error if `llcp_sock->service_name` has already been freed previously.
+
+RECOMMENDATIONS:
+- Before freeing `llcp_sock->service_name`, check whether `llcp_sock->service_name` is `NULL` or not to avoid double-free error.
+- Before assigning a new value to `llcp_sock->ssap`, ensure that `llcp_sock->service_name` is set to `NULL` in the error path.
+- Also, consider using smart pointers or RAII (Resource Acquisition Is Initialization) idiom if possible to avoid manual resource management.
+
+ORIGINAL CODE:
+```
+	llcp_sock->service_name = kmalloc(sizeof(*llcp_sock->service_name) +
+					  llcp_sock->service_name_len,
+					  GFP_KERNEL);
+	if (!llcp_sock->service_name) {
+		nfc_llcp_local_put(llcp_sock->local);
+		ret = -ENOMEM;
+		goto put_dev;
+	}
+	llcp_sock->ssap = nfc_llcp_get_sdp_ssap(local, llcp_sock);
+	if (llcp_sock->ssap == LLCP_SAP_MAX) {
+		nfc_llcp_local_put(llcp_sock->local);
+		kfree(llcp_sock->service_name);
+		llcp_sock->service_name = NULL;
+		ret = -EADDRINUSE;
+		goto put_dev;
+```

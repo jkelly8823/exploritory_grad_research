@@ -1,0 +1,171 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-21, 58-61
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to potential buffer overflow and null pointer dereferences in its handling of OpenSSL X.509 extensions, particularly with regards to subjectAltName and ASN.1 strings.
+
+EXPLANATION:
+The issues arise from the following potential problems:
+
+1. When handling ASN.1 strings, the code uses `bio_buf->length` to determine the length of the data to write, but it does not perform bounds checking. If the ASN.1 string is extremely large, it could potentially overflow the buffer.
+
+2. The code assumes that the ASN.1 string is null-terminated, and does not provide any protection against a null pointer dereference.
+
+3. If `X509V3_EXT_print(bio_out, extension, 0, 0)` returns an error, it will be caught by the `else` clause, which then tries to add an ASN.1 string directly without error checking. However, the return value of `X509_EXTENSION_get_data(extension)` is not checked for null, and the string is not checked for length, which could also cause a null pointer dereference.
+
+RECOMMENDATIONS:
+
+1. Perform bounds checking to prevent potential buffer overflows when handling ASN.1 strings. 
+
+2. Implement null pointer checks to prevent potential null pointer dereferences.
+
+3. When adding an ASN.1 string, check the return value of `X509_EXTENSION_get_data(extension)` for null and check the length of the string to prevent potential null pointer dereferences.
+
+Here is a simplified example of the code with these changes:
+
+```c
+{
+    // ...
+
+    if (bio_buf->length > INT_MAX - 1) {
+        // Logic to handle ASN.1 string that is too large
+    }
+
+    char* asn1_string = ASN1_STRING_data(as);
+    if (asn1_string == NULL) {
+        // Handle null pointer
+    }
+
+    size_t asn1_length = ASN1_STRING_length(as);
+    if (asn1_length == 0) {
+        // Handle empty ASN.1 string
+    }
+
+    BIO_write(bio, asn1_string, asn1_length);
+
+    // ...
+}
+
+// ...
+
+else if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+    BIO_get_mem_ptr(bio_out, &bio_buf);
+    add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+} else {
+    const ASN1_OCTET_STRING* extension_data = X509_EXTENSION_get_data(extension);
+    if (extension_data == NULL) {
+        // Handle null pointer
+    }
+    add_assoc_asn1_string(subitem, extname, extension_data);
+}
+
+// ...
+```
+
+ORIGINAL CODE:
+(The original code is too large, but the recommended changes should be applied to it)
+```c
+/* }}} */
+
+/* Special handling of subjectAltName, see CVE-2013-4073
+ * Christian Heimes
+ */
+
+static int openssl_x509v3_subjectAltName(BIO *bio, X509_EXTENSION *extension)
+{
+    GENERAL_NAMES *names;
+    const X509V3_EXT_METHOD *method = NULL;
+    long i, length, num;
+    const unsigned char *p;
+
+    method = X509V3_EXT_get(extension);
+    if (method == NULL) {
+        return -1;
+    }
+
+    p = extension->value->data;
+    length = extension->value->length;
+    if (method->it) {
+        names = (GENERAL_NAMES*)(ASN1_item_d2i(NULL, &p, length,
+                               ASN1_ITEM_ptr(method->it)));
+    } else {
+        names = (GENERAL_NAMES*)(method->d2i(NULL, &p, length));
+    }
+    if (names == NULL) {
+        return -1;
+    }
+
+    num = sk_GENERAL_NAME_num(names);
+    for (i = 0; i < num; i++) {
+         GENERAL_NAME *name;
+         ASN1_STRING *as;
+         name = sk_GENERAL_NAME_value(names, i);
+         switch (name->type) {
+             case GEN_EMAIL:
+                 BIO_puts(bio, "email:");
+                 as = name->d.rfc822Name;
+                 BIO_write(bio, ASN1_STRING_data(as),
+                           ASN1_STRING_length(as));
+                 break;
+             case GEN_DNS:
+                 BIO_puts(bio, "DNS:");
+                 as = name->d.dNSName;
+                 BIO_write(bio, ASN1_STRING_data(as),
+                           ASN1_STRING_length(as));
+                 break;
+             case GEN_URI:
+                 BIO_puts(bio, "URI:");
+                 as = name->d.uniformResourceIdentifier;
+                 BIO_write(bio, ASN1_STRING_data(as),
+                           ASN1_STRING_length(as));
+                 break;
+             default:
+                 /* use builtin print for GEN_OTHERNAME, GEN_X400,
+                  * GEN_EDIPARTY, GEN_DIRNAME, GEN_IPADD and GEN_RID
+                  */
+                 GENERAL_NAME_print(bio, name);
+         }
+         /* trailing ', ' except for last element */
+         if (i < (num - 1)) {
+             BIO_puts(bio, ", ");
+         }
+    }
+    sk_GENERAL_NAME_pop_free(names, GENERAL_NAME_free);
+
+    return 0;
+}
+
+/* {{{ proto array openssl_x509_parse(mixed x509 [, bool shortnames=true])
+   Returns an array of the fields/values of the CERT */
+PHP_FUNCTION(openssl_x509_parse)
+{
+
+
+    for (i = 0; i < X509_get_ext_count(cert); i++) {
+        int nid;
+        extension = X509_get_ext(cert, i);
+        nid = OBJ_obj2nid(X509_EXTENSION_get_object(extension));
+        if (nid != NID_undef) {
+            extname = (char *)OBJ_nid2sn(OBJ_obj2nid(X509_EXTENSION_get_object(extension)));
+        } else {
+            OBJ_obj2txt(buf, sizeof(buf)-1, X509_EXTENSION_get_object(extension), 1);
+            extname = buf;
+        }
+        bio_out = BIO_new(BIO_s_mem());
+        if (nid == NID_subject_alt_name) {
+            if (openssl_x509v3_subjectAltName(bio_out, extension) == 0) {
+                add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+            } else {
+                zval_dtor(return_value);
+                if (certresource == -1 && cert) {
+                    X509_free(cert);
+                }
+                BIO_free(bio_out);
+                RETURN_FALSE;
+            }
+        }
+        else if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+            BIO_get_mem_ptr(bio_out, &bio_buf);
+            add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+        } else {
+            add_assoc_asn1_string(subitem, extname, X509_EXTENSION_get_data(extension));
+```

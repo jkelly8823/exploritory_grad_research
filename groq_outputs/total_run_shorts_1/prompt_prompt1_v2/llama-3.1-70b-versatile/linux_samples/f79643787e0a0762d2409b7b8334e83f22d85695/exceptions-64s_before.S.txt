@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+The code snippet appears to be using PowerPC assembly language, and a potential vulnerability is present in the std instruction, which stores the value of register r1 into memory location PACA_EXRFI+EX_R12(r13). However, there is no validation or sanitization of the r1 register before storing its value. Additionally, a lack of initialization or control of the values in the EX_R12 register is present.
+
+EXPLANATION:
+When using registers without proper initialization or control, potential memory corruption or information disclosure vulnerabilities may arise. Another concern is that the values loaded into these registers are potentially under external control, allowing an attacker to modify the memory location that the std instruction targets.
+
+Upon closer inspection, it appears that the use of the std instruction on an indirect memory address computed using PACA_EXRFI+EX_R12(r13) indicates a use of an unsafe function. It is assumed that r13 is correctly set to PACA with no taint, but this code relies on previous instructions correctly doing their job and is further emphasized because in most static analysis and auditing tools, low-level subroutines such as std might bypass inspection.
+
+RECOMMENDATIONS:
+1. Ensure that the values in registers r1 and EX_R12 are validated and sanitized before the std instruction is executed. If these values come from external sources or untrusted input, controls should be put in place to prevent malicious values from being stored.
+2. Initialize and control the values of registers r1 and EX_R12 before using them in memory operations.
+3. Use safe and secure functions for memory operations to reduce the risk of memory corruption or information disclosure.
+
+ORIGINAL CODE:
+```.
+endr
+blr
+
+TRAMP_REAL_BEGIN(rfi_flush_fallback)
+	SET_SCRATCH0(r13);
+	GET_PACA(r13);
+	std	r1,PACA_EXRFI+EX_R12(r13)
+```

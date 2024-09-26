@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow vulnerability due to the way it allocates memory using emalloc and stores the return value from php_stream_read into the buffer.
+
+EXPLANATION:
+The code uses emalloc to allocate a buffer of size 'length + 1' bytes. It then uses php_stream_read to read 'length' bytes into this buffer. However, there is no check to ensure that php_stream_read does not read more than the allocated buffer size. This could potentially lead to a buffer overflow if php_stream_read returns a value greater than 'length'. Furthermore, the code assumes that php_stream_read will always write a NUL byte at the end of the buffer, which is not always guaranteed. 
+
+Additionally, in lines 8-10, the code manually appends a NUL byte to the buffer and sets the type of the return value to IS_STRING. However, this does not prevent the buffer overflow, as the extra bytes are still present in the buffer, even though they are not visible as part of the string.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to always check the return value of php_stream_read to ensure it does not exceed the allocated buffer size. If it does, an error should be returned to prevent the buffer overflow. It is also recommended to use a safer memory allocation function, such as estrndup or estrdup, which can help prevent buffer overflows. 
+
+For example:
+
+```
+size_t bytes_read = php_stream_read(intern->u.file.stream, Z_STRVAL_P(return_value), length);
+if (bytes_read > length) {
+    php_error_docref(NULL TSRMLS_CC, E_WARNING, "Bytes read exceeds buffer size");
+    efree(Z_STRVAL_P(return_value));
+    RETURN_FALSE;
+}
+Z_STRVAL_P(return_value)[bytes_read] = 0; // only append a NUL if bytes_read is not equal to length
+```
+
+ORIGINAL CODE:
+RETURN_LONG(php_stream_write(intern->u.file.stream, str, str_len));
+} /* }}} */
+
+SPL_METHOD(SplFileObject, fread)
+{
+    spl_filesystem_object *intern = (spl_filesystem_object*)zend_object_store_get_object(getThis() TSRMLS_CC);
+    long length = 0;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &length) == FAILURE) {
+        return;
+    }
+
+    if (length <= 0) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Length parameter must be greater than 0");
+        RETURN_FALSE;
+    }
+
+    Z_STRVAL_P(return_value) = emalloc(length + 1);
+    Z_STRLEN_P(return_value) = php_stream_read(intern->u.file.stream, Z_STRVAL_P(return_value), length);
+
+    /* needed because recv/read/gzread doesnt put a null at the end*/
+    Z_STRVAL_P(return_value)[Z_STRLEN_P(return_value)] = 0;
+    Z_TYPE_P(return_value) = IS_STRING;
+}
+
+/* {{{ proto bool SplFileObject::fstat()
+   Stat() on a filehandle */
+FileFunction(fstat)
+/* }}} */
+    ZEND_ARG_INFO(0, length)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_file_object_fread, 0, 0, 1)
+    ZEND_ARG_INFO(0, length)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_file_object_ftruncate, 0, 0, 1) 
+    ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+    SPL_ME(SplFileObject, fgetss,         arginfo_file_object_fgetss,        ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, fscanf,         arginfo_file_object_fscanf,        ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, fwrite,         arginfo_file_object_fwrite,        ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, fread,          arginfo_file_object_fread,         ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, fstat,          arginfo_splfileinfo_void,          ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, ftruncate,      arginfo_file_object_ftruncate,     ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, current,        arginfo_splfileinfo_void,          ZEND_ACC_PUBLIC)
+    SPL_ME(SplFileObject, key,            arginfo_splfileinfo_void,          ZEND_ACC_PUBLIC)

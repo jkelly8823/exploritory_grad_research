@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-16
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in the inet_addr function.
+
+EXPLANATION:
+The code snippet provided does not perform proper validation and sanitization of the input to the inet_addr function, which can lead to a potential buffer overflow vulnerability. The inet_addr function does not handle invalid or malformed input well, and can potentially overflow the buffer if the input is too large. Additionally, the function does not support IPv6 addresses, and can return INADDR_NONE (-1) if the input is not a valid IPv4 address. The return value is not checked for these cases, which can lead to undefined behavior.
+
+Furthermore, the use of inet_addr is generally discouraged, as it is not thread-safe and does not support internationalized domain names.
+
+The while loop continues to attempt to establish a connection to the server even if the previous attempts failed, which can lead to a denial-of-service (DoS) attack if the server is not properly secured.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use the inet_pton function instead of inet_addr. The inet_pton function is more secure and flexible, and supports both IPv4 and IPv6 addresses. It also allows for better error handling and validation of the input.
+
+Additionally, it is recommended to validate and sanitize the input to the inet_pton function to ensure that it is a valid IP address. This can be done using a regular expression or by checking the input against a whitelist of valid IP addresses.
+
+It is also recommended to add error handling for the inet_pton function to ensure that it returns a valid IP address. If the function returns an error, the program should handle it properly and not attempt to use the invalid IP address.
+
+Here is an example of how the inet_pton function can be used instead of inet_addr:
+
+```c
+struct in_addr addr;
+if (inet_pton(AF_INET, hostaddr, &addr) == 0) {
+    // handle invalid IP address
+}
+servaddr.sin_addr = addr;
+```
+
+ORIGINAL CODE:
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...int servsock;int connected;struct sockaddr_in servaddr;
+
+    // create socket to connect to server
+    servsock = socket( AF_INET, SOCK_STREAM, 0);memset( &servaddr, 0, sizeof(servaddr));servaddr.sin_family = AF_INET;servaddr.sin_port = htons(port);servaddr.sin_addr.s_addr = inet_addr(hostaddr);
+    do {
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+        // if connected then read and process messages from server
+        if (connected > -1) {
+            // read and process messages
+            ...
+        }
+
+    // keep trying to establish connection to the server
+    } while (connected < 0);
+
+    // close socket and return success or failure
+    ...
+}
+```

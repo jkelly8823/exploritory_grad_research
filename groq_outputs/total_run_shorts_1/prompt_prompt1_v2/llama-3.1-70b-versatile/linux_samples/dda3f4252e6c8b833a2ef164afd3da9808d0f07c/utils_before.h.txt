@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code checks for the existence of `__GLIBC_PREREQ` but includes `<unistd.h>` and `<sys/syscall.h>` regardless, potentially resulting in undefined behavior if the system does not support `__GLIBC_PREREQ(2, 30)`.
+EXPLANATION:
+The `__GLIBC_PREREQ` macro is used to check if the system supports a specific version of the GNU C Library. However, the conditional statement's `|| !__GLIBC_PREREQ(2, 30)` expression may be evaluated even if `__GLIBC_PREREQ` is not defined. This could happen if the preprocessor decides to evaluate the expression from left to right and encounters an undefined `__GLIBC_PREREQ`. Furthermore, the code does not check the return value of `__GLIBC_PREREQ(2, 30)`, which could be 0 (false) on platforms that do not support the required glibc version.
+RECOMMENDATIONS:
+To prevent this potential issue, use the `#ifdef` directive instead, like this:
+```c
+#ifdef __GLIBC_PREREQ
+#if __GLIBC_PREREQ(2, 30)
+/* This code block will only be executed if __GLIBC_PREREQ is defined and
+   the system supports glibc version 2.30 or later */
+#include <unistd.h>
+#include <sys/syscall.h>
+#else
+/* Added Error Handling for when the system doesn't support the glibc version */
+#error "Unsupported glibc version, please use version 2.30 or later."
+#endif  // __GLIBC_PREREQ(2, 30)
+#else  // __GLIBC_PREREQ is not defined
+#error "__GLIBC_PREREQ undefined, unsupported platform"
+#endif  // __GLIBC_PREREQ
+```
+ORIGINAL CODE:
+```c
+int perf_event_disable(int fd);
+int perf_event_reset(int fd);
+
+#if !defined(__GLIBC_PREREQ) || !__GLIBC_PREREQ(2, 30)
+#include <unistd.h>
+#include <sys/syscall.h>
+```

@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code uses a direct memory comparison without checking the boundary limits of the data structure.
+
+EXPLANATION:
+In the given code snippet, the line `if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <= EXT4_INODE_SIZE(inode->i_sb) && *magic == cpu_to_le32(EXT4_XATTR_MAGIC))` checks if the `magic` pointer points to a valid location within the inode structure. However, this check relies on the assumption that `ei->i_extra_isize` does not overflow when added to `EXT4_GOOD_OLD_INODE_SIZE`. 
+
+If `ei->i_extra_isize` is large enough, it can cause a buffer overread or even a segmentation fault. This can be exploited by an attacker who can manipulate the `i_extra_isize` value.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to perform additional checks to ensure that `ei->i_extra_isize` does not overflow when added to `EXT4_GOOD_OLD_INODE_SIZE`. 
+
+Here's a possible fix:
+```c
+if ((EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize) > EXT4_INODE_SIZE(inode->i_sb)) {
+    // handle error or overflow
+    return -EFAULT;
+}
+
+if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <= EXT4_INODE_SIZE(inode->i_sb) && *magic == cpu_to_le32(EXT4_XATTR_MAGIC)) {
+    // valid case
+}
+```
+ORIGINAL CODE:
+
+    }
+}
+
+static inline int ext4_iget_extra_inode(struct inode *inode,
+                        struct ext4_inode *raw_inode,
+                        struct ext4_inode_info *ei)
+{
+    __le32 *magic = (void *)raw_inode +
+            EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize;
+
+    if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <=
+        EXT4_INODE_SIZE(inode->i_sb) &&
+        *magic == cpu_to_le32(EXT4_XATTR_MAGIC)) {
+        ext4_set_inode_state(inode, EXT4_STATE_XATTR);
+        return ext4_find_inline_data_nolock(inode);
+    } else
+        EXT4_I(inode)->i_inline_off = 0;
+    return 0;
+}
+
+int ext4_get_projid(struct inode *inode, kprojid_t *projid)
+{
+            ei->i_extra_isize = sizeof(struct ext4_inode) -
+                        EXT4_GOOD_OLD_INODE_SIZE;
+        } else {
+            ret = ext4_iget_extra_inode(inode, raw_inode, ei);
+            if (ret)
+                goto bad_inode;
+        }
+    }
+
+    EXT4_INODE_GET_XTIME(i_ctime, inode, raw_inode);

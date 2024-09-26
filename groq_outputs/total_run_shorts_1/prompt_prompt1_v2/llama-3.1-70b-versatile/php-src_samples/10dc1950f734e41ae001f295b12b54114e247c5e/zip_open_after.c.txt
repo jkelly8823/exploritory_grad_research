@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 8
+VULNERABILITY_DESCRIPTION: 
+Potential integer overflow vulnerability in the comparison of buffer sizes.
+
+EXPLANATION:
+The vulnerability is found in the comparison of buffer sizes on lines 4 and 8. The code checks if the `offset + size` exceeds `buf_offset + eocd_offset` on line 4, and also checks for equality on line 8. However, there's no protection against potential integer overflow that could occur when adding `offset` and `size` together. If `offset` and `size` are large enough, their sum could wrap around, causing the comparison to produce incorrect results. This could lead to a potential buffer overflow or an out-of-bounds access.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, additional checks can be added to ensure that the sums of `offset + size` and `buf_offset + eocd_offset` do not overflow. This can be achieved by checking for potential overflows before performing the arithmetic operations.
+
+For example:
+```c
+if (offset > INT_MAX - size) {
+    zip_error_set(error, ZIP_ER_OVERFLOW, 0);
+    return NULL;
+}
+if (buf_offset > INT_MAX - eocd_offset) {
+    zip_error_set(error, ZIP_ER_OVERFLOW, 0);
+    return NULL;
+}
+```
+These checks ensure that the sums of `offset + size` and `buf_offset + eocd_offset` will not exceed the maximum value that can be represented by an `int`.
+
+Additionally, consider using a compiler that supports overflow checking or use overflow-safe arithmetic libraries.
+
+ORIGINAL CODE:
+```c
+zip_error_set(error, ZIP_ER_SEEK, EFBIG);
+return NULL;
+}
+if (offset+size > buf_offset + eocd_offset) {
+    /* cdir spans past EOCD record */
+    zip_error_set(error, ZIP_ER_INCONS, 0);
+    return NULL;
+}
+if ((flags & ZIP_CHECKCONS) && offset+size != buf_offset + eocd_offset) {
+    zip_error_set(error, ZIP_ER_INCONS, 0);
+    return NULL;
+}
+```

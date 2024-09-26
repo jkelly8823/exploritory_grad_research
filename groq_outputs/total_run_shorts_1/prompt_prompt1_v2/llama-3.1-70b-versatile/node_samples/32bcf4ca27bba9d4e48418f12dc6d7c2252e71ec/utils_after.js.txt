@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+Untrusted Input Leading to Potential Path Traversal Vulnerability
+
+EXPLANATION:
+The `possiblyTransformPath` function takes a `path` variable as an argument, which is then passed to `resolvePath`. If the `path` is a string or a Buffer, it will be resolved and returned. However, there is no validation on the `path` variable to ensure it is a legitimate path that does not traverse outside of the intended directory. This could potentially lead to a path traversal vulnerability, where an attacker could manipulate the `path` variable to access sensitive files or directories.
+
+Additionally, the `pathModule.resolve` function is being called with a `toString()` method on a Buffer object. This could potentially lead to an error if the Buffer object contains invalid characters or encoding.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend adding input validation and sanitization to the `possiblyTransformPath` function. This could include:
+
+- Checking if the `path` variable is a valid string or Buffer object before passing it to `resolvePath`.
+- Using a library or function that sanitizes the input path to prevent path traversal attacks.
+- Adding error handling to catch any potential errors that may occur when calling `toString()` on a Buffer object.
+
+Additionally, it is recommended to implement the `path.resolve` function on the C++ side as specified in the TODO comment, to ensure that the path resolution is done securely and correctly.
+
+ORIGINAL CODE:
+```javascript
+// TODO(rafaelgss): implement the path.resolve on C++ side
+// See: https://github.com/nodejs/node/pull/44004#discussion_r930958420
+// The permission model needs the absolute path for the fs_permission
+const resolvePath = pathModule.resolve;
+function possiblyTransformPath(path) {
+  if (permission.isEnabled()) {
+    if (typeof path === 'string') {
+      return resolvePath(path);
+    } else if (Buffer.isBuffer(path)) {
+      return Buffer.from(resolvePath(path.toString()));
+    }
+  }
+  return path;
+}
+```

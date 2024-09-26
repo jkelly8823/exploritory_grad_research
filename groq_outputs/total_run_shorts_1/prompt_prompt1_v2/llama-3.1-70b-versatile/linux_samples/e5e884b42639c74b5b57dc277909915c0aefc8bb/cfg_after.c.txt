@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-23
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to an integer overflow in the rates_eid array indexing.
+
+EXPLANATION:
+In the given code snippet, the variable `rates_max` is assigned the value of `rates_eid[1]`. However, there is no validation or check if `rates_eid[1]` is greater than or equal to `rates_max` which is used to iterate in the loop. Additionally, inside the loop, `rates_eid[i+2]` is accessed which could potentially lead to an integer overflow if `rates_max` is large enough. This can cause an undefined behavior as the code is accessing outside the bounds of the array `rates_eid`. 
+
+Furthermore, the code truncates the `lbs_rates[hw].bitrate` by dividing it by 5 and then assigning it to `hw_rate`. This could potentially lead to a truncation error, especially if the bitrate is not a multiple of 5.
+
+RECOMMENDATIONS:
+1. Validate the value of `rates_max` before using it in the loop.
+2. Ensure that the index `i+2` does not exceed the bounds of the `rates_eid` array.
+3. Consider using safer types such as size_t for array indexing.
+4. Avoid truncation of values by using more precise calculations.
+
+ORIGINAL CODE:
+```
+	int hw, ap, ap_max = ie[1];
+	u8 hw_rate;
+
+	if (ap_max > MAX_RATES) {
+		lbs_deb_assoc("invalid rates\n");
+		return tlv;
+	}
+	/* Advance past IE header */
+	ie += 2;
+
+	lbs_deb_hex(LBS_DEB_ASSOC, "AP IE Rates", (u8 *) ie, ap_max);
+	struct cmd_ds_802_11_ad_hoc_join cmd;
+	u8 preamble = RADIO_PREAMBLE_SHORT;
+	int ret = 0;
+	int hw, i;
+	u8 rates_max;
+	u8 *rates;
+
+	/* TODO: set preamble based on scan result */
+	ret = lbs_set_radio(priv, preamble, 1);
+	if (ret)
+	if (!rates_eid) {
+		lbs_add_rates(cmd.bss.rates);
+	} else {
+		rates_max = rates_eid[1];
+		if (rates_max > MAX_RATES) {
+			lbs_deb_join("invalid rates");
+			goto out;
+		}
+		rates = cmd.bss.rates;
+		for (hw = 0; hw < ARRAY_SIZE(lbs_rates); hw++) {
+			u8 hw_rate = lbs_rates[hw].bitrate / 5;
+			for (i = 0; i < rates_max; i++) {
+				if (hw_rate == (rates_eid[i+2] & 0x7f)) {
+```

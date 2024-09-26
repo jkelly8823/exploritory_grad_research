@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+ Dereference of a Pointer Without Checking for Null Before Use.
+EXPLANATION:
+The given code snippet contains a potential null pointer dereference vulnerability. The code checks the value of `right_info` but then uses `right_info->bitmap` without ensuring that `right_info` is not null. This could lead to a crash or unintended behavior if `right_info` is null. 
+
+However, the check is actually `if (right_info && !right_info->bitmap)` which does indeed check for the null pointer before using it, I re-evaluate and find a different vulnerability.
+
+I find in the following lines, both left and right_info pointer are not checked properly for null when used.
+
+```c
+if (right_info && rb_prev(&right_info->offset_index))
+```
+This line might look good as it does a null check, but right above this, right_info was not checked if it was null before this line.
+
+This issue is less likely, but I find that right_info can be null as you referenced above here which doesn’t even check that case.
+  
+So vulnerability can still occur here-
+
+```c
+left_info = rb_entry(rb_prev(&right_info->offset_index),
+                     struct btrfs_free_space, offset_index);
+```
+
+RECOMMENDATIONS:
+Add null checks for `right_info` before using `right_info` and `rb_entry(&right_info->offset_index)` 
+
+For example, 
+
+```c
+if (right_info != NULL) {
+    if (rb_prev(&right_info->offset_index))
+        left_info = rb_entry(rb_prev(&right_info->offset_index),
+                     struct btrfs_free_space, offset_index);
+} else {
+    left_info = tree_search_offset(ctl, offset - 1, 0, 0);
+}
+```
+
+You can also consider using a safer null check idiom in your code, like always assigning initial values to pointers.
+
+ORIGINAL CODE:
+```c
+static bool try_merge_free_space(struct btrfs_free_space_ctl *ctl,
+			  struct btrfs_free_space *info, bool update_stat)
+{
+	struct btrfs_free_space *left_info;
+	struct btrfs_free_space *right_info;
+	bool merged = false;
+	u64 offset = info->offset;
+	u64 bytes = info->bytes;
+	if (right_info && rb_prev(&right_info->offset_index))
+		left_info = rb_entry(rb_prev(&right_info->offset_index),
+				     struct btrfs_free_space, offset_index);
+	else
+		left_info = tree_search_offset(ctl, offset - 1, 0, 0);
+
+	/* See try_merge_free_space() comment. */
+	if (right_info && !right_info->bitmap &&
+```

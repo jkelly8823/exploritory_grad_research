@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 3
+VULNERABILITY_DESCRIPTION: The provided code defines functions `gdPFree` and `gdPEstrdup` to manage memory, but the version used `pefree` and `pestrdup` takes into account a thread safety parameter having a value of 1. This may lead to synchronization issues and race conditions if other parts of the program do not correctly handle thread-safe memory allocation.
+
+EXPLANATION:
+The `gdPFree` and `gdPEstrdup` functions force the use of thread-safe memory allocation and deallocation when called, even if the version of the memory functions used do not support this version. If the rest of the program does not maintain the same level of thread safety in memory management, this may result in synchronization errors and other race conditions.
+
+However, since the code for managing mutex functions (`gdMutexDeclare`, `gdMutexSetup`, `gdMutexShutdown`) seems thread-safe due to being defined with calls to thread-safe functions under a `#ifdef ZTS` directive ( Zend Thread Safety), this specific code snippet appears to be thread-safe. 
+
+The primary concern of this evaluation lies with how this `gdPFree` and `gdPEstrdup` method is used throughout the program, to make certain that other sections are utilizing thread-safe memory allocation methods.
+
+RECOMMENDATIONS:
+If this code is used in a multithreaded environment, all related code sections must also maintain thread safety, specifically during memory allocations. Additional checks for thread-safe support during memory allocation (`pefree` and `pestrdup`) are recommended to ensure synchronization in all scenarios. When possible, the system should opt for synchronized versions of memory functions like `tsrm_safe_strdup`.
+
+ORIGINAL CODE:
+```c
+#define gdPFree(ptr)		pefree(ptr, 1)
+#define gdPEstrdup(ptr)		pestrdup(ptr, 1)
+
+#ifdef ZTS
+#define gdMutexDeclare(x) MUTEX_T x
+#define gdMutexSetup(x) x = tsrm_mutex_alloc()
+#define gdMutexShutdown(x) tsrm_mutex_free(x)
+```

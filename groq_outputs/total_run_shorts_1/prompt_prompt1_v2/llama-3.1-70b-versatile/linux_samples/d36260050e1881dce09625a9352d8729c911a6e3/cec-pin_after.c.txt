@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-15, 18-19
+VULNERABILITY_DESCRIPTION: Insecure Handling of Time-Related Values
+EXPLANATION: 
+This code appears to handle timing conditions for CEC (Consumer Electronics Control) protocol. However, it uses magic numbers (e.g., CEC_TIM_START_BIT_LOW_MIN, CEC_TIM_IDLE_SAMPLE) without explicit bounds checking or error validation on the time interval (delta). This could potentially lead to incorrect or insecure states if the time deltas are not handled correctly. Furthermore, the time-related values seem to be written to pin->rx_start_bit_low_too_short_cnt and pin->rx_start_bit_too_short_cnt only when their respective conditionals evaluate to true and a previous iteration had not triggered the event recording yet, this and its possible associated incremented values to pin->rx_data_bit_too_short_cnt, could lead to additional errors when dealing with too short start bits.
+In addition, this code checks multiple conditions but does not initialize delta with any value. Given that delta is used to check conditions in sequence and without reset to zero, its use might potentially yield false positive results specially on the handling of pin->rx_data_bit_too_short_cnt in the event delta's integer values from former evaluations on prior checks will exceed thresholds evaluated below its prior used value.
+
+RECOMMENDATIONS:
+1. Validate all time interval values (delta) before comparing them to these magic numbers.
+2. Use strict bounds checking on these values to ensure they do not exceed the expected range.
+3. Validate pin->rx_start_bit_low_too_short_cnt and pin->rx_start_bit_too_short_cnt values after a reset is executed avoiding overwrites that aren't expected values, also considering proper delta reset between checks. And considering pin's state transition whenever pin->rx_data_bit_too_short_cnt gets triggered so handling avoids the resulting side effects after said transition happens
+
+
+ORIGINAL CODE:
+
+/* Start bit low is too short, go back to idle */
+if (delta < CEC_TIM_START_BIT_LOW_MIN - CEC_TIM_IDLE_SAMPLE) {
+	if (!pin->rx_start_bit_low_too_short_cnt++) {
+		pin->rx_start_bit_low_too_short_ts = ktime_to_ns(pin->ts);
+		pin->rx_start_bit_low_too_short_delta = delta;
+	}
+	cec_pin_to_idle(pin);
+	break;
+		/* Start bit is too short, go back to idle */
+if (delta < CEC_TIM_START_BIT_TOTAL_MIN - CEC_TIM_IDLE_SAMPLE) {
+	if (!pin->rx_start_bit_too_short_cnt++) {
+		pin->rx_start_bit_too_short_ts = ktime_to_ns(pin->ts);
+		pin->rx_start_bit_too_short_delta = delta;
+	}
+	cec_pin_to_idle(pin);
+	break;
+	*/
+if (delta < CEC_TIM_DATA_BIT_TOTAL_MIN) {
+	if (!pin->rx_data_bit_too_short_cnt++) {
+		pin->rx_data_bit_too_short_ts = ktime_to_ns(pin->ts);
+		pin->rx_data_bit_too_short_delta = delta;
+	}
+	cec_pin_low(pin);
+	pin->state = CEC_ST_RX_LOW_DRIVE;

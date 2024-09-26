@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds buffer access and writing to a pointer with untrusted input.
+
+EXPLANATION:
+The provided code snippet shows two instances of potential vulnerabilities. 
+
+1. The assignment `*arg_copy = untrusted_arg;` writes an untrusted value directly to a pointer (`arg_copy`). This could potentially cause data corruption or injection of malicious data.
+
+2. The line `array[**trusted_ptr * 4096];` performs an out-of-bounds buffer access if the calculated index `**trusted_ptr * 4096` is greater than or equal to the size of the `array`. Although `trusted_ptr` is named as such, the actual trustworthiness of its values is not guaranteed by this code alone. However, assuming this code snippet accurately reflects variable naming conventions, a more significant concern arises when taking into account the other variable named `untrusted_arg`.
+
+If we were to assume that `trusted_ptr` could indeed contain trustworthy values but has the potential to reach beyond the bounds of `array`, the larger concern appears if an attacker successfully controls `trusted_ptr`. Considering that an attacker with control over the argument to `call_victim` function could inject arbitrary values, using such input in an indirect addressing operation, and/or possibly controlling indirect addressing of arbitrary memory, would allow an attacker to make the `array`'s offset untrustworthily large.
+
+The most reasonable assumption, given the code snippet's naming convention, leads us to evaluate both variable assignments' trustworthiness based on the context in which they're used.
+
+RECOMMENDATIONS:
+
+1. Verify the trustworthiness of `untrusted_arg` before writing its value directly to a pointer. This could involve checking whether the value is within the expected range and/or sanitizing it.
+
+2. If `trusted_ptr` is not within the control of the adversary and a mechanism that provides assurance about what range(s) of offset addresses `trusted_ptr` point to exists, consider implementing stricter validation on `trusted_ptr`. 
+
+    `array[**trusted_ptr * 4096]` places unverifiable expectations of what would constitute trustworthy `trusted_ptr` ranges and its exact offset properties. Then you could place specific bounds on `trusted_ptr values`. Otherwise, do more thorough review or add validation code similar to the following
+
+    ```c
+    if (**trusted_ptr * 4096 < sizeof(array)) {
+        array[**trusted_ptr * 4096];
+    }
+    ```
+
+3. Another solution might be applying an offset address shift limit and bounds checking implementation similar to this snippet
+
+    ```c
+    off_addr_t offset = **trusted_ptr * 4096;
+    off_addr_t offset_max_range = sizeof(array);
+
+    off_addr_t upper_bound = offset_max_range - 1;
+
+    if (offset <= upper_bound) {
+        array[offset];
+    } else {
+        LOG_ERROR("Operation failed. Bounds check failed.");
+    }
+    ```
+
+ORIGINAL CODE:
+
+```c
+void call_victim(size_t untrusted_arg) {
+    *arg_copy = untrusted_arg;
+    array[**trusted_ptr * 4096];
+}
+```

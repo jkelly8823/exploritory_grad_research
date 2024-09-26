@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Possible Use-After-Free vulnerability in handling of `return_value` zval.
+
+EXPLANATION:
+The `INIT_PZVAL(return_value)` function call performs an upgrade on the `return_value` zval from an "uninitialized" state to an "initialized" state. However, on lines 3 and 4, there is a potential vulnerability introduced by checking `Z_TYPE_P(return_value)` and subsequently handling it, all before updating the `return_value` zval completely with `zval_update_constant_ex()`. This sequence could lead to an invalid or uninitialized zval being copied and potentially lead to undefined behavior or crashes when processing.
+
+It's uncertain whether `INIT_PZVAL(return_value)` is the correct operation in this context, as the `return_value` zval is then copied if it's not of type IS_CONSTANT or IS_CONSTANT_ARRAY. This could also hint at possible memory corruption.
+
+In certain versions of PHP, this could also lead to potential memory leaks when processing the zval.
+
+RECOMMENDATIONS:
+To address the potential vulnerability, consider re-arranging the operations:
+- Ensure the `return_value` zval is initialized correctly before performing the `Z_TYPE_P()` check.
+- Avoid processing or modifying `return_value` until `zval_update_constant_ex()` is called.
+- Keep PHP's engine in mind, and consider whether manual memory management is required in this specific case, as engine-level issues might contribute to this problem.
+
+ORIGINAL CODE:
+ 
+	*return_value = *precv->op2.zv;
+	INIT_PZVAL(return_value);
+	if (Z_TYPE_P(return_value) != IS_CONSTANT && Z_TYPE_P(return_value) != IS_CONSTANT_ARRAY) {
+		zval_copy_ctor(return_value);
+	}
+	zval_update_constant_ex(&return_value, (void*)0, param->fptr->common.scope TSRMLS_CC);

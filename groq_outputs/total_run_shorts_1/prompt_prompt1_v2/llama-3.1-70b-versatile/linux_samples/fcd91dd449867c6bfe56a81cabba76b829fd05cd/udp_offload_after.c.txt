@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Inconsistent Skype sequence update or wrong checksum handling in the context of UDP checksum validation.
+EXPLANATION:
+The analysis raises concerns about potential inconsistency in Skype sequence update or checksum handling. Specifically, `skb_gro_pull` to pull the encapsulating UDP header suggests that this header may be present or missing. However, this implies a preceding function call that adds UDP header to the `skb` that this function uses for validation, making this line concerning and harder to interpret from. We should then also question the context for what kind of application this code was developed for, this might imply validation for wrong or missing checksum validation.
+The function skb_gro_pull takes off 8bytes so that's also inconsistent in this current instance to reference from as well.   call_gro_receive_sk does not itself resolve consistent update or inconsistency with Skype updating data over networks to date with updated routines based on the previous pull which could allow unauthorized traffic leading to the vulnerability, I understand in general this is part of Skye processing.
+RECOMMENDATIONS:
+This issue can be mitigated by introducing checksum validation. This check validates the integrity of the UDP header. If the checksum is invalid, it should be dropped by design.
+
+Ensure always there's a consistent sequence update for instance updating `skb->csum` for addition UDP sequence update in this sk buffer case.
+Instead of presenting UDP sequence update with it calls as value arguments in new check updates and as follow-through from previous references within Skype UDP handling when previous pull and updates allowed.
+Always ensure to update all other necessary checks for sequence UDP headers pulled from previous network skb data.
+Additionally, there may need to review 'skb_checksum_help'(skb) for skb checksum update and validation before pulling UDP or other lower layer headers and subsequent validation with given skb_sk.
+  Specifically skb_gro_postpull_rcsum - can be questionable based on skb pull based validation methodology in this sequence, to validate UDP sequence, while skb checksum help supports checksum validating using the previous checks resulting from previous SKB validation and enabling consistent handling to this set of skb Skype based SK sequences that need sequence updates also with higher-layer checksums as supported.
+ORIGINAL CODE:
+```
+	skb_gro_pull(skb, sizeof(struct udphdr)); /* pull encapsulating udp header */
+	skb_gro_postpull_rcsum(skb, uh, sizeof(struct udphdr));
+	pp = call_gro_receive_sk(udp_sk(sk)->gro_receive, sk, head, skb);
+
+out_unlock:
+	rcu_read_unlock();
+out:
+```

@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 149-170, 336-346, 351-380
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to memory corruption due to improper handling of dynamically allocated memory.
+EXPLANATION:
+The code uses various functions like `mnd_pestrdup`, `mnd_emalloc`, `mnd_pemalloc`, `mnd.efree` to allocate and free memory. However, the memory is not always properly checked for `NULL` before being used, and in some cases, the memory is freed twice.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to:
+
+1. Always check for `NULL` before using dynamically allocated memory.
+2. Avoid freeing memory twice. Ensure that the same memory is not freed by multiple functions.
+3. Use memory debugging tools like Valgrind to identify memory leaks and corruption.
+
+Specifically:
+
+* In the `mysqlnd_connect_run_authentication` function, the `plugin_data` is allocated with `mnd_emalloc` and then freed with `mnd_efree`. However, the same memory is assigned to `switch_to_auth_protocol_data` and later freed again with `mnd_efree`. This can lead to memory corruption. (Lines 336-346)
+* In the `mysqlnd_conn_data::change_user` function, the `plugin_data` is allocated with `mnd_emalloc` and then freed with `mnd_efree`. However, if `scrambled_data` is `NULL`, the `plugin_data` is not freed, leading to a potential memory leak. (Lines 351-380)
+* In the `mysqlnd_conn_data::simple_command` function, the `cmd_packet` is freed with `PACKET_FREE`, but it is not checked if it is `NULL` before being freed. This can lead to a segmentation fault if `cmd_packet` is `NULL`. (Lines 149-170)
+
+By fixing these issues, the code can be made more robust and less prone to memory corruption.

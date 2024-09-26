@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability.
+EXPLANATION:
+The issue lies in the fact that the `serverSocket` is not closed in the event of an exception. This can lead to a resource leak, where the socket remains open and unavailable for other processes to use.
+
+Additionally, the client socket is not closed in the event of an exception in the `run` method, leading to another resource leak. In both cases, the socket should be closed in a finally block or with a try-with-resources statement to ensure that the socket is always closed, regardless of whether an exception occurs.
+
+Lastly, it appears that the while loop in the constructor is calling the `start()` method without stopping the current thread. This will likely result in additional problems as multiple threads are created and the previous ones are still running. It would be more suitable to start the server in the `run` method instead of the constructor.
+
+RECOMMENDATIONS:
+- It's recommended to use a try-with-resources statement or a try-finally block to ensure the sockets are always closed, even in the event of an exception.
+- Consider refactoring the code to avoid creating new threads in the constructor and instead start the server in the `run` method.
+
+ORIGINAL CODE:
+```java
+@Stateless
+public class StockSymbolBean extends Thread implements StockSymbolRemote {
+    /*Create Socket Objects
+     ServerSocket serverSocket = new...;
+     Socket clientSocket = new...; 
+     boolean value to control the program while loop*/
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    boolean listening = false;
+
+    public StockSymbolBean() {
+        try {
+            serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        } catch (IOException ex) {
+        }
+        listening = true;
+        while (listening) {
+            start();
+        }
+    }
+
+    public String getStockSymbol(String name) {
+        //...
+    }
+
+    public BigDecimal getStockValue(String symbol) {
+        //...
+    }
+
+    public void run() {
+        try {
+            clientSocket = serverSocket.accept();
+        } catch (IOException e) {
+        }
+        //...
+    }
+}
+```

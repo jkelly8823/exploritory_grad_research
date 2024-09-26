@@ -1,0 +1,87 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9, 31-40
+VULNERABILITY_DESCRIPTION:
+ DOM-based cross-site scripting (XSS) vulnerability.
+
+EXPLANATION:
+The code snippet appears to be testing the URL parsing behavior of the `url.parse()` function. However, the test cases include URLs with malicious JavaScript payloads, such as `'javascript:alert(1);a=\x27@white-listed.com\x27'`. These payloads can lead to DOM-based XSS attacks when executed.
+
+The vulnerable lines are those where the `pathname` and `href` properties are set to the malicious JavaScript payloads. These properties are later used to resolve URLs using the `resolveObject()` method, which can lead to the execution of the malicious payloads.
+
+The test case on lines 31-40 is particularly concerning, as it resolves the malicious URL in the `href` property using the `resolveObject()` method. This method call can lead to the execution of the malicious JavaScript payload.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that any user-input or untrusted data is properly sanitized and validated before being used in URL parsing and resolution. In this case, the test cases should be modified to use harmless payloads instead of malicious JavaScript code.
+
+When parsing URLs, consider using a library that provides robust security features, such as URI.js or URL.js. These libraries can help prevent XSS attacks by properly sanitizing and encoding URLs.
+
+Additionally, consider implementing additional security measures, such as content security policies (CSP) and subresource integrity (SRI), to prevent the execution of malicious scripts.
+
+ORIGINAL CODE:
+```javascript
+pathname: '/*',
+path: '/*',
+href: 'https:///*'
+},
+
+// The following two URLs are the same, but they differ for
+// a capital A: it is important that we verify that the protocol
+// is checked in a case-insensitive manner.
+'javascript:alert(1);a=\x27@white-listed.com\x27': {
+protocol: 'javascript:',
+slashes: null,
+auth: null,
+host: null,
+port: null,
+hostname: null,
+hash: null,
+search: null,
+query: null,
+pathname: "alert(1);a='@white-listed.com'",
+path: "alert(1);a='@white-listed.com'",
+href: "javascript:alert(1);a='@white-listed.com'"
+},
+
+'javAscript:alert(1);a=\x27@white-listed.com\x27': {
+protocol: 'javascript:',
+slashes: null,
+auth: null,
+host: null,
+port: null,
+hostname: null,
+hash: null,
+search: null,
+query: null,
+pathname: "alert(1);a='@white-listed.com'",
+path: "alert(1);a='@white-listed.com'",
+href: "javascript:alert(1);a='@white-listed.com'"
+}
+};
+
+for (const u in parseTests) {
+assert.strictEqual(actual, expected,
+`format(${u}) == ${u}\nactual:${actual}`);
+}
+
+{
+const parsed = url.parse('http://nodejs.org/')
+.resolveObject('jAvascript:alert(1);a=\x27@white-listed.com\x27');
+
+const expected = Object.assign(new url.Url(), {
+protocol: 'javascript:',
+slashes: null,
+auth: null,
+host: null,
+port: null,
+hostname: null,
+hash: null,
+search: null,
+query: null,
+pathname: "alert(1);a='@white-listed.com'",
+path: "alert(1);a='@white-listed.com'",
+href: "javascript:alert(1);a='@white-listed.com'"
+});
+
+assert.deepStrictEqual(parsed, expected);
+}
+```

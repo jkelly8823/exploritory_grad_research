@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11, 19-21, 25-26
+VULNERABILITY_DESCRIPTION:
+Integer overflow when integer operands are passed to the `__mwait`, `__mwaitx`, and `__mwait` functions.
+EXPLANATION:
+There are three inline functions `__mwait`, `__mwaitx`, and `__sti_mwait` which are accepting integer arguments (`eax`, `ecx`, `ebx`, `eax`). These inline functions are having unsafe input handling while using inline Assembly code. There is no check over values of input parameters. Henceforth attacker could provide `eax` or `ecx` of value larger than registers can handle directly in assembly (`"a" (eax), "c" (ecx)`), which results in wrong values that might result in undefined behavior or crashes the system.
+RECOMMENDATIONS:
+1. Validating the range of input parameter values ie., ((eax|ecx) > 255 || (eax|ecx) < 0) to prevent such possibility of crashes. The `eax` and `ecx` values should be checked before using inline Assembly code in all the three vulnerable lines.
+2. Bounds checking will prevent an attacker from triggering the vulnerability and ensuring only proper and restricted parameters are passed to the inline functions. 
+
+ORIGINAL CODE:
+```c
+#include <linux/sched/idle.h>
+#include <asm/cpufeature.h>
+#include <asm/nospec-branch.h>
+
+#define MWAIT_SUBSTATE_MASK		0xf
+#define MWAIT_CSTATE_MASK		0xf
+#define MWAIT_SUBSTATE_SIZE		4
+
+static inline void __mwait(unsigned long eax, unsigned long ecx)
+{
+	mds_idle_clear_cpu_buffers();
+
+	/* "mwait %eax, %ecx;" */
+	asm volatile(".byte 0x0f, 0x01, 0xc9;"
+		     :: "a" (eax), "c" (ecx));
+}
+static inline void __mwaitx(unsigned long eax, unsigned long ebx,
+			    unsigned long ecx)
+{
+	/* No MDS buffer clear as this is AMD/HYGON only */
+
+	/* "mwaitx %eax, %ebx, %ecx;" */
+	asm volatile(".byte 0x0f, 0x01, 0xfb;"
+		     :: "a" (eax), "b" (ebx), "c" (ecx));
+}
+
+static inline void __sti_mwait(unsigned long eax, unsigned long ecx)
+{
+	mds_idle_clear_cpu_buffers();
+
+	trace_hardirqs_on();
+	/* "mwait %eax, %ecx;" */
+	asm volatile("sti; .byte 0x0f, 0x01, 0xc9;"
+		     :: "a" (eax), "c" (ecx));
+}
+```

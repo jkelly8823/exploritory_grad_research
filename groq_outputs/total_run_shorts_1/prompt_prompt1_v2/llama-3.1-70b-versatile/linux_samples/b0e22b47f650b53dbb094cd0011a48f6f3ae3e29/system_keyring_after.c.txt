@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-21, 23-25
+VULNERABILITY_DESCRIPTION:
+The code contains an insufficient validation of trusted keys. It only checks if the key is on the revocation list and then calls `pkcs7_validate_trust()`, but it does not properly handle cases where the key is not trusted or is missing.
+
+EXPLANATION:
+The code does not provide adequate checks to ensure the trusted keys are properly validated. Specifically, it fails to handle the case where a key is missing (`-ENOKEY` error) or when `pkcs7_validate_trust()` returns an error. In these cases, the code jumps to the `error` label but does not log the error details. This could potentially lead to unintentional behavior if an untrusted key is used.
+
+RECOMMENDATIONS:
+Properly handle cases where the key is not trusted or is missing by logging the error details and providing a safe fallback. For example, if `pkcs7_validate_trust()` fails, log the error using `pr_err()` and return an error code.
+
+Consider modifying the code to:
+```c
+ret = pkcs7_validate_trust(pkcs7, trusted_keys);
+if (ret < 0) {
+    if (ret == -ENOKEY) {
+        pr_err("Trusted key not found\n");
+    } else {
+        pr_err("Failed to validate trusted key: %d\n", ret);
+    }
+    goto error;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include <keys/asymmetric-type.h>
+#include <keys/system_keyring.h>
+#include <crypto/pkcs7.h>
+#include "common.h"
+
+static struct key *builtin_trusted_keys;
+#ifdef CONFIG_SECONDARY_TRUSTED_KEYRING
+static struct key *secondary_trusted_keys;
+ */
+static __init int load_system_certificate_list(void)
+{
+    pr_notice("Loading compiled-in X.509 certificates\n");
+
+    return load_certificate_list(system_certificate_list, system_certificate_list_size,
+                                 builtin_trusted_keys);
+}
+late_initcall(load_system_certificate_list);
+
+#ifdef CONFIG_SYSTEM_DATA_VERIFICATION
+            pr_devel("PKCS#7 platform keyring is not available\n");
+            goto error;
+        }
+
+        ret = is_key_on_revocation_list(pkcs7);
+        if (ret != -ENOKEY) {
+            pr_devel("PKCS#7 platform key is on revocation list\n");
+            goto error;
+        }
+    }
+    ret = pkcs7_validate_trust(pkcs7, trusted_keys);
+    if (ret < 0) {
+        if (ret == -ENOKEY)
+```
+Note: The provided code snippet seems incomplete and it's recommended to analyze it in conjunction with the rest of the code to get a better understanding of its intent and functionality.

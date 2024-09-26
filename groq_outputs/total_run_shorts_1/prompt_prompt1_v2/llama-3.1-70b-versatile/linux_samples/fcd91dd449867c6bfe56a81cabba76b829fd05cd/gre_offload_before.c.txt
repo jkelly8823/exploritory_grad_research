@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Unvalidated or improper use of user-controlled input to RCU read-lock handling
+EXPLANATION:
+The function skb_gro_postpull_rcsum(skb, greh, grehlen) is adjusting the checksum after skb_gro_pull() but before releasing the RCU read-lock. However, it is also updating internal data structures. The rcu_read_lock() unlocks the data structure, but if there is a concurrent update after skb_gro_postpull_rcsum(skb, greh, grehlen), this can result in an inconsistent data structure, leading to undefined behavior.
+
+Moreover, this inconsistent data structure may lead to issues such as data corruption and a denial of service.
+
+RECOMMENDATIONS:
+To avoid this issue, a more rigorous semaphore strategy or version control on the updated data should be considered to prevent concurrent modification of the data structure when this function is called.
+
+Moreover, review and verify that a proper check for the relevant pointer to the data structure and/or its version prior to releasing the RCU read-lock to avoid this inconsistent state in the data structure.
+
+ORIGINAL CODE:
+```c
+/* Adjusted NAPI_GRO_CB(skb)->csum after skb_gro_pull()*/
+skb_gro_postpull_rcsum(skb, greh, grehlen);
+
+pp = ptype->callbacks.gro_receive(head, skb);
+flush = 0;
+
+out_unlock:
+rcu_read_unlock();
+```

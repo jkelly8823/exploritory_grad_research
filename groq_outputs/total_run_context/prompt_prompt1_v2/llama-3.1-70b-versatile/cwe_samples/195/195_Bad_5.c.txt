@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7, 12
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability due to incorrect allocation size.
+
+EXPLANATION:
+The vulnerability lies in the allocation of the `buf` array. The size of the array is calculated as `pre_len - msg_len`, where `pre_len` is the length of the string "preamble: " and `msg_len` is the length of the message passed to the function. However, if the value of `msg_len` is greater than or equal to `pre_len`, the allocation size becomes zero or negative, which is invalid and can lead to a buffer overflow.
+
+Additionally, the function call `proc_msg ("s",  jnklen)` violates the assumption that the input message starts with the string "preamble: ". This can result in `msg_len` being too small and `pre_len` being larger, also leading to a negative allocation size.
+
+The code tries to address this issue by assuming all strings have a preamble with space, but it does not validate this assumption.
+
+RECOMMENDATIONS:
+1. Validate the input message to ensure it meets the expected format before proceeding with processing.
+2. Use dynamically allocated memory instead of fixed-size arrays to avoid buffer overflows. The allocation size should be calculated based on the actual length of the input message and the expected preamble length.
+3. Use safer functions for string manipulation, such as `snprintf` or `strcpy_s`, to prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+int proc_msg(char *s, int msg_len)
+{
+    int pre_len = sizeof("preamble: ");
+    char buf[pre_len - msg_len];
+    ... Do processing here if we get this far
+}
+char *s = "preamble: message\n";
+char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack
+```

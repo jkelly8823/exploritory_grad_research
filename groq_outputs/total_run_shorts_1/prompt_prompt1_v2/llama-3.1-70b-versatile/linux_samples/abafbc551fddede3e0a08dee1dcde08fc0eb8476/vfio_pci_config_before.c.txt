@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 37, 43
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential integer overflow when performing a bitwise AND operation between two 32-bit integers. This could allow an attacker to bypass certain checks or enable functionality that shouldn't be accessible.
+
+EXPLANATION:
+The code uses `le16_to_cpu` and `cpu_to_le16` functions which suggests that the code is working with 16-bit integers stored in little-endian byte order. However, in lines 37 and 43, these 16-bit integers are being bit-shifted and then used in a bitwise AND operation with `mask`. 
+
+This is problematic because if the value of `mask` is larger than 65535 (which is the maximum value for a 16-bit unsigned integer), this could lead to an integer overflow when performing the bitwise AND operation.
+
+Considering the code is working with PCI Configuration registers, this vulnerability could allow an attacker to access certain privileged configuration space registers that should not be writable.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, you should:
+
+1. Ensure that `mask` is always within the range of a 16-bit unsigned integer.
+2. Validate the value of `mask` before performing the bitwise AND operation.
+3. Consider using `le16_to_cpu` and `cpu_to_le16` functions for all operations involving 16-bit integers, and avoid implicit conversions to larger integers.
+
+ORIGINAL CODE:
+    *(__le32 *)(&p->write[off]) = cpu_to_le32(write);
+}
+
+/*
+ * Restore the *real* BARs after we detect a FLR or backdoor reset.
+ * (backdoor = some device specific technique that we didn't catch)
+ */
+
+    new_cmd = le32_to_cpu(val);
+
+    phys_mem = !!(phys_cmd & PCI_COMMAND_MEMORY);
+    virt_mem = !!(le16_to_cpu(*virt_cmd) & PCI_COMMAND_MEMORY);
+    new_mem = !!(new_cmd & PCI_COMMAND_MEMORY);
+
+    phys_io = !!(phys_cmd & PCI_COMMAND_IO);
+    virt_io = !!(le16_to_cpu(*virt_cmd) & PCI_COMMAND_IO);
+    new_io = !!(new_cmd & PCI_COMMAND_IO);
+
+    /*
+     * If the user is writing mem/io enable (new_mem/io) and we
+     * think it's already enabled (virt_mem/io), but the hardware
+}
+
+    count = vfio_default_config_write(vdev, pos, count, perm, offset, val);
+    if (count < 0)
+        return count;
+
+    /*
+     * Save current memory/io enable bits in vconfig to allow for
+     * the test above next time.
+
+        *virt_cmd &= cpu_to_le16(~mask);
+        *virt_cmd |= cpu_to_le16(new_cmd & mask);
+    }
+
+    /* Emulate INTx disable */
+    if (offset >= PCI_COMMAND && offset <= PCI_COMMAND + 1) {
+                            pos - offset + PCI_EXP_DEVCAP,
+                            &cap);
+
+    if (!ret && (cap & PCI_EXP_DEVCAP_FLR))
+        pci_try_reset_function(vdev->pdev);
+    }
+
+    /*
+     * MPS is virtualized to the user, writes do not change the physical
+                    pos - offset + PCI_AF_CAP,
+                    &cap);
+
+    if (!ret && (cap & PCI_AF_CAP_FLR) && (cap & PCI_AF_CAP_TP))
+        pci_try_reset_function(vdev->pdev);
+    }
+
+    return count;
+}

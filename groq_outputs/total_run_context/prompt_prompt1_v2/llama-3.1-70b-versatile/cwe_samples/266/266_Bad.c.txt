@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-6
+VULNERABILITY_DESCRIPTION:
+Reverting to the original UID using seteuid(getuid()) without sufficient error checking can lead to privilege escalation vulnerabilities, especially if an attacker is able to execute malicious code before the UID is reverted.
+
+EXPLANATION:
+The seteuid(0) function call sets the effective UID to 0, effectively changing the current process to run with superuser privileges. Although the code includes a call to seteuid(getuid()) to revert back to the original UID, this approach is vulnerable if the original UID is elevated due to exploitation or other means. 
+
+Furthermore, there is no error checking in place to ensure the seteuid() function calls are successful. This could lead to an attacker being able to exploit the elevated privileges if an error occurs during the execution of 'some stuff'.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it's essential to include error checking for the seteuid() function calls. Additionally, a safer approach would be to save the effective UID before elevating privileges and use this stored value to reset it later.
+
+Here's an improved version of the code snippet:
+```c
+uid_t original_uid;
+
+/* Retrieve and save the current effective UID */
+original_uid = geteuid();
+
+if (seteuid(0) != 0) {
+    /* Handle failure to elevate privileges */
+    exit(1);
+}
+
+/* do some stuff */
+
+if (seteuid(original_uid) != 0) {
+    /* Handle failure to revert privileges */
+    exit(1);
+}
+```
+ORIGINAL CODE:
+```c
+seteuid(0);
+/* do some stuff */
+
+seteuid(getuid());
+```

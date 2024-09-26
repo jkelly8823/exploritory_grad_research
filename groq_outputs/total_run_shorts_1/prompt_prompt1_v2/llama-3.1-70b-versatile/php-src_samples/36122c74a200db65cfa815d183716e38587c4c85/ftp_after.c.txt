@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8, 15-20
+VULNERABILITY_DESCRIPTION:
+A potential null pointer dereference and use-after-free vulnerability has been identified in the `ftp_get` function. Additionally, the `ftp_getresp` function also has a potential null pointer dereference.
+
+EXPLANATION:
+In the `ftp_get` function, the code checks if `ftp` is `NULL` before using it, which is good practice. However, in the `while` loop, the code uses `data->fd` and `data->buf` without checking if `data` is `NULL`. This can lead to a null pointer dereference if `data` is `NULL`. Furthermore, if `data` is `freed` before the `while` loop, using `data` in the loop can lead to a use-after-free vulnerability.
+
+In the `ftp_getresp` function, the code checks if `ftp` is `NULL` before using it, but then does not check its members. This can lead to a null pointer dereference if `ftp` is `NULL` but its members are accessed.
+
+RECOMMENDATIONS:
+1. Initialize `data` before using it in the `while` loop. Ensure that `data` is properly allocated and checked for `NULL` before using.
+```c
+databuf_t *data = NULL;
+data = malloc(sizeof(databuf_t)); // Initialize data
+if (!data) {
+    goto bail;
+}
+```
+2. Check if `data` is `NULL` before using its members in the `while` loop.
+```c
+while ((rcvd = my_recv(ftp, data != NULL ? data->fd : -1, data != NULL ? data->buf : NULL, FTP_BUFSIZE))) {
+```
+3. In the `ftp_getresp` function, check if `ftp` is `NULL` before accessing its members.
+```c
+ftp->resp = 0;
+```
+   becomes
+```c
+if (ftp) {
+    ftp->resp = 0;
+    // Rest of the function
+}
+```
+
+ORIGINAL CODE:
+```c
+ftp_get(ftpbuf_t *ftp, php_stream *outstream, const char *path, ftptype_t type, long resumepos TSRMLS_DC)
+{
+    databuf_t *data = NULL;
+    size_t rcvd;
+    char arg[11];
+
+    if (ftp == NULL) {
+        goto bail;
+    }
+
+    while ((rcvd = my_recv(ftp, data->fd, data->buf, FTP_BUFSIZE))) {
+        if (rcvd == -1) {
+            goto bail;
+        }
+int
+ftp_getresp(ftpbuf_t *ftp)
+{
+    if (ftp == NULL) {
+        return 0;
+    }
+    ftp->resp = 0;
+
+    while (1) {
+```

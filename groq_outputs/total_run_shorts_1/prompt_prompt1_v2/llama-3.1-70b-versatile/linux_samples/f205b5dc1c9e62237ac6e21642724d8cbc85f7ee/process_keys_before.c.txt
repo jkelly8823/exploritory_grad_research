@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11, 33-34
+VULNERABILITY_DESCRIPTION:
+The code does not check if a null pointer is dereferenced. In the `install_thread_keyring` function, the variable `new` is checked if it's null only after its value is used in the previous lines.
+EXPLANATION:
+In both `install_thread_keyring` and `install_process_keyring` functions, the variable `new` is used to access its fields `thread_keyring` and `process_keyring`, but `new` itself is not checked for nullity before those accesses. Then, in the next lines, there is a null check, but this check only happens after the critical lines that access `new`.
+
+Additionally, in the `install_process_keyring_to_cred` function, the pointer `new` is dereferenced at the line `if (new->process_keyring)` without any prior null check.
+
+This can lead to null pointer dereferences and therefore the program's crash.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to move the null check to before we use `new` in all three occurrences. Here is how you could fix it:
+
+```c
+static int install_thread_keyring(void)
+{
+        struct cred *new;
+        if (!new)
+                return -ENOMEM;
+
+        if (new->thread_keyring)
+                BUG_ON(1); // Or handle this scenario as needed
+        else
+                ret = install_thread_keyring_to_cred(new);
+
+        if (ret < 0) {
+                abort_creds(new);
+                return ret;
+        }
+}
+
+static int install_process_keyring(void)
+{
+        struct cred *new;
+        if (!new)
+                return -ENOMEM;
+
+        if (!new->process_keyring)
+                ret = install_process_keyring_to_cred(new);
+
+        if (ret < 0) {
+                abort_creds(new);
+                return ret != -EEXIST ? ret : 0;
+        }
+
+        return commit_creds(new);
+}
+
+int install_process_keyring_to_cred(struct cred *new)
+{
+        if (!new)
+                return -EFAULT; // Or return an error as needed
+
+        if (new->process_keyring)
+                return -EEXIST;
+
+        struct key *keyring;
+        keyring = keyring_alloc("_pid", new->uid, new->gid, new,
+                        KEY_POS_ALL | KEY_USR_VIEW,
+```

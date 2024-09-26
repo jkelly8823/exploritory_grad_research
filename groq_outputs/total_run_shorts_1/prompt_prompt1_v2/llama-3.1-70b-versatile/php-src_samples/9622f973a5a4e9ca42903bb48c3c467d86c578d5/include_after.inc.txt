@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Server-Side Request Forgery (SSRF) attacks, as it allows an attacker to specify the $host, $port, and $uri without proper validation or sanitization.
+
+EXPLANATION:
+The `run_request` function takes in `$host`, `$port`, and `$uri` parameters, which are then used to create a FastCGI client and make a request to the specified host and port. However, the function does not perform any validation or sanitization on these parameters, allowing an attacker to potentially specify arbitrary hosts, ports, and URIs. This could allow an attacker to make requests to internal services or systems that are not exposed to the public internet, or to make requests on behalf of the server to external services.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the function should validate and sanitize the `$host`, `$port`, and `$uri` parameters to ensure they meet expected formats and values. This could include:
+
+* Using a whitelist approach to only allow specific hosts, ports, and URIs to be requested.
+* Using regular expressions or other string validation techniques to ensure that the parameters conform to expected formats.
+* Implementing rate limiting and IP blocking to prevent abuse.
+
+Additionally, the function should also implement error handling to prevent information disclosure in case of errors.
+
+ORIGINAL CODE:
+
+	}
+} /* }}} */
+
+function run_request($host, $port, $uri='/ping', $query='', $headers=array()) {  /* {{{ */
+	require_once 'fcgi.inc';
+	$client = new Adoy\FastCGI\Client($host, $port);
+	$params = array_merge(array(
+		'GATEWAY_INTERFACE' => 'FastCGI/1.0',
+		'REQUEST_METHOD'    => 'GET',
+		'SCRIPT_FILENAME'   => $uri,
+		'SCRIPT_NAME'       => $uri,
+		'SERVER_PROTOCOL'   => 'HTTP/1.1',
+		'CONTENT_TYPE'      => '',
+		'CONTENT_LENGTH'    => 0
+	), $headers);
+	return $client->request($params, false)."\n";
+}
+/* }}} */

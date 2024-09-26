@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 54-55
+VULNERABILITY_DESCRIPTION:
+Use After Free
+EXPLANATION:
+In the given code snippet, after successfully requesting an IRQ for MSI/MSIX (vdev->ctx[vector].trigger is assigned), there is no check to ensure that "vdev->ctx[vector].trigger" is not NULL before it is used to register an IRQ producer. However, in the preceding block, the trigger's IRQ is freed (lines 77-78) if there is a pre-existing trigger, its IRQ is freed, and its resource (ctx[vector].trigger) is freed, effectively marking the resource as unallocated. This happens because before setting up the new IRQ producer, the existing IRQ is freed using free_irq (line 46) if a pre-existing trigger exists.
+
+If the existing IRQ producer has been freed and "vdev->ctx[vector].trigger" was set to NULL prior to reaching these lines (lines 54-55), this could potentially cause an access to deallocated memory.
+
+RECOMMENDATIONS:
+- Introduce checks to ensure "vdev->ctx[vector].trigger" is not NULL before using it to register an IRQ producer to prevent the possibility of accessing freed memory.
+
+- It is also recommended to re-order the memory deallocations for ctx[vector].trigger and removing the IRQ producer registration so that resources are released in a different order, if need be.
+
+- This solution also implies there should not have been memory allocation issues identified at those lines which implies fixes applied for related resource creation which is beyond current segment visibility.
+
+ORIGINAL CODE:
+(structured unchanged):
+...
+    cmd = vfio_pci_memory_lock_and_enable(vdev);
+	if (msix) {
+		struct msi_msg msg;
+
+		get_cached_msi_msg(irq, &msg);
+
+	ret = request_irq(irq, vfio_msihandler, 0,
+		  vdev->ctx[vector].name, trigger);
+	vfio_pci_memory_unlock_and_restore(vdev, cmd);
+	if (ret) {
+		kfree(vdev->ctx[vector].name);
+		eventfd_ctx_put(trigger);
+		return ret;
+	...')
+     else such related resource and handle has been either got locked per memory handling, as well reasigned.

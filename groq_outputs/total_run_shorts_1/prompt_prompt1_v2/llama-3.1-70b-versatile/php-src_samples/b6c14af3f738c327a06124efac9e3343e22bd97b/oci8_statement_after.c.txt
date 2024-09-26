@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Insecure Error Handling
+
+EXPLANATION:
+The PHP code provided contains a function `php_oci_get_implicit_resultset` that makes a database call using `OCIStmtGetNextResult`. If the database call fails (i.e., `statement->errcode` is set), the error code is directly exposed in the function without proper error handling. The error code itself might reveal sensitive information about the database or application. Furthermore, error messages are not sanitized before being output. However, the insecure error handling vulnerability is seen on lines 5 and 6 where PHP functions `php_error_docref` may potentially leak sensitive information from the error message, although function itself doesn't seem to receive user data as an argument in this particular case.
+
+Furthermore, an `E_WARNING` will trigger further error control at this point which may not continue the rest of the execution as intended.
+
+RECOMMENDATIONS:
+- Instead of using `php_error_docref` directly, exceptions or error handling mechanisms specific to the application should be used.
+- For providing error messages that could potentially expose internal information, use a generic error message and log the actual error internally.
+
+Make your `php_oci_get_implicit_resultset` error handling follow these recommendations by logging or presenting error information securely. 
+
+- Example fix:
+```php
+#if (OCI_MAJOR_VERSION < 12)
+	/* generic error, log details if needed but not exposed to user */
+	php_error_docref(NULL TSRMLS_CC, E_WARNING, "The database operation is not supported");
+	// Add logging functionality if necessary, include actual error code and description to a secure log
+	return NULL;
+#else
+...
+```
+ORIGINAL CODE:
+```c
+   Fetch implicit result set statement resource */
+php_oci_statement *php_oci_get_implicit_resultset(php_oci_statement *statement TSRMLS_DC)
+{
+#if (OCI_MAJOR_VERSION < 12)
+	php_error_docref(NULL TSRMLS_CC, E_WARNING, "Implicit results are available in Oracle Database 12c onwards");
+	return NULL;
+#else
+	void *result;
+	ub4   rtype;
+	php_oci_statement *statement2;  /* implicit result set statement handle */
+
+	PHP_OCI_CALL_RETURN(OCISTMTGETNEXTRESULT, statement->errcode, OCIStmtGetNextResult, (statement->stmt, statement->err, &result, &rtype, OCI_DEFAULT));
+	if (statement->errcode == OCI_NO_DATA) {
+		return NULL;
+	}
+```

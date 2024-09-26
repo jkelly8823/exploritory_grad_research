@@ -1,0 +1,7 @@
+ 
+
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION: A race condition exists in this code. The spinlock is acquired after the check for MAX_USER_CONTEXT, but before the ida_remove operation. This means that another thread could potentially acquire the lock, remove the ida entry, and then the current thread could remove the ida entry again, resulting in a double free.
+EXPLANATION: The spinlock is used to protect the ida_remove operation, but it is not used to protect the check for MAX_USER_CONTEXT. This means that another thread could potentially see the index as valid, but then the current thread could acquire the lock and remove the ida entry, resulting in a double free.
+RECOMMENDATIONS: The spinlock should be acquired before the check for MAX_USER_CONTEXT, and then released after the ida_remove operation. This will ensure that the ida entry is not removed twice. The corrected code should look like this: spin_lock(&mmu_context_lock); if (index > MAX_USER_CONTEXT) { ida_remove(&mmu_context_ida, index); spin_unlock(&mmu_context_lock); return -ENOMEM; } else if (err) return err; spin_unlock

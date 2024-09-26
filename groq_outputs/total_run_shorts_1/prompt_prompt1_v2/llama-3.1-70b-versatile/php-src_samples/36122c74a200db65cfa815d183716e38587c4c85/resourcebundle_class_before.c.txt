@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5-7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Memory Allocation and Incorrect Error Handling in Function Call
+EXPLANATION:
+The provided code snippet is vulnerable due to the lack of proper error handling and uncontrolled memory allocation. The `ures_getByIndex` and `ures_getByKey` functions allocate memory, but the code does not check if these allocations are successful. Additionally, the `intl_errors_set` function is called with a potentially null or uninitialized value (`U_ILLEGAL_ARGUMENT_ERROR`).
+
+The `Intl_errots_set` function is also called with a format string that is not sanitized, potentially allowing for format string attacks.
+
+Furthermore, if the `is_numeric` condition is false, the return value of `Z_TYPE_P(offset)` is used without validation. This can lead to type confusion and undefined behavior if `offset` is not a string or integer.
+
+The `mekeylen` is assigned the value of `Z_STRLEN_P(offset)`, but it is not checked if the string is null-terminated. This can lead to a buffer overflow when used in subsequent function calls.
+
+Lastly, the `TSRMLS_CC` macro is used, but its purpose and any potential risks associated with it are unclear.
+
+RECOMMENDATIONS:
+
+1.  Check the return values of `ures_getByIndex` and `ures_getByKey` for successful memory allocation and handle any potential errors.
+2.  Verify that the `U_ILLEGAL_ARGUMENT_ERROR` value is valid before passing it to `intl_errors_set`.
+3.  Validate the type of `offset` before using it to prevent type confusion and undefined behavior.
+4.  Ensure that the string used in `Z_STRVAL_P(offset)` is null-terminated to prevent buffer overflows.
+5.  Remove the `TSRMLS_CC` macro unless it is absolutely necessary and its purpose is clearly understood.
+
+ORIGINAL CODE:
+```c
+{
+	int32_t     meindex = 0;
+	char *      mekey = NULL;
+	long        mekeylen;
+    zend_bool    is_numeric = 0;
+	char         *pbuf;
+	ResourceBundle_object *rb;
+
+		rb->child = ures_getByIndex( rb->me, meindex, rb->child, &INTL_DATA_ERROR_CODE(rb) );
+	} else if(Z_TYPE_P(offset) == IS_STRING) {
+		mekey = Z_STRVAL_P(offset);
+		mekeylen = Z_STRLEN_P(offset);
+		rb->child = ures_getByKey(rb->me, mekey, rb->child, &INTL_DATA_ERROR_CODE(rb) );
+	} else {
+		intl_errors_set(INTL_DATA_ERROR_P(rb), U_ILLEGAL_ARGUMENT_ERROR,	
+			"resourcebundle_get: index should be integer or string", 0 TSRMLS_CC);
+```

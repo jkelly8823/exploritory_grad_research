@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The code contains a potential buffer overflow vulnerability.
+
+EXPLANATION:
+In the lines `if (macoff + snaplen > po->rx_ring.frame_size)`, the code checks if the sum of `macoff` and `snaplen` exceeds the limit of `rx_ring.frame_size`. If this condition is true and `po->copy_thresh` is set, the code then checks if the socket's receive buffer is large enough to accommodate the incoming data. However, it does not perform any bounds checking on `snaplen` itself. This could potentially lead to a buffer overflow if `snaplen` exceeds the maximum allowed value.
+
+Additionally, in lines 3-4 of the code snippet, `macoff` is calculated as `netoff - maclen` without checking if `maclen` is greater than or equal to `netoff`. If `maclen` is larger than `netoff`, this would result in a signed underflow and a negative `macoff`. If this incorrect `macoff` value is then used in subsequent arithmetic operations (such as in line 7), it could again lead to buffer overflow or similar vulnerabilities.
+
+RECOMMENDATIONS:
+* Add a check to ensure that `snaplen` does not exceed a reasonable limit, such as the `rx_ring.frame_size` minus `macoff`.
+* Add a check to ensure that `maclen` is not larger than `netoff` before calculating `macoff`.
+* Consider using a safer method of calculating `macoff`, such as `macoff = max(netoff - maclen, 0)`, to prevent underflow.
+* Consider reviewing similar arithmetic operations in the code to prevent similar vulnerabilities.
+
+ORIGINAL CODE:
+```c
+int skb_len = skb->len;
+unsigned int snaplen, res;
+unsigned long status = TP_STATUS_USER;
+unsigned short macoff, hdrlen;
+unsigned int netoff;
+struct sk_buff *copy_skb = NULL;
+struct timespec64 ts;
+__u32 ts_status;
+bool is_drop_n_account = false;
+	}
+	macoff = netoff - maclen;
+}
+if (netoff > USHRT_MAX) {
+	atomic_inc(&po->tp_drops);
+	goto drop_n_restore;
+}
+if (po->tp_version <= TPACKET_V2) {
+	if (macoff + snaplen > po->rx_ring.frame_size) {
+		if (po->copy_thresh &&
+		    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf) {
+```

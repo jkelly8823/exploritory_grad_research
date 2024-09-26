@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 8
+VULNERABILITY_DESCRIPTION:
+The code snipped contains a Resource Management Vulnerability, specifically, a Use-After-Free vulnerability.
+
+EXPLANATION:
+In the given code snippet, the variable `tdata` is accessed after it is freed. If an error occurs during the creation of the temporary file, `tdata` is freed and then an attempt is made to access its `temp_file` member in the error messages printed to the console. This is a potential use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix the vulnerability, ensure that `tdata` is not accessed after it has been freed. Instead of using `pr_debug` after freeing `tdata`, you can store the error messages in a temporary buffer or use a logging mechanism that does not require accessing the freed memory. 
+
+Here is an example of how to fix the vulnerability:
+
+```c
+    char errmsg[100];
+    if (!mkstemp(tdata->temp_file)) {
+        snprintf(errmsg, sizeof(errmsg), "Can't make temp file");
+        free(tdata);
+        pr_debug("%s", errmsg);
+        return NULL;
+    }
+
+    temp_fd = open(tdata->temp_file, O_RDWR);
+    if (temp_fd < 0) {
+        snprintf(errmsg, sizeof(errmsg), "Can't read '%s'", tdata->temp_file);
+        free(tdata);
+        pr_debug("%s", errmsg);
+        return NULL;
+    }
+```
+
+ORIGINAL CODE:
+    "/tmp/perf-XXXXXX");
+    if (!mkstemp(tdata->temp_file)) {
+        pr_debug("Can't make temp file");
+        free(tdata);
+        return NULL;
+    }
+
+    temp_fd = open(tdata->temp_file, O_RDWR);
+    if (temp_fd < 0) {
+        pr_debug("Can't read '%s'", tdata->temp_file);
+        free(tdata);
+        return NULL;
+    }
+
+    /*

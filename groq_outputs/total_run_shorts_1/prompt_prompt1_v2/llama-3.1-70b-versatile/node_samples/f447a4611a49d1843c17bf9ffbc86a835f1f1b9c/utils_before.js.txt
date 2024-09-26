@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-15
+VULNERABILITY_DESCRIPTION:
+The possiblyTransformPath function does not properly handle cases where the path is an object or a complex data structure, which could lead to unexpected behavior or errors when resolving the path.
+
+EXPLANATION:
+The possiblyTransformPath function checks if the path is a string or a Buffer and calls resolvePath on it. However, it does not check for other types of data structures such as objects or Arrays. This could lead to issues if the path is a complex data structure, as calling resolvePath on it could cause unexpected behavior.
+
+Additionally, if the path is a string that contains invalid or malicious characters, calling resolvePath on it could potentially lead to security issues such as directory traversal attacks.
+
+RECOMMENDATIONS:
+1. Consider adding input validation to ensure that the path is a string or a Buffer. This can be done using a simple typeof check or using a library like 'is-plain-object' to check for complex data structures.
+2. Use a try-catch block around the call to resolvePath to handle any potential errors that may occur.
+
+Example of how the code could be modified:
+```javascript
+function possiblyTransformPath(path) {
+  if (permission.isEnabled()) {
+    if (typeof path === 'string' || Buffer.isBuffer(path)) {
+      try {
+        if (typeof path === 'string') {
+          return resolvePath(path);
+        } else {
+          return Buffer.from(resolvePath(path.toString()));
+        }
+      } catch (err) {
+        // Handle the error
+      }
+    } else {
+      // Handle the case where the path is not a string or a Buffer
+      throw new Error('Invalid path type');
+    }
+  }
+  return path;
+}
+
+// Alternatively, you could use a library like 'is-plain-object' to check for complex data structures
+const isPlainObject = require('is-plain-object');
+function possiblyTransformPath(path) {
+  if (permission.isEnabled()) {
+    if (typeof path === 'string' || Buffer.isBuffer(path)) {
+      // Proceed with the original logic
+    } else if (isPlainObject(path)) {
+      // Handle the case where the path is an object
+      throw new Error('Invalid path type');
+    }
+  }
+  return path;
+}
+```
+
+ORIGINAL CODE:
+```javascript
+  Symbol,
+  TypedArrayPrototypeAt,
+  TypedArrayPrototypeIncludes,
+} = primordials;
+
+const permission = require('internal/process/permission');
+
+// See: https://github.com/nodejs/node/pull/44004#discussion_r930958420
+// The permission model needs the absolute path for the fs_permission
+const resolvePath = pathModule.resolve;
+function possiblyTransformPath(path) {
+  if (permission.isEnabled()) {
+    if (typeof path === 'string') {
+      return resolvePath(path);
+    } else if (Buffer.isBuffer(path)) {
+      return Buffer.from(resolvePath(path.toString()));
+    }
+  }
+  return path;
+}
+```

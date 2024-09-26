@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Insecure default permission configuration due to potentially incomplete permission options.
+
+EXPLANATION:
+The provided code snippet sets the default permission configurations based on options such as `allow_fs_read`, `allow_fs_write`, `allow_child_process`, and `allow_worker_threads`. However, it does not appear to consider the scenario where these options are not provided at all. This may result in default permissions being applied that could lead to unintended security vulnerabilities. Furthermore, the permissions are not uniformly set to their most restrictive setting when specifically configured.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should consider adding checks for all relevant permission options and apply the most restrictive settings when these options are not explicitly provided. This can be achieved by adding the following lines:
+
+```cpp
+if (options_->allow_fs_read.empty()) options_->allow_fs_read = "false";
+if (options_->allow_fs_write.empty()) options_->allow_fs_write = "false";
+if (options_->allow_child_process.empty()) options_->allow_child_process = "false";
+if (options_->allow_worker_threads.empty()) options_->allow_worker_threads = "false";
+
+if (!options_->allow_child_process) {
+  permission()->Apply("*", permission::PermissionScope::kChildProcess);
+}
+
+if (!options_->allow_worker_threads) {
+  permission()->Apply("*", permission::PermissionScope::kWorkerThread);
+}
+```
+
+Additionally, all permission options should be validated to prevent setting arbitrary permissions. The `permission()->Apply()` calls should also be validated to ensure that the provided permissions are valid.
+
+ORIGINAL CODE:
+```cpp
+if (options_->experimental_permission) {
+  permission()->EnablePermissions();
+  // If any permission is set the process shouldn't be able to neither
+  // spawn/worker nor use addons unless explicitly allowed by the user
+  if (!options_->allow_fs_read.empty() || !options_->allow_fs_write.empty()) {
+    options_->allow_native_addons = false;
+    if (!options_->allow_child_process) {
+      permission()->Apply("*", permission::PermissionScope::kChildProcess);
+    }
+    if (!options_->allow_worker_threads) {
+```

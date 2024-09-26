@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26, 35
+VULNERABILITY_DESCRIPTION:
+Insecure usage of SSL/TLS: SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS is disabled after being set
+
+EXPLANATION:
+The code sets `SSL_OP_ALL` as the ssl_ctx_options and then, under the condition `OPENSSL_VERSION_NUMBER >= 0x0090605fL`, it disables `SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS` using the bitwise AND operator (`&=`). However, without proper synchronization or thread safety measures, this change might be made by multiple threads, potentially overwriting each other's changes. 
+
+Moreover, there's a high likelihood that multiple SSL handles are being created using the same SSL context with changed options, potentially affecting each other's behavior. The snippet seems to disable `SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS` multiple times for different instances, but doesn't check if it's the same SSL context.
+
+This issue can potentially lead to data corruption, information leakage, or security issues due to improper SSL/TLS handling.
+
+RECOMMENDATIONS:
+To address this vulnerability, we need to ensure proper synchronization and thread safety measures. 
+One possible way to solve this problem is by moving `ssl_ctx_options &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;` before `SSL_CTX_set_options(ctx, ssl_ctx_options);` in a separate, synchronized block of code. This guarantees that all SSL handles created using this context have the same options set.
+
+Additionally, verifying that `SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS` is only disabled once for every SSL context, through inter-thread synchronization mechanisms like locks or semaphores, may prevent any overwriting or changing of ssl_ctx_options.
+
+Lastly, set SSL options once per SSL context and maintain this through the lifetime of your application to ensure consistent SSL behavior across all parts of the application.
+
+ORIGINAL CODE:
+```c
+{
+#if HAVE_OPENSSL_EXT
+	SSL_CTX	*ctx = NULL;
+	long ssl_ctx_options = SSL_OP_ALL;
+#endif
+	if (ftp == NULL) {
+		return 0;
+	}
+			return 0;
+		}
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090605fL
+		ssl_ctx_options &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
+#endif
+		SSL_CTX_set_options(ctx, ssl_ctx_options);
+
+		ftp->ssl_handle = SSL_new(ctx);
+		if (ftp->ssl_handle == NULL) {
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to create the SSL handle");
+
+#if HAVE_OPENSSL_EXT
+	SSL_CTX		*ctx;
+	long ssl_ctx_options = SSL_OP_ALL;
+#endif
+
+	if (data->fd != -1) {
+		goto data_accepted;
+			return 0;
+		}
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090605fL
+		ssl_ctx_options &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
+#endif
+		SSL_CTX_set_options(ctx, ssl_ctx_options);
+
+		data->ssl_handle = SSL_new(ctx);
+		if (data->ssl_handle == NULL) {
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "data_accept: failed to create the SSL handle");
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Memory allocation with potential out-of-bounds access.
+
+EXPLANATION:
+The code allocates memory for `vq->indirect`, `vq->log`, and `vq->heads` using `kmalloc_array`, but does not validate the values of `UIO_MAXIOV` and `dev->iov_limit` before passing them as the first argument. This could lead to integer overflow or out-of-bounds access if the values are very large. Although there is a check for memory allocation failure (NULL pointer checks), this does not prevent integer overflow attacks.
+
+RECOMMENDATIONS:
+1. Validate the values of `UIO_MAXIOV` and `dev->iov_limit` before passing them to `kmalloc_array`. Ensure that they are within a reasonable range and do not cause integer overflow.
+2. Consider using a safer alternative to `kmalloc_array`, such as `vmalloc` or a custom memory allocation function with overflow detection.
+3. Ensure that the struct member `vq->indirect`, `vq->log`, and `vq->heads` have bounds checks when accessed, especially when indexing.
+
+ORIGINAL CODE:
+
+```c
+	vq->indirect = kmalloc_array(UIO_MAXIOV,
+					     sizeof(*vq->indirect),
+					     GFP_KERNEL);
+	vq->log = kmalloc_array(dev->iov_limit, sizeof(*vq->log),
+					GFP_KERNEL);
+	vq->heads = kmalloc_array(dev->iov_limit, sizeof(*vq->heads),
+					  GFP_KERNEL);
+	if (!vq->indirect || !vq->log || !vq->heads)
+		goto err_nomem;
+}
+}
+
+void vhost_dev_init(struct vhost_dev *dev,
+		    struct vhost_virtqueue **vqs, int nvqs, int iov_limit)
+{
+	struct vhost_virtqueue *vq;
+	int i;
+
+	dev->iotlb = NULL;
+	dev->mm = NULL;
+	dev->worker = NULL;
+	dev->iov_limit = iov_limit;
+	init_llist_head(&dev->work_list);
+	init_waitqueue_head(&dev->wait);
+	INIT_LIST_HEAD(&dev->read_list);
+	INIT_LIST_HEAD(&dev->pending_list);
+```

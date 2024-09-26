@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15, 22
+VULNERABILITY_DESCRIPTION:
+Potential use after free vulnerability in the provided code snippet. 
+
+EXPLANATION:
+The vulnerability is introduced in the lines where `asn1obj` is assigned to `*ppval` and where `ec_key` is freed after setting it in the `p8` structure. However, when an error occurs later on in the code, `ep` is freed but `*ppval` is neither freed nor reset. The same issue can be observed with the `pval` and `penc` variables which are freed only when certain conditions are met, potentially leading to their use after being freed in error paths. 
+
+Another potential issue can be observed in the management of `pval` which, depending on its `ptype` value, is freed differently, introducing inconsistency and possible memory leaks.
+
+RECOMMENDATIONS:
+To address the potential use after free vulnerability, it is essential to ensure that all dynamically allocated memory is properly cleaned up in all possible error paths. Consider introducing a centralized clean-up function for error handling. Additionally, ensure that `pval` is consistently managed across different `ptype` values and that `*ppval` is reset or freed before returning.
+
+ORIGINAL CODE:
+```c
+ASN1_OBJECT *asn1obj = OBJ_nid2obj(nid);
+
+if (asn1obj == NULL || OBJ_length(asn1obj) == 0) {
+    ERR_raise(ERR_LIB_EC, EC_R_MISSING_OID);
+    return 0;
+}
+*ppval = asn1obj;
+ptypes, pval, penc, penclen))
+return 1;
+err:
+    if (ptype == V_ASN1_SEQUENCE)
+        ASN1_STRING_free(pval);
+    OPENSSL_free(penc);
+    return 0;
+}
+    eplen = i2d_ECPrivateKey(&ec_key, &ep);
+    if (eplen <= 0) {
+        ERR_raise(ERR_LIB_EC, ERR_R_EC_LIB);
+        goto err;
+    }
+
+    if (!PKCS8_pkey_set0(p8, OBJ_nid2obj(NID_X9_62_id_ecPublicKey), 0,
+                         ptype, pval, ep, eplen)) {
+        ERR_raise(ERR_LIB_EC, ERR_R_ASN1_LIB);
+        OPENSSL_clear_free(ep, eplen);
+        goto err;
+    }
+
+    return 1;
+
+ err:
+    if (ptype == V_ASN1_SEQUENCE)
+        ASN1_STRING_free(pval);
+    return 0;
+}
+
+static int int_ec_size(const EVP_PKEY *pkey)
+```

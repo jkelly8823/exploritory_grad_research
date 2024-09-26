@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4, 5
+VULNERABILITY_DESCRIPTION: 
+Insecure SHA-1 Hash Usage and Static Nonce
+
+EXPLANATION:
+The code snippet is using SHA-1 for hashing, which is considered insecure due to its vulnerability to collision attacks. It is also using a static nonce ("bad nonce"), which further weakens the security of the system. A nonce should be randomly generated and unique for each hashing operation to prevent replay attacks.
+
+Additionally, the code snippet is using a hash function directly on a password. This is not secure because hash functions are not designed for password storage. Instead, a password hashing function like bcrypt, PBKDF2, or Argon2 should be used.
+
+The code snippet also concatenates the nonce with the password before hashing, which does not provide adequate protection against attacks. A secure solution would involve using a randomly generated salt value, hashing it with the password, and then verifying the result.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend the following steps:
+
+- Use a secure password hashing function like bcrypt, PBKDF2, or Argon2.
+- Generate a random salt value for each hashing operation.
+- Use a different instance of the MessageDigest class or a different hashing function for each hashing operation to prevent nonce reuse.
+
+Additionally, when creating a new hash, use a secure hashing algorithm like SHA-256 or SHA-3 instead of SHA-1. 
+When verifying a password, rehash the provided password and compare the results with the stored hash. This will ensure the password is secure.
+
+```java
+// Example using bcrypt
+String hashedPassword = BCrypt.hashpw("secretPassword", BCrypt.gensalt());
+
+// Example using PBKDF2
+KeySpec spec = new PBEKeySpec("secretPassword".toCharArray(), 
+        salt, 65536, 128);
+SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512");
+byte[] hashedPassword = f.generateSecret(spec).getEncoded();
+
+// Example using SHA-256
+String command = new String("some command to execute");
+String nonce = UUID.randomUUID().toString(16);
+MessageDigest md = MessageDigest.getInstance("SHA-256");
+byte[] bytes = md.digest((nonce + "secretPassword").getBytes());
+//...
+```
+
+
+ORIGINAL CODE:
+String command = new String("some command to execute");
+MessageDigest nonce = MessageDigest.getInstance("SHA");
+nonce.update(String.valueOf("bad nonce"));
+byte[] nonce = nonce.digest();
+MessageDigest password = MessageDigest.getInstance("SHA");
+password.update(nonce + "secretPassword");
+byte[] digest = password.digest();
+sendCommand(digest, command)
+```

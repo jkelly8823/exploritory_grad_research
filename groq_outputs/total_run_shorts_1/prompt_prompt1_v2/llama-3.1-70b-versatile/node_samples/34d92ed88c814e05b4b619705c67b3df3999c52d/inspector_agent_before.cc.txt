@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 9-10, 13-14, 23-24, 33-34
+VULNERABILITY_DESCRIPTION:
+The code has a possible denial-of-service (DoS) vulnerability due to potential infinite recursion. The same condition (!parent_env_->should_create_inspector() && !client_) is checked in multiple methods, and if this condition is not met, an error is thrown and the function returns. However, in the case of an exception being thrown and not caught, it can lead to an infinite recursion and eventually a crash or a denial-of-service.
+
+EXPLANATION:
+The code checks for the condition (!parent_env_->should_create_inspector() && !client_) in multiple methods. If this condition is not met, an error is thrown using the ThrowUninitializedInspectorError function. However, if the error is not properly handled in the calling code, it can lead to an infinite recursion and eventually a crash or a denial-of-service. 
+
+For example, if the WaitForDisconnect method is called when !parent_env_->should_create_inspector() && !client_) is true, the ThrowUninitializedInspectorError will be called, which might throw an exception that is not caught, causing the WaitForDisconnect method to be called again, and so on.
+
+Additionally, the same checks are repeated in multiple methods. This redundancy can make the code harder to maintain and debug. If the condition changes in the future, it needs to be updated in all places where it is checked.
+
+RECOMMENDATIONS:
+1. Ensure that the ThrowUninitializedInspectorError function properly handles and does not rethrow the exception. 
+2. Consider adding a check at the beginning of the Agent class to prevent any methods from being called when the object is in an invalid state (i.e., when !parent_env_->should_create_inspector() && !client_). This would eliminate the need to check the condition in each method.
+3. If possible, refactor the code to handle the condition in a more centralized way to eliminate redundancy.
+
+ORIGINAL CODE:
+```c
+#include "node_options-inl.h"
+#include "node_process-inl.h"
+#include "node_url.h"
+#include "util-inl.h"
+#include "timer_wrap-inl.h"
+#include "v8-inspector.h"
+#include "v8-platform.h"
+
+#include "libplatform/libplatform.h"
+  if (io_ != nullptr)
+    return true;
+
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return false;
+  }
+std::unique_ptr<InspectorSession> Agent::Connect(
+    std::unique_ptr<InspectorSessionDelegate> delegate,
+    bool prevent_shutdown) {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return std::unique_ptr<InspectorSession>{};
+  }
+std::unique_ptr<InspectorSession> Agent::ConnectToMainThread(
+    std::unique_ptr<InspectorSessionDelegate> delegate,
+    bool prevent_shutdown) {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return std::unique_ptr<InspectorSession>{};
+  }
+}
+
+void Agent::WaitForDisconnect() {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return;
+  }
+
+std::unique_ptr<ParentInspectorHandle> Agent::GetParentHandle(
+    uint64_t thread_id, const std::string& url, const std::string& name) {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return std::unique_ptr<ParentInspectorHandle>{};
+  }
+}
+
+void Agent::WaitForConnect() {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return;
+  }
+}
+
+std::shared_ptr<WorkerManager> Agent::GetWorkerManager() {
+  if (!parent_env_->should_create_inspector() && !client_) {
+    ThrowUninitializedInspectorError(parent_env_);
+    return std::unique_ptr<WorkerManager>{};
+  }
+```

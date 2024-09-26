@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential NULL pointer dereference after freeing the 'out' object.
+
+EXPLANATION:
+In the code snippet, if `EVP_CIPHER_CTX_ctrl` returns a value less than 0, the `OPENSSL_free(out)` function is called to free the memory allocated to 'out'. After this, the value of 'out' is set to NULL. However, if the Err_raise function and goto statement do not cause the program flow to exit the current function, the 'out' object will still be used later in the function (the current code snippet does not show this usage). Since 'out' has been freed, using it will result in a NULL pointer dereference.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that after freeing 'out', neither it nor 'out+len' is used later in the function. The goto statement does attempt to handle this by redirecting to 'err', but it is essential to ensure that this redirect is adequate and no code that uses 'out' can be executed after 'out' is freed.
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 1999-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+        if (EVP_CIPHER_CTX_is_encrypting(ctx)) {
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG,
+                (int)mac_len, out+outlen) < 0) {
+                OPENSSL_free(out);
+                out = NULL;
+                ERR_raise(ERR_LIB_PKCS12, ERR_R_INTERNAL_ERROR);
+                goto err;
+            }
+            outlen += mac_len;
+```

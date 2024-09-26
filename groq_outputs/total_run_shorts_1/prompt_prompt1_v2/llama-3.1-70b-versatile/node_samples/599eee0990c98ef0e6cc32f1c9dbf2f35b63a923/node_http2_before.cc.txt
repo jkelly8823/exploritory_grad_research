@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-19
+VULNERABILITY_DESCRIPTION:
+Potential Out-of-Bounds Write Vulnerability due to Inadequate Input Validation
+EXPLANATION:
+In the given code snippet, `Write(&stream_buf_, 1)` is called without validating the return value of this function. However, this alone does not indicate a vulnerability. What's of concern is the lack of validation of the `stream_buf_` data structure before it is used in the `Write` call. `CHECK_LE(offset + buf.len, session->stream_buf_.len)` is performed in an earlier conditional branch. It is unclear if the conditional path has changed the values of `stream_buf_` or `buf`. If these values have changed or are not validated to be within the bounds of the buffer before being passed to `Write`, this could result in an out-of-bounds write, leading to potential exploitation opportunities. Furthermore, it's assumed that the `.ToArrayBuffer()` function correctly writes and propagates buffer metadata. Inconsistencies with this detail would further exacerbate concerns.
+RECOMMENDATIONS:
+To address this potential vulnerability, ensure that the `stream_buf_` data structure is properly validated before passing it to `Write`. Add input validation checks to ensure that `stream_buf_` is within valid bounds. If the return value of `Write` can be an error, handle this value correctly.
+
+ORIGINAL CODE:
+```cpp
+return;
+  }
+
+  CHECK(!session->stream_buf_ab_.IsEmpty());
+
+  // There is a single large array buffer for the entire data read from the
+  // network; create a slice of that array buffer and emit it as the
+  // received data buffer.
+  CHECK_LE(offset, session->stream_buf_.len);
+  CHECK_LE(offset + buf.len, session->stream_buf_.len);
+
+  stream->CallJSOnreadMethod(nread, session->stream_buf_ab_, offset);
+}
+
+
+// Called by OnFrameReceived to notify JavaScript land that a complete
+  Http2Scope h2scope(this);
+  CHECK_NOT_NULL(stream_);
+  Debug(this, "receiving %d bytes", nread);
+  CHECK(stream_buf_ab_.IsEmpty());
+  AllocatedBuffer buf(env(), buf_);
+
+  // Only pass data on if nread > 0
+    // We use `nread` instead of `buf.size()` here, because the buffer is
+    // cleared as part of the `.ToArrayBuffer()` call below.
+    DecrementCurrentSessionMemory(nread);
+    stream_buf_ab_ = Local<ArrayBuffer>();
+    stream_buf_ = uv_buf_init(nullptr, 0);
+  });
+
+  // Make sure that there was no read previously active.
+
+  Isolate* isolate = env()->isolate();
+
+  // Create an array buffer for the read data. DATA frames will be emitted
+  // as slices of this array buffer to avoid having to copy memory.
+  stream_buf_ab_ = buf.ToArrayBuffer();
+
+  statistics_.data_received += nread;
+  ssize_t ret = Write(&stream_buf_, 1);
+```

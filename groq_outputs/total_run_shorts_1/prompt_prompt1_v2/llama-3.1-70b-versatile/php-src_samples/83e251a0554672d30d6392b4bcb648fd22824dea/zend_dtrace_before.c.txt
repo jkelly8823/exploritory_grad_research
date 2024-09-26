@@ -1,0 +1,103 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-34
+VULNERABILITY_DESCRIPTION:
+This vulnerability is a potential null pointer dereference. In the functions dtrace_execute_ex and dtrace_execute_internal, there is a lack of null checks for variables such as filename, funcname, and classname.
+
+EXPLANATION:
+The functions dtrace_execute_ex and dtrace_execute_internal do not check if the filename, funcname, or classname variables are null before using them. This can lead to a null pointer dereference if any of these variables are null. The dtrace_get_executed_filename function returns a null value if EG(current_execute_data) or EG(current_execute_data)->op_array is null. This null value is then assigned to filename in dtrace_execute_internal. If DTRACE_EXECUTE_ENTRY_ENABLED() or DTRACE_EXECUTE_RETURN_ENABLED(), DTRACE_EXECUTE_ENTRY or DTRACE_EXECUTE_RETURN is called with this null value, a null pointer dereference can occur.
+
+RECOMMENDATIONS:
+Add null checks for filename, funcname, and classname variables before using them. If any of these variables are null, handle them accordingly to prevent a null pointer dereference.
+
+```c
+if (filename != NULL) {
+    DTRACE_EXECUTE_ENTRY(filename, lineno);
+}
+```
+
+And
+
+```c
+if (funcname != NULL && filename != NULL && classname != NULL && scope != NULL) {
+    DTRACE_FUNCTION_ENTRY(funcname, filename, lineno, classname, scope);
+}
+```
+
+And
+
+```c
+if (filename != NULL) {
+    DTRACE_EXECUTE_RETURN(filename, lineno);
+}
+```
+
+ORIGINAL CODE:
+
+
+#ifdef HAVE_DTRACE
+/* PHP DTrace probes {{{ */
+static inline char *dtrace_get_executed_filename(TSRMLS_D)
+{
+	if (EG(current_execute_data) && EG(current_execute_data)->op_array) {
+		return EG(current_execute_data)->op_array->filename;
+	} else {
+ZEND_API zend_op_array *dtrace_compile_file(zend_file_handle *file_handle, int type TSRMLS_DC)
+{
+	zend_op_array *res;
+	DTRACE_COMPILE_FILE_ENTRY(file_handle->opened_path, file_handle->filename);
+	res = compile_file(file_handle, type TSRMLS_CC);
+	DTRACE_COMPILE_FILE_RETURN(file_handle->opened_path, file_handle->filename);
+
+	return res;
+}
+
+ZEND_API void dtrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
+{
+	int lineno;
+	char *scope, *filename, *funcname, *classname;
+	scope = filename = funcname = classname = NULL;
+
+	/* we need filename and lineno for both execute and function probes */
+	if (DTRACE_EXECUTE_ENTRY_ENABLED() || DTRACE_EXECUTE_RETURN_ENABLED()
+	}
+
+	if (DTRACE_EXECUTE_ENTRY_ENABLED()) {
+		DTRACE_EXECUTE_ENTRY(filename, lineno);
+	}
+
+	if (DTRACE_FUNCTION_ENTRY_ENABLED() && funcname != NULL) {
+		DTRACE_FUNCTION_ENTRY(funcname, filename, lineno, classname, scope);
+	}
+
+	execute_ex(execute_data TSRMLS_CC);
+
+	if (DTRACE_FUNCTION_RETURN_ENABLED() && funcname != NULL) {
+		DTRACE_FUNCTION_RETURN(funcname, filename, lineno, classname, scope);
+	}
+
+	if (DTRACE_EXECUTE_RETURN_ENABLED()) {
+		DTRACE_EXECUTE_RETURN(filename, lineno);
+	}
+}
+
+ZEND_API void dtrace_execute_internal(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
+{
+	int lineno;
+	char *filename;
+	if (DTRACE_EXECUTE_ENTRY_ENABLED() || DTRACE_EXECUTE_RETURN_ENABLED()) {
+		filename = dtrace_get_executed_filename(TSRMLS_C);
+		lineno = zend_get_executed_lineno(TSRMLS_C);
+	}
+
+	if (DTRACE_EXECUTE_ENTRY_ENABLED()) {
+		DTRACE_EXECUTE_ENTRY(filename, lineno);
+	}
+
+	execute_internal(execute_data_ptr, fci, return_value_used TSRMLS_CC);
+
+	if (DTRACE_EXECUTE_RETURN_ENABLED()) {
+		DTRACE_EXECUTE_RETURN(filename, lineno);
+	}
+}
+
+/* }}} */

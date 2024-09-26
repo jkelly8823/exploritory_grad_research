@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION:
+Stack overflow vulnerability due to infinite recursion and recursive dynamic memory allocation.
+
+EXPLANATION:
+The code attempts to allocate memory on the stack using `alloca` in a recursive manner. However, `alloca` does not return a pointer to the allocated memory; it returns the starting address of the allocated memory as a `void*`. In this context, it's incorrectly assigned to `*p`, which is `int*`. Additionally, `p = *p` is used to "point to the next location to be saved", but this operation actually accesses the value stored in the memory address pointed by `p` (which was initialized to `NULL`), leading to potential undefined behavior.
+
+More importantly, the loop iterates `end_limit` times, which can potentially be a very large number, leading to a stack overflow. `alloca` is not a function that requests memory from the heap like `malloc` or `calloc`; instead, it attempts to allocate memory from the stack frame. The amount of stack space available is limited, and excessive use can easily cause a stack overflow.
+
+RECOMMENDATIONS:
+- Use allocation functions like `malloc` or `calloc` instead of `alloca`, and properly check for allocation errors.
+- Check the value of `end_limit` to prevent excessive allocation and stack overflows. 
+- Use a data structure like a dynamically-linked list or vector to handle large datasets.
+- Free memory when it is no longer needed to prevent memory leaks.
+
+ORIGINAL CODE:
+```c
+// Gets the size from the number of objects in a database, which over time can conceivably get very large
+int end_limit = get_nmbr_obj_from_db();
+int i;
+int *base = NULL;
+int *p = base;
+for (i = 0; i < end_limit; i++)
+{
+    *p = alloca(sizeof(int *)); // Allocate memory on the stack
+    p = *p; // Point to the next location to be saved
+}
+```

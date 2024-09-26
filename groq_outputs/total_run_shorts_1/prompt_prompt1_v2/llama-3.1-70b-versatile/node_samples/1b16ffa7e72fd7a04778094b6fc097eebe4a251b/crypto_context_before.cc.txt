@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-12
+VULNERABILITY_DESCRIPTION:
+Invalidated variable reuse and potential duplicate error handling vulnerability.
+
+EXPLANATION:
+In this code snippet, a variable named 'errors' is declared on line 2, and then an attempt is made to load an engine by ID and handle any potential errors in the 'errors' object. Later, inside the first 'if' block, a new variable named 'errors' with the same name is redeclared, but with a different index for 'args' (args[0] is used instead of args[1]). This could lead to incorrect error handling, and reusing this variable may cause unintended behavior. Furthermore, it seems that there is some confusion between args[0] and args[1]. The indices seem to be mixed up as they are passed to the engine_id and then the engine is loaded.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code snippet should ensure that it's handling errors correctly and not reusing variable names. Consider renaming the 'errors' variables to provide distinct error handling, and ensure that the 'args' indices are used correctly throughout the code. Here's an example:
+
+```c
+  CHECK_EQ(args.Length(), 2);
+
+  CryptoErrorStore outer_errors;
+  Utf8Value outer_engine_id(env->isolate(), args[1]);
+  EnginePointer outer_engine = LoadEngineById(*outer_engine_id, &outer_errors);
+  if (!outer_engine) {
+  // support multiple calls to SetClientCertEngine.
+  CHECK(!sc->client_cert_engine_provided_);
+
+  CryptoErrorStore inner_errors;
+  const Utf8Value inner_engine_id(env->isolate(), args[0]);
+  EnginePointer inner_engine = LoadEngineById(*inner_engine_id, &inner_errors);
+  if (!inner_engine) {
+```
+
+ORIGINAL CODE:
+```c
+  CHECK_EQ(args.Length(), 2);
+
+  CryptoErrorStore errors;
+  Utf8Value engine_id(env->isolate(), args[1]);
+  EnginePointer engine = LoadEngineById(*engine_id, &errors);
+  if (!engine) {
+  // support multiple calls to SetClientCertEngine.
+  CHECK(!sc->client_cert_engine_provided_);
+
+  CryptoErrorStore errors;
+  const Utf8Value engine_id(env->isolate(), args[0]);
+  EnginePointer engine = LoadEngineById(*engine_id, &errors);
+  if (!engine) { 
+```

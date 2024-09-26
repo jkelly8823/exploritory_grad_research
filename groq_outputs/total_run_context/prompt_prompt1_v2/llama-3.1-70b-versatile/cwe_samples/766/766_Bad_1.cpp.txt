@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 9-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to buffer overflow attacks due to the use of `strcpy` function without proper bounds checking, and incorrect usage of `strcmp` function for equality check.
+
+EXPLANATION:
+The code uses `strcpy` function to copy the username and password into `this->username` and `this->password` respectively. Although the lengths of `this->username` and `this->password` are limited by the `MAX_USERNAME_LENGTH` and `MAX_PASSWORD_LENGTH` macros, it is still possible to overflow the buffer if the input string contains null characters. 
+
+Furthermore, the `strcmp` function is used incorrectly for equality check. The `strcmp` function returns 0 if the strings are equal and non-zero if the strings are not equal. However, in the code, it is used with an `if` statement, which will evaluate to true for non-zero values, effectively inverting the intended logic.
+
+RECOMMENDATIONS:
+1. Replace `strcpy` with `strncpy` to limit the number of characters copied and prevent buffer overflow. Ensure that the null-terminator is added manually if necessary.
+
+2. Fix the `strcmp` logic by comparing its return value to 0 explicitly to check for equality.
+
+Example of the fixed code:
+
+```c
+#define MAX_PASSWORD_LENGTH 15
+#define MAX_USERNAME_LENGTH 15
+
+class UserAccount {
+public:
+    UserAccount(char *username, char *password) {
+        if ((strlen(username) > MAX_USERNAME_LENGTH) || (strlen(password) > MAX_PASSWORD_LENGTH)) {
+            ExitError("Invalid username or password");
+        }
+        strncpy(this->username, username, MAX_USERNAME_LENGTH);
+        this->username[MAX_USERNAME_LENGTH] = '\0'; // Add null-terminator manually if necessary
+        strncpy(this->password, password, MAX_PASSWORD_LENGTH);
+        this->password[MAX_PASSWORD_LENGTH] = '\0'; // Add null-terminator manually if necessary
+    }
+
+    int authorizeAccess(char *username, char *password) {
+        if ((strlen(username) > MAX_USERNAME_LENGTH) || (strlen(password) > MAX_PASSWORD_LENGTH)) {
+            ExitError("Invalid username or password");
+        }
+        if (strcmp(this->username, username) == 0 && strcmp(this->password, password) == 0) {
+            return 1; // Authorized access
+        } else {
+            return 0; // Not authorized
+        }
+    }
+
+    char username[MAX_USERNAME_LENGTH+1];
+    char password[MAX_PASSWORD_LENGTH+1];
+};
+```
+
+ORIGINAL CODE:
+```c
+#define MAX_PASSWORD_LENGTH 15#define MAX_USERNAME_LENGTH 15
+class UserAccount{
+public:
+UserAccount(char *username, char *password){if ((strlen(username) > MAX_USERNAME_LENGTH) ||(strlen(password) > MAX_PASSWORD_LENGTH)) {ExitError("Invalid username or password");}strcpy(this->username, username);strcpy(this->password, password);}
+int authorizeAccess(char *username, char *password){
+if ((strlen(username) > MAX_USERNAME_LENGTH) ||(strlen(password) > MAX_PASSWORD_LENGTH)) {ExitError("Invalid username or password");}
+if (strcmp(this->username, username) ||strcmp(this->password, password))return 0;
+elsereturn 1;
+}
+char username[MAX_USERNAME_LENGTH+1];char password[MAX_PASSWORD_LENGTH+1];
+};
+```

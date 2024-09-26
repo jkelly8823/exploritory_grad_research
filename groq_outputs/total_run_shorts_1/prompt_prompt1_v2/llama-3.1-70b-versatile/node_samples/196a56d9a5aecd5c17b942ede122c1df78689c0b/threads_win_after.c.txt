@@ -1,0 +1,97 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19, 36
+VULNERABILITY_DESCRIPTION:
+Timing Attack and Locking Mechanism Vulnerability.
+
+EXPLANATION:
+In the functions `CRYPTO_atomic_or` and `CRYPTO_atomic_load`, a locking mechanism is used to ensure atomicity when updating a shared variable. However, the `CRYPTO_THREAD_read_lock` and `CRYPTO_THREAD_write_lock` functions are used outside of this mechanism in a time-sensitive manner. This could potentially lead to a timing side-channel vulnerability.
+
+In the manual locking implementation for `CRYPTO_atomic_or`, the operation is not atomic because of the conditional assignment of `*val |= op`. Additionally, the return value of `CRYPTO_THREAD_unlock` is checked outside of the timing-sensitive area.
+
+In the `CRYPTO_atomic_load` function, the locking mechanism is similar to the one in `CRYPTO_atomic_or`, but with a potential for timing-based vulnerability because it uses non-atomic access.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend using atomic operations instead of a hand-rolled locking mechanism. This can be achieved by leveraging the `InterlockedOr64` and `InterlockedCompareExchange64` functions for the manual locking mechanism. If `Interlocked` functions are not available, use `CompareAndSwap` instructions, if supported by the CPU.
+
+Furthermore, instead of checking the return value of `CRYPTO_THREAD_unlock`, ensure that unlocking always happens in the same amount of time to minimize potential timing attacks.
+
+Here is an example of how the non-atomic operations can be modified to use atomic operations in the `CRYPTO_atomic_or` function:
+
+```c
+*ret = (uint64_t)InterlockedOr64((LONG64 volatile *)val, (LONG64)op);
+return 1;
+```
+
+For the `CRYPTO_atomic_load` function:
+
+```c
+*ret = (uint64_t)InterlockedCompareExchange64((LONG64 volatile *)val, 0, 0);
+return 1;
+```
+
+Note that for systems where `Interlocked` functions are not supported, additional modifications to use `CompareAndSwap` or other atomic instructions may be required.
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 2016-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+# endif
+#endif
+
+/*
+ * VC++ 2008 or earlier x86 compilers do not have an inline implementation
+ * of InterlockedOr64 for 32bit and will fail to run on Windows XP 32bit.
+ * https://docs.microsoft.com/en-us/cpp/intrinsics/interlockedor-intrinsic-functions#requirements
+ * To work around this problem, we implement a manual locking mechanism for
+ * only VC++ 2008 or earlier x86 compilers.
+ */
+
+#if (defined(_MSC_VER) && defined(_M_IX86) && _MSC_VER <= 1500)
+# define NO_INTERLOCKEDOR64
+#endif
+
+#include <openssl/crypto.h>
+
+#if defined(OPENSSL_THREADS) && !defined(CRYPTO_TDEBUG) && defined(OPENSSL_SYS_WINDOWS)
+
+int CRYPTO_atomic_or(uint64_t *val, uint64_t op, uint64_t *ret,
+                     CRYPTO_RWLOCK *lock)
+{
+#if (defined(NO_INTERLOCKEDOR64))
+    if (lock == NULL || !CRYPTO_THREAD_write_lock(lock))
+        return 0;
+    *val |= op;
+    *ret = *val;
+
+    if (!CRYPTO_THREAD_unlock(lock))
+        return 0;
+
+    return 1;
+#else
+    *ret = (uint64_t)InterlockedOr64((LONG64 volatile *)val, (LONG64)op) | op;
+    return 1;
+#endif
+}
+
+int CRYPTO_atomic_load(uint64_t *val, uint64_t *ret, CRYPTO_RWLOCK *lock)
+{
+#if (defined(NO_INTERLOCKEDOR64))
+    if (lock == NULL || !CRYPTO_THREAD_read_lock(lock))
+        return 0;
+    *ret = *val;
+    if (!CRYPTO_THREAD_unlock(lock))
+        return 0;
+
+    return 1;
+#else
+    *ret = (uint64_t)InterlockedOr64((LONG64 volatile *)val, 0);
+    return 1;
+#endif
+}
+
+int openssl_init_fork_handlers(void)
+{```

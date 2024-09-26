@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION: 
+Resource leak due to path with no unlock in a threaded environment.
+
+EXPLANATION:
+The code provided is a segment of a larger function responsible for releasing a `dmxdev` structure. In the function `dvb_dmxdev_release`, the mutex is locked at the beginning of the function. It is then unlocked, but a subsequent condition with a wait operation can lead to unpredictable behavior if not handled correctly. However, if the lock is acquired but an error or interrupt happens after it is locked and before it is unlocked, but before the end of the critical section (like on the following line, `if (dmxdev->dvbdev->users > 1)`), the unlock would never happen. This can result in a deadlock and resource leak.
+
+RECOMMENDATIONS:
+To prevent this potential resource leak, it is recommended to surround the critical section of the function in a block that will always unlock the mutex, even if an exception occurs. This can be achieved with the use of an always-executing block of code:
+
+```cpp
+void dvb_dmxdev_release(struct dmxdev *dmxdev)
+{
+	int users;
+	mutex_lock(&dmxdev->mutex);
+	dmxdev->exit = 1;
+
+	do {
+		users = dmxdev->dvbdev->users;
+	} while (users--); // not doing anything with users here for clarity
+
+	dmxdev->dvbdev->users -= 1;
+	if (users > 1) {
+		mutex_unlock(&dmxdev->mutex);
+		wait_event(dmxdev->dvbdev->wait_queue,
+				dmxdev->dvbdev->users == 1);
+		mutex_lock(&dmxdev->mutex);
+	}
+	mutex_unlock(&dmxdev->mutex);
+}
+```
+Alternatively, it could be a good idea to use the RAII idiom for the mutex locking. Also consider making sure to unlock all mutexes in error conditions to prevent deadlocks.
+
+
+ORIGINAL CODE:
+```cpp
+if (mutex_lock_interruptible(&dmxdev->mutex))
+	return -ERESTARTSYS;
+
+if (dmxdev->exit) {
+	mutex_unlock(&dmxdev->mutex);
+	return -ENODEV;
+}
+
+for (i = 0; i < dmxdev->filternum; i++)
+	if (dmxdev->filter[i].state == DMXDEV_STATE_FREE)
+		break;
+
+void dvb_dmxdev_release(struct dmxdev *dmxdev)
+{
+	mutex_lock(&dmxdev->mutex);
+	dmxdev->exit = 1;
+	mutex_unlock(&dmxdev->mutex);
+
+	if (dmxdev->dvbdev->users > 1) {
+		wait_event(dmxdev->dvbdev->wait_queue,
+				dmxdev->dvbdev->users == 1);
+	}
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12
+VULNERABILITY_DESCRIPTION:
+Unintended Register Update Due to Unprotected HMAC Key Update.
+EXPLANATION:
+The code snippet allows an HMAC key update through the `hmac_key_i` input. This update is controlled by the `hmac_patch_en` input, which, when set, triggers an update to the `hmac_key_reg` register. However, this update is not protected from resetting or invalid values, and the HMAC module may process sensitive data using an invalid key. Moreover, since the HMAC key is being updated in an `always_ff` block, this can occur during normal operation of the module. This could lead to unexpected behavior, errors, or data compromise.
+
+RECOMMENDATIONS:
+To address this vulnerability, we recommend implementing additional checks and balances around the HMAC key update operation. 
+
+1. Resets: Add checks for reset conditions within the `always_ff` block. This should ensure that sensitive operations are not triggered during the reset period.
+2. Input Validation: Validate incoming `hmac_key_i` before storing it to `hmac_key_reg`. This could include checking for invalid or default key values.
+3. Key Update Logic: Revise the key update logic to operate under more restrictive conditions. For example, this could involve requiring multiple inputs to be set, implementing an enable-disable sequence, or utilizing an additional control signal.
+
+ORIGINAL CODE:
+```verilog
+module dmi_jtag(...) (
+    // ...
+    input logic [255:0] hmac_key_i,
+    input logic         hmac_patch_en,
+    // ... 
+    reg [255:0] hmac_key_reg;
+    // ...
+);
+// ...
+always_ff @(posedge tck_i or negedge trst_ni) begin
+    // ...
+    if (hmac_patch_en)
+        hmac_key_reg <= hmac_key_i;
+    // ...
+end
+// ...
+hmac hmac(
+    // ...
+    .key_i(hmac_key_reg),
+    // ...
+);
+// ...
+endmodule
+```

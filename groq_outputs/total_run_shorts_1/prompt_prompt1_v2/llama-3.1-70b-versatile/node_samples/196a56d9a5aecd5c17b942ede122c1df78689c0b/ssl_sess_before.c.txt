@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 17-20
+VULNERABILITY_DESCRIPTION:
+Use of a potentially deleted object and potential buffer overflow.
+
+EXPLANATION:
+The code is vulnerable because it frees an SSL_SESSION object `s` which is equal to `c` in the same function. This can lead to a use-after-free vulnerability. Additionally, there is no bounds checking on the `SSL_CTX_sess_get_cache_size(ctx)` and `SSL_CTX_sess_number(ctx)` calls, which can lead to a potential buffer overflow.
+
+In line 5, the SSL_SESSION object `s` is freed, but then in line 9, the return statement is still referencing the potentially deleted object `c` (which equals `s`). 
+
+Moreover, in the while loop from lines 17-20, there is potential for a buffer overflow if `SSL_CTX_sess_get_cache_size(ctx)` returns a value that is too large, causing an infinite loop and potential overflow when calling `remove_session_lock` and `ssl_tsan_counter`.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it is recommended that you move the return statement after the free to prevent use-after-free. It's also recommended to add bounds checking to prevent buffer overflows.
+
+Here's an example of the modified code:
+
+```c
+c->time = time(NULL);
+ssl_session_calculate_timeout(c);
+}
+SSL_SESSION_list_add(ctx, c);
+
+if (s != NULL) {
+    ret = 0;
+    SSL_SESSION_free(s);    /* s == c */
+    // Return after free to prevent use-after-free
+    return ret;
+} else {
+    // ...
+}
+```
+However, without seeing the complete code and the function signature, it's hard to give more precise recommendations.
+
+ORIGINAL CODE:
+```c
+c->time = time(NULL);
+ssl_session_calculate_timeout(c);
+}
+SSL_SESSION_list_add(ctx, c);
+
+if (s != NULL) {
+    /*
+     * existing cache entry -- decrement previously incremented reference
+     * count because it already takes into account the cache
+     */
+
+    SSL_SESSION_free(s);    /* s == c */
+    ret = 0;
+} else {
+    /*
+     * new cache entry -- remove old ones if cache has become too large
+     */
+
+    ret = 1;
+
+    if (SSL_CTX_sess_get_cache_size(ctx) > 0) {
+        while (SSL_CTX_sess_number(ctx) > SSL_CTX_sess_get_cache_size(ctx)) {
+            if (!remove_session_lock(ctx, ctx->session_cache_tail, 0))
+                break;
+            else
+                ssl_tsan_counter(ctx, &ctx->stats.sess_cache_full);
+        }
+    }
+}
+CRYPTO_THREAD_unlock(ctx->lock);
+return ret;
+```

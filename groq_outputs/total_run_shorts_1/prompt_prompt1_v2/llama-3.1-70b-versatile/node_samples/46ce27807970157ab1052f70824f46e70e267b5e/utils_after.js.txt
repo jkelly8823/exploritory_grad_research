@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+EXPLANATION:
+The vulnerability in this code arises from the potential to traverse outside the intended directory structure. Although the `BufferFrom` function prevents monkey-patching Buffer internals and the `encodeUtf8String` function prevents path manipulation via encoding, it's the fact that `resolvePath` is being called directly on the user-controlled `path` value that's risky.
+
+Specifically, the `resolvePath` function may resolve a relative path to an absolute path, potentially leading to path traversal attacks when `path` contains directory traversal characters like "..". This could allow an attacker to access sensitive directories outside the intended file tree.
+
+RECOMMENDATIONS:
+To address this vulnerability, you should add additional validation to ensure that the resolved path is still within the intended directory structure. One approach is to use a library like `path/is-absolute` to check if the resolved path is absolute, and if so, strip any directory traversal characters.
+
+Alternatively, consider using the `path.join` function to construct the absolute path instead of `resolvePath`, as `path.join` does not perform directory traversal. Here's an example:
+
+```javascript
+const path = require('path');
+
+return encodeUtf8String(path.join('/', resolvePath(BufferToString(path))));
+```
+
+However, this fix is incomplete as we can't be sure what the desired root directory is from the given snippet. This fix would vary based on the actual implementation.
+
+ORIGINAL CODE:
+```javascript
+const kStats = Symbol('stats');
+const assert = require('internal/assert');
+
+const { encodeUtf8String } = internalBinding('encoding_binding');
+
+const {
+  fs: {
+    F_OK = 0,
+    W_OK = 0,
+    }
+    assert(isUint8Array(path));
+    if (!BufferIsBuffer(path)) path = BufferFrom(path);
+    // Avoid Buffer.from() and use a C++ binding instead to encode the result
+    // of path.resolve() in order to prevent path traversal attacks that
+    // monkey-patch Buffer internals.
+    return encodeUtf8String(resolvePath(BufferToString(path)));
+  }
+  return path;
+}
+```

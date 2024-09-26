@@ -1,0 +1,15 @@
+ 
+
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION: A race condition exists in the wait_for_unix_gc function. The condition for triggering a garbage collection is not atomic, and the wait_event call is not protected from concurrent modifications to unix_tot_inflight.
+EXPLANATION: The wait_for_unix_gc function checks if the number of inflight sockets is greater than the trigger threshold and if a garbage collection is not already in progress. However, this check is not atomic, and another thread may modify unix_tot_inflight between the check and the wait_event call. This can cause the wait_event call to wait indefinitely, leading to a deadlock.
+RECOMMENDATIONS: To fix this vulnerability, the check for the trigger threshold should be atomic, and the wait_event call should be protected from concurrent modifications to unix_tot_inflight. This can be achieved by using a spinlock or a mutex to protect the critical section. For example, the code can be modified as follows:
+```c
+void wait_for_unix_gc(void)
+{
+	spin_lock(&unix_gc_lock);
+	if (unix_tot_inflight > UNIX_INFLIGHT_TRIGGER_GC &&!gc_in_progress)
+		unix_gc();
+	spin_unlock(&unix_gc_lock);
+	wait

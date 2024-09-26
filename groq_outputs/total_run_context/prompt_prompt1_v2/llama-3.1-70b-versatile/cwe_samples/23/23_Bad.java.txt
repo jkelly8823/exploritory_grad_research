@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-10, 14-15
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Unrestricted File Upload vulnerabilities.
+
+EXPLANATION:
+The provided code snippet contains multiple security vulnerabilities. 
+
+Firstly, there is no validation on the 'filename' variable, which is derived from the 'pLine' string read from the 'BufferedReader'. This allows an attacker to specify arbitrary paths and names for the file to be written. This enables a Directory Traversal vulnerability, which can lead to attackers writing files in arbitrary locations.
+
+Additionally, the 'filename' is not sanitized or filtered, allowing an attacker to specify absolute or relative paths to an arbitrary file. This allows an attacker to potentially overwrite critical system files or configuration files.
+
+Furthermore, the code uses the 'BufferedWriter' to write the file in append mode ('true' parameter in the 'FileWriter' constructor) without checking if the file already exists. This allows an attacker to force the server to write data to an existing file, potentially leading to an overwrite of the file's original contents.
+
+Lastly, there is no content-type or sanitizer validation performed on the file data, allowing an attacker to potentially upload malicious content such as executable scripts.
+
+RECOMMENDATIONS:
+- Perform strict validation on the 'filename' and ensure it is within a controlled and sanitized directory structure.
+- Limit file uploads to specific, whitelisted directories and file extensions.
+- Use Path.normalize() to ensure attacker-provided paths are sanitized and absolute path-based exploits are mitigated.
+- Use a whitelisted content-type array for validating the type of files that can be uploaded.
+- Set the 'FileWriter' in 'false' mode to prevent appending data to an existing file.
+- Perform security checks on the 'FileWriter' to ensure that it is not writing to an arbitrary location.
+
+ORIGINAL CODE:
+public class FileUploadServlet extends HttpServlet {
+    ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+        String contentType = request.getContentType();
+
+        // the starting position of the boundary header
+        int ind = contentType.indexOf("boundary=");
+        String boundary = contentType.substring(ind+9);
+
+        String pLine = new String();
+        String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+
+        // verify that content type is multipart form data
+        if (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+            // extract the filename from the Http header
+            BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
+            ...
+            pLine = br.readLine();
+            String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));
+            ...
+            // output the file to the local upload directory
+            try {
+                BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));
+                for (String line; (line=br.readLine())!=null; ) {
+                    if (line.indexOf(boundary) == -1) {
+                        bw.write(line);
+                        bw.newLine();
+                        bw.flush();
+                    }
+                } //end of for loop
+                bw.close();
+
+            } catch (IOException ex) {...}
+            // output successful upload response HTML page
+        } // output unsuccessful upload response HTML page
+        else {...}
+    }yalty

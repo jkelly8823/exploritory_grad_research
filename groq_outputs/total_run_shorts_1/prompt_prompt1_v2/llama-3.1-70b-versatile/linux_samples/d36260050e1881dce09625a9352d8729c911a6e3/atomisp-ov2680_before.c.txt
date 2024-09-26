@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 34
+VULNERABILITY_DESCRIPTION: 
+Integer Overflow in Memory Allocation
+
+EXPLANATION: 
+The code snippet demonstrates an integer overflow vulnerability in memory allocation. In the particular code snippet provided, I noticed that when `ctrl->index` is concatenated with `sizeof(u16)`, there are no checks for potential integer overflows in the `size` variable.
+
+The line of concern is: 
+
+```c
+size = sizeof(u16) + ctrl->index; /* 16-bit address + data */
+```
+
+Although, there isn't a clear memory allocation using `size`, there may be other uses for this variable in the larger codebase that may lead to overflow issues.
+
+However, during my other code reviews, there was also this one particular line that may lead to overflows in certain scenarios.
+
+In the original code there was another instance in this particular snippet:
+
+```c
+const u16 len = data_length + sizeof(u16); /* 16-bit address + data */
+```
+
+Should any of these sums become excessively large and then be assigned to a smaller type (without check), then an integer overflow may occur, which would result in memory corruption and unpredictable behavior.
+
+RECOMMENDATIONS: 
+It's essential to prevent the `size` variable from being subjected to integer overflow, as shown below:
+
+```c
+u64 full_size = (u64)sizeof(u16) + (u64)ctrl->index; 
+if(full_size > UINT16_MAX) {
+    // handle overflow error, return error 
+}
+u16 safe_size = full_size;
+```
+
+Alternatively:
+
+```c
+u16 size;    
+if(ctrl->index > (UINT16_MAX - sizeof(u16))) {
+    // handle overflow error, return error
+}    
+size = sizeof(u16) + ctrl->index;
+```
+
+Apply these techniques to every scenario in this provided code snippet that involves integer sums or concatenations. Perform a similar review for all code that involves memory allocation, data copying, or where data originates as input and can potentially be exploited.
+
+ORIGINAL CODE:
+(if/else) and I2C Reads/Writes part above (starts at "if(data_length==)
+
+I2C Writes part below (starts at "int ret")
+
+Original code snippet has been partially provided and is used at designated place

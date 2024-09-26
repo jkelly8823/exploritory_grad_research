@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 16
+VULNERABILITY_DESCRIPTION:
+Memory corruption due to out-of-bounds write in memcpy.
+
+EXPLANATION:
+The code uses memcpy to copy data from `__vectors_start` and `__stubs_start` into memory locations calculated based on the `vectors` variable. However, it does not perform any bounds checking on the destination buffer. If the size of the data being copied exceeds the size of the destination buffer, it will result in an out-of-bounds write, potentially leading to memory corruption.
+
+The vulnerable lines of code are:
+```c
+memcpy((void *)vectors, __vectors_start, __vectors_end - __vectors_start);
+memcpy((void *)vectors + 0x1000, __stubs_start, __stubs_end - __stubs_start);
+```
+The `vectors` variable is of type `unsigned long` and is used as both the source and destination address for the memcpy calls. However, there is no guarantee that the destination buffer is large enough to hold the data being copied.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking to ensure that the destination buffer is large enough to hold the data being copied. You can do this by verifying that the destination address plus the size of the data being copied does not exceed the end of the buffer.
+
+Additionally, you should consider using `memmove` instead of `memcpy` to prevent overlapping copies.
+
+Example of how the fix could look like:
+```c
+if ((vectors + (__vectors_end - __vectors_start)) <= (vectors + PAGE_SIZE)) {
+    memcpy((void *)vectors, __vectors_start, __vectors_end - __vectors_start);
+}
+
+if ((vectors + 0x1000 + (__stubs_end - __stubs_start)) <= (vectors + 2 * PAGE_SIZE)) {
+    memcpy((void *)vectors + 0x1000, __stubs_start, __stubs_end - __stubs_start);
+}
+```
+ORIGINAL CODE:
+```c
+#include <linux/atomic.h>
+#include <asm/cacheflush.h>
+#include <asm/exception.h>
+#include <asm/unistd.h>
+#include <asm/traps.h>
+#include <asm/ptrace.h>
+#include <asm/unwind.h>
+}
+#endif
+
+void __init early_trap_init(void *vectors_base)
+{
+#ifndef CONFIG_CPU_V7M
+	unsigned long vectors = (unsigned long)vectors_base;
+	extern char __stubs_start[], __stubs_end[];
+	extern char __vectors_start[], __vectors_end[];
+	unsigned i;
+
+	 * into the vector page, mapped at 0xffff0000, and ensure these
+	 * are visible to the instruction stream.
+	 */
+	memcpy((void *)vectors, __vectors_start, __vectors_end - __vectors_start);
+	memcpy((void *)vectors + 0x1000, __stubs_start, __stubs_end - __stubs_start);
+
+	kuser_init(vectors_base);
+
+	flush_icache_range(vectors, vectors + PAGE_SIZE * 2);
+#else /* ifndef CONFIG_CPU_V7M */
+	/*
+	 * on V7-M there is no need to copy the vector table to a dedicated
+	 * memory area. The address is configurable and so a table in the kernel
+	 * image can be used.
+	 */
+#endif
+}
+```

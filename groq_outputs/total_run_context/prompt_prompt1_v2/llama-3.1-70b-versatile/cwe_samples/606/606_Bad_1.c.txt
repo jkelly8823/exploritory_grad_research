@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11, 14-15
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability.
+
+EXPLANATION:
+The code appears to be processing messages from a socket and storing them in a buffer. However, the code does not check if the received message exceeds the buffer size (BUFFER_SIZE). Additionally, the code copies the message body into a new string (message) without checking if the message body length (msg->msgLength) exceeds the size of the message buffer (MESSAGE_SIZE). This can result in a buffer overflow, allowing an attacker to potentially execute arbitrary code.
+
+Furthermore, the code appears to ignore the possibility of a buffer overflow, but does not actually prevent it. The if statement at line 8 only checks if the received message is greater than 0, not if it exceeds the buffer size.
+
+RECOMMENDATIONS:
+To fix the vulnerability, it is recommended to:
+
+1. Check the length of the received message and ensure it does not exceed the buffer size before copying it.
+2. Validate the message body length (msg->msgLength) against the message buffer size (MESSAGE_SIZE) to prevent buffer overflow.
+3. Consider using bounds-checked array access or allocating memory dynamically to prevent buffer overflow.
+
+Below is an example of the adjusted code (Note: The correction should be integrated with the full program context, including types and existing methods):
+
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];
+    char message[MESSAGE_SIZE];
+
+    // get message from socket and store into buffer
+    int recievedMessageSize = getMessage(socket, buffer, BUFFER_SIZE);
+    if(recievedMessageSize > 0) {
+        if (recievedMessageSize < MESSAGE_SIZE) { // this could potentially be size of structured required
+            // place contents of the buffer into message structure
+            ExMessage *msg = recastBuffer(buffer);
+            int requiredBufferLength = msg->msgLength + 1;
+            if(requiredBufferLength <= MESSAGE_SIZE) {
+                // copy message body into string for processing
+                strncpy(message, msg->msgBody , requiredBufferLength);
+                message[requiredBufferLength-1] = '\0';  // this line in case of unexpected issue truncate and apply terminating null with this last byte
+
+                // process message
+                success = processMessage(message);
+            } else {
+                // Handle error where message from socket of insufficient buffer size
+                // The logic of your process will dictate the best course of action here
+            }
+        }
+    }
+    return success;
+}
+```
+
+ORIGINAL CODE:
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+    
+    // get message from socket and store into buffer
+    
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+        
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+        
+        // copy message body into string for processing
+        int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+        
+        // process message
+        success = processMessage(message);
+    return success;
+}
+```

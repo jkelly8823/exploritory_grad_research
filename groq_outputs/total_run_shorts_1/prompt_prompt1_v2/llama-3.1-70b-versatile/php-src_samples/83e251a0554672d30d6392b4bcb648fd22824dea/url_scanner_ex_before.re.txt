@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow Vulnerability
+
+EXPLANATION:
+The code snippet accepts a user-provided string (`name` and `value`) with a length (`name_len` and `value_len`). However, it is not immediately apparent that bounds checking is performed on the lengths before passing these parameters to be processed. Although the assignment of `name_len` and `value_len` are visible within the passed parameters, the true length of `name` and `value` should also be checked.
+
+There's also the possibility that `BG(url_adapt_state_ex).active` check may imply that url encode operation is done only in a specific condition which can limit the input data to specific formats. The operation seems safe on the encoding part, however  data coming from untrusted channels (e.g. in event of file inclusion) may still represent vulnerability on its length since a small copy error might also convert it in unassuming context.
+
+Moreover the URL encode is itself a 'danger' operation - the danger comes when you do URL encode operations on data which is not verified to be on valid chars. since in current limited snippet data in no way is validated before URL decode. which may still mean it is good practice to be particularly defensive when accepting values as that from users in web applications.
+
+RECOMMENDATIONS:
+Before passing any user data to the php_url_scanner_add_var function, verify that the provided string lengths match their actual lengths using `strlen()`. Checking this disparity will make vulnerability more noticeable (strlen != value_len OR strlen value != value_len ). And manually validate it before proceeding in code logic.
+
+Additionally, perform further validation on the strings themselves, removing or escaping any special characters that should not be in URLs to ensure proper encoding.
+
+```php
+if (name_len != strlen(name)) {
+    // Handle bad input parameters
+    return;
+}
+if (value_len != strlen(value)) {
+    // Handle bad input parameters
+    return;
+}
+```
+
+If this is not available then it’s better to depend on third-party library to help manage input sanitizing.
+
+ORIGINAL CODE:
+```c
+PHPAPI int php_url_scanner_add_var(char *name, int name_len, char *value, int value_len, int urlencode TSRMLS_DC)
+{
+	char *encoded;
+	int encoded_len;
+	smart_str val;
+	
+	if (! BG(url_adapt_state_ex).active) {
+```

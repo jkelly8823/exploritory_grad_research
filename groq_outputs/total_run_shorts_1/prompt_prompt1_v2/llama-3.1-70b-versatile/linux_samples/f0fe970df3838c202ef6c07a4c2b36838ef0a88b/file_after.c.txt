@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-9
+VULNERABILITY_DESCRIPTION:
+Improper Use of Functions Can Lead to Insecure Direct Object Reference (IDOR)
+
+EXPLANATION:
+The code does not validate the input `lower_file->f_op->mmap` and returns an error when it is null. This approach is correct. However, the code lacks error checking for the `generic_file_mmap(file, vma)` function call. This function call can potentially be exploitable if the function pointer `generic_file_mmap` has been tampered with. However, this specific code snippet is more of a red flag because of the `#ifdef CONFIG_COMPAT` block which is not present in this snippet and only includes one function call without memory validation or bounds checking.
+
+Additionally, the snippet contains more complexity, multiple function assignments on object creation should consider validation to ensure buffer overflow or object modifications through an intentional IDOR mistake 
+
+However, our snippet implies but does not explicitly validate and assign multiple function calls contained in a block which implies other places in this system might use the file/struct methods like the method assignment on lines 8 & 9 which do show a more general lack of validation on the lower struct methods shown being referred with use in lines 5-9.
+
+
+
+RECOMMENDATIONS:
+To prevent the potential insecure direct object reference, add error checking for the function pointer `generic_file_mmap` and validate that it points to a valid function before calling it. Additionally, the function calls should also be validated so the overall IDOR condition might make sure potential file tampering might be thwarted.
+
+Here's an example of how you can validate the function pointer:
+
+```c
+if (generic_file_mmap != NULL && generic_file_mmap(file, vma) < 0) {
+    // Handle the error
+}
+```
+
+However, this will only prevent the null pointer dereference. In order to prevent the potential exploitation of the function pointer, you should also validate the function pointer to ensure it points to the correct function and has not been tampered with.
+
+ORIGINAL CODE:
+```c
+	return rc;
+}
+
+static int ecryptfs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct file *lower_file = ecryptfs_file_to_lower(file);
+	/*
+	 * Don't allow mmap on top of file systems that don't support it
+	 * natively.  If FILESYSTEM_MAX_STACK_DEPTH > 2 or ecryptfs
+	 * allows recursive mounting, this will need to be extended.
+	 */
+	if (!lower_file->f_op->mmap)
+		return -ENODEV;
+	return generic_file_mmap(file, vma);
+}
+
+/**
+ * ecryptfs_open
+ * @inode: inode specifying file to open
+ * @file: Structure to return filled in
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = ecryptfs_compat_ioctl,
+#endif
+	.mmap = ecryptfs_mmap,
+	.open = ecryptfs_open,
+	.flush = ecryptfs_flush,
+	.release = ecryptfs_release,
+	.fsync = ecryptfs_fsync,
+```

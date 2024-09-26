@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-18, 24
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to Command Injection and Potential Remote Code Execution (RCE) due to the insecure use of unsanitized variables in system commands.
+
+EXPLANATION:
+The code execution flow is passed through several commands using unsanitized variables (`INSTALLTOP`, `MODULESDIR`, `OPENSSLDIR`, `INSTALL_FIPSMODULE`, `FIPSMODULENAME`, `VERSION_NUMBER`, `gen0`, `mkdef`, `ord_ver`, `ord_name`). Although some variables seem to be derived from other input variables (`args{intent}`, `args{generator}`, `args{product}`), without more information about those variables' origins, it's hard to confirm whether they are sanitized. This lack of input validation and sanitization creates potential Command Injection vulnerabilities. Furthermore, the Perl interpreter is used to execute commands that incorporate these variables, which could also lead to potential Remote Code Execution (RCE) vulnerabilities.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities, implement input validation and sanitization for all variables used within system commands. Validate inputs to prevent malicious commands from being executed.
+
+Additionally:
+1. Implement least privilege access: the user running the Perl script should have only the required permissions for the script execution.
+
+2. Use secure options and flags: Use flags and options that provide additional security features such as `-T` flag for taint mode in Perl to help prevent potential attacks.
+
+3. Avoid executing system commands directly from user-controlled input variables whenever possible. Use safer API options instead.
+
+ORIGINAL CODE:
+{- output_off() if $disabled{fips}; "" -}
+install_fips: build_sw $(INSTALL_FIPSMODULECONF)
+#	@[ -n "$(INSTALLTOP)" ] || (echo INSTALLTOP should not be empty; exit 1)
+	@"$(PERL)" "$(SRCDIR)\util\mkdir-p.pl" "$(MODULESDIR)"
+	@"$(PERL)" "$(SRCDIR)\util\mkdir-p.pl" "$(OPENSSLDIR)"
+	@$(ECHO) "*** Installing FIPS module"
+	@$(ECHO) "install $(INSTALL_FIPSMODULE) -> $(MODULESDIR)\$(FIPSMODULENAME)"
+	@"$(PERL)" "$(SRCDIR)\util\copy.pl" "$(INSTALL_FIPSMODULE)" "$(MODULESDIR)"
+	@$(ECHO) "*** Installing FIPS module configuration"
+                              rel2abs($config{builddir}));
+          my $ord_ver = $args{intent} eq 'lib' ? ' --version $(VERSION_NUMBER)' : '';
+          my $ord_name =
+              $args{generator}->[1] || basename(platform->dsoname($args{product}));
+          return <<"EOF";
+$target: $gen0 $deps $mkdef
+	"\$(PERL)" "$mkdef"$ord_ver --type $args{intent} --ordinals $gen0 --name $ord_name --OS windows > $target
+EOF

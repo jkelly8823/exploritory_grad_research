@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-17
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential use-after-free error, where memory is accessed after it has been freed.
+
+EXPLANATION:
+The code uses the `goto end` statement to jump directly to the end of the function when an error occurs. This bypasses any code that might be necessary to free resources or deallocate memory. However, the code does attempt to free the `cms` and `bio` variables at the end of the function. This could lead to a use-after-free error if the `goto end` statement is taken, and then the code attempts to free the already freed `cms` or `bio` variable.
+
+However, this does not appear to be the primary concern.  The primary vulnerability appears to be in the CMS_ContentInfo_free(cms) and the BIO_free(bio) calls, since no check is performed to ensure the pointers are non-null before calling these functions.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should check if the `cms` and `bio` pointers are not null before attempting to free them. This will prevent any potential null pointer dereferences.
+
+Here is a potential fix:
+
+```c
+end:
+    if (cms) CMS_ContentInfo_free(cms);
+    if (bio) BIO_free(bio);
+    return ret;
+```
+
+Additionally, it would be better to handle errors in a more structured way, for example by returning from the function immediately after an error occurs, instead of using `goto end`. This can make the code easier to read and understand.
+
+ORIGINAL CODE:
+
+```c
+return ret;
+}
+
+static int test_d2i_CMS_bio_file_encrypted_data(void)
+{
+    BIO *bio = NULL;
+    CMS_ContentInfo *cms = NULL;
+    int ret = 0;
+
+    ERR_clear_error();
+
+    if (!TEST_ptr(bio = BIO_new_file(derin, "r"))
+      || !TEST_ptr(cms = d2i_CMS_bio(bio, NULL)))
+      goto end;
+
+    if (!TEST_int_eq(ERR_peek_error(), 0))
+        goto end;
+
+    ret = 1;
+end:
+    CMS_ContentInfo_free(cms);
+    BIO_free(bio);
+
+    return ret;
+}
+
+    ADD_TEST(test_encrypt_decrypt_aes_192_gcm);
+    ADD_TEST(test_encrypt_decrypt_aes_256_gcm);
+    ADD_TEST(test_d2i_CMS_bio_NULL);
+    ADD_TEST(test_d2i_CMS_bio_file_encrypted_data);
+    return 1;
+}
+
+void cleanup_tests(void)
+```

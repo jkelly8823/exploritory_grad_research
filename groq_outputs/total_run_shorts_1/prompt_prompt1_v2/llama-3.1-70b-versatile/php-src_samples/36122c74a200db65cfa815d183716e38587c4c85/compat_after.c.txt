@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-24
+VULNERABILITY_DESCRIPTION:
+Resource leak on error
+EXPLANATION:
+In the given code snippet, a potential resource leak is identified. If an error occurs after the `xmlStrdup(parser->_ns_separator)` allocation, but before the `XML_ParserFree` function is called, the allocated memory will not be released. This can lead to memory leaks if this code is executed repeatedly.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should ensure that the allocated memory is released even in error cases. This can be achieved by calling `xmlFree(parser->_ns_separator)` immediately after the allocation, or by using a smart pointer that automatically releases the memory when it goes out of scope. Additionally, the `XML_ParserFree` function should be called in all cases, not just when `parser->use_namespace` is true.
+
+ORIGINAL CODE:
+```c
+if (URI) {
+    /* Use libxml functions otherwise its memory deallocation is screwed up */
+    *qualified = xmlStrdup(URI);
+    *qualified = xmlStrncat(*qualified, parser->_ns_separator, 1);
+    *qualified = xmlStrncat(*qualified, name, xmlStrlen(name));
+} else {
+    *qualified = xmlStrdup(name);
+}
+parser = (XML_Parser) emalloc(sizeof(struct _XML_Parser));
+memset(parser, 0, sizeof(struct _XML_Parser));
+parser->use_namespace = 0;
+parser->_ns_separator = NULL;
+
+parser->parser = xmlCreatePushParserCtxt((xmlSAXHandlerPtr) &php_xml_compat_handlers, (void *) parser, NULL, 0, NULL);
+if (parser->parser == NULL) {
+    efree(parser);
+if (sep != NULL) {
+    parser->use_namespace = 1;
+    parser->parser->sax2 = 1;
+    parser->_ns_separator = xmlStrdup(sep);
+} else {
+    /* Reset flag as XML_SAX2_MAGIC is needed for xmlCreatePushParserCtxt 
+    so must be set in the handlers */
+    parser->parser->sax->initialized = 1;
+XML_ParserFree(XML_Parser parser)
+{
+    if (parser->use_namespace) {
+        if (parser->_ns_separator) {
+            xmlFree(parser->_ns_separator);
+        }
+    }
+    if (parser->parser->myDoc) {
+        xmlFreeDoc(parser->parser->myDoc);
+```

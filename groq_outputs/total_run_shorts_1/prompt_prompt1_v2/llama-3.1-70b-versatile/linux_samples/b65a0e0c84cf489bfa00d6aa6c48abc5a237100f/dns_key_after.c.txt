@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-9
+VULNERABILITY_DESCRIPTION:
+The given code snippet contains a null pointer dereference and an off-by-one error when calling `seq_printf`.
+
+EXPLANATION:
+In the provided code, `data` is checked for null before dereferencing it in `kenter` at line 3. However, `datalen` is checked afterwards and decremented by one if the data does not contain a null terminator. This line actually does nothing useful and thus does not have a positive impact, but leads to misleading conclusions. However, `key` is dereferenced earlier in the same function during the `kenter` call without a prior null check. Furthermore, the buffer's contents are not validated, and there is no bound check for the length. 
+
+Additionally, there's another section for dns_resolver_read function in this file which has an issue with potential null pointer access.
+
+RECOMMENDATIONS:
+1. Add null pointer checks for all dereferenced pointers like `key` in function call and in variables. The null pointer check should be before any lines that dereference or check the variable, like in kenter.
+
+2. Validate the buffer for unexpected inputs or character lengths and implement proper bound checking. For instance, a possible fix could involve checking that the datalen is greater than or equal to 0 and shorter than the buffer's available length. As no variable character information is available from the given snippet and we are aware there could be large amounts of input data being generated, the given recommendation focuses on how datalen is decreased by one when data[datalen - 1] isn't equal to '\0'. This datalen-1 shouldn't directly decrease without evaluating how many characters are valid within the bounds of that data and a specified buffer limit.
+
+3. Review the intention for the decrementing of `datalen` by one in case the string's last character does not contain a null. Revise this chunk to avoid leading to potential boundary error issues.
+
+
+ORIGINAL CODE:
+
+	size_t result_len = 0;
+	const char *data = _data, *end, *opt;
+
+	kenter("%%%d,%s,'%*.*s',%zu",
+	       key->serial, key->description,
+	       (int)datalen, (int)datalen, data, datalen);
+
+	if (datalen <= 1 || !data || data[datalen - 1] != '\0')
+		return -EINVAL;
+	datalen--;
+		seq_printf(m, ": %u", key->datalen);
+}
+
+/*
+ * read the DNS data
+ * - the key's semaphore is read-locked
+ */
+static long dns_resolver_read(const struct key *key,
+			      char __user *buffer, size_t buflen)
+{
+	if (key->type_data.x[0])
+		return key->type_data.x[0];
+
+	return user_read(key, buffer, buflen);
+}
+
+struct key_type key_type_dns_resolver = {
+	.name		= "dns_resolver",
+	.instantiate	= dns_resolver_instantiate,
+	.match		= dns_resolver_match,
+	.revoke		= user_revoke,
+	.destroy	= user_destroy,
+	.describe	= dns_resolver_describe,
+	.read		= dns_resolver_read,
+};
+
+static int __init init_dns_resolver(void)
+{

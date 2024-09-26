@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Insecure File Creation and Permissions
+
+EXPLANATION:
+The function `createAdminFileIfNotExists` creates a file if it does not exist. However, the file is created with default permissions, which can be insecure. After the file creation, the function `changeModeOfAdminFile` tries to change the file permissions using the `os.Chmod` function. However, if the `changeModeOfAdminFile` function is not called immediately after `createAdminFileIfNotExists`, there could be a window of time where the file has insecure permissions.
+
+Furthermore, if an attacker is able to get control of the file before its permissions are changed, they will have access to sensitive data or be able to write data to the file, which could be problematic. It would be better to use the `os.OpenFile` function instead, which allows you to specify the permissions when the file is created.
+
+In addition, the code does not close the file descriptor after it is created. Although in this case, this is not a problem because the file is not being written to or read from. However, it is still good practice to close file descriptors when they are no longer needed.
+
+RECOMMENDATIONS:
+Use the `os.OpenFile` function to create the file with specific permissions from the start. This will prevent the file from being created with insecure permissions. Also, the file descriptor should be closed after it is created.
+
+Here's how you could improve the code:
+
+```go
+const adminFile = "/etc/admin-users"
+
+func createAdminFileIfNotExists() error {
+    file, err := os.OpenFile(adminFile, os.O_CREATE|os.O_WRONLY, 0440)
+    if err != nil {
+        return err
+    }
+    file.Close()  // This is unnecessary in this case, but good practice in general
+    return nil
+}
+```
+
+Then the `changeModeOfAdminFile` function would not be needed anymore.
+
+ORIGINAL CODE:
+```
+const adminFile = "/etc/admin-users"
+func createAdminFileIfNotExists() error {
+    file, err := os.Create(adminFile)
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
+func changeModeOfAdminFile() error {
+    fileMode := os.FileMode(0440)
+    if err := os.Chmod(adminFile, fileMode); err != nil {
+        return err
+    }
+    return nil
+}
+```

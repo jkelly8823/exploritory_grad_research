@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 7
+VULNERABILITY_DESCRIPTION:
+Resource Leaks and Missing Error Handling
+
+EXPLANATION:
+The given code snippet does not ensure proper resource cleanup, which can lead to unintended behavior and potential resource leaks. This is due to two main issues. Firstly, the connection object is not properly disposed of in a timely manner. Although 'Close()' is called on the connection, best practice is to utilize the 'using' statement (or 'Close()' and 'Dispose()' methods in earlier .NET versions) for connections that need to be closed and disposed of in a deterministic manner. This helps avoid resource leaks in case an exception occurs before the 'Close' or 'Dispose' call. Secondly, even with the 'Close()' call on the connection object, it does not correctly close the 'SqlDataReader' result set.
+
+In addition, this code does not handle potential exceptions that might be thrown when establishing or closing database connections. This is problematic because it can lead to unexpected behavior if there is a connection issue or runtime error.
+
+RECOMMENDATIONS:
+1. Wrap database connections and related objects in 'using' statements to ensure proper disposal and avoid resource leaks.
+
+2. Implement try-catch blocks for database operations to handle potential exceptions. Do not suppress exceptions, but handle them as per the business use case.
+
+Here is an example of the corrected code:
+
+```csharp
+try
+{
+    using (SqlConnection conn = new SqlConnection(connString))
+    {
+        conn.Open();
+        using (SqlCommand cmd = new SqlCommand(queryString, conn))
+        {
+            using (SqlDataReader rdr = cmd.ExecuteReader())
+            {
+                HarvestResults(rdr);
+            }
+        }
+    }
+}
+catch (SqlException ex)
+{
+    // Handle SQL-related exceptions
+}
+catch (Exception ex)
+{
+    // Handle any other exceptions
+}
+```
+ORIGINAL CODE:
+
+
+SqlConnection conn = new SqlConnection(connString);SqlCommand cmd = new SqlCommand(queryString);cmd.Connection = conn;conn.Open();SqlDataReader rdr = cmd.ExecuteReader();HarvestResults(rdr);conn.Connection.Close();

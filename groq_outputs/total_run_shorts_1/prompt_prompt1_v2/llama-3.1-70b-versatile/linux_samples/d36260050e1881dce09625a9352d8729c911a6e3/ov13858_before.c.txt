@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+ Unchecked return value from function call.
+
+EXPLANATION:
+The function call to `v4l2_find_nearest_size` is not checked for a return value of NULL or an invalid value. This can lead to a NULL pointer dereference or incorrect results if `mode` is used without checking its validity.
+
+Additionally, the function call `v4l2_subdev_get_try_format` is not checked for a return value of NULL or an invalid value either. This is similar to the above vulnerability but is a separate issue.
+ 
+ However, given the lack of complete information, we focus on what we have, and that is the call to `v4l2_find_nearest_size` has the return value assigned to mode, while  `ov13858_update_pad_format(mode, fmt);` will use `mode`, all without verification. 
+
+
+RECOMMENDATIONS:
+The code should check the return value of `v4l2_find_nearest_size` and `v4l2_subdev_get_try_format` for NULL or invalid values before using them in further calculations. If an error occurs, it is recommended to handle it immediately by logging the error and continuing with the rest of the function or returning from the function.
+
+```c
+mode = v4l2_find_nearest_size(supported_modes, width, height,
+				      fmt->format.width, fmt->format.height);
+if (mode == NULL) {
+    printk(KERN_ERR "Error: Could not find a supported mode");
+    return -EINVAL;
+}
+ov13858_update_pad_format(mode, fmt);
+if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
+    framefmt = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+    if (framefmt == NULL) {
+        printk(KERN_ERR "Error: Failed to get try format");
+        return -EINVAL;
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+    if (fmt->format.code != MEDIA_BUS_FMT_SGRBG10_1X10)
+    fmt->format.code = MEDIA_BUS_FMT_SGRBG10_1X10;
+
+mode = v4l2_find_nearest_size(supported_modes, width, height,
+                                    fmt->format.width, fmt->format.height);
+    ov13858_update_pad_format(mode, fmt);
+if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
+        framefmt = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+```

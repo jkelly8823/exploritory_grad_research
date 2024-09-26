@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-14
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+
+EXPLANATION:
+The code is vulnerable to a path traversal attack. The `traversalPath` and `traversalFolderPath` variables are constructed using user-controlled input (`allowedFolder` and `../`) without proper validation or sanitization. This allows an attacker to potentially access sensitive files or directories outside of the intended scope.
+
+The use of `../` in the path construction is particularly concerning, as it can be used to traverse up the directory tree and access files or directories that are not intended to be accessible.
+
+Furthermore, the fact that the `path.resolve` function is overridden to simply return the input string without any path resolution or validation makes the vulnerability even more severe.
+
+RECOMMENDATIONS:
+1. Validate and sanitize user-controlled input: Ensure that any input from the environment variables `BLOCKEDFOLDER` and `ALLOWEDFOLDER` is properly validated and sanitized before using it to construct file paths.
+2. Use a secure path resolution function: Instead of overriding the `path.resolve` function, use a secure path resolution function that properly handles path resolution and validation, such as `path.join()` or `path.resolve()` with validation.
+3. Use a try-catch block to handle errors: Use try-catch blocks to catch and handle any errors that may occur when resolving or accessing file paths.
+4. Avoid using user-controlled input to construct file paths: If possible, avoid using user-controlled input to construct file paths. Instead, use a secure and validated path that is not dependent on user input.
+
+ORIGINAL CODE:
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+// This should not affect how the permission model resolves paths.
+const { resolve } = path;
+path.resolve = (s) => s;
+
+const blockedFolder = process.env.BLOCKEDFOLDER;
+const allowedFolder = process.env.ALLOWEDFOLDER;
+const traversalPath = allowedFolder + '../file.md';
+const traversalFolderPath = allowedFolder + '../folder';
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: path.toNamespacedPath(resolve(traversalPath)),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: path.toNamespacedPath(resolve(traversalPath)),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: resolve(traversalFolderPath + 'XXXXXX'),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: resolve(traversalFolderPath + 'XXXXXX'),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: resolve(traversalPath),
+  }));
+}
+```

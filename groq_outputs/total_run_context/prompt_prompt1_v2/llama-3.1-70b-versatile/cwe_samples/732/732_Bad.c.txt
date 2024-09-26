@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code accesses a file without proper file access control. This vulnerability is commonly known as Unrestricted File Creation (CWE-639).
+
+EXPLANATION:
+The code creates a file named "hello.out" in the current directory. The `umask(0)` function call sets the umask to 0, allowing the file to be created with the most permissive file permissions possible (rwxrwxrwx). This can be problematic because an attacker could potentially exploit this vulnerability by creating a symlink with the same name in the same directory, which could then be overwritten by the program, resulting in data corruption or loss.
+
+Additionally, the code does not perform any error checking after calling `fopen()`, other than checking if `fopen()` returned NULL, but does not account for the possibility of `fopen()` failing due to reasons such as out of disk space or the file being in use by another process.
+
+RECOMMENDATIONS:
+To address this vulnerability, the following changes are recommended:
+
+1. Use `fopen()` with a mode that limits the permissions for the created file, such as "w+" which would set the permissions for the file as the owner having read and write access, while the group and others would not.
+2. Check the return value of `fopen()` to ensure the file was successfully created.
+3. Use `fopen()` with an additional argument that includes 'e' mode, to prevent overwriting if file already exists or an error if file cannot be created, such as 'we' or 'xe'.
+4. Use the `open()` function with the `O_CLOEXEC` and `O_NOFOLLOW` flags instead of `fopen()` for increased security.
+
+ORIGINAL CODE:
+
+
+                  #define OUTFILE "hello.out"
+                     umask(0);FILE *out;
+                     /* Ignore link following (CWE-59) for brevity */
+                     
+                     out = fopen(OUTFILE, "w");if (out) {fprintf(out, "hello world!\n");fclose(out);}
+              

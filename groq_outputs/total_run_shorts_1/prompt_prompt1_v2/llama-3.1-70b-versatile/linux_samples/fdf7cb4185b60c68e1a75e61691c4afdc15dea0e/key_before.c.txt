@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential use-after-free bug. The ieee80211_key_replace function is called before the mutex is released, but it's not guaranteed that the old_key won't be freed before ieee80211_key_destroy is called, which could lead to a use-after-free scenario.
+
+EXPLANATION:
+The issue arises from the fact that ieee80211_key_replace and ieee80211_key_destroy are called while still holding the mutex lock. However, if ieee80211_key_replace frees the old_key, the subsequent call to ieee80211_key_destroy could be operating on freed memory. This could lead to unexpected behavior or crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to release the mutex lock before calling ieee80211_key_replace and ieee80211_key_destroy. However, this might require additional synchronization mechanisms to ensure that the key is not freed prematurely. A possible fix would be to reorder the operations as follows:
+
+```c
+mutex_unlock(&sdata->local->key_mtx);
+
+ieee80211_key_replace(sdata, sta, pairwise, old_key, key);
+ieee80211_key_destroy(old_key, true);
+ret = 0;
+```
+
+Additionally, the code should ensure that ieee80211_key_replace does not free the old_key until ieee80211_key_destroy is called. If this is not the case, additional synchronization mechanisms or checks should be put in place to prevent the use-after-free scenario.
+
+ORIGINAL CODE:
+
+```c
+pairwise = key->conf.flags & IEEE80211_KEY_FLAG_PAIRWISE;
+idx = key->conf.keyidx;
+key->local = sdata->local;
+key->sdata = sdata;
+key->sta = sta;
+
+mutex_lock(&sdata->local->key_mtx);
+
+if (sta && pairwise)
+else
+	old_key = key_mtx_dereference(sdata->local, sdata->keys[idx]);
+
+increment_tailroom_need_count(sdata);
+
+ieee80211_key_replace(sdata, sta, pairwise, old_key, key);
+ieee80211_key_destroy(old_key, true);
+	ret = 0;
+}
+
+mutex_unlock(&sdata->local->key_mtx);
+
+return ret;
+```

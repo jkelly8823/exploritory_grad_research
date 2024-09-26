@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-11
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable to a synchronization issue due to a locking problem. The `wait_woken` function does not guarantee the state of the `wait` object after it is called, which can lead to incorrect behavior when used in combination with `signal_pending` function.
+
+EXPLANATION:
+In the given code snippet, after calling `wait_woken`, the `wait` object's state is not guaranteed. However, if `signal_pending` returns true directly after, it indicates a potential for inconsistent behavior, as signal_pending checks may not be atomic with the `wait_woken` calls. Additionally, after `add_wait_queue` is called and before `remove_wait_queue` is called, there is a chance that the wait queue can be spuriously signaled or another thread is about to signal the queue right before it is removed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using `wait_event_interruptible_timeout` or similar `wait_event` convenience functions. This will wait until the `events->wait_queue` is signaled, handle timeout, spurious wakeups, and interruptions more robustly. Additionally, instead of rolling your own wait queue handling, leverage existing sync primitives that are more robust and handle edge cases:
+
+```c
+wait_event_interruptible_timeout(events->wait_queue, dvb_frontend_test_event(fepriv, events), DVBTIMEOUT);
+if(signal_pending(current))
+    return -ERESTARTSYS;
+``` 
+
+Also, use `wait_event_idle` or `wait_event_timeout` instead of `wait_event_interruptible` if it's not necessary to handle user interruptibles.
+
+ORIGINAL CODE:
+
+	}
+
+	if (events->eventw == events->eventr) {
+		struct wait_queue_entry wait;
+		int ret = 0;
+
+		if (flags & O_NONBLOCK)
+			return -EWOULDBLOCK;
+
+		init_waitqueue_entry(&wait, current);
+		add_wait_queue(&events->wait_queue, &wait);
+		while (!dvb_frontend_test_event(fepriv, events)) {
+			wait_woken(&wait, TASK_INTERRUPTIBLE, 0);
+			if (signal_pending(current)) {
+				ret = -ERESTARTSYS;
+				break;
+			}
+		}
+		remove_wait_queue(&events->wait_queue, &wait);
+		if (ret < 0)
+			return ret;
+	}

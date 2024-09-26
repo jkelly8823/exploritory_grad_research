@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-24
+VULNERABILITY_DESCRIPTION: Use-After-Free Vulnerability
+EXPLANATION:
+The code first allocates memory for `nontransmitted_profile` using `kmalloc`. The allocation result is checked to avoid potential null pointer dereferences. However, after using this allocated memory to store the result of `ieee802_11_find_bssid_profile` and potentially using the returned pointer in `cfg80211_find_ext_elem`, the memory is immediately freed with `kfree(nontransmitted_profile);`. Any subsequent use of `non_inherit`, which could be based on the memory pointed to by `nontransmitted_profile`, is a use-after-free vulnerability. 
+
+This is because `non_inherit` could be pointing to the `nontransmitted_profile` memory location but this is freed later. So if `elems->crc = _ieee802_11_parse_elems_full(params, elems, non_inherit);` is executed after `kfree(nontransmitted_profile);` and uses `non_inherit`, it could result in an unintended and undefined behavior.
+RECOMMENDATIONS:
+To fix this vulnerability, we should ensure that `non_inherit` and any subsequent uses of `nontransmitted_profile` memory are carried out before freeing the `nontransmitted_profile` memory using `kfree(nontransmitted_profile);`.
+
+In ideal circumstances, using-after-frees are usually avoided by freeing memory at the end of its usage, when we no longer have any need for the pointer. But when we can't free at the end because memory needs to persist after function execution, it might be necessary to rethink how the memory and pointers are structured within the code. Possible solutions are: 
+- Not freeing `nontransmitted_profile` until after `elems->crc` operation is performed.
+- Ensuring `elems->crc` does not use freed memory.
+
+To completely remedy this, our ideal `nontransmitted_profile` lifecycle should terminate after finishing its necessary use, which doesn't seem to be after allocating `elems`.
+
+ORIGINAL CODE:
+```c
+const struct element *non_inherit = NULL;
+u8 *nontransmitted_profile;
+int nontransmitted_profile_len = 0;
+
+elems = kzalloc(sizeof(*elems), GFP_ATOMIC);
+if (!elems)
+	return NULL;
+elems->ie_start = params->start;
+elems->total_len = params->len;
+
+nontransmitted_profile = kmalloc(params->len, GFP_ATOMIC);
+if (nontransmitted_profile) {
+	nontransmitted_profile_len =
+		ieee802_11_find_bssid_profile(params->start, params->len,
+					      elems, params->bss,
+					      nontransmitted_profile);
+	non_inherit =
+		cfg80211_find_ext_elem(WLAN_EID_EXT_NON_INHERITANCE,
+				       nontransmitted_profile,
+				       nontransmitted_profile_len);
+}
+
+elems->crc = _ieee802_11_parse_elems_full(params, elems, non_inherit);
+
+/* Override with nontransmitted profile, if found */
+    offsetofend(struct ieee80211_bssid_index, dtim_count))
+	elems->dtim_count = elems->bssid_index->dtim_count;
+
+kfree(nontransmitted_profile);
+
+return elems;
+}
+
+void ieee80211_regulatory_limit_wmm_params(struct ieee80211_sub_if_data *sdata,
+```

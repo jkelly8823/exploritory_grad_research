@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Insecure use of non-constant time comparison and constant time swap, but insecure sequence due to BN_copy usage before.
+
+EXPLANATION:
+The BN_consttime_swap function is used to avoid timing side channel attacks. However, the presence of BN_copy before it may still leak information about the input data through side channels. The comparison and swap operations need to be separated from any insecure operations to ensure constant time execution.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, ensure that the entire operation, including the copy, is performed in constant time. Consider replacing BN_copy with a constant time implementation or using a way to zero out the value securely in constant time.
+
+The usage of BN_is_bit_set and BN_consttime_swap seems secure. However, one possible optimization could be making sure BN_copy also runs in constant time.
+
+ORIGINAL CODE:
+
+    cardinality_bits = BN_num_bits(cardinality);
+    group_top = bn_get_top(cardinality);
+    if ((bn_wexpand(k, group_top + 2) == NULL)
+        || (bn_wexpand(lambda, group_top + 2) == NULL))
+        goto err;
+
+    if (!BN_copy(k, scalar))
+        goto err;
+     * k := scalar + 2*cardinality
+     */
+    kbit = BN_is_bit_set(lambda, cardinality_bits);
+    BN_consttime_swap(kbit, k, lambda, group_top + 2);
+
+    group_top = bn_get_top(group->field);
+    if ((bn_wexpand(s->X, group_top) == NULL)
+        || (bn_wexpand(s->Y, group_top) == NULL)

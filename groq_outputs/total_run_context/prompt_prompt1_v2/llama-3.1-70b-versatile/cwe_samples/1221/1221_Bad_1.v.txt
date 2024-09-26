@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-16
+VULNERABILITY_DESCRIPTION:
+Unprotected Direct Memory Access and potential Out-of-Bounds Memory Access vulnerability.
+
+EXPLANATION:
+The code snippet appears to be a part of a hardware description language (HDL) implementation, likely targeted at a Field-Programmable Gate Array (FPGA) or Application-Specific Integrated Circuit (ASIC). The `assign` statement at lines 12-16 directly accesses memory locations in the `mem` array using hardcoded indices (`JTAG_OFFSET-1`, `JTAG_OFFSET-2`, etc.). Although the code defines `JTAG_OFFSET` as a constant, there's no explicit bounds checking to ensure that these indices are within the valid range of the `mem` array. This could lead to unintended behavior or access to undefined memory locations if `JTAG_OFFSET` is not correctly set or if the `mem` array is modified elsewhere in the code. 
+
+Additionally, this direct memory access with hardcoded indices might expose the implementation to potential information leaks or allow malicious actors to bypass access controls.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider implementing explicit bounds checking before accessing the `mem` array. You can achieve this by verifying that the calculated indices are within the valid range of the `mem` array. 
+
+```vhdl
+if (JTAG_OFFSET-1 > 0 && JTAG_OFFSET-1 < MEM_SIZE) begin
+  // index is within bounds, proceed with access
+  assign jtag_hash_o = {mem[JTAG_OFFSET-1],mem[JTAG_OFFSET-2],mem[JTAG_OFFSET-3],
+  mem[JTAG_OFFSET-4],mem[JTAG_OFFSET-5],mem[JTAG_OFFSET-6],mem[JTAG_OFFSET-7],mem[JTAG_OFFSET-8]};
+end else begin
+  // handle error condition, e.g., set an error flag or generate an alert
+  error_signal = 1;
+end
+```
+
+Alternatively, consider using a more robust indexing mechanism, such as using a for loop to iterate over the array and access the required indices.
+
+```vhdl
+for (int i = JTAG_OFFSET-8; i < JTAG_OFFSET; i++) begin
+  if (i >= 0 && i < MEM_SIZE) begin
+    // access mem array safely
+    mem_access[i] = mem[i];
+  end
+end
+assign jtag_hash_o = {mem_access[JTAG_OFFSET-8], mem_access[JTAG_OFFSET-7], 
+  mem_access[JTAG_OFFSET-6], mem_access[JTAG_OFFSET-5], mem_access[JTAG_OFFSET-4],
+  mem_access[JTAG_OFFSET-3], mem_access[JTAG_OFFSET-2], mem_access[JTAG_OFFSET-1]};
+```
+
+ORIGINAL CODE:
+```vhdl
+parameter  MEM_SIZE = 100;
+localparam JTAG_OFFSET = 81;
+
+const logic [MEM_SIZE-1:0][31:0] mem = {
+  // JTAG expected hamc hash
+  32'h49ac13af, 32'h1276f1b8, 32'h6703193a, 32'h65eb531b,
+  32'h3025ccca, 32'h3e8861f4, 32'h329edfe5, 32'h98f763b4,
+
+  ...
+  assign jtag_hash_o = {mem[JTAG_OFFSET-1],mem[JTAG_OFFSET-2],mem[JTAG_OFFSET-3],
+  mem[JTAG_OFFSET-4],mem[JTAG_OFFSET-5],mem[JTAG_OFFSET-6],mem[JTAG_OFFSET-7],mem[JTAG_OFFSET-8]};
+  ...
+```

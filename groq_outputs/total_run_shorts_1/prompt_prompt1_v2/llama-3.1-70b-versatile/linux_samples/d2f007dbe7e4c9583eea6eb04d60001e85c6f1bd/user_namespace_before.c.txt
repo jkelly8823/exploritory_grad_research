@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+The given code is vulnerable to a buffer overflow attack. This occurs when user-controlled data is copied into a buffer without verifying its size or origin first.
+
+EXPLANATION:
+The line `memcpy(map->extent, new_map.extent, new_map.nr_extents * sizeof(new_map.extent[0]));` copies data from `new_map.extent` into `map->extent` without checking if the destination buffer has enough space to hold the data. This can lead to a buffer overflow if the size of `new_map.nr_extents` is larger than the size of `map->extent`. This can potentially allow an attacker to overwrite adjacent memory areas with arbitrary data, leading to a denial of service or potentially even code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should check the size of the destination buffer before copying data into it. The code should also handle the case where the copy operation fails or the buffer is not large enough to hold the data.
+
+```c
+if (new_map.nr_extents * sizeof(new_map.extent[0]) <= UID_GID_MAP_MAX_BASE_EXTENTS * sizeof(map->extent[0])) {
+    memcpy(map->extent, new_map.extent, new_map.nr_extents * sizeof(new_map.extent[0]));
+} else {
+    /* Handle the error case where the buffer is not large enough */
+    ret = -EINVAL;
+    goto out;
+}
+```
+ORIGINAL CODE:
+```c
+if (!new_idmap_permitted(file, ns, cap_setid, &new_map))
+    goto out;
+
+ret = sort_idmaps(&new_map);
+if (ret < 0)
+    goto out;
+
+ret = -EPERM;
+/* Map the lower ids from the parent user namespace to the
+ * kernel global id space.
+ */
+e->lower_first = lower_first;
+}
+
+/* Install the map */
+if (new_map.nr_extents <= UID_GID_MAP_MAX_BASE_EXTENTS) {
+    memcpy(map->extent, new_map.extent,
+           new_map.nr_extents * sizeof(new_map.extent[0]));
+```

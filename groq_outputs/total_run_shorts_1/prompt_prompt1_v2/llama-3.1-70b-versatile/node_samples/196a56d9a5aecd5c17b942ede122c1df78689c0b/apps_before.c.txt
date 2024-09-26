@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 35-36
+VULNERABILITY_DESCRIPTION:
+ Buffer Overflows, Potential NULL Pointer Dereferences
+EXPLANATION:
+The function `load_serial(const char *serialfile, int create, ASN1_INTEGER **retai)` presents a few issues. 
+When loading the contents from the file using `a2i_ASN1_INTEGER(in, ai, buf, 1024)`, the function does not check if the memory allocation for `ai` and `buf` is successful. 
+Although `BIO_new_file` does check its return value, there are no input validation checks for `serialfile` before passing it to the functions.
+The variable `ai` is also used without prior initialization.
+Similarly, there's a resource leak in case of an error at the label `err:` as the resource that stores data, `ai` is freed, and then local scope variables are not checked if they are currently set before assignment.
+The line numbers listed below are directly referenced as part of code not being accounted for as part of variable uninitialized checks. A further referenced but not detailed error is the use of hardcoded lengths, like `BSIZE 256`.
+RECOMMENDATIONS:
+1. Input validation checks for the parameters should be performed to prevent any invalid input to the function.
+2. Both error and exception returns from functions should be accounted for. Therefore, returned values or pointer dereferences must be checked to avoid NULL pointer dereferences.
+3. At the label `err`, we should check if `ai` is NULL before calling `ASN1_INTEGER_free(ai)`.
+4. Hardcoded length checks like `BSIZE` and `1024` could be further defined and validated for correct functionality.
+5. You should initialize any local variables before their usage.
+ORIGINAL CODE:
+static IMPLEMENT_LHASH_COMP_FN(index_name, OPENSSL_CSTRING)
+#undef BSIZE
+#define BSIZE 256
+BIGNUM *load_serial(const char *serialfile, int create, ASN1_INTEGER **retai)
+{
+    BIO *in = NULL;
+    BIGNUM *ret = NULL;
+    char buf[1024];
+        goto err;
+
+    in = BIO_new_file(serialfile, "r");
+    if (in == NULL) {
+        if (!create) {
+            perror(serialfile);
+            goto err;
+        }
+        ERR_clear_error();
+        ret = BN_new();
+        if (ret == NULL || !rand_serial(ret, ai))
+            BIO_printf(bio_err, "Out of memory\n");
+    } else {
+        if (!a2i_ASN1_INTEGER(in, ai, buf, 1024)) {
+            BIO_printf(bio_err, "Unable to load number from %s\n",
+                       serialfile);
+        }
+    }
+
+    if (ret && retai) {
+        *retai = ai;
+        ai = NULL;
+    }
+ err:
+    ERR_print_errors(bio_err);
+    BIO_free(in);
+    ASN1_INTEGER_free(ai);
+    return ret;
+}
+    APP_HTTP_TLS_INFO *info = (APP_HTTP_TLS_INFO *)arg;
+    SSL_CTX *ssl_ctx = info->ssl_ctx;
+
+    if (connect && detail) { /* connecting with TLS */
+        SSL *ssl;
+        BIO *sbio = NULL;
+
+        /* adapt after fixing callback design flaw, see #17088 */
+                       "missing SSL_CTX");
+        goto end;
+    }
+
+    info.server = server;
+    info.port = port;
+    info.use_proxy = /* workaround for callback design flaw, see #17088 */
+                        BIO_NOCLOSE | (FMT_istext(format) ? BIO_FP_TEXT : 0));
+    void *prefix = NULL;
+
+#ifdef OPENSSL_SYS_VMS
+    if (FMT_istext(format))
+        b = BIO_push(BIO_new(BIO_f_linebuffer()), b);
+#endif
+    BIO *b = BIO_new_fp(stderr,
+                        BIO_NOCLOSE | (FMT_istext(format) ? BIO_FP_TEXT : 0));
+#ifdef OPENSSL_SYS_VMS
+    if (FMT_istext(format))
+        b = BIO_push(BIO_new(BIO_f_linebuffer()), b);
+#endif
+    return b;
+}

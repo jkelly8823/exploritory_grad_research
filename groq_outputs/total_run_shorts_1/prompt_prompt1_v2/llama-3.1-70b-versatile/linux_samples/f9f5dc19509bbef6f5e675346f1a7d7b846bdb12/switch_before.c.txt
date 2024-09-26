@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14
+VULNERABILITY_DESCRIPTION:
+This code contains a potential information disclosure vulnerability due to the use of an unchecked return value from `__fpsimd_enabled_nvhe()`, which could potentially lead to access to sensitive information in certain configurations. Additionally, there is a potential lack of data sanitation for the return value of `__sysreg_save_state_nvhe()` which may also become a source for information disclosure.
+
+EXPLANATION:
+This code uses `__fpsimd_enabled_nvhe()` to get a value, and stores the value into `fp_enabled` but does not validate the return value. This is problematic because it's unclear what the expectations of `__fpsimd_enabled_nvhe()` are, and in general, not checking return values can lead to potential vulnerabilities. 
+The call to `__sysreg_save_state_nvhe(guest_ctxt)` also gets and stores the state without validation.
+
+It should also be noted that the results of functions like these and possible actions (if needed) generally seem architecture and firmware dependent, which in turn can lead to elevated risks in critical systems with potentially greater dependencies on specific data processing.
+
+RECOMMENDATIONS:
+- Validate the return value of `__fpsimd_enabled_nvhe()`.
+- Validate the results of `__sysreg_save_state_nvhe()` and ensure data is correctly cleaned.
+- Use secure coding standards when interacting with potentially sensitive system calls like `__sysreg_save_state_nvhe()` and consider exception handling if these calls may have errors.
+
+ORIGINAL CODE:
+
+```cpp
+/* And we're baaack! */
+} while (fixup_guest_exit(vcpu, &exit_code));
+
+if (cpus_have_const_cap(ARM64_HARDEN_BP_POST_GUEST_EXIT)) {
+    u32 midr = read_cpuid_id();
+
+    /* Apply BTAC predictors mitigation to all Falkor chips */
+    if (((midr & MIDR_CPU_MODEL_MASK) == MIDR_QCOM_FALKOR) ||
+        ((midr & MIDR_CPU_MODEL_MASK) == MIDR_QCOM_FALKOR_V1)) {
+        __qcom_hyp_sanitize_btac_predictors();
+    }
+}
+
+fp_enabled = __fpsimd_enabled_nvhe();
+
+__sysreg_save_state_nvhe(guest_ctxt);
+__sysreg32_save_state(vcpu);
+```

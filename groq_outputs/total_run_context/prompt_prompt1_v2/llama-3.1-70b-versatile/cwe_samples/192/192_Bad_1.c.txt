@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack and an integer sign extension vulnerability. 
+
+EXPLANATION:
+The function `GetUntrustedInt` returns an integer value `0x0000FFFF` (which is 65535 in decimal) that is assigned to the variable `i`. This value is then assigned to the `short` variable `s`. Since `s` is a signed short integer, it treats the value 65535 as -1, passing the safety check `if (s > 256)`. However, when `s` is assigned to the unsigned integer `sz`, it gets sign-extended to a large unsigned value (4294967295 on most systems), not the intended value.
+
+Later, `s` is passed as the third argument to the `strncpy` function, which treats it as an unsigned integer. This can cause `strncpy` to attempt to copy a very large amount of data, potentially leading to a buffer overflow.
+
+RECOMMENDATIONS:
+1. Validate the length of the `input` before using it as the length argument to `strncpy`. Ensure that it's within a safe range for the destination buffer `path`.
+2. Use the `snprintf` function instead of `strncpy` to prevent buffer overflow attacks. `snprintf` allows you to specify the maximum number of characters to be written to the buffer, preventing overflow.
+3. Avoid using signed integers for sizes and lengths, as they can be vulnerable to sign extension bugs. Use unsigned integers instead.
+4. Validate the value of `s` before using it as the length argument to `strncpy`. Ensure that it's a positive, reasonable value.
+
+ORIGINAL CODE:
+
+
+                  int GetUntrustedInt () {return(0x0000FFFF);}
+                     void main (int argc, char **argv) {
+                        char path[256];char *input;int i;short s;unsigned int sz;
+                           i = GetUntrustedInt();s = i;/* s is -1 so it passes the safety check - CWE-697 */if (s > 256) {DiePainfully("go away!\n");}
+                           /* s is sign-extended and saved in sz */sz = s;
+                           /* output: i=65535, s=-1, sz=4294967295 - your mileage may vary */printf("i=%d, s=%d, sz=%u\n", i, s, sz);
+                           input = GetUserInput("Enter pathname:");
+                           /* strncpy interprets s as unsigned int, so it's treated as MAX_INT(CWE-195), enabling buffer overflow (CWE-119) */strncpy(path, input, s);path[255] = '\0'; /* don't want CWE-170 */printf("Path is: %s\n", path);
+                     }

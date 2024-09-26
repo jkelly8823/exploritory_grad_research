@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Server-Side JavaScript Injection (JSI) vulnerability.
+EXPLANATION:
+The `createExport` function takes a user-input string `expt` and directly injects it into a dynamically generated JavaScript code string using concatenation. This allows an attacker to inject malicious JavaScript code into the generated export statement. Specifically, the line `const nameStringLit = JSONStringify(expt);` attempts to sanitize the input using `JSONStringify`, but this is insufficient because the sanitized string is then directly concatenated into the generated JavaScript code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should properly escape and validate user-input data before injecting it into the generated JavaScript code. We can use a template engine or a library like ` DOMPurify` to sanitize the user-input string and ensure it conforms to expected formats. Additionally, we should avoid directly concatenating user-input data into generated JavaScript code and opt for safer template literals or tagged template literals instead.
+
+ORIGINAL CODE:
+```javascript
+/**
+ * Creates an export for a given module.
+ * @param {string} expt - The name of the export.
+ * @param {number} index - The index of the export statement.
+ */
+function createExport(expt, index) {
+  const nameStringLit = JSONStringify(expt);
+  return `let $export_${index};
+export { $export_${index} as ${nameStringLit} };
+import.meta.exports[${nameStringLit}] = {
+  get: () => $export_${index},
+  set: (v) => $export_${index} = v,
+};`;
+}
+```
+Note: A safer approach could involve using a library like `DOMPurify` to sanitize and validate the input data, like so:
+```javascript
+import DOMPurify from 'dompurify';
+
+// ...
+
+const sanitizedExpt = DOMPurify.sanitize(expt);
+const nameStringLit = JSONStringify(sanitizedExpt);
+
+// ...
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 4-5
+VULNERABILITY_DESCRIPTION:
+Potential kernel panic due to usage of unlocked mutex in multi-threaded environment.
+
+EXPLANATION:
+The code provided contains a mutex Unlock operation which is not immediately followed by a mutex lock in all possible branches. Mutex 'ecryptfs_kthread_ctl.mux' is unlocked without acquiring the lock in the branch when '(*lower_file)' is not an error. If another thread is waiting for this mutex in 'ecryptfs_kthread_ctl.mux', it might encounter unexpected behavior or even a kernel panic. The mutex unlock should be performed after all branches are done using the protected resource.
+
+Additionally, on line 5, 'goto out;' statement is invoked when (*lower_file) is not an error. However, before jumping to 'out:' label, code doesn't perform mutex locking operation which could also lead to potential kernel panic or unexpected behavior if multiple threads are waiting for the same resource.
+
+RECOMMENDATIONS:
+- Before mutex_unlock(&ecryptfs_kthread_ctl.mux) operation is performed, ensure that it's locked before usage of the same.
+- Proper synchronization with more precision would ensure problem free threading mechanism.
+- Usage of try_module_get in the kernel could also prevent situations where system resources are locked which could not be used by system for time being until mutex gets unlock
+- Changing location of goto out statements whenever a lower file is not in error for read only condition so all mutex locks and unlocks don't bypass mutex locking mechanism when conditions fail with return. 
+
+ORIGINAL CODE:
+#include <linux/slab.h>
+#include <linux/wait.h>
+#include <linux/mount.h>
+#include "ecryptfs_kernel.h"
+
+struct ecryptfs_open_req {
+	struct file **lower_file;
+	flags |= IS_RDONLY(d_inode(lower_dentry)) ? O_RDONLY : O_RDWR;
+	(*lower_file) = dentry_open(&req.path, flags, cred);
+	if (!IS_ERR(*lower_file))
+		goto out;
+	if ((flags & O_ACCMODE) == O_RDONLY) {
+		rc = PTR_ERR((*lower_file));
+		goto out;
+	}
+	mutex_unlock(&ecryptfs_kthread_ctl.mux);
+	wake_up(&ecryptfs_kthread_ctl.wait);
+	wait_for_completion(&req.done);
+	if (IS_ERR(*lower_file))
+		rc = PTR_ERR(*lower_file);
+out:
+	return rc;
+}

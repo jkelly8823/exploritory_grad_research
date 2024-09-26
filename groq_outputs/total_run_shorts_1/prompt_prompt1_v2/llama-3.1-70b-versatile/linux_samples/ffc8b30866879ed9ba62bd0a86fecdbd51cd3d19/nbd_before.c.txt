@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Kernel memory leak due to unlocked mutex on thread creation failure.
+
+EXPLANATION:
+The code creates a kernel thread with kthread_create, which may fail and return an error. If the thread creation fails (indicated by IS_ERR(thread)), the function returns with the error code. However, the mutex locked before the thread creation failure is not unlocked. This results in a memory leak, as the tx_lock mutex is held and never released.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a call to mutex_unlock in the error path to release the mutex when thread creation fails. The corrected code snippet should look like this:
+
+```c
+	else
+		blk_queue_flush(nbd->disk->queue, 0);
+
+	thread = kthread_create(nbd_thread, nbd, nbd->disk->disk_name);
+	if (IS_ERR(thread)) {
+		mutex_unlock(&nbd->tx_lock);
+		return PTR_ERR(thread);
+	}
+```
+
+ORIGINAL CODE:
+```
+	else
+		blk_queue_flush(nbd->disk->queue, 0);
+
+	thread = kthread_create(nbd_thread, nbd, nbd->disk->disk_name);
+	if (IS_ERR(thread)) {
+		mutex_lock(&nbd->tx_lock);
+		return PTR_ERR(thread);
+	}
+```
+
+Note that in the original code, there's a line of code that is at odds with the requirements to correctly identify the problem - the mutex_lock in the error handling seems out of place. The right thing to do here would be to unlock the mutex as described in the fix.

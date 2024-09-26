@@ -1,0 +1,90 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16, 18, 21-23
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Missing Bound Checks.
+
+EXPLANATION:
+The provided code has several potential buffer overflow vulnerabilities and missing bound checks. 
+
+In the `TestMemoryCorruption` function, the code uses `napi_get_value_string_utf8` to get the string value of an argument. However, the third argument of `napi_get_value_string_utf8` is the buffer size, and it is set to 0. This means that the buffer will be filled until it is full, regardless of its actual size, which can lead to a buffer overflow.
+
+Additionally, the code does not account for the null-terminator when calculating the buffer size, which can lead to an additional byte of overflow.
+
+The code also copies the contents of `buf` to `zero` using `memcmp` without checking the bounds of the `buf` array, which can lead to an out-of-bounds access.
+
+RECOMMENDATIONS:
+To fix the vulnerabilities, you should add proper bound checks and handling for the buffer sizes.
+
+*   When calling `napi_get_value_string_utf8`, pass the actual size of the buffer instead of 0. This will prevent the buffer from being filled beyond its capacity.
+
+*   When using `memcpy`, make sure to account for the null-terminator when calculating the buffer size to avoid an additional byte of overflow.
+
+*   Before calling `memcmp`, make sure to check the bounds of the `buf` array to avoid an out-of-bounds access.
+
+Here is a possible fix for the issues mentioned above:
+
+```c
+static napi_value TestMemoryCorruption(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  NAPI_CALL(env, napi_get_cb_info(env, info, &argc, args, NULL, NULL));
+
+  NAPI_ASSERT(env, argc == 1, "Wrong number of arguments");
+
+  char buf[11] = { 0 }; // Make sure the buffer has enough space for the null-terminator
+  size_t bufSize = 10;
+  NAPI_CALL(env, napi_get_value_string_utf8(env, args[0], buf, bufSize + 1, NULL)); // Add 1 to the buffer size to account for the null-terminator
+
+  char zero[11] = { 0 }; 
+  size_t minSize = (bufSize > sizeof(zero)) ? sizeof(zero) : bufSize;
+  if (memcmp(buf, zero, minSize) != 0) {
+    NAPI_CALL(env, napi_throw_error(env, NULL, "Buffer overwritten"));
+  }
+
+  return NULL;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+#include <limits.h>  // INT_MAX
+#include <string.h>
+#include <js_native_api.h>
+#include "../common.h"
+
+static napi_value TestLatin1(napi_env env, napi_callback_info info) {
+  return output;
+}
+
+static napi_value TestMemoryCorruption(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  NAPI_CALL(env, napi_get_cb_info(env, info, &argc, args, NULL, NULL));
+
+  NAPI_ASSERT(env, argc == 1, "Wrong number of arguments");
+
+  char buf[10] = { 0 };
+  NAPI_CALL(env, napi_get_value_string_utf8(env, args[0], buf, 0, NULL));
+
+  char zero[10] = { 0 };
+  if (memcmp(buf, zero, sizeof(buf)) != 0) {
+    NAPI_CALL(env, napi_throw_error(env, NULL, "Buffer overwritten"));
+  }
+
+  return NULL;
+}
+
+EXTERN_C_START
+napi_value Init(napi_env env, napi_value exports) {
+  napi_property_descriptor properties[] = {
+    DECLARE_NAPI_PROPERTY("TestLatin1", TestLatin1),
+    DECLARE_NAPI_PROPERTY("TestLargeUtf8", TestLargeUtf8),
+    DECLARE_NAPI_PROPERTY("TestLargeLatin1", TestLargeLatin1),
+    DECLARE_NAPI_PROPERTY("TestLargeUtf16", TestLargeUtf16),
+    DECLARE_NAPI_PROPERTY("TestMemoryCorruption", TestMemoryCorruption),
+  };
+
+  NAPI_CALL(env, napi_define_properties(
+      env, exports, sizeof(properties) / sizeof(*properties), properties));
+```

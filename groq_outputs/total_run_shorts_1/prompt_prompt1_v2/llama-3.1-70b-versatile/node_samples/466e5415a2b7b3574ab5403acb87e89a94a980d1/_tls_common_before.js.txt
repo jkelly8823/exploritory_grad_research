@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Regular Expression Denial of Service (ReDoS) attack, and a Key-Based Injection attack.
+
+EXPLANATION:
+The provided code snippet is using a regular expression to parse the `info` string. The regular expression `/([^\n:]*):([^\n]*)(?:\n|$)/g` may be vulnerable to ReDoS attacks because it contains a greedy quantifier `*` inside a capturing group. This can lead to catastrophic backtracking and cause the CPU to be hogged.
+
+Additionally, the code is using the user-provided `key` value directly as a property name in the `c.infoAccess` object, which can lead to a Key-Based Injection attack if the `key` value is not properly validated and sanitized.
+
+RECOMMENDATIONS:
+To avoid these vulnerabilities, it is recommended to:
+
+- Use a safer regular expression that avoids greedy quantifiers. Consider using the `{n, m}` syntax to limit the number of matches.
+- Validate and sanitize the `key` value before using it as a property name in the `c.infoAccess` object. This can be done using a whitelist of allowed keys or by using a more robust object structure.
+
+Here is a revised version of the code snippet with some recommended fixes:
+```javascript
+const keyRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+StringPrototypeReplace(info, /([^\n:]*):([^\n]*)(?:\n|$)/g,
+                      (all, key, val) => {
+                        if (keyRegex.test(key) && key in c.infoAccess)
+                          ArrayPrototypePush(c.infoAccess[key], val);
+                        else if (keyRegex.test(key))
+                          c.infoAccess[key] = [val];
+                      });
+```
+
+ORIGINAL CODE:
+```javascript
+const {
+  ArrayPrototypePush,
+  ObjectCreate,
+  StringPrototypeReplace,
+} = primordials;
+
+// XXX: More key validation?
+StringPrototypeReplace(info, /([^\n:]*):([^\n]*)(?:\n|$)/g,
+                       (all, key, val) => {
+                         if (key in c.infoAccess)
+                           ArrayPrototypePush(c.infoAccess[key], val);
+                         else
+                           c.infoAccess[key] = [val];
+```

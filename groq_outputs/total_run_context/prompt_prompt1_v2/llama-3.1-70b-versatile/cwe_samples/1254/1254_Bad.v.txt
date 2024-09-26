@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-14
+VULNERABILITY_DESCRIPTION:
+Insecure Compare Operation in Assigned Values.
+
+EXPLANATION:
+This vulnerability arises due to the insecure comparison of entered password and the golden (correct) password. The vulnerability is present in the iteration of the for loop where each byte of the entered password is compared with the golden password byte by byte. 
+
+In a secure implementation, comparing entered passwords with golden passwords directly can reveal information about the correct password through timing attacks. Also, there is an early exit in the comparison of the entered password with the golden password. An early exit can indicate to an attacker that a particular byte of the entered password is incorrect which can be leveraged to perform brute-force attacks with reduced possibilities.
+
+The secure way to compare passwords is to use a constant-time comparison, which does not leak information about the correct password byte even if it is incorrect.
+
+RECOMMENDATIONS:
+Recommend using a constant-time comparison algorithm for securely comparing the entered password with the golden password.
+
+The constant-time comparison should continue the comparison of all bytes even if there is a mismatch in any of the bytes. The correct approach will result in all bytes being compared regardless of whether the first few bytes match or not.
+
+Here is a suggested fix:
+
+```verilog
+always_comb @ (posedge clk)
+begin
+    assign check_pass[3:0] = 4'b0;
+    integer passed = 0;
+    for (i = 0; i < 4; i++) begin
+        if (entered_pass[(i*8 - 1) : i] == golden_pass[(i*8 - 1) : i])
+            passed = passed | (1 << i);
+    end
+    if (passed == 15)  // check if all bytes are correct
+        assign grant_access = 1'b1;
+    else
+        assign grant_access = 1'b0;
+end
+```
+
+ORIGINAL CODE:
+```verilog
+always_comb @ (posedge clk)
+begin
+    assign check_pass[3:0] = 4'b0;
+    for (i = 0; i < 4; i++) begin
+        if (entered_pass[(i*8 - 1) : i] eq golden_pass([i*8 - 1) : i])
+            assign check_pass[i] = 1;
+            continue;
+        else
+            assign check_pass[i] = 0;
+            break;
+    end
+    assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;
+end
+```

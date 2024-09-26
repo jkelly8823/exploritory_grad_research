@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION: 
+Potential buffer overflow vulnerability due to the use of `atoi` function with an untrusted input.
+
+EXPLANATION: 
+The use of `atoi` function without proper input validation can lead to a buffer overflow vulnerability. In this code, the input `thestr` is derived from an untrusted source (`timestr->data`) and passed to `atoi` without checking for errors or buffer overflows. If the input string is not a valid integer or is too large, `atoi` can cause undefined behavior or a buffer overflow.
+
+Additionally, the `atoi` function also does not check for errors; it will silently ignore any errors and continue execution, which can lead to unintended behavior.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, it is recommended to use `strtol` instead of `atoi` to convert the string to an integer. `strtol` checks for errors and buffer overflows, and it also provides more flexibility in handling different input formats. Here is an example of how to use `strtol` with proper error checking:
+
+```c
+char * endptr;
+errno = 0;
+long sec = strtol(thestr, &endptr, 10);
+if (endptr == thestr || errno != 0) {
+    // Handle error
+}
+else {
+    thetime.tm_sec = sec;
+}
+```
+
+ORIGINAL CODE:
+```c
+char * thestr;
+long gmadjust = 0;
+
+if (timestr->length < 13) {
+    php_error_docref(NULL TSRMLS_CC, E_WARNING, "extension author too lazy to parse %s correctly", timestr->data);
+    return (time_t)-1;
+}
+
+strbuf = estrdup((char *)timestr->data);
+
+memset(&thetime, 0, sizeof(thetime));
+
+/* we work backwards so that we can use atoi more easily */
+
+thestr = strbuf + timestr->length - 3;
+
+thetime.tm_sec = atoi(thestr);
+*thestr = '\0';
+thestr -= 2;
+```

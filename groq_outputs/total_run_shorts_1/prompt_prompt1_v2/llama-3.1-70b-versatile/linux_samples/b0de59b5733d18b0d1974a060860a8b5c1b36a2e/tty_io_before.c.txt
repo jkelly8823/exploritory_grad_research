@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Time-of-Check to Time-of-Use (TOCTOU) bug, which allows an attacker to exploit the time difference between checking and using the timestamps.
+
+EXPLANATION:
+In the given code, `current_fs_time(inode->i_sb)` is used to get the current time and then store it in `inode->i_atime` or `inode->i_mtime`. However, there is no synchronization mechanism to prevent another thread or process from modifying the file's timestamp between the time of checking and the time of updating. This allows an attacker to potentially exploit this window to alter the timestamp.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use synchronization mechanisms such as locks to ensure that the file's timestamp is not modified by another thread or process between checking and updating. For example, you could use a lock to protect the code that updates the timestamp.
+
+Here's an example of how you can modify the code to fix this vulnerability:
+
+```c
+mutex_lock(&inode->i_mutex);
+inode->i_mtime = current_fs_time(inode->i_sb);
+mutex_unlock(&inode->i_mutex);
+```
+
+You should also consider using appropriate synchronization mechanisms when checking the timestamp to ensure that it is not modified after it is checked.
+
+ORIGINAL CODE:
+```c
+else
+	i = -EIO;
+	tty_ldisc_deref(ld);
+	if (i > 0)
+		inode->i_atime = current_fs_time(inode->i_sb);
+	return i;
+}
+
+void tty_write_unlock(struct tty_struct *tty)
+			break;
+		cond_resched();
+	}
+	if (written) {
+		struct inode *inode = file->f_path.dentry->d_inode;
+		inode->i_mtime = current_fs_time(inode->i_sb);
+		ret = written;
+	}
+out:
+	tty_write_unlock(tty);
+	return ret;
+}

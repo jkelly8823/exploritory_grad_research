@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19-20
+VULNERABILITY_DESCRIPTION:
+Directory Traversal/Vulnerability to Symlink Attacks
+EXPLANATION:
+The code uses the `open` function with a filename provided by the `srctop_file` function, which may potentially lead to a directory traversal or symlink attack vulnerability. This is because the filename is not sanitized and may contain malicious characters. An attacker could potentially manipulate the filename to access unauthorized files or create a symbolic link to gain elevated access.
+
+RECOMMENDATIONS:
+Instead of using the `open` function directly with an unsanitized filename, consider using the `opendir` function to open a directory handle and then validate the filename before attempting to open it. Additionally, consider using the `File::Spec` module to normalize the filename and prevent directory traversal attacks. 
+
+An example of how to securely open a file is as follows:
+```perl
+my $directory = srctop_file("test/certs");
+my $filename = "ca-cert.pem";
+
+my $dh = opendir(my $dir, $directory) or die "Can't open directory: $!";
+my @files = readdir($dir);
+closedir($dir);
+
+foreach my $file (@files) {
+    if ($file eq $filename) {
+        open my $fh, '<', $directory . '/' . $filename or die "Can't open file: $!";
+        # process file
+        close $fh;
+    }
+}
+```
+Alternatively, if the filename is fully trustable, consider using a sandboxed environment or a secure open function that prevents directory traversal attacks.
+
+ORIGINAL CODE:
+```perl
+# extracts issuer from a -text formatted-output
+sub get_issuer {
+    my $f = shift(@_);
+    my $issuer = "";
+    open my $fh, $f or die;
+    while (my $line = <$fh>) {
+        if ($line =~ /Issuer:/) {
+            $issuer = $line;
+        }
+    }
+    close $fh;
+    return $issuer;
+}
+```

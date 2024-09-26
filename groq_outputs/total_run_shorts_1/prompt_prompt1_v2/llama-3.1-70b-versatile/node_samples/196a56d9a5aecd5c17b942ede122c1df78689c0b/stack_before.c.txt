@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 49-53, 62-65
+VULNERABILITY_DESCRIPTION: 
+The code has a memory vulnerability in the form of a double free and a use-after-free. This occurs when `OPENSSL_sk_insert` is called, which decrements `st->num` without updating `st->num_alloc`. If this function is followed by calls to `OPENSSL_sk_reserve` or `OPENSSL_sk_set`, which reallocate `st->data` using `OPENSSL_realloc`, the memory previously allocated for `st->data` is freed. However, this freed memory is still referenced by `st->data` when it is later used in `OPENSSL_sk_insert`. This can lead to a double free and/or use-after-free vulnerability.
+
+EXPLANATION:
+In the provided code snippet, there appears to be an issue in the `OPENSSL_sk_insert` and `OPENSSL_sk_reserve` functions. When `OPENSSL_sk_insert` is called, it first moves items in the stack down to make space for the new element, then decrements `st->num`. However, `st->num_alloc` remains unchanged even though the actual allocated size of `st->data` is determined by `st->num_alloc`. This mismatch between `st->num` and `st->num_alloc` is the source of the vulnerability. 
+
+Later on, when `OPENSSL_sk_reserve` is called, it may decide to reallocate `st->data` based on the new `num_alloc` value. However, before it does so, it assigns the new value to `st->num_alloc` but does not update `st->num` to match. This means that `st->num` is now out of sync with the actual size of `st->data`.
+
+If after calling `OPENSSL_sk_insert`, another call is made to `OPENSSL_sk_insert` or to `OPENSSL_sk_set` which uses the already freed memory, this could result in a double free and/or use-after-free vulnerability.
+
+RECOMMENDATIONS: 
+
+To fix this vulnerability, the `OPENSSL_sk_insert` function should be modified to correctly update `st->num_alloc` along with `st->num`. Also, a check should be added to `OPENSSL_sk_reserve` to ensure that it does not attempt to access already freed memory. 
+
+Here's an example of how to update `OPENSSL_sk_insert` and `OPENSSL_sk_reserve`:
+
+```c
+int OPENSSL_sk_insert(OPENSSL_STACK *st, const void *data, int loc)
+{
+    if (st == NULL || st->num == max_nodes)
+        return 0;
+
+    if (!sk_reserve(st, 1, 0))
+        return 0;
+
+    const void *ret = st->data[loc];
+
+    if (loc != st->num - 1)
+        memmove(&st->data[loc], &st->data[loc + 1],
+                sizeof(st->data[0]) * (st->num - loc - 1));
+    st->num--;
+    st->num_alloc--;  // Update st->num_alloc here
+    return (void *)ret;
+}
+
+int OPENSSL_sk_reserve(OPENSSL_STACK *st, int n)
+{
+    if (st == NULL)
+        return 0;
+
+    if (n < 0)
+        return 1;
+    if (st->num + n > st->num_alloc && st->num_alloc != 0) {  // Check here
+        tmpdata = OPENSSL_realloc((void *)st->data, sizeof(void *) * (st->num_alloc + n));
+        if (tmpdata == NULL)
+            return 0;
+        st->data = tmpdata;
+        st->num_alloc = st->num_alloc + n;
+    }
+    return 1;
+}
+```
+
+Note: This recommendation only fixes the mentioned issue but does not guarantee to make the code safe from all vulnerabilities.
+
+ORIGINAL CODE:
+Provided in the original question.

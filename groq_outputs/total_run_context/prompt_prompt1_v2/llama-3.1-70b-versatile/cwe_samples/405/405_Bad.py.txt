@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+A Resource Leak Vulnerability is present due to the lack of error handling and potential socket closure in the given UDP server code.
+
+EXPLANATION:
+The given code snippet creates a UDP socket, binds it to a specific IP and port, and enters a loop to receive and process incoming requests. However, there are several issues that could lead to a resource leak. Firstly, if an exception occurs during the execution of the loop (e.g., during the parsing or name resolution of the received data), the socket will not be closed properly. This could lead to the socket being left open indefinitely, consuming system resources and potentially causing issues.
+
+Moreover, there is no explicit code to handle potential errors that might occur while receiving data from the socket. If a socket-related error occurs, the socket will also remain open, causing a resource leak.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the code should handle potential exceptions and errors that might occur during the execution of the loop. The socket should be closed properly, regardless of whether an exception occurs or not. Here's a recommended fix:
+
+```python
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((UDP_IP, UDP_PORT))
+    while True:
+        data = sock.recvfrom(1024)
+        if not data:
+            break
+        try:
+            (requestIP, nameToResolve) = parseUDPpacket(data)
+            record = resolveName(nameToResolve)
+            sendResponse(requestIP, record)
+        except Exception as e:
+            # Handle the exception and log it as needed
+            print(f"An error occurred: {e}")
+except Exception as e:
+    print(f"An error occurred while setting up the UDP socket: {e}")
+finally:
+    # Close the socket properly
+    if 'sock' in locals():
+        sock.close()
+```
+ORIGINAL CODE:
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((UDP_IP, UDP_PORT))
+while True:
+    data = sock.recvfrom(1024)
+    if not data:
+        break
+    (requestIP, nameToResolve) = parseUDPpacket(data)
+    record = resolveName(nameToResolve)
+    sendResponse(requestIP, record)

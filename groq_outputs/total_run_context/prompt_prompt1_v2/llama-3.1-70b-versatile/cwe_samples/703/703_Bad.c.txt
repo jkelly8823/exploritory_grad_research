@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The given code snippet is vulnerable to a buffer overflow attack. The `fgets` function reads a line from `stdin` into the `buf` array, which is 10 bytes long. However, the `strcpy` function is then used to copy the contents of `buf` into `cp_buf`, which is also 10 bytes long. 
+
+The `fgets` function prevents a buffer overflow by limiting the number of characters read to `10-1 = 9`, but the `strcpy` function does not perform any bounds checking. If the input to `fgets` contains a null byte (`\0`), it may not be copied to `cp_buf`, resulting in an unterminated string. 
+
+However, if the input is very large, `fgets` itself will truncate the input to 9 bytes, leaving space for the null terminator. The issue lies with `strcpy`, specifically the fact that it does not check whether `buf`'s null terminator is within the `cp_buf`'s capacity, it copies till it encounters the first null of `buf` that could be beyond `cp_buf`'s capacity if `buf` hasn't obtained the null from `fgets` function i.e. if the input to `fgets` contains more than 9 characters and the null character didn't appear at the end of the read data.
+
+To avoid potential issues of buffer overoverflow `strcpy` should be avoided in favor of functions that limit their copying based on destination buffer capacity.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use the `strncpy` function instead of `strcpy`, like this:
+
+```c
+char buf[10], cp_buf[10];
+fgets(buf, 10, stdin);
+strncpy(cp_buf, buf, sizeof(cp_buf)-1);
+cp_buf[sizeof(cp_buf)-1] = '\0';
+```
+
+Or, better yet, use `strcpy_s` function if available (for C11):
+
+```c
+char buf[10], cp_buf[10];
+fgets(buf, 10, stdin);
+strcpy_s(cp_buf, sizeof(cp_buf), buf);
+```
+
+Both approaches prevent potential buffer overflows and ensure a null-terminated string.
+
+ORIGINAL CODE:
+```
+                  char buf[10], cp_buf[10];fgets(buf, 10, stdin);strcpy(cp_buf, buf);
+```

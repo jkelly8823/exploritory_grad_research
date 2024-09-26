@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Potential Out-of-Bounds Array Access
+
+EXPLANATION:
+The code snippet contains potential buffer overflow and out-of-bounds array access vulnerabilities. The loop `for (i = 0; i < size; i++)` iterates over the `fmt` array, but there is no validation that the `struct` or data stored in `fmt` is properly initialized or allocated. The loop also uses the index `i` without checking if it exceeds the valid indices of the `fmt` array.
+
+However, the more severe issue arises from the usage of the `i` variable after the loop. If the `fmt` array does not contain the specified `type`, the loop will iterate over all elements and `i` will be equal to `size`. Then, when checking `if (i == size)`, it will evaluate to true, and the function will return `NULL`.
+
+The issue arises when `i` is used to access the `fmt` array later in the code: `return &fmt[i];`. If `i` is equal to `size`, this will result in an out-of-bounds array access, leading to undefined behavior. 
+
+Additionally, if an attacker can control the `size` variable or the `fmt` array's contents, a buffer overflow might occur.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add validation for `i` before accessing the `fmt` array:
+1. Validate the `fmt` array: Ensure the `fmt` array is properly initialized, allocated, and populated before accessing it.
+2. Validate the `size` variable: Before entering the loop, validate the `size` variable to ensure it does not exceed the actual size of the `fmt` array.
+3. Validate `i` before access: Before accessing the `fmt` array with `i`, ensure that `i` is within the valid range of indices for the array. This can be achieved by adding a bounds check.
+
+Here is a sample fix:
+
+```c
+	if (i >= size || i < 0) {
+		// handle error or return an error code
+		return NULL;
+	}
+
+	return &fmt[i];
+```
+
+ORIGINAL CODE:
+```c
+	return NULL;
+
+	for (i = 0; i < size; i++) {
+		if (fmt[i].type != type)
+			continue;
+		if (k == index)
+			break;
+		k++;
+	}
+
+	if (i == size)
+		return NULL;
+
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+	    !venus_helper_check_codec(inst, fmt[i].pixfmt))
+		return NULL;
+
+	return &fmt[i];
+}
+
+static int venc_v4l2_to_hfi(int id, int value)
+```

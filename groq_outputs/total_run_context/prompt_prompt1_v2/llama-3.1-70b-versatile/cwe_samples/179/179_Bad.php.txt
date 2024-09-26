@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Directory Traversal attack.
+
+EXPLANATION:
+Although the code attempts to sanitize the directory name by checking for ".." and replacing "~" with an empty string, it is still vulnerable to a Directory Traversal attack. The reason for this is that the "strpos" function returns the offset of the first occurrence of the specified substring, and the code only checks if the substring exists, but not where it exists. This means that if the attacker could insert a directory name like '////../../../../etc' and the code won't detect it, potentially allowing an attack.
+
+Additionally, the lack of a trailing slash on the $userDir directory path, may also allow for the creation of directories outside of the user directory.
+
+However, the primary vulnerability is identified on line 6. A more comprehensive validation of the input should be done to prevent these types of attacks.
+
+RECOMMENDATIONS:
+Use real paths to check if the directory exists and doesn't attempt to traverse upwards, using the following PHP method:
+```php
+if (realpath($newDir) === false || !str_starts_with(realpath($newDir), $userDir . '/')) {
+    echo 'Directory name contains invalid sequence';
+    return;
+}
+```
+
+Also, to prevent race condition attacks, it's better to use a try and catch block when checking if a directory already exists and if it's possible for it to be created, then use the following PHP method:
+```php
+if (!mkdir($newDir, 0700)) {
+    if (file_exists($newDir)) {
+        // handle the error, possibly throw exception
+    }
+}
+```
+The way your code is validating the directory is partially incomplete and does not offer comprehensive protection.
+
+ORIGINAL CODE:
+```php
+function createDir($userName, $dirName) {
+    $userDir = '/users/' . $userName;
+    if (strpos($dirName, '..') !== false) {
+        echo 'Directory name contains invalid sequence';
+        return;
+    }
+    //filter out '~' because other scripts identify user directories by this prefix
+    $dirName = str_replace('~', '', $dirName);
+    $newDir = $userDir . $dirName;
+    mkdir($newDir, 0700);
+    chown($newDir, $userName);
+}
+```

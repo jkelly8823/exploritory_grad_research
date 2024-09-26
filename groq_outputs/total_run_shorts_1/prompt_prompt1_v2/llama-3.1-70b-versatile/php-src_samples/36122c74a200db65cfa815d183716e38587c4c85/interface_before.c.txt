@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 45-48
+VULNERABILITY_DESCRIPTION:
+A resource leak vulnerability is present due to the premature deallocation of a struct curl_slist.
+EXPLANATION:
+In the given code snippet, the curl_free_slist function deallocates the memory allocated for a struct curl_slist using curl_slist_free_all. However, later on in the code, the same function is used as a destructor for a linked list of struct curl_slist objects. 
+
+The issue arises when cleaning the linked list of struct curl_slist objects. If the curl_free_slist function is called on each node of the linked list, this could prematurely free the node's memory. However, in this snippet of code, this seems not to be the case. 
+
+However, when adding an element to the linked list of slists with zend_llist_add_element, we are allocating memory for a struct curl_slist object as well. This memory is then freed using the destructor curl_free_slist when cleaning or destructive iterating over the linked list of slists. This, however, also sets the pointer to the memory that has been allocated for this slist object in the slist linked list to NULL. As this pointer is also being used by other variables (slist), this may cause resource leaks later in the code as these variables point to memory which has already been freed.
+
+A possible example is when you later do zend_llist_clean for the linked list of slists, every element's memory is freed using curl_free_slist function. If in a different flow of your program you try to free these memory locations again using curl_slist_free_all(*slist), this function will possibly cause segmentation faults as the slist may be previously freed and the memory allocated to some other variable.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we could avoid directly setting slist to NULL after adding it to the linked list of slists, or ensure that all references of slist have been properly set to NULL after it is freed. It would be safest if every usage or reference to slist is manually unset if it's memory is in progress of being freed through any of the above discussed methods.
+
+
+
+ORIGINAL CODE:
+
+
+/* {{{ curl_free_slist
+ */
+static void curl_free_slist(void **slist)
+{
+    curl_slist_free_all((struct curl_slist *) *slist);
+}
+/* }}} */
+
+/* {{{ proto array curl_version([int version])
+    (*ch)->handlers->read->stream = NULL;
+
+    zend_llist_init(&(*ch)->to_free->str,   sizeof(char *),            (llist_dtor_func_t) curl_free_string, 0);
+    zend_llist_init(&(*ch)->to_free->slist, sizeof(struct curl_slist), (llist_dtor_func_t) curl_free_slist,  0);
+    zend_llist_init(&(*ch)->to_free->post,  sizeof(struct HttpPost),   (llist_dtor_func_t) curl_free_post,   0);
+    (*ch)->safe_upload = 0; /* for now, for BC reason we allow unsafe API */
+}
+/* }}} */
+
+#if LIBCURL_VERSION_NUM >= 0x071301 /* Available since 7.19.1 */
+    }
+#endif
+
+    efree(dupch->to_free);
+    dupch->to_free = ch->to_free;
+
+    /* Keep track of cloned copies to avoid invoking curl destructors for every clone */
+
+            ph = HASH_OF(*zvalue);
+            if (!ph) {
+                char *name;
+                switch (option) {
+                    case CURLOPT_HTTPHEADER:
+                        name = "CURLOPT_HTTPHEADER";
+                        break;
+                }
+            }
+            zend_llist_add_element(&ch->to_free->slist, &slist);
+
+            error = curl_easy_setopt(ch->cp, option, slist);
+
+            break;
+    /* cURL destructors should be invoked only by last curl handle */
+    if (Z_REFCOUNT_P(ch->clone) <= 1) {
+        zend_llist_clean(&ch->to_free->str);
+        zend_llist_clean(&ch->to_free->slist);
+        zend_llist_clean(&ch->to_free->post);
+        efree(ch->to_free);
+        FREE_ZVAL(ch->clone);
+    } else {
+        Z_DELREF_P(ch->clone);
+    }

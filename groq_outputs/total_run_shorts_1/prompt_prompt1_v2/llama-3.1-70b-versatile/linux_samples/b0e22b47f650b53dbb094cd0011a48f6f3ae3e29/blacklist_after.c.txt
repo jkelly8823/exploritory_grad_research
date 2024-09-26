@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 67-70
+VULNERABILITY_DESCRIPTION: Unchecked Return Value
+EXPLANATION:
+The code has a potential vulnerability in the `is_key_on_revocation_list` function. Specifically, the function calls `pkcs7_validate_trust` and checks if the return value is 0. However, the function does not check for any other return values that might indicate an error. 
+RECOMMENDATIONS:
+It is recommended to check the return value of `pkcs7_validate_trust` and handle any potential errors that might occur. This can be done by checking the documentation of `pkcs7_validate_trust` to see what return values it can produce and handling them accordingly. For example, if `pkcs7_validate_trust` returns an error code, the function should handle it and return an error code to the caller.
+
+Additionally, It is worth noting that the `pkcs7_validate_trust` function may return a -ENODEV error if the validation fails, which can be a valid return value in certain situations. So it would be better to return the actual value returned by the function instead of just returning -EKEYREJECTED in case of success.
+
+Here is an example of how the function can be modified:
+
+```c
+int is_key_on_revocation_list(struct pkcs7_message *pkcs7)
+{
+	int ret;
+
+	ret = pkcs7_validate_trust(pkcs7, blacklist_keyring);
+	if (ret < 0) {
+		return ret;  // Return the actual error code
+	}
+
+	return -ENOKEY;
+}
+```
+
+ORIGINAL CODE:
+```c
+/**
+ * is_key_on_revocation_list - Determine if the key for a PKCS#7 message is revoked
+ * @pkcs7: The PKCS#7 message to check
+ */
+int is_key_on_revocation_list(struct pkcs7_message *pkcs7)
+{
+	int ret;
+
+	ret = pkcs7_validate_trust(pkcs7, blacklist_keyring);
+
+	if (ret == 0)
+		return -EKEYREJECTED;
+
+	return -ENOKEY;
+}
+```

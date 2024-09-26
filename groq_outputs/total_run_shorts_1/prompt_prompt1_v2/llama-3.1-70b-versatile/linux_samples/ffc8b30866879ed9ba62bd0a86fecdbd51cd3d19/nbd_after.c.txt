@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+ The mutex is locked but not checked for errors, and the previous error handling for kthread creation is not properly synchronized.
+EXPLANATION:
+In the provided code snippet, a mutex is locked before returning an error caused by an unsuccessful kthread creation. However, the thread creation can potentially create a context switch, which may or may not become scheduled. When returning the error, it's essential to keep the resource (mutex) synchronized to avoid deadlocks and complications with other locks within the function. Proper error handling should also ensure that any necessary cleanup is done when the kthread creation fails.
+
+RECOMMENDATIONS:
+When locking the mutex for returning the error, ensure the cleaning up by unlocking the mutex if an error is encountered:
+```c
+if (IS_ERR(thread)) {
+    err = PTR_ERR(thread);
+    mutex_lock(&nbd->tx_lock);
+    // perform any additional error-handling related cleanup if necessary
+    mutex_unlock(&nbd->tx_lock);  // Release lock if leaving with an error
+    return err;
+}
+```
+
+Additionally, proper error handling may include cancelling or joining the kthread if a failure occurs. This can be achieved using a try-lock mechanism to acquire the necessary locks prior to creating the kthread or performing further operations.
+
+ORIGINAL CODE:
+```c
+else
+    blk_queue_flush(nbd->disk->queue, 0);
+
+thread = kthread_create(nbd_thread, nbd, "%s",
+        nbd->disk->disk_name);
+if (IS_ERR(thread)) {
+    mutex_lock(&nbd->tx_lock);
+    return PTR_ERR(thread);
+}
+```

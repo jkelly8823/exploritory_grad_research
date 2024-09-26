@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Arbitrary File and Directory Write via Unsandboxed Child Process
+
+EXPLANATION:
+The code snippet uses `spawnSync` to execute a child process that has access to the file system (`--allow-fs-write`) and writes files to the `/tmp/` directory. The use of an unsandboxed child process can lead to arbitrary file and directory write vulnerabilities if not properly validated.
+
+Furthermore, the code executes an arbitrary code snippet (`console.log(process.permission.has("fs")); etc`) as the child process, allowing potential injection attacks.
+
+Additionally, the `process.execPath` is a path to the current Node.js executable. Reloading the current process might expose the whole server of critical internal implementations.
+
+RECOMMENDATIONS:
+1. Implement proper input validation and sanitization for all the values passed to the child process.
+2. Use a sandboxed child process using Docker, containerization or similar methods, and consider implementing more granular access controls for your child processes.
+3. Prefer using execSync over spawnSync whenever you are not handling process events as the return signature is more synchronous.
+4. Perform User input validation to make sure `stdout` is correctly handled or not.
+
+ORIGINAL CODE:
+
+}
+{
+  const { status, stdout } = spawnSync(
+    process.execPath,
+    [
+      '--experimental-permission',
+      '--allow-fs-write', '/tmp/', '-e',
+      `console.log(process.permission.has("fs"));
+      console.log(process.permission.has("fs.read"));
+      console.log(process.permission.has("fs.write"));
+      console.log(process.permission.has("fs.write", "/tmp/"));`,

@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability due to missing finally block or lack of try-with-resources.
+
+EXPLANATION:
+The provided code snippet attempts to establish a server socket connection. However, upon reviewing the code, a significant flaw has been identified. The server socket is only closed in the try block, which means it will not be closed in the event of an exception being thrown, except for the IOException caught in the catch block. This can result in resource leaks if an exception of a different type occurs.
+
+Furthermore, the lack of a finally block or try-with-resources statement can lead to unchecked exceptions potentially bypassing the close method, ultimately resulting in resource leaks.
+
+Additionally, the ClientSocketThread thread is started without proper error handling. If an exception occurs within the ClientSocketThread, it might leave resources (such as sockets or sockets opened within the Socket class) unclosed.
+
+RECOMMENDATIONS:
+1. Implement a try-with-resources statement to ensure that the server socket is closed after use, regardless of whether an exception is thrown or not.
+
+```java
+public void acceptConnections() {
+    try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            t.start();
+        }
+    } catch (IOException ex) {...}
+}
+```
+
+2. Wrap the Socket that is being passed to the ClientSocketThread in a try-with-resources statement in the thread itself, or ensure proper exception handling within the thread.
+
+```java
+public class ClientSocketThread implements Runnable {
+    private Socket client;
+
+    public ClientSocketThread(Socket client) {
+        this.client = client;
+    }
+
+    @Override
+    public void run() {
+        try {
+            // Perform operations on the client socket...
+        } catch (IOException e) {
+            // Handle the exception...
+        } finally {
+            try {
+                client.close();
+            } catch (IOException e) {
+                // Handle exception that occurred while closing the client socket...
+            }
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```
+public void acceptConnections() {
+    
+    try {ServerSocket serverSocket = new ServerSocket(SERVER_PORT);int counter = 0;boolean hasConnections = true;while (hasConnections) {Socket client = serverSocket.accept();Thread t = new Thread(new ClientSocketThread(client));t.setName(client.getInetAddress().getHostName() + ":" + counter++);t.start();}serverSocket.close();
+
+} catch (IOException ex) {...}
+}
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-16, 19-22
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability and an insecure memory usage vulnerability are present. 
+
+EXPLANATION:
+In lines 6-16, a `buf` variable is used to store the result of `OBJ_obj2txt` function without properly checking its length. If the length of the object exceeds `sizeof(buf)-1`, a buffer overflow occurs. The length check only ensures that there's space for a null-terminator, but it's not clear if this is sufficient for all cases.
+
+Additionally, in lines 19-22, the `bio_buf->data` is directly assigned as a string to `add_assoc_stringl`, but `BIO_get_mem_ptr` doesn't guarantee that the memory buffer is null-terminated. This could potentially cause the function to access memory out-of-bounds.
+
+RECOMMENDATIONS:
+1. Ensure that `buf` has sufficient space to hold the result of `OBJ_obj2txt`, or handle cases where `OBJ_obj2txt` fails to write the full object, perhaps by using a larger buffer or dynamically allocated memory.
+2. Before calling `add_assoc_stringl`, verify that `bio_buf->data` is null-terminated. Alternatively, use `BIO_ctrl(bio_out, BIO_CTRL_FLUSH, 0, NULL)` to ensure that the buffer is flushed with a null-terminator.
+
+ORIGINAL CODE:
+```c
+}
+/* }}} */
+
+/* {{{ proto array openssl_x509_parse(mixed x509 [, bool shortnames=true])
+   Returns an array of the fields/values of the CERT */
+PHP_FUNCTION(openssl_x509_parse)
+{
+
+
+	for (i = 0; i < X509_get_ext_count(cert); i++) {
+		extension = X509_get_ext(cert, i);
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(extension)) != NID_undef) {
+			extname = (char *)OBJ_nid2sn(OBJ_obj2nid(X509_EXTENSION_get_object(extension)));
+		} else {
+			OBJ_obj2txt(buf, sizeof(buf)-1, X509_EXTENSION_get_object(extension), 1);
+			extname = buf;
+		}
+		bio_out = BIO_new(BIO_s_mem());
+		if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+			BIO_get_mem_ptr(bio_out, &bio_buf);
+			add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+		} else {
+			add_assoc_asn1_string(subitem, extname, X509_EXTENSION_get_data(extension));
+```

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to Server-Side Template Injection (SSTI) via an XML External Entity (XXE) vulnerability in the DOMDocument class. The code uses user input (a string from the file 'dom.xml') to create a DOMDocument object without validation.
+
+EXPLANATION:
+The DOMDocument class in PHP is vulnerable to XXE attacks if an XML document is loaded or parsed without proper validation. In this case, the code loads an XML file from a path using the 'load' method, but it does not validate the XML content before loading it. If the 'dom.xml' file was to contain malicious XML content, such as an external entity declaration, it could lead to an XXE attack. This could potentially allow an attacker to read and exfiltrate sensitive information from the server, including configuration files, system logs, or even secret keys.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should validate the XML file before loading it into the DOMDocument object. Here are a few recommendations:
+
+1. Use the 'loadXML' method instead of 'load', and provide a string representation of the XML content. This would allow you to properly validate the XML content before parsing it.
+
+Example:
+
+```php
+$xmlContent = file_get_contents(dirname(__FILE__).'/dom.xml');
+$dom = new DOMDocument('1.0');
+$dom->loadXML($xmlContent);
+```
+
+2. Use a validating parser, such as 'DOMDocument::validate' or 'DOMDocument::schemaValidate' to validate the XML content against a schema or DTD.
+
+Example:
+
+```php
+$dom = new DOMDocument('1.0');
+$dom->load(dirname(__FILE__).'/dom.xml');
+if (!$dom->validate()) {
+    // Handle validation error
+}
+```
+
+3. Use a library that provides better protection against XXE attacks, such as Libxml2.
+
+ORIGINAL CODE:
+
+```php
+// reusing existing xml: http://cvs.php.net/viewvc.cgi/php-src/ext/dom/tests/dom.xml?view=co&content-type=text%2Fplain
+// reusing existing dtd: http://cvs.php.net/viewvc.cgi/php-src/ext/dom/tests/dom.ent?view=co&content-type=text%2Fplain
+$dom = new DOMDocument('1.0');
+$dom->load(dirname(__FILE__).'/dom.xml');
+var_dump($dom->validate());
+?>
+--EXPECTF--
+```

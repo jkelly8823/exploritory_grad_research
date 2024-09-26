@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-12
+VULNERABILITY_DESCRIPTION:
+Memory Leak Due to Inconsistent Error Handling and Double Allocation.
+
+EXPLANATION:
+The code is allocating memory to `wbmp->bitmap` twice. The first allocation on line 3 is not checked for its actual success, as the memory is reassigned on line 9 without any checks. If the first allocation succeeds, and the second fails, the previously allocated memory on line 3 is leaked.
+
+Additionally, when the second allocation fails, the memory allocated to `wbmp` itself is freed using `gdFree(wbmp)`, but the status code returned is inconsistent. On line 5, it returns `NULL`, while on line 11, it returns `-1`.
+
+RECOMMENDATIONS:
+Firstly, avoid reassigning the same pointer without proper deallocation. The allocation on line 9 should be done to a temporary pointer, and then assigned to `wbmp->bitmap` if successful.
+
+Secondly, ensure consistent error handling. If `gdFree(wbmp)` is called, it should be followed by an error code return for consistency.
+
+Lastly, add checks for the first allocation.
+
+```c
+  if ((wbmp = (Wbmp *) gdMalloc (sizeof (Wbmp))) == NULL)
+    return (NULL);
+
+  int* temp_bitmap;
+  if ((temp_bitmap = (int *) safe_emalloc(sizeof(int), width * height, 0)) == NULL)
+    {
+      gdFree (wbmp);
+      return (NULL);
+    }
+  wbmp->bitmap = temp_bitmap;  // assign if successful
+
+  printf ("W: %d, H: %d\n", wbmp->width, wbmp->height);
+
+  // No need for the second allocation on line 9
+```
+
+ORIGINAL CODE:
+```c
+  if ((wbmp = (Wbmp *) gdMalloc (sizeof (Wbmp))) == NULL)
+    return (NULL);
+
+  if ((wbmp->bitmap = (int *) safe_emalloc(sizeof(int), width * height, 0)) == NULL)
+    {
+      gdFree (wbmp);
+      return (NULL);
+  printf ("W: %d, H: %d\n", wbmp->width, wbmp->height);
+#endif
+
+  if ((wbmp->bitmap = (int *) safe_emalloc(wbmp->width * wbmp->height, sizeof(int), 0)) == NULL)
+    {
+      gdFree (wbmp);
+      return (-1);
+```

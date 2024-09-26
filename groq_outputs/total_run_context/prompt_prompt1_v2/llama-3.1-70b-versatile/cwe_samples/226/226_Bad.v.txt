@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-19
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a data exposure vulnerability due to improper access control.
+
+EXPLANATION:
+The vulnerability exists in the `always @(posedge clk_i)` block, specifically in the `case (address[8:3])` statement. The code uses the `address` signal to determine which register to write to, but it does not properly validate the `address` signal. This allows an attacker to potentially write to arbitrary registers by manipulating the `address` signal. Furthermore, the code does not properly check the `reglk_ctrl_i` signal, which seems to be controlling access to certain registers. This could allow an attacker to bypass access control and write to sensitive registers.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly validate the `address` signal to ensure it is within a valid range before writing to a register. Additionally, the code should properly check the `reglk_ctrl_i` signal to ensure it is properly configured before allowing writes to sensitive registers. This can be achieved by adding bounds checking and access control checks before writing to registers.
+
+ORIGINAL CODE:
+```
+module aes0_wrapper #(...)(...);
+...
+always @(posedge clk_i)
+begin
+  if(~(rst_ni && ~rst_1)) //clear p_c[i] at reset
+  begin
+    start <= 0;
+    p_c[0] <= 0;
+    p_c[1] <= 0;
+    p_c[2] <= 0;
+    p_c[3] <= 0;
+    ...
+  end
+  else if(en && we)
+  case(address[8:3])
+    0:
+      start  <= reglk_ctrl_i[1] ? start  : wdata[0];
+    1:
+      p_c[3] <= reglk_ctrl_i[3] ? p_c[3] : wdata[31:0];
+    2:
+      p_c[2] <= reglk_ctrl_i[3] ? p_c[2] : wdata[31:0];
+    3:
+      p_c[1] <= reglk_ctrl_i[3] ? p_c[1] : wdata[31:0];
+    4:
+      p_c[0] <= reglk_ctrl_i[3] ? p_c[0] : wdata[31:0];
+    ...
+  endcase
+  end // always @ (posedge wb_clk_i)
+end
+endmodule
+```

@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 55, 63, 71, 79
+VULNERABILITY_DESCRIPTION:
+Null pointer dereferences
+EXPLANATION:
+In the code snippet, there are several instances where a null pointer is checked after a function call. This is a potential vulnerability as it can cause the program to crash or behave unexpectedly if the null pointer is dereferenced.
+
+In X509_REQ_delete_attr function, the code checks if `req` is null before using it. However, in the same scope, `X509at_delete_attr` is called before `req` is checked for null. This could potentially lead to a null pointer dereference if `X509at_delete_attr` tries to access a member of `req` before the null check.
+
+Similarly, in X509_REQ_add1_attr, X509_REQ_add1_attr_by_OBJ, X509_REQ_add1_attr_by_NID, and X509_REQ_add1_attr_by_txt functions, the code checks if `req` is null after calling functions with `req` as a parameter. This could potentially lead to a null pointer dereference if the called function tries to access a member of `req` before the null check.
+
+The function X509_REQ_get_attr_by_NID could also result in an out of bounds array access if the ext_nids array isn't null-terminated or its null-terminator isn't located in the array, as its terminating condition is specified with an address and offset ("for (pnid = ext_nids; *pnid != NID_undef; pnid++)")
+
+RECOMMENDATIONS:
+To fix this vulnerability, the null check should be performed before calling any functions that use the potentially null pointer.
+
+In X509_REQ_delete_attr, move the null check before the call to `X509at_delete_attr`.
+
+```c
+X509_ATTRIBUTE *X509_REQ_delete_attr(X509_REQ *req, int loc)
+{
+    X509_ATTRIBUTE *attr;
+    if (req == NULL) {
+        ERR_raise(ERR_LIB_X509, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    if (req->req_info.attributes == NULL) {
+        ERR_raise(ERR_LIB_X509, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    attr = X509at_delete_attr(req->req_info.attributes, loc);
+    if (attr != NULL)
+        req->req_info.enc.modified = 1;
+    return attr;
+}
+```
+Similarly, move the null check before the call to other functions in X509_REQ_add1_attr, X509_REQ_add1_attr_by_OBJ, X509_REQ_add1_attr_by_NID, and X509_REQ_add1_attr_by_txt.
+
+```c
+int X509_REQ_add1_attr(X509_REQ *req, X509_ATTRIBUTE *attr)
+{
+    if (req == NULL) {
+        ERR_raise(ERR_LIB_X509, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    if (req->req_info.attributes == NULL) {
+        ERR_raise(ERR_LIB_X509, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    if (!X509at_add1_attr(&req->req_info.attributes, attr))
+        return 0;
+    req->req_info.enc.modified = 1;
+    return 1;
+}
+```
+
+Add a loop termination check for X509_REQ_get_attr_by_NID extenstion lookup, as this is a common place for bounds issues in the initial review.
+
+```c
+for (i = 0; ext_nids[i] != -1; i++) {
+    nid = ext_nids[i];
+    if (req_nid == nid){
+        return nid;
+    }
+    if (nid == NID_undef)
+        return 0;
+```
+
+ORIGINAL CODE:
+```
+// not provided

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to hash comparison attacks using timing analysis.
+
+EXPLANATION:
+The code uses the `equal` function to compare the stored hash (`ctext`) with a hash derived from the user-provided plaintext password. However, the `equal` function likely uses a constant-time comparison method that checks the equality of the two strings character by character, which can allow attackers to deduce information about the stored hash through timing analysis. 
+
+Attackers can repeatedly attempt to log in by submitting different passwords and measuring the time it takes for the `equal` function to return. If the attacker notices a difference in time taken by the function between two attempts, they may be able to deduce that the first few bytes of the provided password match the stored password. This information can then be used to generate a password that is likely to match the stored password.
+
+Furthermore, the use of SHA-1 has been deprecated in favor of stronger hash functions. It's vulnerable to collision attacks which means an attacker can generate two different passwords that produce the same hash.
+
+RECOMMENDATIONS:
+To address the vulnerability:
+
+- Instead of comparing hashes directly, use a constant-time comparison function with a secure hash like bcrypt.
+- Replace SHA-1 with a stronger hash function like bcrypt or Argon2. 
+- Use a salt while hashing the password.
+
+Here's a revised code snippet that addresses these concerns:
+ 
+```c
+#define bcrypt_cost 12  // Select the cost factor
+BcryptHash *computed_hash;
+computed_hash = bcrypt_hash_password(plaintext, bcrypt_cost);  // hashed password from user input
+
+// Login if hash matches stored hash
+if (bcrypt_check_password(ctext, computed_hash) == 0)
+  {
+  login_user();
+  }
+```
+
+ORIGINAL CODE:
+
+```c
+unsigned char *check_passwd(char *plaintext) 
+{ 
+    ctext = simple_digest("sha1",plaintext,strlen(plaintext), ... );
+    /* Login if hash matches stored hash */
+    if (equal(ctext, secret_password())) 
+    {
+    login_user();
+    }
+}
+```

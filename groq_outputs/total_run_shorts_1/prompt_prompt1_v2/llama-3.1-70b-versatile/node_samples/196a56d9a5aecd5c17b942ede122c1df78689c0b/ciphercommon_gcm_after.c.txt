@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow due to unchecked calculation of the `len` variable.
+
+EXPLANATION:
+The `len` variable is calculated as `buf[aad_len - 2] << 8 | buf[aad_len - 1]`. This calculation does not check if `aad_len` is less than 2, which would result in an out-of-bounds access of the `buf` array. Furthermore, this value is then compared to `EVP_GCM_TLS_EXPLICIT_IV_LEN` without checking if it exceeds the bounds of the `buf` array.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a check should be added to ensure that `aad_len` is at least 2 before calculating `len`. Additionally, the `buf` array should be checked to ensure that `len` does not exceed its bounds. 
+
+Example fix:
+```
+if (aad_len < 2) {
+    // Handle error: aad_len too small
+    return 0;
+}
+if (aad_len - 2 >= 0 && aad_len - 1 >= 0) {
+    len = buf[aad_len - 2] << 8 | buf[aad_len - 1];
+    if (len >= EVP_GCM_TLS_EXPLICIT_IV_LEN && len <= buf_size) {
+        // Proceed with len value
+    } else {
+        // Handle error: len value invalid
+        return 0;
+    }
+}
+```
+
+ORIGINAL CODE:
+(was not able to cut the full code in the initial response due to partial formatting),
+referenced original code segment 1 starts here:
+
+size_t *padlen, const unsigned char *in,
+                               size_t len);
+
+/*
+ * Called from EVP_CipherInit when there is currently no context via
+ * the new_ctx() function
+ */
+void ossl_gcm_initctx(void *provctx, PROV_GCM_CTX *ctx, size_t keybits,
+                      const PROV_GCM_HW *hw)
+{
+    ctx->pad = 1;
+    ctx->libctx = PROV_LIBCTX_OF(provctx);
+}
+
+/*
+ * Called by EVP_CipherInit via the _einit and _dinit functions
+ */
+static int gcm_init(void *vctx, const unsigned char *key, size_t keylen,
+                    const unsigned char *iv, size_t ivlen,
+                    const OSSL_PARAM params[], int enc)
+{
+        }
+        if (!ctx->hw->setkey(ctx, key, ctx->keylen))
+            return 0;
+        ctx->tls_enc_records = 0;
+    }
+    return ossl_gcm_set_ctx_params(ctx, params);
+}
+
+    buf = dat->buf;
+    memcpy(buf, aad, aad_len);
+    dat->tls_aad_len = aad_len;
+
+    len = buf[aad_len - 2] << 8 | buf[aad_len - 1];
+    /* Correct length for explicit iv. */
+    if (len < EVP_GCM_TLS_EXPLICIT_IV_LEN)

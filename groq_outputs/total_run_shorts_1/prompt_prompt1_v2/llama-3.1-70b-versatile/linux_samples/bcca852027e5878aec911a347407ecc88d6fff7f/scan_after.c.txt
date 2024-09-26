@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9 (list_add_tail operation and the preceding line that may lead to a double-free vulnerability)
+VULNERABILITY_DESCRIPTION:
+A potential double-free vulnerability exists due to the use of list_add_tail without proper checks for existing list membership.
+
+EXPLANATION:
+The code is adding an item to a list using list_add_tail without ensuring that the item is not already part of the list or another list. If the item has been freed or is about to be freed, and then added to the list, this can lead to a double-free vulnerability. This can result in crashes, and potentially can be exploited for arbitrary code execution.
+
+In the given code snippet, if nontrans_bss->nontrans_list and trans_bss->nontrans_list point to the same memory location, the subsequent call to list_add_tail may cause issues, as the list item could be freed but still point to memory that's been freed. Additionally, without checks for existing membership, this can lead to duplicate list entries and potential crashes when freeing the list.
+
+RECOMMENDATIONS:
+- Use list_empty_Carefully check if nontrans_bss is already on the trans_bss's nontrans_list (or any other list) before attempting to add it, to prevent potential double-free vulnerabilities.
+- Consider using a safe function such as list_add_tail_unique, if available, which often checks for existing membership before adding the item to the list.
+- Be cautious of the relationship between nontrans_bss->nontrans_list and trans_bss->nontrans_list and add correct error handling if they point to the same list or memory location.
+- Always free memory and list pointers properly using list_del Initiative when deleting a list item from the list.
+
+ORIGINAL CODE:
+
+	rcu_read_unlock();
+
+	/*
+	 * This is a bit weird - it's not on the list, but already on another
+	 * one! The only way that could happen is if there's some BSSID/SSID
+	 * shared by multiple APs in their multi-BSSID profiles, potentially
+	 * with hidden SSID mixed in ... ignore it.
+	 */
+	if (!list_empty(&nontrans_bss->nontrans_list))
+		return -EINVAL;
+
+	/* add to the list */
+	list_add_tail(&nontrans_bss->nontrans_list, &trans_bss->nontrans_list);
+	return 0;
+}

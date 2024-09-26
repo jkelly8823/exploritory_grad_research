@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Command Injection attack due to direct inclusion of user-provided data in the construction of a command.
+
+EXPLANATION:
+The `create` method in the `AutocannonBenchmarker` class takes an `options` object as an argument and constructs a command by appending user-provided data from the `options.headers` and `options.path` properties. This is vulnerable to Command Injection because an attacker can inject malicious data into the `options.headers` or `options.path` properties, which would be executed as part of the command.
+
+For example, an attacker could provide a malicious `options.headers` object with a field name containing malicious data that would be executed as a command. Similarly, an attacker could provide a malicious `options.path` property that contains malicious data that would be executed as a command.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should validate and sanitize any user-provided data before including it in the construction of the command. One way to do this is to use a white-listing approach to restrict the types of data that can be provided in the `options.headers` and `options.path` properties. Additionally, the code should use a safe method to construct the command, such as using a command builder library that can help prevent Command Injection attacks.
+
+Example of how to fix the vulnerability:
+```javascript
+const sanitizedHeaders = {};
+for (const field in options.headers) {
+  const sanitizedField = sanitizeField(field);
+  const sanitizedValue = sanitizeValue(options.headers[field]);
+  sanitizedHeaders[sanitizedField] = sanitizedValue;
+}
+const args = [
+  '-n',
+];
+for (const field in sanitizedHeaders) {
+  args.push('-H', `${field}=${sanitizedHeaders[field]}`);
+}
+```
+This example uses fictional `sanitizeField` and `sanitizeValue` functions to sanitize the user-provided data. You should replace these with actual sanitization logic suitable for your use case.
+
+ORIGINAL CODE:
+```javascript
+class AutocannonBenchmarker {
+  constructor() {
+    this.name = 'autocannon';
+    this.executable =
+      process.platform === 'win32' ? 'autocannon.cmd' : 'autocannon';
+    const result = child_process.spawnSync(this.executable, ['-h']);
+    this.present = !(result.error && result.error.code === 'ENOENT');
+  }
+
+  create(options) {
+    const args = [
+      '-n',
+    ];
+    for (const field in options.headers) {
+      args.push('-H', `${field}=${options.headers[field]}`);
+    }
+    const scheme = options.scheme || 'http';
+    args.push(`${scheme}://127.0.0.1:${options.port}${options.path}`);
+    const child = child_process.spawn(this.executable, args);
+    return child;
+  }
+
+  processResults(output) {
+```

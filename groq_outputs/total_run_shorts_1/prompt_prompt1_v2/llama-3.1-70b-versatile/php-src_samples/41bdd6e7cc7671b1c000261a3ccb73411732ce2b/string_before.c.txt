@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+A potential use after free vulnerability may be present due to incorrect handling of memory pointers.
+
+EXPLANATION:
+In the given code snippet, memory is freed using `str_efree(Z_STRVAL_P(result))`. However, immediately after that, the `Z_STRLEN_P(result)` and `Z_STRVAL_P(result)` are still used, which may lead to a use after free vulnerability. This is because `Z_STRVAL_P(result)` points to memory that has already been freed.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, you can rearrange the order of assignments, so that `Z_STRVAL_P(result)` and `Z_STRLEN_P(result)` are not used after memory has been freed:
+
+```c
+Z_STRVAL_P(result) = Z_STRVAL(temp_result);
+Z_STRLEN_P(result) = Z_STRLEN(temp_result);
+str_efree(Z_STRVAL_P(result));
+```
+
+However, a better approach would be to avoid freeing `Z_STRVAL_P(result)` until it's no longer needed, and then free it after all necessary operations have been performed:
+
+```c
+// perform all necessary operations on result
+// after operations are done, replace result
+
+str_efree(Z_STRVAL_P(result));
+Z_STRVAL_P(result) = Z_STRVAL(temp_result);
+Z_STRLEN_P(result) = Z_STRLEN(temp_result);
+```
+
+Additionally, ensure that `Z_STRVAL(temp_result)` is a valid memory location that will not be freed while `result` is still in use.
+
+ORIGINAL CODE:
+    replace_value, replace_len, &Z_STRLEN(temp_result), case_sensitivity, replace_count);
+	}
+
+       str_efree(Z_STRVAL_P(result));
+	Z_STRVAL_P(result) = Z_STRVAL(temp_result);
+	Z_STRLEN_P(result) = Z_STRLEN(temp_result);
+
+	if (Z_STRLEN_P(result) == 0) {

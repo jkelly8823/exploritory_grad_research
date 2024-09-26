@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 13
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability due to insufficient validation.
+EXPLANATION:
+The provided code snippet has checks in place for validating the path, however, the validation function `getValidatedPath(path)` is used in some places but not others. Specifically, the line `const stats = binding.lstat(getValidatedPath(path), options.bigint, undefined,` uses `getValidatedPath(path)` but the original `path` variable is assigned the result of `getValidatedPath(path)` earlier. However, in the line `binding.lstat(path, options.bigint, req);` the `path` variable is not guaranteed to be validated as an absolute path. This inconsistency in validation could potentially lead to a Path Traversal Vulnerability if the `path` variable contains a malicious input.
+
+Additionally, the `path` variable is not explicitly validated as an absolute path in the case where `callback` is used. This lack of validation could lead to issues where the path is not correctly validated as an absolute path, potentially allowing for Path Traversal Attacks.
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to use the validated `path` variable consistently throughout the code. The line `binding.lstat(path, options.bigint, req);` should be modified to use the validated `path` like this: `binding.lstat(getValidatedPath(path), options.bigint, req);`
+
+Also, it's worth noting that if `permission.has('fs.read', path)` can return false, then `path` is potentially not validated.  It's recommended to instead validate the path before the access check to ensure that it is indeed an absolute path.
+
+ORIGINAL CODE:
+
+  }
+  callback = makeStatsCallback(callback);
+  path = getValidatedPath(path);
+  if (permission.isEnabled() && !permission.has('fs.read', path)) {
+    callback(new ERR_ACCESS_DENIED('Access to this API has been restricted', 'FileSystemRead', path));
+    return;
+  }
+
+  const req = new FSReqCallback(options.bigint);
+  req.oncomplete = callback;
+  binding.lstat(path, options.bigint, req);
+ * @returns {Stats | undefined}
+ */
+function lstatSync(path, options = { bigint: false, throwIfNoEntry: true }) {
+  path = getValidatedPath(path);
+  if (permission.isEnabled() && !permission.has('fs.read', path)) {
+    throw new ERR_ACCESS_DENIED('Access to this API has been restricted', 'FileSystemRead', path);
+  }
+  const stats = binding.lstat(
+    getValidatedPath(path),
+    options.bigint,
+    undefined,

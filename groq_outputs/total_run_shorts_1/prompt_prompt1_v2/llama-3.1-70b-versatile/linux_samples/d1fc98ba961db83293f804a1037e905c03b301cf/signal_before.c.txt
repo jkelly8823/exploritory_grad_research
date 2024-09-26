@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow Vulnerability via put_user_ex
+
+EXPLANATION:
+The put_user_ex function is used to copy data from the kernel to userspace. However, the provided code snippet does not perform any validation on the size of the data being copied. This can lead to a potential buffer overflow vulnerability if the size of 'restorer' exceeds the size of the buffer pointed to by '&frame->pretcode'. 
+
+Additionally, there is no error checking on the result of the put_user_ex function. This function returns the number of bytes that were not copied due to faults, and a non-zero return value indicates an error.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add a check to ensure that the size of 'restorer' does not exceed the size of the buffer pointed to by '&frame->pretcode'. We should also add error checking on the result of the put_user_ex function.
+
+Here's a possible fix:
+```c
+size_t bytes_to_copy = sizeof(restorer);
+if (bytes_to_copy > sizeof(frame->pretcode)) {
+    // handle the error, e.g., return an error code
+}
+if (put_user_ex(restorer, &frame->pretcode) != 0) {
+    // handle the error, e.g., return an error code
+}
+```
+
+ORIGINAL CODE:
+
+        /* Set up to return from userspace.  */
+        restorer = current->mm->context.vdso +
+            selected_vdso32->sym___kernel_sigreturn;
+        if (ksig->ka.sa.sa_flags & SA_RESTORER)
+            restorer = ksig->ka.sa.sa_restorer;
+        put_user_ex(restorer, &frame->pretcode);

@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION: Insufficient input validation and no free of allocated memory, coupled with printf being used for error messages. 
+
+EXPLANATION: 
+The code allocates memory for a single character using malloc and checks if the allocation was successful. However, if the allocation fails, the function exits immediately after printing an error message to stdout using printf. While printing an error message is not inherently bad, it is not suitable for production code. Additionally, more information would be beneficial in this error message, such as the nature of the error, and or error codes such as those provided by libc's errno. Furthermore, attempting to use a pointer after a function has returned will result in undefined behavior. In practice, memory leaks occur when memory allocated is not freed in error conditions, a defensive approach freeing this before return will prevent memory leaks from repeated errors.
+A major concern here however is the potential format string vulnerability within that printf. If user input can end up within this error message, an attacker could use this as a format string vulnerability exploit.
+
+RECOMMENDATIONS:
+Instead of using printf for error messages in production code, use a logging function like syslog or a custom logging function. In this case, it would be more suitable to handle this as it is a resource failure. 
+A defensive approach to freeing memory after failure should be taken as this error handling path can be repeated if resource starvation occurs.
+Always validate all inputs, especially if used for error messages. 
+Additionally, as malloc does not initialize memory to null or zero the allocated space can contain sensitive information. Consider using calloc.
+Ensure you return more meaningful information like the actual error, and track how memory is being used. 
+Lastly, while not immediately visible from code provided, due diligence should be made to prevent memory issues. If memory is not freed when it gets deleted (i.e., you are moving to other data or removing it), it should be freed.
+
+ORIGINAL CODE:
+foo=malloc(sizeof(char)); 
+//the next line checks to see if malloc failed
+if (foo==NULL) {
+    printf("Malloc failed to allocate memory resources");
+    return -1;
+}

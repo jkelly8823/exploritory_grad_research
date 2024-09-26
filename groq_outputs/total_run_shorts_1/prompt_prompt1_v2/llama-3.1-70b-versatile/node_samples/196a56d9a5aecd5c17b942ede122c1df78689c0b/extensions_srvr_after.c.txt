@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 68-72, 80-84
+VULNERABILITY_DESCRIPTION: 
+Use of time(NULL) function which can be vulnerable to attacks that rely on manipulating system time. Time can be manipulated to cause authentication issues, TLS session and ticket replay attacks.
+
+EXPLANATION: 
+The vulnerability arises from the use of time(NULL) to get the current system time. This function can be vulnerable to attacks that manipulate system time. If the system time is altered, this code can misinterpret the ticket age and session time. This can lead to authentication issues and potentially allow an attacker to replay a TLS session or ticket. 
+
+In addition, in a distributed environment where multiple servers are in use, different servers might have different system times. This could cause a ticket that was issued by one server being considered stale or not yet valid by another server.
+
+RECOMMENDATIONS: 
+To mitigate this vulnerability, it is recommended to use a cryptographically secure method of timekeeping and to verify the integrity of time-related information. Monotonic time should be used where possible (i.e., getting a precise time relative to some epoch). Furthermore, secure methods such as TAI or NTP-based time synchronization can be used for ensuring accurate time across multiple systems.
+
+Moreover, this code doesn't handle potential overflow when calculating ticket_age and subsequent variables.
+
+```cpp
+/*
+ * If we are using anti-replay protection then we behave as if
+*/
+// Recommended way of calculating agesec (seconds since epoch), which prevents integer overflow:
+time_t sess_time = sess->time; 
+time_t sys_time = time(NULL);
+double timediff = difftime(sys_time, sess_time);
+int32_t agesec = (int32_t)floor(timediff);
+```
+ 
+In the snippet regarding keyshares and ciphersuites, adding nonces or session context might be beneficial for proving to an initiating peer, whether directly (in message extensions) or transitively relying on that session having no gap introduced before beginning. Prevent replay uses nonces (ephemeral key agreement) - be conscious such parts add, possibly invalidating each piece of verification failing any ephemeral context.
+
+Note that the method of getting the system time can be system dependent. Therefore, refer to your system documentation on the best way to securely obtain system time in your application.
+
+ORIGINAL CODE:
+```cpp
+#include <time.h>
+#include "statem_local.h"
+#include "internal/cryptlib.h"
+
+// ...
+```

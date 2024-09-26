@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a use-after-free error, as the pointer 'pfn' is accessed after the underlying page is mapped and unmapped using 'pte_unmap_unlock'. This could potentially cause the program to access memory that has already been freed.
+
+EXPLANATION:
+The function 'hva_to_pfn_remapped' seems to be handling page table entries and page mappings. The line 'pte_unmap_unlock(ptep, ptl)' releases the lock on the page table entry and unmaps the page, potentially freeing the underlying page. However, immediately after this, the code accesses 'pfn' and assigns its value to '*p_pfn'. If the page was indeed freed when 'pte_unmap_unlock' was called, this access would be a use-after-free error. The fact that 'kvm_get_pfn(pfn)' is called before the error suggests that 'pfn' was indeed holding a valid value before the unmapping.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should ensure that 'pfn' is not accessed after the underlying page has been unmapped. One way to do this would be to store the value of 'pfn' in a temporary variable before calling 'pte_unmap_unlock', and then use this temporary variable to set '*p_pfn'. This would prevent the code from accessing memory that has already been freed. The corrected code would look something like this:
+
+```c
+kvm_pfn_t pfn_value = pfn;
+pte_unmap_unlock(ptep, ptl);
+*p_pfn = pfn_value;
+```
+
+ORIGINAL CODE:
+```c
+return true;
+}
+
+static int hva_to_pfn_remapped(struct vm_area_struct *vma,
+			       unsigned long addr, bool *async,
+			       bool write_fault, bool *writable,
+			       kvm_pfn_t *p_pfn)
+/*
+ * Whoever called remap_pfn_range is also going to call e.g.
+ * unmap_mapping_range before the underlying pages are freed,
+ * causing a call to our MMU notifier.
+*/ 
+kvm_get_pfn(pfn);
+
+out:
+	pte_unmap_unlock(ptep, ptl);
+	*p_pfn = pfn;
+	return 0;
+}
+
+/*
+ * Pin guest page in memory and return its pfn.
+```

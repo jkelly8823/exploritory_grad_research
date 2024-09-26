@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 9-10
+VULNERABILITY_DESCRIPTION:
+Heap-Based Buffer Overflow
+EXPLANATION:
+The code appears to handle parsing of binary data, but it contains two potential vulnerabilities. 
+
+On line 3, if `inp[i].pi_type` is not a valid value, the use of the bitwise AND operator could result in undefined behavior. However, the code checks only for `CDF_VECTOR` type. If other types do not have any flags that overlap with `CDF_VECTOR`, this might not cause an issue.
+
+On lines 9-10, a pointer `inp` is reassigned and its original value is lost, as `inp` now points to `*info + nelem`. This is a potential vulnerability due to the lack of information about the `info` variable's original declaration and usage.
+
+However, the most obvious issue is that there's no validation of if `i` is greater than or equal to `nelem` before performing the pointer arithmetic `inp = *info + nelem`. This could lead to a buffer overflow if `i + nelem` exceeds the buffer's size.
+
+Moreover, inside the `for` loop, the use of `CDF_GETUINT32(q, o)` could also be vulnerable to a buffer overflow if `q` is not within the buffer limits.
+
+RECOMMENDATIONS:
+- Validate `inp[i].pi_type` before using it in a bitwise AND operation.
+- Ensure `inp` and `info` variables do not point to the same memory. It's better to use a different variable to store the value of `*info + nelem`.
+- Always validate if `i + nelem` is within the bounds of the buffer before performing the pointer arithmetic to avoid buffer overflows.
+- Validate if `q` is within the buffer limits before using `CDF_GETUINT32(q, o)`.
+
+ORIGINAL CODE:
+```c
+		    i, inp[i].pi_id, inp[i].pi_type, q - p, offs));
+		if (inp[i].pi_type & CDF_VECTOR) {
+			nelements = CDF_GETUINT32(q, 1);
+			if (nelements == 0) {
+				DPRINTF(("CDF_VECTOR with nelements == 0\n"));
+				goto out;
+			}
+			o = 2;
+		} else {
+				*info = inp;
+				inp = *info + nelem;
+			}
+			DPRINTF(("nelements = %" SIZE_T_FORMAT "u\n",
+			    nelements));
+			for (j = 0; j < nelements && i < sh.sh_properties;
+			    j++, i++)
+			{
+				uint32_t l = CDF_GETUINT32(q, o);
+```

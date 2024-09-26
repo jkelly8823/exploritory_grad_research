@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+15, 21-31
+
+VULNERABILITY_DESCRIPTION:
+The vulnerability present is a potential null pointer dereference and a memory leak in the OPENSSL_sk_deep_copy function. The function is not properly handling the memory allocation and copy operation when the source stack's data is being duplicated. 
+
+EXPLANATION:
+In the OPENSSL_sk_deep_copy function, the code attempts to allocate memory for the 'ret->data' pointer and then copies the source stack's data into it using memcpy. However, there is no error checking after the memcpy operation, and there is no attempt to free the allocated memory if an error occurs afterwards. If an error occurs after the memcpy operation, the allocated memory for 'ret->data' will be leaked. Additionally, if the memcpy operation fails and 'ret->data' is still set to NULL, the subsequent lines of code will attempt to dereference this null pointer, resulting in a null pointer dereference vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, error checking should be added after the memcpy operation to ensure it was successful. Additionally, the allocated memory for 'ret->data' should be freed if an error occurs after it has been allocated. Here is an updated version of the vulnerable code:
+
+```c
+OPENSSL_STACK *OPENSSL_sk_deep_copy(const OPENSSL_STACK *sk,
+                                    OPENSSL_sk_copyfunc copy_func,
+                                    OPENSSL_sk_freefunc free_func)
+{
+    OPENSSL_STACK *ret;
+    int i;
+
+    // existing code ...
+
+    ret->data = OPENSSL_malloc(sizeof(*ret->data) * sk->num_alloc);
+    if (ret->data == NULL) {
+        goto err;
+    }
+    if (memcpy(ret->data, sk->data, sizeof(void *) * sk->num) != ret->data) {
+        OPENSSL_free(ret->data);
+        goto err;
+    }
+    // existing code ...
+    return ret;
+err:
+    OPENSSL_free(ret->data);
+    return NULL;
+}
+```

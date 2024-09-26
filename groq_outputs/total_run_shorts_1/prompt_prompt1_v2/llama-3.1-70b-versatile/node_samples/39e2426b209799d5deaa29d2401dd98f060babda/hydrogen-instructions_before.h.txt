@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION: 
+Data Hiding Vulnerability. In the provided code snippet, there is evidence of 'Variable Shadowing', where a local variable's name is the same as one of its 'argument's name' or 'class's variable name', making the code harder to understand, but in line 17, the variable 'bit_field_' is updated but then the value is not used from its correct memory location. There's no function in use that stores the bit field's pointer in some memory that we use later for an action that changes the program's state.
+ 
+
+EXPLANATION: 
+On examining the 'virtual ~ArrayInstructionInterface() { };' line we notice a certain lack of "delete"s which is concerning because depending on what one of these classes may possibly point to some random spot in memory and when deleted it only frees its own dynamically allocated memory instead of all referenced dynamically allocated memory. This leaves room for common issues like memory leaks or dangling pointers if the program interacts with other systems expecting standard class behavior as related memory calls.
+ 
+ What the review failed to notice is what came before -the object (key)'s potentially incorrectly calculated memory and variable's lifetime which can't easily tell without seeing more, which given the original contract given leaves room for memory safety from non-huge implementations using pointers - which a good optimization might not.
+
+RECOMMENDATIONS:
+When modifying 'bit_field_' directly from within the Set method, take into account in which memory this method was called from and consider an additional switch flag. This will inform dependent systems this change happened.
+
+For an issue like this you need to remove all the functions in your class, then try your derived interface at your final class: no such calls when a different unrelated delete action comes from perhaps some reference to interface with 'optimized huge or bigger memory'.
+
+Avoid functions in line with set's call whose value isn't the caller when dealing with "delete". Finally avoid passing 'key' around in the two methods until done with optimizations.
+
+ORIGINAL CODE:
+(partially cut due to duplication)
+
+  virtual HValue* GetKey() = 0;
+  virtual void SetKey(HValue* key) = 0;
+  virtual void SetIndexOffset(uint32_t index_offset) = 0;
+  virtual bool IsDehoisted() = 0;
+  virtual void SetDehoisted(bool is_dehoisted) = 0;
+  virtual ~ArrayInstructionInterface() { };
+};
+  void SetIndexOffset(uint32_t index_offset) {
+    bit_field_ = IndexOffsetField::update(bit_field_, index_offset);
+  }
+  HValue* GetKey() { return key(); }
+  void SetKey(HValue* key) { SetOperandAt(1, key); }
+  bool IsDehoisted() { return IsDehoistedField::decode(bit_field_); }
+  void SetDehoisted(bool is_dehoisted) {
+ ...

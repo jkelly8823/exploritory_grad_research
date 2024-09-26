@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15, 16
+VULNERABILITY_DESCRIPTION:
+Insecure bounds checking and integer overflow vulnerability.
+
+EXPLANATION:
+The code checks if `minlen` is greater than `EXT4_CLUSTERS_PER_GROUP(sb)`. However, it does not check if `minlen` is a negative value or if `EXT4_CLUSTERS_PER_GROUP(sb)` is small enough to cause an integer overflow when subtracted from. Although the code appears to check if `minlen` is greater than `EXT4_CLUSTERS_PER_GROUP(sb)`, there is still an integer overflow vulnerability. 
+
+On line 15, when `EXT4_NUM_B2C(EXT4_SB(sb), range->minlen >> sb->s_blocksize_bits)` is called, it shifts the value of `range->minlen` right by `sb->s_blocksize_bits`. If `range->minlen` is a negative value and is large enough, after shifting, it will produce a positive value that is greater than the maximum limit. When this positive value is assigned to `minlen`, it causes an integer overflow vulnerability.
+
+Additionally, when `EXT4_FREE_B2C(EXT4_SB(sb), range->minlen)` is not used and `minlen` is reassigned with `EXT4_NUM_B2C(EXT4_SB(sb), range->minlen >> sb->s_blocksize_bits)`, there's also an opportunity for integer overflow due to potential loss of precision after the right shift operation.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add checks to ensure `minlen` is not negative and that `EXT4_CLUSTERS_PER_GROUP(sb)` is not small enough to cause an integer overflow when subtracted from. This can be achieved by using functions to convert integers to their corresponding two's complement representations and applying overflow checks before performing arithmetic operations.
+
+Furthermore, using 64-bit arithmetic operations instead of 32-bit operations, even if you're working with 32-bit or smaller data, would help to detect integer overflows.
+
+Here's a potential code replacement for lines 15-16:
+
+```c
+u64 min_len;
+min_len = (u64)range->minlen >> sb->s_blocksize_bits;
+if (min_len > UINT32_MAX) {
+    // Handle error
+}
+minlen = (uint32_t)min_len;
+```
+However, make sure to implement checks and adjust the given lines according to the exact requirements of your application.
+
+ORIGINAL CODE:
+    }
+	len = ext4_free_group_clusters(sb, gdp) - ac->ac_b_ex.fe_len;
+	ext4_free_group_clusters_set(sb, gdp, len);
+	ext4_block_bitmap_csum_set(sb, ac->ac_b_ex.fe_group, gdp, bitmap_bh);
+	ext4_group_desc_csum_set(sb, ac->ac_b_ex.fe_group, gdp);
+
+	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
+	percpu_counter_sub(&sbi->s_freeclusters_counter, ac->ac_b_ex.fe_len);
+
+	ret = ext4_free_group_clusters(sb, gdp) + count_clusters;
+	ext4_free_group_clusters_set(sb, gdp, ret);
+	ext4_block_bitmap_csum_set(sb, block_group, gdp, bitmap_bh);
+	ext4_group_desc_csum_set(sb, block_group, gdp);
+	ext4_unlock_group(sb, block_group);
+	percpu_counter_add(&sbi->s_freeclusters_counter, count_clusters);
+
+	mb_free_blocks(NULL, &e4b, bit, count);
+	blk_free_count = blocks_freed + ext4_free_group_clusters(sb, desc);
+	ext4_free_group_clusters_set(sb, desc, blk_free_count);
+	ext4_block_bitmap_csum_set(sb, block_group, desc, bitmap_bh);
+	ext4_group_desc_csum_set(sb, block_group, desc);
+	ext4_unlock_group(sb, block_group);
+	percpu_counter_add(&sbi->s_freeclusters_counter,
+			   EXT4_B2C(sbi, blocks_freed));
+	minlen = EXT4_NUM_B2C(EXT4_SB(sb),
+			      range->minlen >> sb->s_blocksize_bits);
+
+	if (minlen > EXT4_CLUSTERS_PER_GROUP(sb) ||
+	    start >= max_blks ||
+	    range->len < sb->s_blocksize)
+		return -EINVAL;
+	if (end >= max_blks)
+		end = max_blks - 1;
+	if (end <= first_data_blk)

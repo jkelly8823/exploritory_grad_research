@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Kernel memory allocation without proper error handling and memory leak vulnerability
+
+EXPLANATION:
+The given code snippet contains a potential vulnerability. The kzalloc function is used to allocate memory for the bcm pointer. However, only one error case is handled: when the allocation fails and bcm is NULL. But the function does not handle the case where the allocation succeeds, but the returned memory contains a buffer overflow error that happens after this allocation.
+
+Moreover, if the kzalloc call fails, the function immediately returns without freeing up any resources that may have been allocated earlier in the function call stack. This can result in memory leaks.
+
+Furthermore, bt_dev_dbg is called at the beginning of the code snippet, which may lead to a Use After Free vulnerability if an error occurs before memory is allocated and an error occurs after, causing the memory pointer (bcm) that is being used (hu pointer in this case) to be free and then used again.
+
+RECOMMENDATIONS:
+-  Always validate the memory pointer after allocation.
+- Check for a NULL pointer before using it to prevent null-pointer dereferences and use-after-free errors.
+- Keep track of dynamically allocated memory to prevent memory leaks. In this case, ensure all allocated memory is freed in both normal and error paths.
+
+ORIGINAL CODE:
+
+	bt_dev_dbg(hu->hdev, "hu %p", hu);
+
+	bcm = kzalloc(sizeof(*bcm), GFP_KERNEL);
+	if (!bcm)
+		return -ENOMEM;

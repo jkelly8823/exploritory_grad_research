@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an authentication bypass vulnerability. In a catch block, a custom exception message is being created with the username and password.
+EXPLANATION:
+In the catch block, a custom exception message is being created with the username and password, including both in the message. This is a potential security risk because it could potentially leak sensitive information about the credentials that were used in a failed login attempt. This exception message could potentially be logged or exposed in an error message, depending on how the application handles this error.
+RECOMMENDATIONS:
+To address this vulnerability, the exception message should be rewritten to not include the username and password. Instead, it could include a more general message that still conveys the failure of the login while keeping the credentials private. Here is an example of how to do this:
+```java
+// Instead of this
+throw new FailedLoginException("Failed Login for user " + username + " with password " + password);
+
+// Use this
+throw new FailedLoginException("Failed Login for user " + username + " with incorrect password");
+```
+Alternatively, you could just not include any specific information about the credentials in the exception message, to make the error message even more general:
+```java
+// Instead of this
+throw new FailedLoginException("Failed Login for user " + username + " with password " + password);
+
+// Use this
+throw new FailedLoginException("Login failed - invalid credentials");
+```
+ORIGINAL CODE:
+```java
+public class BankManagerLoginServlet extends HttpServlet {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        try {
+            // Get username and password from login page request
+            String username = request.getParameter("username");
+            String password = request.getParameter("password");
+            // Authenticate user
+            BankManager bankMgr = new BankManager();
+            boolean isAuthentic = bankMgr.authenticateUser(username, password);
+            // If user is authenticated then go to successful login page
+            if (isAuthentic) {
+                request.setAttribute("login", new String("Login Successful."));
+                getServletContext().getRequestDispatcher("/BankManagerServiceLoggedIn.jsp").forward(request, response);
+            } else {
+                // Otherwise, raise failed login exception and output unsuccessful login message to error page
+                throw new FailedLoginException("Failed Login for user " + username + " with password " + password);
+            }
+        } catch (FailedLoginException ex) {
+            // output failed login message to error page
+            request.setAttribute("error", new String("Login Error"));
+            request.setAttribute("message", ex.getMessage());
+            getServletContext().getRequestDispatcher("/ErrorPage.jsp").forward(request, response);
+        }
+    }
+}
+```

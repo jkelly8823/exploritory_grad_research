@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code uses a user-controlled value (smb->WordCount) to calculate the size of the data to read, which can lead to a buffer over-read vulnerability if the value is large enough.
+
+EXPLANATION:
+The vulnerability exists in the line `if (total_read < sizeof(*smb) + 2 * smb->WordCount)`. The variable `smb->WordCount` is under user control (via the SMB protocol), and its value is used to calculate the minimum required size of the data to read. If an attacker can cause `smb->WordCount` to have a large value, it could lead to a buffer over-read vulnerability.
+
+Additionally, the `cifs_dbg` function might potentially also be vulnerable to format string attacks, because it appears to be using string formatting with a provided string (the `__func__` string) as an argument, however, this cannot be confirmed with the code segment provided, more context would be required to confirm this assessment.
+
+RECOMMENDATIONS:
+To fix the vulnerability, validate the `smb->WordCount` value to ensure it is within a reasonable range before using it to calculate the size of the data to read. Additionally, consider using a safer logging function that does not use string formatting with user-controlled input.
+
+ORIGINAL CODE:
+```
+			cifs_dbg(VFS, "Length less than smb header size\n");
+		}
+		return -EIO;
+	} else if (total_read < sizeof(*smb) + 2 * smb->WordCount) {
+		cifs_dbg(VFS, "%s: can't read BCC due to invalid WordCount(%u)\n",
+			 __func__, smb->WordCount);
+		return -EIO;
+	}
+
+	/* otherwise, there is enough to get to the BCC */
+	if (check_smb_hdr(smb))
+```

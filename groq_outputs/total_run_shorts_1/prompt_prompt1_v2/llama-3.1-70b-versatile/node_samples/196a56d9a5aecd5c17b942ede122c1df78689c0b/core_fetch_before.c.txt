@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 19
+VULNERABILITY_DESCRIPTION: Potential double-free vulnerability in temporary store management.
+
+EXPLANATION:
+The function `ossl_method_construct_precondition` is responsible for storing and managing methods in either the global store or a temporary store. The function first checks if the method should be stored temporarily or not. If it should be stored temporarily, it retrieves a temporary store using `data->mcm->get_tmp_store` and then attempts to store the method in the temporary store. After storing the method in either the global or temporary store, the function then calls `data->mcm->destruct` to drop the reference to the method. 
+
+However, if the method was stored in a temporary store, and if the call to `data->mcm->put` is successful but `data->mcm->destruct` fails (for example, due to an out-of-memory error), the method will be stored in the temporary store but its reference count will not be decremented. This could potentially lead to a double-free vulnerability when the method is eventually removed from the temporary store and its reference count is decremented again.
+
+Additionally, the function stores the return value of `data->mcm->get_tmp_store` in the `data->store` variable. However, it does not check if the return value is NULL before storing the method in the temporary store. If `data->mcm->get_tmp_store` returns NULL, this will cause a null pointer dereference error when trying to store the method in the temporary store.
+
+RECOMMENDATIONS:
+1. Check the return value of `data->mcm->put` before calling `data->mcm->destruct`. If `data->mcm->put` fails, do not call `data->mcm->destruct`.
+2. Check the return value of `data->mcm->get_tmp_store` and handle the case where it returns NULL.
+3. Consider adding additional error checking and handling for potential failures in the temporary store management code.
+
+ORIGINAL CODE:
+```c
+return no_store && !data->force_store;
+}
+
+static int ossl_method_construct_precondition(OSSL_PROVIDER *provider,
+                                              int operation_id, int no_store,
+                                              void *cbdata, int *result)
+{
+     * It is *expected* that the put function increments the refcnt
+     * of the passed method.
+     */
+
+    if (!is_temporary_method_store(no_store, data)) {
+        /* If we haven't been told not to store, add to the global store */
+        data->mcm->put(NULL, method, provider, algo->algorithm_names,
+                       algo->property_definition, data->mcm_data);
+    } else {
+        /*
+         * If we have been told not to store the method "permanently", we
+         * ask for a temporary store, and store the method there.
+         * The owner of |data->mcm| is completely responsible for managing
+         * that temporary store.
+         */
+        if ((data->store = data->mcm->get_tmp_store(data->mcm_data)) == NULL)
+            return;
+
+        data->mcm->put(data->store, method, provider, algo->algorithm_names,
+                       algo->property_definition, data->mcm_data);
+    }
+
+    /* refcnt-- because we're dropping the reference */
+    data->mcm->destruct(method, data->mcm_data);
+}
+    cbdata.mcm_data = mcm_data;
+    ossl_algorithm_do_all(libctx, operation_id, provider,
+                          ossl_method_construct_precondition,
+                          ossl_method_construct_this,
+                          ossl_method_construct_postcondition,
+                          &cbdata);
+
+    /* If there is a temporary store, try there first */
+```

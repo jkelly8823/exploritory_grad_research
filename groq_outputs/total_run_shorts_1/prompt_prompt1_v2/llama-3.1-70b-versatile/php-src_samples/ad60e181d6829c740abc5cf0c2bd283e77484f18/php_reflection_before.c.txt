@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use After Free Vulnerability
+EXPLANATION:
+The vulnerability is located at line 4. The variable `return_value` is being updated with `zval_update_constant_ex` after its type is checked and potentially copied with `zval_copy_ctor`. However, if the type of `return_value` is neither `IS_CONSTANT` nor `IS_CONSTANT_ARRAY`, it is still possible that its value is a copy of another zval that was freed earlier in the execution. Updating this value with `zval_update_constant_ex` may lead to a use-after-free error if the other zval was freed before this point. 
+
+Additionally, this code snippet does not seem to handle the situation when the type of `return_value` is `IS_CONSTANT` but it holds a pointer to memory that was freed earlier in the execution. There is no protection mechanism (like a refcount) protecting the programmer from freeing structures they point to.
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the return_value is still allocated before updating its value. This can be achieved by introducing additional checks before updating its value to ensure that it is not pointing to memory that was previously freed. Furthermore, the zval structure should be carefully managed, considering its value and the scope in which it's used. Here is a code snippet illustrating this potential fix:
+
+
+	*return_value = *precv->op2.zv;
+	INIT_PZVAL(return_value);
+	if (Z_TYPE_P(return_value) != IS_CONSTANT && Z_TYPE_P(return_value) != IS_CONSTANT_ARRAY) {
+		zval_copy_ctor(return_value);
+	}
+	if (!Z_REFCOUNT_P(return_value)) {
+		zend_error(E_ERROR, "attempt to access freed zval");
+	} else if (EXPECTED(Z_REFCOUNT_P(return_value)) > 1) {
+		zend_error(E_ERROR, "return value zval has multiple references, can't update");
+	} else {
+		zval_update_constant_ex(&return_value, (void*)0, param->fptr->common.scope TSRMLS_CC);
+	}
+
+ORIGINAL CODE:
+	*return_value = *precv->op2.zv;
+	INIT_PZVAL(return_value);
+	if (Z_TYPE_P(return_value) != IS_CONSTANT && Z_TYPE_P(return_value) != IS_CONSTANT_ARRAY) {
+		zval_copy_ctor(return_value);
+	}
+	zval_update_constant_ex(&return_value, (void*)0, param->fptr->common.scope TSRMLS_CC);
+}

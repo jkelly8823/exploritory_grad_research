@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds read in format type check
+
+EXPLANATION:
+The provided code checks for a specific format type (`V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE`) and calls the `venus_helper_check_codec` function if this condition is met. However, the `venus_helper_check_codec` function uses an unchecked `pixfmt` field from the `fmt` array without validating whether the index `i` is within the valid range of indices that have a valid `pixfmt` value. 
+
+This could potentially result in out-of-bounds access, which can cause undefined behavior if not handled correctly. 
+
+This may have been missed due to lack of bounds checking when `venus_helper_check_codec` was called or missing length checks on `img` formats, resulting in such an edge case.
+
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, it is recommended to add bounds checks for the `pixfmt` field in the `venus_helper_check_codec` function before accessing it. This can be achieved by adding length checks for image formats and ensuring that the `fmt` array does not go past an acceptable size.
+
+It is also advisable to validate the index `i` before using `fmt[i]`. Additionally, in the code snippet, the `size` variable is not validated if it contains acceptable values before looping through `i`. The addition of these safety precautions would prevent a potential out-of-bounds vulnerability.
+
+
+ORIGINAL CODE:
+
+		return NULL;
+
+	for (i = 0; i < size; i++) {
+		if (fmt[i].type != type)
+			continue;
+		if (k == index)
+			break;
+		k++;
+	}
+
+	if (i == size)
+		return NULL;
+
+	if (type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
+	    !venus_helper_check_codec(inst, fmt[i].pixfmt))
+		return NULL;
+
+	return &fmt[i];
+}

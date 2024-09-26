@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-23
+VULNERABILITY_DESCRIPTION:
+Potential Memory Corruption Issue Due to Arithmetic Operations on Unvalidated Input Values.
+
+EXPLANATION:
+The provided code snippet appears to involve handling system call instructions in a 64-bit mode. However, there are potential memory corruption issues due to arithmetic operations on unvalidated input values. Specifically, the values obtained from the MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_EIP, and MSR_IA32_SYSENTER_ESP registers are not validated before performing arithmetic operations or assigning them to sensitive registers.
+
+The code assumes that the values obtained from these registers are within a certain range, but there is no explicit validation or checks in place to ensure this assumption holds true. If the values obtained from these registers are outside the expected range, it could potentially lead to memory corruption or other security issues.
+
+RECOMMENDATIONS:
+1. Validate the values obtained from the MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_EIP, and MSR_IA32_SYSENTER_ESP registers before performing any arithmetic operations or assigning them to sensitive registers.
+
+Example of validation:
+```c
+// MSR_IA32_SYSENTER_CS
+if (msr_data & 0xfffc != 0x0) {
+    // Handle invalid value error
+}
+
+// MSR_IA32_SYSENTER_EIP
+if ((msr_data & 0xffffffff00000000) != 0) {
+    // Handle invalid value error
+}
+
+// MSR_IA32_SYSENTER_ESP
+if ((msr_data & 0xffffffff00000000) != 0) {
+    // Handle invalid value error
+}
+```
+2. Perform explicit bounds checking on the values obtained from these registers to prevent potential overflows.
+
+3. Consider using a secure copy or assignment operation when assigning the values obtained from these registers to sensitive registers.
+
+ORIGINAL CODE:
+
+```c
+	 * Not recognized on AMD in compat mode (but is recognized in legacy
+	 * mode).
+	 */
+	if ((ctxt->mode != X86EMUL_MODE_PROT64) && (efer & EFER_LMA)
+	    && !vendor_intel(ctxt))
+		return emulate_ud(ctxt);
+
+	/* sysenter/sysexit have not been tested in 64bit mode. */
+	setup_syscalls_segments(ctxt, &cs, &ss);
+
+	ops->get_msr(ctxt, MSR_IA32_SYSENTER_CS, &msr_data);
+	if ((msr_data & 0xfffc) == 0x0)
+		return emulate_gp(ctxt, 0);
+
+	ctxt->eflags &= ~(EFLG_VM | EFLG_IF);
+	cs_sel = (u16)msr_data & ~SELECTOR_RPL_MASK;
+	ss_sel = cs_sel + 8;
+	if (efer & EFER_LMA) {
+		cs.d = 0;
+		cs.l = 1;
+	}
+
+	ops->set_segment(ctxt, ss_sel, &ss, 0, VCPU_SREG_SS);
+
+	ops->get_msr(ctxt, MSR_IA32_SYSENTER_EIP, &msr_data);
+	ctxt->_eip = (efer & EFER_LMA) ? msr_data : (u32)msr_data;
+
+	ops->get_msr(ctxt, MSR_IA32_SYSENTER_ESP, &msr_data);
+	*reg_write(ctxt, VCPU_REGS_RSP) = (efer & EFER_LMA) ? msr_data :
+							      (u32)msr_data;
+
+	return X86EMUL_CONTINUE;
+}
+```

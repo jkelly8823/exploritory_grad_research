@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability. The 'messageBody' pointer is freed and then used afterward, potentially leading to undefined behavior.
+
+EXPLANATION:
+In the provided code snippet, the 'messageBody' pointer is freed if 'processMessageBody' returns an error. However, after freeing the memory allocated to 'messageBody', the same pointer is used again when 'logError' is called if 'result' equals 'ERROR'. This constitutes a use-after-free vulnerability. The freed memory might have been reallocated and its contents modified, leading to unpredictable behavior or even crashes.
+
+RECOMMENDATIONS:
+The fix for this vulnerability is to check the value of 'result' and only log the error if 'result' is not equal to 'ERROR', thus preventing the use of the freed 'messageBody' pointer. Alternatively, one could also clone the 'messageBody' before freeing the original pointer to safely log the error message.
+
+```c
+// Bad fix: check result in each log call
+if (result == ERROR) {
+    logError("Error processing message", messageBody);
+    free(messageBody);
+} else {
+    free(messageBody);
+}
+
+// Good fix: clone messageBody before freeing it
+if (result == ERROR) {
+    char* messageBodyClone = (char*)malloc(length*sizeof(char));
+    strcpy(messageBodyClone, messageBody);
+    logError("Error processing message", messageBodyClone);
+    free(messageBodyClone);
+    free(messageBody);
+} else {
+    free(messageBody);
+}
+```
+
+However, as per the function flow, since 'messageBody' is already freed, it should be made 'NULL' after that to avoid any confusion. 
+
+```c
+// Good fix: check result and assign NULL to messageBody after freeing
+if (success == ERROR) {result = ERROR;free(messageBody);messageBody = NULL;}
+...
+if (result == ERROR) {logError("Error processing message", messageBody ? messageBody : "MessageBody has been freed");}
+  
+```
+ORIGINAL CODE:
+```c
+#define FAIL 0
+#define SUCCESS 1
+#define ERROR -1
+#define MAX_MESSAGE_SIZE 32
+
+int processMessage(char **message){
+    int result = SUCCESS;
+    int length = getMessageLength(message[0]);
+    char *messageBody;
+
+    if ((length > 0) && (length < MAX_MESSAGE_SIZE)) {
+        messageBody = (char*)malloc(length*sizeof(char));
+        messageBody = &message[1][0];
+
+        int success = processMessageBody(messageBody);
+        if (success == ERROR) {result = ERROR;free(messageBody);}
+
+    }else {printf("Unable to process message; invalid message length");result = FAIL;}
+
+    if (result == ERROR) {logError("Error processing message", messageBody);}
+    return result;
+}
+```

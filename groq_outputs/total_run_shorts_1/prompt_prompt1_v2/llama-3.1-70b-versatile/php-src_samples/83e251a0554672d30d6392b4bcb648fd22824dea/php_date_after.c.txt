@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability in timelib_time object access
+
+EXPLANATION:
+A use-after-free vulnerability exists in the provided code snippet. This vulnerability occurs when the `timelib_time_dtor` function is called on `dateobj->time` while the `dateobj->time` object is still being referenced. This object is subsequently used to access other variables that may be tied to its original memory location.
+
+Although the code snippet provided does not explicitly show `dateobj->time` being referenced later, this same function may be called from other points in the code. This potential vulnerability could lead to access of freed memory if `dateobj->time` is used elsewhere in the codebase.
+
+However, this vulnerability can only be confirmed by evaluating the rest of the code to verify how the object is being used and where else the function is being called.
+
+RECOMMENDATIONS:
+To fix this vulnerability, refrain from using objects after they have been destroyed. You should either not destroy `dateobj->time` if it is still in use, or make sure all code paths that may attempt to use this object have means of verifying whether the object has been destroyed. The function should also check whether `dateobj->time` is `NULL` before calling `timelib_time_dtor` on it.
+
+Additionally, ensure to adjust memory allocation accordingly after objects are destroyed to prevent potential memory corruption. A general solution would be to set `dateobj->time` to `NULL` after `timelib_time_dtor` has been called to prevent any further references to this freed memory.
+
+ORIGINAL CODE:
+```c
+static char *date_format(char *format, int format_len, timelib_time *t, int localtime)
+{
+	smart_str            string = {0};
+	int                  i, length = 0;
+	char                 buffer[97];
+	timelib_time_offset *offset = NULL;
+	timelib_sll          isoweek, isoyear;
+	int                  rfc_colon;
+	timelib_time   *now;
+	timelib_tzinfo *tzi = NULL;
+	timelib_error_container *err = NULL;
+	int type = TIMELIB_ZONETYPE_ID, new_dst = 0;
+	char *new_abbr = NULL;
+	timelib_sll     new_offset;
+	
+	if (dateobj->time) {
+		timelib_time_dtor(dateobj->time);
+```

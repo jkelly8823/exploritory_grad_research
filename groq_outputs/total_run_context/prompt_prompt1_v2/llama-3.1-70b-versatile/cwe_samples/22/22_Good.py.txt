@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Path Traversal vulnerability, allowing an attacker to potentially read any file on the system.
+
+EXPLANATION:
+The vulnerability lies in the fact that the code uses a filename provided by the user directly in the `open` function. The `os.path.normpath` function is used to normalize the path, but it does not ensure that the resulting path is within a specific directory. This allows an attacker to potentially access any file on the system by providing a path that includes a sequence of `../` or other special characters. For example, if the user provides the filename `/../../../../etc/passwd`, the code will attempt to read the `/etc/passwd` file.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use a more secure way of handling file paths. One way to do this is to use the `os.path.abspath` function to get the absolute path of the file, and then check if the resulting path is within a specific directory. Additionally, consider using a whitelist of allowed files or directories to further restrict access. The code could also use `os.path.join` to safely join the directory and filename.
+
+Here is an example of how the code could be fixed:
+
+```python
+filename = sys.argv[1]
+base_dir = '/path/to/allowed/directory'
+allowed_files = ['file1.txt', 'file2.txt']
+
+path = os.path.abspath(os.path.join(base_dir, filename))
+
+if os.path.commonpath([path]) != base_dir or os.path.basename(path) not in allowed_files:
+    print("Error - access denied")
+else:
+    try:
+        with open(path, 'r') as f:
+            file_data = f.read()
+    except FileNotFoundError as e:
+        print("Error - file not found")
+
+ORIGINAL CODE:
+
+import os
+import sys
+def main():
+
+    filename = sys.argv[1]
+    path = os.path.normpath(f"{os.getcwd()}{os.sep}{filename}")
+    try:
+
+        with open(path, 'r') as f:
+
+            file_data = f.read()
+
+
+    except FileNotFoundError as e:
+
+        print("Error - file not found")
+
+
+main()
+```

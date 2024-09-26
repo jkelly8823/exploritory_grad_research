@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 16-18, 27-29
+VULNERABILITY_DESCRIPTION:
+The provided code has potential buffer overflow vulnerabilities due to incorrect size handling when copying data into the buffer.
+
+EXPLANATION:
+The code copies data into a buffer with size `bufsize`, but there are situations where the size is not correctly handled. Specifically, there are two instances where the function `WriteOneByte` and `WriteUtf8` are called, and in both cases, the buffer size is not checked to ensure it can hold the copied data. Additionally, in the second write operation (Write), the size passed to the function is `bufsize - 1`, but it's not checked if this can cause an out-of-bounds write.
+
+Additionally, in the function calls `WriteOneByte` and `Write` and `WriteUtf8`, the buffer is cast to a specific type (`uint8_t*` and `uint16_t*` respectively), but there is no verification that the data being written can be safely cast to this type.
+
+However, more concerning is that this cast operation leads to the potential creation of false assumptions. For example, when writing one byte the size of `bufsize`  can cause a miscalculation because of incorrect assumption.
+
+In this particular situation, I am unable to catch the potential bug. I am assuming `bufsize` and `buf` are aligned with declared format of data that they hold.
+
+However, we do have a incorrect  buffer size being passed in `WriteUtf8` call as well as we do not know type of data we are getting from `val.As<v8::String>()`.
+
+Moreover `bufsize - 1` does not account for integer underflow if bufsize is zero and will ensure proper termination of string, with `WriteUtf8`.
+
+Two lines, namely,  `if (!buf) {`, should return in the first potential bug case and other one does as well. That means `return` should be after `  *result = val.As<v8::String>()->Length();`
+
+This way it can prevent buffer overflow which has not shown well in here. Considering the data might be incorrect because you are truncating or over-answering data back.
+
+
+RECOMMENDATIONS:
+- Assign proper size which would prevent `bufsize` being negative of anyother edge case: 
+  Example,
+
+    ```cpp
+int bytesizedec = val.As<v8::String>()->Utf8Length(env->isolate);
+int utf16decoded = val.As<v8::String>()->Length();
+int finaldestination = 0;
+if (finaldestination + bytesizedec >= bufsize - 1) {
+    finaldestination += bytesizedec;
+} else {
+    // there are other edge cases to consider here. This is a basic rule example
+    finaldestination = bufsize - 1;
+}
+```

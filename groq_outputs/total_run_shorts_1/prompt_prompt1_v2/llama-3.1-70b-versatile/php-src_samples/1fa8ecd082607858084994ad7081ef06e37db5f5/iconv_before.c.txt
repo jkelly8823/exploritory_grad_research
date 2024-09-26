@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 131, 141, 166, 175
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in iconv functionality.
+
+EXPLANATION:
+The code is using `spprintf` to format a string and store it in a buffer, but it is not checking if the buffer is large enough to hold the formatted string. This can lead to a buffer overflow if the formatted string is longer than the buffer.
+
+In the `_php_iconv_appendl` function, the buffer overflow occurs when the code appends a string to a `smart_str` object without checking its length. If the string is longer than the buffer, it will overflow and potentially cause undefined behavior.
+
+Additionally, the `spprintf` function is used without bounds checking, which can also lead to a buffer overflow.
+
+RECOMMENDATIONS:
+1. Use a safer way to format strings, such as `snprintf`, which allows specifying the maximum number of bytes to write to the buffer.
+2. Check the length of the string before appending it to the `smart_str` object.
+3. Use a buffer that is large enough to hold the maximum possible length of the formatted string.
+
+ORIGINAL CODE:
+```c
+// original code snippet:
+if (mimetype != NULL && !(output_context->op & PHP_OUTPUT_HANDLER_CLEAN)) {
+    int len;
+    char *p = strstr(ICONVG(output_encoding), "//"); // 131
+
+    if (p) {
+        len = spprintf(&content_type, 0, "Content-Type:%.*s; charset=%.*s", mimetype_len ? mimetype_len : (int) strlen(mimetype), mimetype, (int)(p - ICONVG(output_encoding)), ICONVG(output_encoding));
+    } else {
+
+// ...
+
+err = _php_iconv_appendl(pretval, encoded_word, (size_t)((p1 + 1) - encoded_word), cd_pl); // 141
+if (err != PHP_ICONV_ERR_SUCCESS) {
+    goto out;
+}
+
+// ...
+
+err = _php_iconv_appendl(pretval, encoded_word, (size_t)((p1 + 1) - encoded_word), cd_pl); // 166
+if (err != PHP_ICONV_ERR_SUCCESS) {
+    goto out;
+}
+
+// ...
+
+err = _php_iconv_appendl(pretval, encoded_word, (size_t)((p1 + 1) - encoded_word), cd_pl); // 175
+if (err != PHP_ICONV_ERR_SUCCESS) {
+    goto out;
+}
+```

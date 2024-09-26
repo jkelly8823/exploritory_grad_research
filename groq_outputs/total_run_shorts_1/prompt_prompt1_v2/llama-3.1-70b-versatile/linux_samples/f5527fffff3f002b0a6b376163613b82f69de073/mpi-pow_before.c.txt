@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow due to Insufficient Bounds Checking.
+
+EXPLANATION:
+The code snippet does not perform any bounds checking on the input values 'mod->d[0]' and 'msize' before using them to assign values to the struct 'res'. Specifically, the line 'res->nlimbs = (msize == 1 && mod->d[0] == 1) ? 0 : 1;' does not ensure that 'res->nlimbs' is a valid index for 'rp'. If 'res->nlimbs' is assigned an out-of-bounds value, it could lead to a buffer overflow when trying to access 'rp[res->nlimbs]'. 
+
+However, we assume 'rp' is large enough to accommodate for 'res->nlimbs'. Nevertheless, the buffer 'rp' can overflow, since on line 3, rp[0] is being accessed without validation.
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, add bounds checking to ensure that 'msize' and 'mod->d[0]' are within valid ranges before using them. Also, consider validating 'res->nlimbs' before assigning it a value to ensure it is a valid index for 'rp'.
+
+```c
+if (!esize) {
+    if (msize == 1 && mod->d[0] == 1) {
+        // bounds checking for msize and mod->d[0]
+        if(mod->d[0] >= 0 && mod->d[0] < MOD && msize > 0) {
+            rp[0] = 1;
+            res->nlimbs = 0;
+            res->sign = 0;
+            goto leave;
+        }
+    } else {
+        if (msize > 0) {
+            rp[0] = 1;
+            res->nlimbs = 1;
+            res->sign = 0;
+            goto leave;
+        }
+    }
+}
+```
+ORIGINAL CODE:
+```c
+if (!esize) {
+    /* Exponent is zero, result is 1 mod MOD, i.e., 1 or 0
+     * depending on if MOD equals 1.  */
+    rp[0] = 1;
+    res->nlimbs = (msize == 1 && mod->d[0] == 1) ? 0 : 1;
+    res->sign = 0;
+    goto leave;
+}
+```

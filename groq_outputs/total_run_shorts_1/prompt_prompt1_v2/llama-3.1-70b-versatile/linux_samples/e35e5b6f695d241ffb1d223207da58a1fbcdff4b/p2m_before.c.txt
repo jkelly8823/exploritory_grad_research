@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-15, 16-22
+VULNERABILITY_DESCRIPTION: 
+Variable Shadowing and Potential Deadlock
+
+EXPLANATION:
+The given code snippet has two main issues. Firstly, variable shadowing is observed in the inner while loop, where the variables 'irqflags', 'p2m_entry', and 'n' are re-declared, potentially leading to unexpected behavior. However, this issue might not cause a security vulnerability. 
+
+The second issue is a potential deadlock. In the inner while loop, a write lock is acquired on 'p2m_lock' while already holding a read lock on the same lock. This can lead to a deadlock if another thread or process tries to acquire a write lock while holding a read lock. 
+
+RECOMMENDATIONS:
+1. Avoid variable shadowing by renaming the variables in the inner while loop to avoid potential conflicts and unexpected behavior.
+2. Release the read lock on 'p2m_lock' before acquiring the write lock to prevent deadlocks. If the intention is to upgrade the lock, consider using a lock upgrade mechanism if available in the system.
+
+ORIGINAL CODE:
+```c
+unsigned long __pfn_to_mfn(unsigned long pfn)
+{
+	struct rb_node *n = phys_to_mach.rb_node;
+	struct xen_p2m_entry *entry;
+	unsigned long irqflags;
+
+	read_lock_irqsave(&p2m_lock, irqflags);
+	while (n) {
+		entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+		if (entry->pfn <= pfn &&
+				entry->pfn + entry->nr_pages > pfn) {
+	int rc;
+	unsigned long irqflags;
+	struct xen_p2m_entry *p2m_entry;
+	struct rb_node *n = phys_to_mach.rb_node;
+
+	if (mfn == INVALID_P2M_ENTRY) {
+		write_lock_irqsave(&p2m_lock, irqflags);
+		while (n) {
+			p2m_entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+			if (p2m_entry->pfn <= pfn &&
+					p2m_entry->pfn + p2m_entry->nr_pages > pfn) {
+```

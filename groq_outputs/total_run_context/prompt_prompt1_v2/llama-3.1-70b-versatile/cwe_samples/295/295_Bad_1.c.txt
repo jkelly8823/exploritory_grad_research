@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Inadequate Certificate Verification
+EXPLANATION:
+The provided code snippet checks if a client certificate is present and then verifies the certificate. However, if the certificate verification result is `X509_V_OK`, the code proceeds to perform some actions. The vulnerability lies in the simplicity of the verification process. The `X509_V_OK` result only means that the certificate chain is successfully built and verified, but it does not imply that the certificate belongs to a trusted party. An attacker can obtain a valid certificate from a certificate authority (CA) and still be able to impersonate another entity.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should implement a more comprehensive verification process that not only checks if the certificate is valid but also if it belongs to a trusted party.
+
+```c
+// Additional validation before proceeding
+cert = SSL_get_peer_certificate(ssl);
+if (cert) {
+    X509_VERIFY_CTX *ctx;
+    ctx = SSL_get_verify_ctx(ssl);
+    ctx->depth = ctx->num;  // Verify the entire certificate chain
+
+    if ((SSL_get_verify_result(ssl) == X509_V_OK) &&
+        (X509_check_host(X509_get_subject_name(cert), hostname, hostname_len, 0, NULL) == 1)) {
+        // do secret things
+    }
+}
+```
+
+In addition, consider implementing a whitelist or a strict set of rules for who can connect to your application. Always verify that the certificate subject matches your expectations.
+
+ORIGINAL CODE:
+```c
+cert = SSL_get_peer_certificate(ssl);if (cert && (SSL_get_verify_result(ssl)==X509_V_OK)) {
+    // do secret things
+}
+```

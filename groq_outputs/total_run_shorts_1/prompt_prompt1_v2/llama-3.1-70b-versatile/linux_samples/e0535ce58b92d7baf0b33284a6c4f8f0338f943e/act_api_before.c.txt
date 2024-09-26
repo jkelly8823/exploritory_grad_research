@@ -1,0 +1,84 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 11-12, 42-43
+VULNERABILITY_DESCRIPTION:
+Potential double-free vulnerability in nla_memdup_cookie function and incorrect error handling in tcf_action_init_1 function.
+
+EXPLANATION:
+In the nla_memdup_cookie function, if the kzalloc call succeeds but the nla_memdup call fails, the act_cookie structure is freed correctly. However, if the kzalloc call fails and returns -ENOMEM, the function returns -ENOMEM without freeing the data pointer which is NULL at this point. Although this might not cause a double free, in the context of the larger function tcf_action_init_1, this returned error could lead to freeing of other data (module_put(a_o->owner)) on error which isn't directly linked to this allocation.
+
+A more concerning potential double-free vulnerability exists in the tcf_action_init_1 function. In the case where the nla_memdup_cookie function succeeds but an error occurs afterwards, tcf_hash_release is called which could potentially free the same memory as nla_memdup_cookie, if the release function shares the same memory. The release function isn't provided, but if this assumption is correct, this would indeed constitute a double-free vulnerability.
+
+Moreover, the goto statement in the tcf_action_init_1 function is directly going to module_put when an error occurs, whether it was associated with the module allocation or not. This could free other modules that were not directly involved in the current function.
+
+RECOMMENDATIONS:
+1. Always check the return value of kzalloc and handle it properly.
+2. Ensure that nla_memdup_cookie handles NULL returns correctly and doesn't leave inconsistent state.
+3. Ensure tcf_hash_release doesn't free the same memory as nla_memdup_cookie or make sure the memory is safely removed.
+4. Consider using more explicit error handling rather than goto statements to avoid potential issues with module_put.
+
+ORIGINAL CODE:
+```c
+return err;
+}
+
+static int nla_memdup_cookie(struct tc_action *a, struct nlattr **tb)
+{
+	a->act_cookie = kzalloc(sizeof(*a->act_cookie), GFP_KERNEL);
+	if (!a->act_cookie)
+		return -ENOMEM;
+
+	a->act_cookie->data = nla_memdup(tb[TCA_ACT_COOKIE], GFP_KERNEL);
+	if (!a->act_cookie->data) {
+		kfree(a->act_cookie);
+		return -ENOMEM;
+	}
+	a->act_cookie->len = nla_len(tb[TCA_ACT_COOKIE]);
+
+	return 0;
+}
+
+struct tc_action *tcf_action_init_1(struct net *net, struct nlattr *nla,
+				    struct nlattr *est, char *name, int ovr,
+{
+	struct tc_action *a;
+	struct tc_action_ops *a_o;
+	char act_name[IFNAMSIZ];
+	struct nlattr *tb[TCA_ACT_MAX + 1];
+	struct nlattr *kind;
+	int err;
+			goto err_out;
+		if (nla_strlcpy(act_name, kind, IFNAMSIZ) >= IFNAMSIZ)
+			goto err_out;
+	} else {
+		err = -EINVAL;
+		if (strlcpy(act_name, name, IFNAMSIZ) >= IFNAMSIZ)
+			goto err_out;
+	if (err < 0)
+		goto err_mod;
+
+	if (tb[TCA_ACT_COOKIE]) {
+		int cklen = nla_len(tb[TCA_ACT_COOKIE]);
+
+		if (cklen > TC_COOKIE_MAX_SIZE) {
+			err = -EINVAL;
+			tcf_hash_release(a, bind);
+			goto err_mod;
+		}
+
+		if (nla_memdup_cookie(a, tb) < 0) {
+			err = -ENOMEM;
+			tcf_hash_release(a, bind);
+			goto err_mod;
+		}
+	}
+
+	/* module count goes up only when brand new policy is created
+	 * if it exists and is only bound to in a_o->init() then
+err_mod:
+	module_put(a_o->owner);
+err_out:
+	return ERR_PTR(err);
+}
+
+static void cleanup_a(struct list_head *actions, int ovr)
+```

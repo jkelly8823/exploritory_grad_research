@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION: 
+The svm_get_lpage_level function contains a potential buffer overflow vulnerability in the cpuid function call. This vulnerability arises from the fact that cpuid returns values in EBX, ECX, and EDX registers, but these values are written directly to the structure members without any bounds checking.
+
+EXPLANATION: 
+The svm_get_lpage_level function appears to be handling CPUID instructions. In the case where the instruction is 0x8000001F (memory encryption), it calls the cpuid function to populate the entry structure's register values (eax, ebx, ecx, edx). However, the function call does not include any checks to ensure the register values written to the structure are of the correct size or within the valid range.
+
+If the cpuid function call returns values that exceed the size of the structure members (eax, ebx, ecx, edx), this could result in a buffer overflow, where adjacent memory locations or even function calls on the stack may be overwritten.
+
+Additionally, since this is a low-level function handling CPUID instructions, exploiting such a vulnerability could potentially lead to arbitrary code execution or privilege escalation.
+
+RECOMMENDATIONS: 
+To mitigate this vulnerability, consider adding bounds checking to the cpuid function call. Ensure that the returned values for eax, ebx, ecx, and edx are within the valid range for the structure members. Also, verify that the size of the entry structure is sufficient to accommodate the maximum possible returned values. You can use a library function like memcpy or memset_s to safely copy the returned values into the structure.
+
+Here's a rough example of how you can add bounds checking:
+```c
+uint32_t eax, ebx, ecx, edx;
+if (!cpuid(0x8000001f, &eax, &ebx, &ecx, &edx)) {
+    // Handle the error case
+}
+entry->eax = eax;
+entry->ebx = ebx;
+entry->ecx = ecx;
+entry->edx = edx;
+```
+Note that the above code is an illustrative example and may need adjustments based on the actual implementation details and data types.
+
+ORIGINAL CODE:
+```c
+if (boot_cpu_has(X86_FEATURE_SEV))
+    cpuid(0x8000001f, &entry->eax, &entry->ebx,
+        &entry->ecx, &entry->edx);
+```

@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Unvalidated and raw data is being passed to the `ossl_ffc_name_to_dh_named_group` and `ossl_ffc_named_group_set_pqg` functions without any bounds checking, which may lead to a potential buffer overflow vulnerability or null pointer dereference.
+EXPLANATION:
+Our analysis has found that the provided code snippet allows unvalidated data, `prm->data`, to be passed to the `ossl_ffc_name_to_dh_named_group` function. This function might expect a valid, null-terminated string as input, but if `prm->data` does not satisfy these conditions, it might lead to a buffer overflow or a null pointer dereference.
+
+Additionally, even though there is a check for `prm->data == NULL`, the following check `ossl_ffc_name_to_dh_named_group(prm->data)` will cause a null pointer dereference, because the conditional `||` short-circuits and if `prm->data` is `NULL` then the function is never executed.
+
+Lastly, we notice that there is a missing check for the length of the string `prm->data`, which can lead to an overflow when calling `ossl_ffc_name_to_dh_named_group` and later on `ossl_ffc_named_group_set_pqg` when handling the return value of `ossl_ffc_name_to_dh_named_group`.
+RECOMMENDATIONS:
+We recommend adding a bounds check and a validity check on the `prm->data` before passing it to the `ossl_ffc_name_to_dh_named_group` function to prevent potential buffer overflows. 
+
+Additionally, you should consider adding error checking to handle the case where `group` is `NULL`, as it might propagate further issues down the call chain. Furthermore, to prevent null pointer dereferences, you should never pass `NULL` or a pointer to it to `ossl_ffc_name_to_dh_named_group` or other functions that depend on this value.
+
+Lastly, we highly recommend to review the full software stack to validate the origin, structure, and data integrity of `prm->data` as to be able to fully assess and address any security-related vulnerabilities. It is also highly recommended to consult the documentation of the `ossl_ffc_name_to_dh_named_group` and `ossl_ffc_named_group_set_pqg` functions for recommended usage and best practices.
+
+ORIGINAL CODE:
+```c
+if (prm->data_type != OSSL_PARAM_UTF8_STRING
+    || prm->data == NULL
+    || (group = ossl_ffc_name_to_dh_named_group(prm->data)) == NULL
+    || !ossl_ffc_named_group_set_pqg(ffc, group))
+#endif
+    goto err;
+}

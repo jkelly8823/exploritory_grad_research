@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 35-47, 60-67
+VULNERABILITY_DESCRIPTION:
+The provided PHP code contains two vulnerabilities: a potential memory leak and potential arbitrary code execution.
+
+EXPLANATION:
+The memory leak is present in the `var_push_dtor_no_addref` function, where a new `var_entries` structure is allocated and assigned to `var_hash`, but the `var_hash` pointer is not updated to point to the new allocation in all cases. This can lead to a memory leak if the `var_hash` pointer is not properly updated.
+
+The potential arbitrary code execution vulnerability is present in the dynamic function call `call_user_function_ex`. This function allows an attacker to inject arbitrary code through the `user_func` and `class_name` parameters.
+
+RECOMMENDATIONS:
+To fix the memory leak, ensure that the `var_hash` pointer is updated to point to the new allocation in all cases. Add proper memory management to handle the `var_entries` structure.
+
+To fix the potential arbitrary code execution vulnerability, validate and sanitize the input parameters `user_func` and `class_name`. Also, consider using safer alternatives to `call_user_function_ex` to avoid injection attacks.
+
+ORIGINAL CODE:
+```php
+...
+void *next;
+long i;
+var_entries *var_hash = (*var_hashx)->first;
+#if VAR_ENTRIES_DBG
+fprintf(stderr, "var_destroy(%ld)\n", var_hash?var_hash->used_slots:-1L);
+#endif
+
+while (var_hash) {
+...
+BG(serialize_lock)++;
+if (zend_lookup_class(class_name, len2, &pce TSRMLS_CC) == SUCCESS) {
+    BG(serialize_lock)--;
+    if (EG(exception)) {
+        efree(class_name);
+        return 0;
+    }
+    ce = *pce;
+    break;
+}
+BG(serialize_lock)--;
+
+if (EG(exception)) {
+    efree(class_name);
+    return 0;
+}
+args[0] = &arg_func_name;
+MAKE_STD_ZVAL(arg_func_name);
+ZVAL_STRING(arg_func_name, class_name, 1);
+BG(serialize_lock)++;
+if (call_user_function_ex(CG(function_table), NULL, user_func, &retval_ptr, 1, args, 0, NULL TSRMLS_CC) != SUCCESS) {
+    BG(serialize_lock)--;
+    if (EG(exception)) {
+        efree(class_name);
+        zval_ptr_dtor(&user_func);
+        zval_ptr_dtor(&arg_func_name);
+    }
+...
+zval_ptr_dtor(&arg_func_name);
+break;
+}
+BG(serialize_lock)--;
+if (retval_ptr) {
+    zval_ptr_dtor(&retval_ptr);
+}
+if (EG(exception)) {
+```

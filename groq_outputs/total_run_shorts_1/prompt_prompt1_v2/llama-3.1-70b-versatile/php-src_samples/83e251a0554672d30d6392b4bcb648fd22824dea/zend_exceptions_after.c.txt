@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Potential Null Pointer Dereference Vulnerability.
+
+EXPLANATION:
+On line 8, the variable `classname` is declared as a `const char *` and is used as a parameter for the function `DTRACE_EXCEPTION_THROWN`. However, before being passed to this function, `classname` is retrieved from the function `zend_get_object_classname`. If the function `zend_get_object_classname` returns a null value for `classname` and this is not handled before being used in `DTRACE_EXCEPTION_THROWN`, it can lead to a null pointer dereference vulnerability.
+
+However, for the current scenario, this vulnerability is already being handled by the provided "null" check under the else condition where DTRACE_EXCEPTION_THROWN is being called with NULL parameter in case the exception is NULL. 
+
+RECOMMENDATIONS:
+To enhance the current code, we recommend explicit checks for the null value of `classname` and handle these situations properly.
+
+```cpp
+if (classname != NULL) {
+    DTRACE_EXCEPTION_THROWN((char *)classname);
+} else {
+    // Either handle this situation or log that class name is not available.
+    // It could also be the case that DTRACE_EXCEPTION_THROWN can handle NULL perfectly, then no additional check is required. Consult the documentation for the function.
+}
+```
+
+ORIGINAL CODE:
+```cpp
+{
+#ifdef HAVE_DTRACE
+	if (DTRACE_EXCEPTION_THROWN_ENABLED()) {
+		const char *classname;
+		zend_uint name_len;
+
+		if (exception != NULL) {
+			zend_get_object_classname(exception, &classname, &name_len TSRMLS_CC);
+			DTRACE_EXCEPTION_THROWN((char *)classname);
+		} else {
+			DTRACE_EXCEPTION_THROWN(NULL);
+		}
+	}
+```

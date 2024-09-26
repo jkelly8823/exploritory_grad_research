@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION: 
+Pointer Comparison Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the code snippet due to a potential buffer overflow vulnerability. The `strncmp` function is used to compare a portion of two strings, but it does not perform a null check on the strings. Additionally, the code does not verify that the `resolved_name` and `resolved_basedir` strings do not exceed the `resolved_name_len` and `resolved_basedir_len` lengths, respectively. This can lead to a buffer overflow if the strings are longer than the specified lengths. Furthermore, the use of magic numbers (e.g., `PHP_DIR_SEPARATOR`) can make the code harder to understand and more prone to errors.
+
+However, the main vulnerability lies in the way directory traversal is handled. If an attacker can manipulate the `resolved_name` variable to point to a parent directory of `resolved_basedir`, the comparison `resolved_name[resolved_basedir_len] != PHP_DIR_SEPARATOR` may not prevent directory traversal attacks. This is because `resolved_name` may be a subdirectory of `resolved_basedir`, and the comparison only checks if the next character is a directory separator, not if the entire path is a subdirectory. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use safer string comparison functions that perform null checks and bounds checking, such as `memcmp` or `strcmp` with `strnlen` to get the length of the strings. Additionally, the code should verify that the `resolved_name` string does not exceed the `resolved_name_len` length before performing any operations on it.
+
+Here is a possible fix:
+
+```c
+#else
+    if (strnlen(resolved_basedir, resolved_basedir_len) < resolved_basedir_len && 
+        strnlen(resolved_name, resolved_name_len) < resolved_name_len) {
+        if (strncmp(resolved_basedir, resolved_name, resolved_basedir_len) == 0) {
+            if (resolved_name_len > resolved_basedir_len && 
+                resolved_name[resolved_basedir_len] != PHP_DIR_SEPARATOR) {
+                return -1;
+            } else {
+                /* File is in the right directory */
+                return 0;
+            }
+        } else {
+            /* /openbasedir/ and /openbasedir are the same directory */
+            if (resolved_basedir_len == (resolved_name_len + 1) && resolved_basedir[resolved_basedir_len - 1] == PHP_DIR_SEPARATOR) {
+#endif
+```
+
+ORIGINAL CODE:
+```
+#else
+    if (strncmp(resolved_basedir, resolved_name, resolved_basedir_len) == 0) {
+#endif
+        if (resolved_name_len > resolved_basedir_len &&
+            resolved_name[resolved_basedir_len] != PHP_DIR_SEPARATOR) {
+            return -1;
+        } else {
+            /* File is in the right directory */
+            return 0;
+        }
+    } else {
+        /* /openbasedir/ and /openbasedir are the same directory */
+        if (resolved_basedir_len == (resolved_name_len + 1) && resolved_basedir[resolved_basedir_len - 1] == PHP_DIR_SEPARATOR) {
+#if defined(PHP_WIN32) || defined(NETWARE)
+```

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Inconsistent resource handling due to premature unlock operation.
+
+EXPLANATION:
+The code first checks the value of `dumpable` and performs an RCU read lock. It then checks the value of `dumpable` again and performs an RCU read unlock if it's not set. However, there's a possibility that the value of `dumpable` changes between these two checks, resulting in incorrect behavior. Moreover, after the `rcu_read_unlock()` is called if `dumpable` is false, the subsequent `rcu_read_unlock()` call is still executed, despite having already unlocked the RCU read lock.
+
+RECOMMENDATIONS:
+To fix this issue, only call `rcu_read_unlock()` once, at the end of the unprotected region. Since the code snippet is incomplete, it's also strongly recommended to add some error checking mechanism to ensure that the `dumpable` variable doesn't get modified unexpectedly.
+
+Here's a refactored version of the code with proper resource handling:
+
+    if (task->mm)
+        dumpable = get_dumpable(task->mm);
+    rcu_read_lock();
+    if (!dumpable && !ptrace_has_cap(__task_cred(task)->user_ns, mode)) {
+        rcu_read_unlock();
+        return -EPERM;
+    } else {
+        // Perform operations on dumpable here...
+    }
+    rcu_read_unlock();
+
+ORIGINAL CODE:
+
+    if (task->mm)
+        dumpable = get_dumpable(task->mm);
+    rcu_read_lock();
+    if (!dumpable && !ptrace_has_cap(__task_cred(task)->user_ns, mode)) {
+        rcu_read_unlock();
+        return -EPERM;
+    }
+    rcu_read_unlock();

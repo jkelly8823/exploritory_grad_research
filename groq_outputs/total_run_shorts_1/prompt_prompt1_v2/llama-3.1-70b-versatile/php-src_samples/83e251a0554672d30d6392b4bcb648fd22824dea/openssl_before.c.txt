@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Improper Use of Stack-Based Buffer (Potential Buffer Overflow)
+EXPLANATION:
+The vulnerability is found in the lines where `OBJ_obj2txt` is used with a hard-coded buffer size (`sizeof(buf)-1`). This function writes to a buffer, but there is no validation that the buffer is large enough to hold the result. This could lead to a buffer overflow if the input data is large enough.
+
+Although the vulnerable code does not include the definition of the `buf` variable, given the context, it appears to be an on-stack buffer that could be overflowed by arbitrarily large data from `X509_EXTENSION_get_object(extension)`. 
+
+In addition, there's the possibility of a double-free or use-after-free bug, since `BIO_get_mem_ptr` does not remove the memory from the BIO; however, based on the OpenSSL documentation, this is acceptable usage of the API and thus these potential bugs could be dismissed.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should ensure that the buffer used for `OBJ_obj2txt` is dynamically allocated based on the length of data that `X509_EXTENSION_get_object(extension)` returns. Alternatively, an openSSL constant can be used (`SN_maxlen`), as seen elsewhere in this case, where it's replaced with a sane maximum (maximum set by engine, default is 61) without using the large-ish numbers returned by `SN_maxlen`.
+
+You could use `OPENSSL_malloc` with the returned length by `OBJ_obj2txt` when called with a null buffer and use of `0` as a length (this is to get the required length), then pass this buffer to `OBJ_obj2txt`.
+
+If an error is encountered when allocating the necessary memory, ensure to safely handle and free previously allocated memory.
+
+```c
+size_t buf_len = OBJ_obj2txt(NULL, 0, X509_EXTENSION_get_object(extension), 0);
+if (buf_len == 0) {
+    // Handle get buffer len error
+    return;
+}
+char *buf = OPENSSL_malloc(buf_len);
+if (buf == NULL) {
+    // Handle malloc error
+    return;
+}
+OBJ_obj2txt(buf, buf_len, X509_EXTENSION_get_object(extension), 0);
+
+```
+
+
+ORIGINAL CODE:
+```
+	for (i = 0; i < X509_NAME_entry_count(name); i++) {
+		unsigned char *to_add;
+		int to_add_len;
+
+
+		ne  = X509_NAME_get_entry(name, i);
+		obj = X509_NAME_ENTRY_get_object(ne);
+}
+/* }}} */
+
+/* {{{ proto array openssl_x509_parse(mixed x509 [, bool shortnames=true])
+   Returns an array of the fields/values of the CERT */
+PHP_FUNCTION(openssl_x509_parse)
+{
+
+
+	for (i = 0; i < X509_get_ext_count(cert); i++) {
+		extension = X509_get_ext(cert, i);
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(extension)) != NID_undef) {
+			extname = (char *)OBJ_nid2sn(OBJ_obj2nid(X509_EXTENSION_get_object(extension)));
+		} else {
+			OBJ_obj2txt(buf, sizeof(buf)-1, X509_EXTENSION_get_object(extension), 1);
+			extname = buf;
+		}
+		bio_out = BIO_new(BIO_s_mem());
+		if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+			BIO_get_mem_ptr(bio_out, &bio_buf);
+			add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+		} else {
+			add_assoc_asn1_string(subitem, extname, X509_EXTENSION_get_data(extension));
+```

@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+ The `memset` function is used to try to mitigate a potential issue with leaking uninitialized kernel stack memory, but its usage suggests that the `exception` structure is initially left uninitialized.
+
+EXPLANATION:
+The use of `memset` to zero out the `exception` structure is an indication that it was previously left uninitialized. This leaves open the possibility that garbage data from the stack could have been used if `memset` was not present. However, `memset` does not actually address the root issue. It appears to be an attempt to work around a larger issue. The actual vulnerability could potentially occur if `memset` was not used or had an error, resulting in an uninitialized `exception` structure being passed to `kvm_read_guest_virt_helper` or another function.
+
+RECOMMENDATIONS:
+- Ensure that the `exception` structure is properly initialized before it is passed to any functions. It would be better to do this at the time the structure is declared if possible.
+- Also, consider using stack initialization syntax available in the C language to zero out the stack variables when declared.
+- Avoid relying on `memset` to clean up after structures if they were not initialized. This can lead to more problems down the line if not all users of the structure use `memset` to clean up.
+
+ORIGINAL CODE:
+```c
+{
+	u32 access = (kvm_x86_ops->get_cpl(vcpu) == 3) ? PFERR_USER_MASK : 0;
+
+	/*
+	 * FIXME: this should call handle_emulation_failure if X86EMUL_IO_NEEDED
+	 * is returned, but our callers are not ready for that and they blindly
+	 * call kvm_inject_page_fault.  Ensure that they at least do not leak
+	 * uninitialized kernel stack memory into cr2 and error code.
+	 */
+	memset(exception, 0, sizeof(*exception));
+	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, access,
+					  exception);
+}
+EXPORT_SYMBOL_GPL(kvm_read_guest_virt);
+```

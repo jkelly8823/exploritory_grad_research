@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential DoS vulnerability via 0-length frame without END_STREAM flag
+EXPLANATION:
+This segment of code deals with the handling of frames in an HTTP/2 connection. The code snippet hints at a check for a frame's EOF status based on its length and a flag `NGHTTP2_FLAG_END_STREAM`. The vulnerable line is the one where it returns 1 when encountering a 0-length frame without this flag set, possibly triggering an error. 
+
+The DoS vulnerability stems from not providing an opportunity for the connection to recover or perform any necessary cleanup before considering it an error and exiting the function. This can lead to crashes or an attacker making the server exhaust resources and ultimately become unavailable.
+
+RECOMMENDATIONS:
+Consider allowing for recovery mechanisms by providing a way to handle or log this occurrence instead of immediately returning 1. Additionally, consider validating and sanitizing frame data before using it. Here is a possible fix for this issue:
+
+```c
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+    stream->EmitRead(UV_EOF);
+  } else if (frame->hd.length == 0) {
+    // Allow recovery mechanism
+    log_event("0-length frame received without END_STREAM");
+    return -1;
+  }
+  return 0;
+}
+
+// Alternatively, consider returning an error that doesn't immediately terminate
+// the function, but allows for error handling code further up to deal with this
+// issue, such as returning a dedicated enum value that doesn't immediately
+// exit, or throwing an exception.
+
+ORIGINAL CODE:
+if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+  stream->EmitRead(UV_EOF);
+} else if (frame->hd.length == 0) {
+  return 1;  // Consider 0-length frame without END_STREAM an error.
+}
+return 0;

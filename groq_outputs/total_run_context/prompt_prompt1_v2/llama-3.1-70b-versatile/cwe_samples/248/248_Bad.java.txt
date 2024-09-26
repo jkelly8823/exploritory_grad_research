@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code invokes getHostName() on an InetAddress object, which performs a reverse DNS lookup. This can potentially lead to a Slow DNS Lookup Attack vulnerability if the DNS resolution of the remote IP address is slow or hangs indefinitely.
+
+EXPLANATION:
+The `InetAddress.getByName(ip)` method resolves the IP address to a hostname. However, if the DNS resolution is slow or hangs indefinitely, the `getHostName()` method can block the thread indefinitely. This can potentially cause denial-of-service (DoS) attacks if an attacker intentionally provides a slow or hanging DNS resolution.
+
+Additionally, this can also lead to a situation where the method call stalls, blocking the execution of the servlet and potentially leading to performance degradation or server crashes.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, we can consider the following alternatives:
+
+1. Avoid performing DNS lookups on remote IP addresses. 
+   Instead, consider logging or displaying the IP address directly.
+
+2. Use a library that provides asynchronous or cached DNS resolution to prevent blocking the thread.
+
+3. Implement a timeout for DNS lookups to prevent indefinite blocking.
+
+4. Move DNS resolution to a background thread to prevent blocking the main request thread.
+
+In case it is necessary to resolve the IP address to a hostname, consider implementing additional security measures to limit the impact of a potential DoS attack.
+
+ORIGINAL CODE:
+```java
+protected void doPost (HttpServletRequest req, HttpServletResponse res) throws IOException {
+String ip = req.getRemoteAddr();
+InetAddress addr = InetAddress.getByName(ip);
+...out.println("hello " + addr.getHostName());
+}
+```
+
+Here's a better way to handle this:
+
+```java
+protected void doPost (HttpServletRequest req, HttpServletResponse res) throws IOException {
+String ip = req.getRemoteAddr();
+if (log.isDebugEnabled()) {
+  InetAddress addr = InetAddress.getByName(ip);
+  String hostName = addr.getHostName();
+  log.debug("Request from host '{}'", hostName);
+}
+out.println("Hello");
+}
+```

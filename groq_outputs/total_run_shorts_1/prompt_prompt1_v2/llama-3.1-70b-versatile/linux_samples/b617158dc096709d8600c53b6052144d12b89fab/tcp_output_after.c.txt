@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-20
+VULNERABILITY_DESCRIPTION:
+The given code is vulnerable to a Resource Overuse vulnerability. 
+
+EXPLANATION:
+This vulnerability occurs when there is no limit on the amount of resources an application can consume. In this case, the resource being consumed is the socket buffer space (sk_wmem_queued), where a socket is allowed to enqueue a large amount of data without proper bounds checking. Even though there is a limit check in place, it does not provide enough security as it can be bypassed. 
+
+If an attacker is able to enqueue a large amount of data and cause the (sk_wmem_queued >> 1) > limit condition to fail, excessive data can be queued and potentially cause a denial of service. 
+
+Furthermore, the socket's receiver may be overwhelmed with data and unable to handle it, resulting in resource overuse. 
+
+This vulnerability can be exploited by attackers to consume system resources. 
+
+RECOMMENDATIONS:
+This vulnerability can be fixed by properly enforcing the sk_sndbuf limit, by introducing additional checks to ensure that data enqueue does not exceed the allowed buffer space. Introduce rate limiting or quotas for data enqueue to prevent abuse and provide more robust security. It would also be prudent to allow system administrators to adjust these limits according to their needs.
+
+ORIGINAL CODE:
+```c
+struct tcp_sock *tp = tcp_sk(sk);
+struct sk_buff *buff;
+int nsize, old_factor;
+long limit;
+int nlen;
+u8 flags;
+
+if (WARN_ON(len > skb->len))
+if (nsize < 0)
+	nsize = 0;
+
+/* tcp_sendmsg() can overshoot sk_wmem_queued by one full size skb.
+ * We need some allowance to not penalize applications setting small
+ * SO_SNDBUF values.
+ * Also allow first and last skb in retransmit queue to be split.
+ */
+limit = sk->sk_sndbuf + 2 * SKB_TRUESIZE(GSO_MAX_SIZE);
+if (unlikely((sk->sk_wmem_queued >> 1) > limit &&
+	      tcp_queue != TCP_FRAG_IN_WRITE_QUEUE &&
+	      skb != tcp_rtx_queue_head(sk) &&
+	      skb != tcp_rtx_queue_tail(sk))) {
+	NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPWQUEUETOOBIG);
+	return -ENOMEM;
+}
+```

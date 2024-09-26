@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 26, 31
+VULNERABILITY_DESCRIPTION: 
+Insecure handling of string data due to lack of validation and potential buffer overflow issues.
+
+EXPLANATION:
+This vulnerability arises due to a lack of validation on the `field_len` variable before passing it to `strndup` function. If an attacker manipulates `field_len` so that `strndup` attempts to allocate a large memory block or reads outside the valid memory region, this can lead to a potential buffer overflow or information disclosure issue. Additionally, there are scenarios where if NULL or an invalid pointer is passed to `strlen`, it will cause program failure or may reveal information to an attacker.
+
+Furthermore, `strndup` allocates memory using `malloc`, which might fail and cause a potential double-free vulnerability if not checked.
+
+RECOMMENDATIONS:
+1.  Sanitize input data to prevent potential buffer overflow issues.
+2.  Validate input length `field_len` to avoid potential buffer overflow or memory corruption.
+3.  Implement error handling to prevent potential double-free vulnerability.
+4.  Add secure string checks (with a NULL guard) to `strlen`, checking the pointer against NULL before attempting to read the string length.
+
+Here is an example of addressing potential security concerns:
+```c
+if (field_len > 0 && field != NULL) {
+    escaped = strndup(field, field_len); 
+    if (escaped == NULL) {
+        //  Error handling for allocation failure.
+    }
+} else {
+    //  Error handling for invalid field or zero-length.
+}
+```
+ORIGINAL CODE:
+```c
+field_escaped[j] = '\0';
+return field_escaped;
+}
+#endif
+
+/* {{{ PHP_INI
+*/
+PHP_INI_BEGIN()
+STD_PHP_INI_BOOLEAN( "pgsql.allow_persistent",      "1",  PHP_INI_SYSTEM, OnUpdateBool, allow_persistent,      zend_pgsql_globals, pgsql_globals)
+        char *from = NULL, *to = NULL, *tmp = NULL;
+        zval *pgsql_link = NULL;
+        PGconn *pgsql;
+        int to_len;
+        int from_len;
+        int id = -1;
+
+        switch (ZEND_NUM_ARGS()) {
+            /* If field is NULL and HAS DEFAULT, should be skipped */
+            if (!skip_field) {
+                char *escaped;
+                size_t new_len, field_len = strlen(field);
+
+                if (_php_pgsql_detect_identifier_escape(field, field_len) == SUCCESS) {
+                    escaped = strndup(field, field_len);
+                } else {
+#if HAVE_PQESCAPELITERAL
+                    escaped = PQescapeIdentifier(pg_link, field, field_len);
+#else
+            token = php_strtok_r(table_copy, ".", &tmp);
+            len = strlen(token);
+            if (_php_pgsql_detect_identifier_escape(token, len) == SUCCESS) {
+                escaped = strndup(token, len);
+            } else {
+#if HAVE_PQESCAPELITERAL
+                escaped = PQescapeIdentifier(pg_link, token, len);
+#else
+            len = strlen(tmp);
+            /* "schema"."table" format */
+            if (_php_pgsql_detect_identifier_escape(tmp, len) == SUCCESS) {
+                escaped = strndup(tmp, len);
+            } else {
+#if HAVE_PQESCAPELITERAL
+                escaped = PQescapeIdentifier(pg_link, tmp, len);
+#else
+```

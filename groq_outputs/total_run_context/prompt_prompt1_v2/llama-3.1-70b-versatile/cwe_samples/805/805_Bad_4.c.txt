@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The `MultiByteToWideChar` function is used to convert a multibyte character string to a wide character string. However, the `sizeof(unicodeUser)` is used to calculate the number of bytes required for the wide character string, but it does not account for the worst-case scenario where the input `username` string contains the maximum possible number of bytes per character. This can lead to a buffer overflow, allowing an attacker to potentially execute arbitrary code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use `wcstombs` to calculate the required buffer size for the wide character string before calling `MultiByteToWideChar`. Alternatively, you can use `MultiByteToWideChar` with the `0` argument as the `cchWideChar` value to get the required buffer size. It is also recommended to error handle the `MultiByteToWideChar` function call to prevent buffer overflows.
+
+Here is an updated version of the code snippet:
+```c
+void getUserInfo(char *username, struct _USER_INFO_2 info){
+    WCHAR unicodeUser[UNLEN+1];
+    int requiredSize = MultiByteToWideChar(CP_ACP, 0, username, -1, NULL, 0);
+    if (requiredSize <= sizeof(unicodeUser) / sizeof(WCHAR)) {
+        MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, requiredSize);
+        NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);
+    } else {
+        // handle buffer overflow error
+    }
+}
+```
+ORIGINAL CODE:
+```c
+void getUserInfo(char *username, struct _USER_INFO_2 info){
+    WCHAR unicodeUser[UNLEN+1];
+    MultiByteToWideChar(CP_ACP, 0, username, -1, unicodeUser, sizeof(unicodeUser));
+    NetUserGetInfo(NULL, unicodeUser, 2, (LPBYTE *)&info);
+}
+```

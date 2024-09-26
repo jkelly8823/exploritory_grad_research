@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: Unvalidated or Insufficiently Validated Input in CBC Mode
+EXPLANATION:
+The vulnerability exists in line 4, where the `eivlen` variable is not properly validated for cases where the cipher is in CBC mode. In CBC mode, an Initialization Vector (IV) is required to be at least 16 bytes (128 bits) long for AES encryption. However, if `eivlen` is set to 1, the subsequent encryption operations may use an insecure IV, leading to potential attacks like padding oracle attacks.
+
+In this code snippet, if `eivlen` is 1 after `EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx)` is called, it is reset to 0. However, this might not be sufficient to prevent insecure IV usage because `eivlen` is not checked against a minimum secure value.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that `eivlen` is validated against a minimum secure value for CBC mode encryption. Here's a recommended fix:
+
+```c
+int mode = EVP_CIPHER_CTX_get_mode(s->enc_write_ctx);
+if (mode == EVP_CIPH_CBC_MODE) {
+    eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+    if (eivlen < 16) { // 16 bytes is the minimum for AES encryption
+        // handle error: insufficient IV length for CBC mode
+        // e.g., generate a new IV or use a default secure IV
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+int mode = EVP_CIPHER_CTX_get_mode(s->enc_write_ctx);
+if (mode == EVP_CIPH_CBC_MODE) {
+    eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+    if (eivlen <= 1)
+        eivlen = 0;
+}
+/* Need explicit part of IV for GCM mode */
+```

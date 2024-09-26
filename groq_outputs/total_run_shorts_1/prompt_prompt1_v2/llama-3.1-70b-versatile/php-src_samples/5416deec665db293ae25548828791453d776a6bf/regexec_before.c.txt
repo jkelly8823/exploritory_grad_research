@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Null Pointer Dereference Vulnerability
+EXPLANATION:
+A null pointer dereference vulnerability is identified on line 8 of the given code snippet. If `low_prev` is `NULL` after the check on line 6 and the `onigenc_get_right_adjust_char_head_with_prev` function returns `NULL`, then `*low_prev` is assigned the result of `onigenc_get_prev_char_head` function. However, if `low_prev` is `NULL` before this assignment, `IS_NULL(*low_prev)` is evaluated, which would cause a null pointer dereference.
+ 
+Alternatively, if `low_prev` is non-`NULL` and its contents get set to `NULL` by the `onigenc_get_right_adjust_char_head_with_prev` function call, and then *low_prev is dereferenced, also resulting in a null pointer dereference vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that `low_prev` is checked for `NULL` before being dereferenced.
+
+ Recommended Fix:
+```c
+else {
+  if (reg->dmax != ONIG_INFINITE_DISTANCE) {
+    *low = p - reg->dmax;
+    if (*low > s) {
+      *low = onigenc_get_right_adjust_char_head_with_prev(reg->enc, s,
+                              *low, (const UChar** )low_prev);
+      if (low_prev && *low_prev)  // Check *low_prev for NULL first
+        *low_prev = onigenc_get_prev_char_head(reg->enc,
+                           (pprev ? pprev : str), *low);
+    }
+  }
+}
+```
+However, the fix may also require considering scenarios in which `low_prev` becomes `NULL` after checking it, thus avoiding race conditions in multithreaded environments.
+ORIGINAL CODE:
+```c
+else {
+  if (reg->dmax != ONIG_INFINITE_DISTANCE) {
+    *low = p - reg->dmax;
+    if (*low > s) {
+      *low = onigenc_get_right_adjust_char_head_with_prev(reg->enc, s,
+                              *low, (const UChar** )low_prev);
+      if (low_prev && IS_NULL(*low_prev))
+        *low_prev = onigenc_get_prev_char_head(reg->enc,
+                           (pprev ? pprev : str), *low);
+    }
+  }
+}
+/* no needs to adjust *high, *high is used as range check only */
+*high = p - reg->dmin;
+```

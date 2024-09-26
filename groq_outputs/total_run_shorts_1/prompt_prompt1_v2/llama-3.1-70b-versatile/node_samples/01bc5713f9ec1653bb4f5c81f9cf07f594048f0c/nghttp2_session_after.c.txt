@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 127, 242, 295
+VULNERABILITY_DESCRIPTION:
+Improper Input Validation, specifically within the frame padding mechanism. This can lead to denial-of-service attacks, data corruption, or in extreme cases, arbitrary code execution.
+
+EXPLANATION:
+The vulnerability exists in how the code handles the padding field in HTTP/2 frames. It does not correctly validate the length of the frame and its padding field. This may lead to overflows or other exploitable conditions.
+
+RECOMMENDATIONS:
+1. Ensure that frame lengths are correctly validated and that padding lengths are checked to prevent overflow.
+2. Regularly update and test HTTP/2 padding validation mechanisms.
+3. Protect against HTTP/2 attacks using techniques such as traffic normalization and verification.
+4. Validate and normalize headers before processing them.
+
+ORIGINAL CODE:
+(Only the relevant parts of the original code are included)
+
+```c
+switch (iframe->frame.hd.type) {
+  case NGHTTP2_HEADERS:
+    if (iframe->padlen == 0 &&
+        (iframe->frame.hd.flags & NGHTTP2_FLAG_PADDED)) {
+      pri_fieldlen = nghttp2_frame_priority_len(iframe->frame.hd.flags);
+      padlen = inbound_frame_compute_pad(iframe);
+      if (padlen < 0 ||
+          (size_t)padlen + pri_fieldlen > 1 + iframe->payloadleft) {
+        rv = nghttp2_session_terminate_session_with_reason(
+            session, NGHTTP2_PROTOCOL_ERROR, "HEADERS: invalid padding");
+        if (nghttp2_is_fatal(rv)) {
+          return rv;
+        }
+        return (ssize_t)inlen;
+      }
+      iframe->frame.headers.padlen = (size_t)padlen;
+
+  case NGHTTP2_PUSH_PROMISE:
+    if (iframe->padlen == 0 &&
+        (iframe->frame.hd.flags & NGHTTP2_FLAG_PADDED)) {
+      padlen = inbound_frame_compute_pad(iframe);
+      if (padlen < 0 || (size_t)padlen + 4 /* promised stream id */
+                                > 1 + iframe->payloadleft) {
+        rv = nghttp2_session_terminate_session_with_reason(
+            session, NGHTTP2_PROTOCOL_ERROR,
+            "PUSH_PROMISE: invalid padding");
+        if (nghttp2_is_fatal(rv)) {
+          return rv;
+        }
+        return (ssize_t)inlen;
+      }
+
+  case NGHTTP2_DATA: {
+    if (iframe->padlen == 0 &&
+        !(iframe->frame.hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+      rv = inbound_frame_handle_pad(iframe, &iframe->frame.hd);
+      if (rv < 0) {
+        rv = nghttp2_session_terminate_session_with_reason(
+            session, NGHTTP2_PROTOCOL_ERROR,
+            "DATA: insufficient padding space");
+        if (nghttp2_is_fatal(rv)) {
+          return rv;
+        }
+        return (ssize_t)inlen;
+      }
+```

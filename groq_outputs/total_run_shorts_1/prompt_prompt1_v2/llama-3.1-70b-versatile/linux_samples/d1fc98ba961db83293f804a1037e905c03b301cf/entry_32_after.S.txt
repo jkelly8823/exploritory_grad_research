@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: Potential out-of-bounds access due to integer overflow vulnerability.
+EXPLANATION:
+The given code snippet appears to be part of a system call handler. On line 4, it calls the function at the address stored in `sys_call_table(,%eax,4)`. However, the code does not properly validate the `eax` register value before using it to index into the `sys_call_table`. While line 2 checks for an upper bound (`NR_syscalls`), it does not account for potential integer overflows when using `eax` as an index. 
+
+Although the provided code snippet doesn't show how `eax` is obtained, in assembly, an attacker might manipulate the `eax` register value to bypass the bounds check and access memory outside the intended range of `sys_call_table`, potentially leading to arbitrary code execution or other security issues.
+
+RECOMMENDATIONS:
+It's essential to validate the `eax` register value before using it as an index. You should ensure that `eax` is non-negative and its value is within the valid range of the `sys_call_table` array. It's also crucial to ensure that `eax` is not manipulated by an attacker to access memory outside the intended range.
+
+Consider adding a lower bound check to the code to ensure `eax` is within the valid range. You should also carefully review the entire codebase to ensure that `eax` is not manipulated maliciously.
+
+```assembly
+jnz sysenter_audit
+sysenter_do_call:
+    cmpl $0, %eax  # Check lower bound
+    jl sysenter_badsys  # or jump to error handling
+    cmpl $(NR_syscalls), %eax
+    jae sysenter_badsys
+    call *sys_call_table(,%eax,4)
+    movl %eax,PT_EAX(%esp)
+sysenter_after_call:
+    LOCKDEP_SYS_EXIT
+    DISABLE_INTERRUPTS(CLBR_ANY)
+    TRACE_IRQS_OFF
+    movl TI_flags(%ebp), %ecx
+
+syscall_badsys:
+    movl $-ENOSYS,PT_EAX(%esp)
+    jmp syscall_exit
+END(syscall_badsys)
+
+sysenter_badsys:
+    movl $-ENOSYS,PT_EAX(%esp)
+    jmp sysenter_after_call
+END(syscall_badsys)
+    CFI_ENDPROC
+
+.macro FIXUP_ESPFIX_STACK
+```
+
+ORIGINAL CODE:
+
+```assembly
+    jnz sysenter_audit
+sysenter_do_call:
+    cmpl $(NR_syscalls), %eax
+    jae sysenter_badsys
+    call *sys_call_table(,%eax,4)
+    movl %eax,PT_EAX(%esp)
+sysenter_after_call:
+    LOCKDEP_SYS_EXIT
+    DISABLE_INTERRUPTS(CLBR_ANY)
+    TRACE_IRQS_OFF
+    movl TI_flags(%ebp), %ecx
+
+syscall_badsys:
+    movl $-ENOSYS,PT_EAX(%esp)
+    jmp syscall_exit
+END(syscall_badsys)
+
+sysenter_badsys:
+    movl $-ENOSYS,PT_EAX(%esp)
+    jmp sysenter_after_call
+END(syscall_badsys)
+    CFI_ENDPROC
+
+.macro FIXUP_ESPFIX_STACK
+```

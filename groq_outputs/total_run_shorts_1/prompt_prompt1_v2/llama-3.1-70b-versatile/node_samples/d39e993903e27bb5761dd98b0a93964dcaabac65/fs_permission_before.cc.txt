@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-7
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+
+EXPLANATION:
+The code snippet is vulnerable to a path traversal attack when running on Windows platforms (_WIN32). The code attempts to resolve a file path and then performs a lookup in the `granted_tree`. However, the code does not validate or sanitize the input `param` before passing it to `node::PathResolve` and then to `Lookup`. This allows an attacker to potentially traverse the file system by providing a specially crafted `param` value.
+
+The code also uses insecure string manipulation methods, such as `std::string_view::rfind` and `substr`, which can lead to incorrect results or even crashes if the input is malformed.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the input `param` before passing it to `node::PathResolve` to prevent potential path traversal attacks.
+2. Use a secure path resolution library or function that can handle edge cases and prevent traversal attacks.
+3. Use safer string manipulation methods, such as using `std::string_view::find` and `std::string_view::substr` instead of `rfind` and `substr`.
+4. Consider using a canonicalization step to normalize the path before performing the lookup.
+5. If possible, consider using a secure lookup function that can prevent path traversal attacks.
+
+ORIGINAL CODE:
+```c++
+const std::string_view& param) {
+  std::string resolved_param = node::PathResolve(env, {param});
+#ifdef _WIN32
+  // is UNC file path
+  if (resolved_param.rfind("\\\\", 0) == 0) {
+    // return lookup with normalized param
+    size_t starting_pos = 4;  // "\\?\"
+    if (resolved_param.rfind("\\\\?\\UNC\\") == 0) {
+      starting_pos += 4;  // "UNC\"
+    }
+    auto normalized = param.substr(starting_pos);
+    return granted_tree->Lookup(normalized, true);
+  }
+#endif
+  return granted_tree->Lookup(resolved_param, true);
+}

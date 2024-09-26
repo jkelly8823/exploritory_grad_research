@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 139-144, 153-158
+VULNERABILITY_DESCRIPTION:
+Insecure handling of failed memory slot registrations in a switch case.
+
+EXPLANATION:
+The code provided has multiple switch cases within the kernel code. Two of these cases involve handling memslot registrations (cases KVM_MR_CREATE and KVM_MR_DELETE) with UV. In case KVM_MR_CREATE and KVM_MR_DELETE, successful registrations with UV (executed in uv_register_mem_slot and uv_unregister_mem_slot respectively) may fail but the code does not account for potential failure scenarios. This presents an issue if these memslots are shared across multiple processes as it may result in incorrect memory mappings or loss of data. Specifically, within case KVM_MR_CREATE, even if the registration with UV fails, the init code (kvmppc_uvmem_slot_init(kvm, new)) is performed, which might not be intended when the registration has failed. Similarly, in case KVM_MR_DELETE, even if the deregistration with UV fails (i.e., uv_unregister_mem_slot returns a non-zero value), the local uvmem_slot_free code is still executed.
+
+In addition, the default case of this switch also explicitly has a comment mentioning that it should handle KVM_MR_MOVE, which is currently left unhandled.
+
+RECOMMENDATIONS:
+1. Always account for the success and failure status of memslot registration/deregistration with UV. This includes examining return codes from functions uv_register_mem_slot and uv_unregister_mem_slot.
+
+2. Implement handling for KVM_MR_MOVE as mentioned in the todo comment within the default case.
+
+3. Ensure successful deregistrations of UV before performing local operations (e.g., releasing resources in KVM_MR_DELETE).
+
+ORIGINAL CODE:
+ 
+```c
+case KVM_MR_CREATE:
+	if (kvmppc_uvmem_slot_init(kvm, new))
+		return;
+	uv_register_mem_slot(kvm->arch.lpid,
+			     new->base_gfn << PAGE_SHIFT,
+			     new->npages * PAGE_SIZE,
+			     0, new->id);
+	break;
+```
+```c
+case KVM_MR_DELETE:
+	uv_unregister_mem_slot(kvm->arch.lpid, old->id);
+	kvmppc_uvmem_slot_free(kvm, old);
+	break;
+```

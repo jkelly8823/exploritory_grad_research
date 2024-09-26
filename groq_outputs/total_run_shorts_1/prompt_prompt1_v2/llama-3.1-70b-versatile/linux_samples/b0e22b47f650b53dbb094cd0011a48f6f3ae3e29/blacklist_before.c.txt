@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Memory Corruption due to Initialization Order
+
+EXPLANATION:
+The vulnerability lies in the init order of `blacklist_init` function. The function is marked with `device_initcall`, which has an undefined init order relative to other init calls with different priorities. This can lead to a situation where the function is called before some required modules or devices are initialized, resulting in potential memory corruption or other undefined behavior when accessing these resources.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the init priority of `blacklist_init` function should be set to ensure it is called after all necessary modules or devices are initialized. This can be achieved by replacing `device_initcall` with `late_initcall` or `device_initcall_sync` if the function is dependent on other kernel services.
+
+If the order of initialization is critical, consider using a more explicit initialization approach, such as using kernel's `module_init` and `module_exit` functions, where dependencies are clearly defined.
+
+One potential solution would be to change `device_initcall(blacklist_init);` to `late_initcall(blacklist_init);`. This will ensure `blacklist_init` is called after all `device_initcall` functions have been executed.
+
+ORIGINAL CODE:
+```c
+#include <linux/uidgid.h>
+#include <keys/system_keyring.h>
+#include "blacklist.h"
+
+static struct key *blacklist_keyring;
+
+/*
+ * The description must be a type prefix, a colon and then an even number of
+ * hex digits.  The hash is kept in the description.
+ */
+}
+EXPORT_SYMBOL_GPL(is_binary_blacklisted);
+
+/*
+ * Initialise the blacklist
+ */
+static int __init blacklist_init(void)
+ * Must be initialised before we try and load the keys into the keyring.
+ */
+device_initcall(blacklist_init);
+```

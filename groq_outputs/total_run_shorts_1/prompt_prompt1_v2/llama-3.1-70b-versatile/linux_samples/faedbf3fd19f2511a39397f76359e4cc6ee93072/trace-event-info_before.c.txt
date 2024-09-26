@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Use of a predictable temporary file name.
+
+EXPLANATION:
+The code uses `mkstemp` to create a temporary file with a name in the format "/tmp/perf-XXXXXX". While `mkstemp` does generate a unique file name by replacing the XXXXXX with a unique string, it is still subject to certain vulnerabilities. The main issue here is that an attacker may attempt to guess the temporary file name and exploit it before the actual file is used.
+
+The reason I point out line 7 specifically, is because it tries to open the generated file, and doesn't handle the case where the file was created successfully by `mkstemp`, but then deleted by an attacker before it was opened by this code.
+
+RECOMMENDATIONS:
+Use a more secure method to create temporary files, such as `mkostemp`, which allows you to pass additional flags for secure file creation. Also, before using the temporary file, you should ensure it has not been tampered with by verifying its ownership and permissions.
+
+Alternatively, you could use a higher-level library that provides secure temporary file creation, such as `libtmpfile` or a similar API in your programming language's standard library.
+
+Additionally, it would be a good practice to verify the file descriptor returned by `mkstemp` (or `mkostemp`) after it has been created and before it is used.
+
+ORIGINAL CODE:
+    "/tmp/perf-XXXXXX");
+		if (!mkstemp(tdata->temp_file)) {
+			pr_debug("Can't make temp file");
+			return NULL;
+		}
+
+		temp_fd = open(tdata->temp_file, O_RDWR);
+		if (temp_fd < 0) {
+			pr_debug("Can't read '%s'", tdata->temp_file);
+			return NULL;
+		}
+
+		/*

@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-26
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a race condition that can occur between the Http2Session::OnStreamAfterWrite and Http2Session::MaybeStopReading functions.
+
+EXPLANATION:
+In the `OnStreamAfterWrite` function, the `SESSION_STATE_READING_STOPPED` flag is cleared after checking if the session wants to read. However, the `MaybeStopReading` function checks the `SESSION_STATE_READING_STOPPED` flag and sets it if necessary. If `OnStreamAfterWrite` is interrupted before the `MaybeStopReading` function is called and another thread checks the flags in `MaybeStopReading` after `OnStreamAfterWrite` has cleared `SESSION_STATE_READING_STOPPED`, then another thread may needlessly stop reading. Also, similarly later the read flag is also cleared and then MaybeScheduleWrite() is called, there could be a possible case where nghttp2_session_want_read() which is read from the underlying HTTP/2 buffer and its result is being saved to call Write() at a later stage might be false whereas want to call Write() to this function. 
+
+This is further compounded by the function calls like `nghttp2_session_want_read(session_);` which checks the underlying buffer of the HTTP/2 session and has some latency as well as depends on various other parameters like network latency and available buffer size, introducing further possibility of race conditions.
+
+RECOMMENDATIONS:
+To avoid this potential race condition, consider:
+
+1. Using a lock to synchronize access to the flags. This would ensure that either `OnStreamAfterWrite` or `MaybeStopReading` has exclusive access to the flags.
+
+2. Removing any potential overlapping control of the flags. In other words, checking the same flags on multiple places can lead to multiple race condition errors.
+
+3. Avoiding interrupts between such a critical function for e.g OnStreamAfterWrite. This may seem hard. Any how having such interrupt is to best avoided.
+
+ORIGINAL CODE:
+```cpp
+void Http2Session::OnStreamAfterWrite(WriteWrap* w, int status) {
+  Debug(this, "write finished with status %d", status);
+
+  CHECK_NE(flags_ & SESSION_STATE_WRITE_IN_PROGRESS, 0);
+  flags_ &= ~SESSION_STATE_WRITE_IN_PROGRESS;
+
+  // Inform all pending writes about their completion.
+  ClearOutgoing(status);
+
+  if ((flags_ & SESSION_STATE_READING_STOPPED) &&
+      nghttp2_session_want_read(session_)) {
+    flags_ &= ~SESSION_STATE_READING_STOPPED;
+    stream_->ReadStart();
+  }
+
+  if (!(flags_ & SESSION_STATE_WRITE_SCHEDULED)) {
+    // Schedule a new write if nghttp2 wants to send data.
+    MaybeScheduleWrite();
+  }
+}
+
+void Http2Session::MaybeStopReading() {
+  if (flags_ & SESSION_STATE_READING_STOPPED) return;
+  int want_read = nghttp2_session_want_read(session_);
+  Debug(this, "wants read? %d", want_read);
+  if (want_read == 0 || (flags_ & SESSION_STATE_WRITE_IN_PROGRESS)) {
+    flags_ |= SESSION_STATE_READING_STOPPED;
+    stream_->ReadStop();
+  }
+}
+
+// Unset the sending state, finish up all current writes, and reset
+// storage for data and metadata that was associated with these writes.
+
+  chunks_sent_since_last_write_++;
+
+  CHECK_EQ(flags_ & SESSION_STATE_WRITE_IN_PROGRESS, 0);
+  flags_ |= SESSION_STATE_WRITE_IN_PROGRESS;
+  StreamWriteResult res = underlying_stream()->Write(*bufs, count);
+  if (!res.async) {
+    flags_ &= ~SESSION_STATE_WRITE_IN_PROGRESS;
+    ClearOutgoing(res.err);
+  }
+
+  MaybeStopReading();
+```

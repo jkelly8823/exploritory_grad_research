@@ -1,0 +1,107 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-25, 149
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack due to the lack of proper validation on the `length` parameter in the `CopyDataIntoOutgoing` function. Additionally, the `memcpy` function in the `OnDataChunkReceived` function does not have proper bounds checking, which could lead to a buffer overflow.
+
+EXPLANATION:
+In the `CopyDataIntoOutgoing` function, the `src_length` parameter is not validated properly. This allows an attacker to pass a large value, potentially causing a buffer overflow. Similarly, in the `OnDataChunkReceived` function, the `memcpy` function does not have proper bounds checking. This could lead to a buffer overflow if the `nread` value is greater than the size of the `buf` object.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation should be added to the `length` parameter in the `CopyDataIntoOutgoing` function. For example:
+
+```cpp
+void Http2Session::CopyDataIntoOutgoing(const uint8_t* src, size_t src_length) {
+  if (src_length > MAX_BUFFER_SIZE) {
+    // Handle error
+  }
+  // ...
+}
+```
+
+Additionally, bounds checking should be added to the `memcpy` function in the `OnDataChunkReceived` function. For example:
+
+```cpp
+memcpy(new_buf.data(),
+       stream_buf_.base + stream_buf_offset_,
+       std::min(stream_buf_.len - stream_buf_offset_, new_buf.size()));
+```
+
+ORIGINAL CODE:
+```cpp
+// various callback functions. Each of these will typically result in a call
+// out to JavaScript so this particular function is rather hot and can be
+// quite expensive. This is a potential performance optimization target later.
+ssize_t Http2Session::ConsumeHTTP2Data() {
+  // ...
+}
+
+inline int32_t GetFrameID(const nghttp2_frame* frame) {
+  // ...
+}
+
+void Http2Session::PushOutgoingBuffer(nghttp2_stream_write&& write) {
+  // ...
+}
+
+// Queue a given block of data for sending. This always creates a copy,
+// so it is used for the cases in which nghttp2 requests sending of a
+// small chunk of data.
+void Http2Session::CopyDataIntoOutgoing(const uint8_t* src, size_t src_length) {
+  // of the outgoing_buffers_ vector may invalidate the pointer.
+  // The correct base pointers will be set later, before writing to the
+  // underlying socket.
+  PushOutgoingBuffer(nghttp2_stream_write {
+    uv_buf_init(nullptr, src_length)
+  });
+}
+
+// ...
+Http2Scope h2scope(this);
+CHECK_NOT_NULL(stream_);
+Debug(this, "receiving %d bytes", nread);
+AllocatedBuffer buf(env(), buf_);
+
+// Only pass data on if nread > 0
+if (nread <= 0) {
+  return;
+}
+
+statistics_.data_received += nread;
+
+if (UNLIKELY(stream_buf_offset_ > 0)) {
+  // This is a very unlikely case, and should only happen if the ReadStart()
+  // call in OnStreamAfterWrite() immediately provides data. If that does
+  // happen, we concatenate the data we received with the already-stored
+  // pending input data, slicing off the already processed part.
+  AllocatedBuffer new_buf = env()->AllocateManaged(
+      stream_buf_.len - stream_buf_offset_ + nread);
+  memcpy(new_buf.data(),
+         stream_buf_.base + stream_buf_offset_,
+         stream_buf_.len - stream_buf_offset_);
+  memcpy(new_buf.data() + stream_buf_.len - stream_buf_offset_,
+         buf.data(),
+         nread);
+  buf = std::move(new_buf);
+  nread = buf.size();
+  stream_buf_offset_ = 0;
+  stream_buf_ab_.Reset();
+  DecrementCurrentSessionMemory(stream_buf_offset_);
+}
+
+// Shrink to the actual amount of used data.
+buf.Resize(nread);
+IncrementCurrentSessionMemory(nread);
+
+// Remember the current buffer, so that OnDataChunkReceived knows the
+// offset of a DATA frame's data into the socket read buffer.
+stream_buf_ = uv_buf_init(buf.data(), nread);
+// to copy memory.
+stream_buf_allocation_ = std::move(buf);
+
+ssize_t ret = ConsumeHTTP2Data();
+
+if (UNLIKELY(ret < 0)) {
+  Debug(this, "fatal error receiving data: %d", ret);
+  Local<Value> arg = Integer::New(isolate, ret);
+}
+```

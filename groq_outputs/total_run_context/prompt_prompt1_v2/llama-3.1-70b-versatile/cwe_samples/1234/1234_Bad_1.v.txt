@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-10
+VULNERABILITY_DESCRIPTION:
+The code snippet has a potential asynchronous reset issue, where the reset signal 'rst_ni' is asynchronous with respect to the clock 'clk_i', but it is also being checked in the same combinatorial logic as the synchronous reset logic for 'rst_9'.
+
+EXPLANATION:
+In a synchronous digital design, the reset signal should ideally be synchronized with the clock to prevent potential metastability issues. However, in this code, 'rst_ni' is being checked in the asynchronous part of the reset logic, along with the synchronized check for 'rst_9'. This can potentially cause metastability issues because the 'rst_ni' signal may be in an unstable state when the clock rises. Additionally, the way the conditions are combined in the if statement may also introduce uncertainty about the order in which the reset conditions are evaluated.
+
+RECOMMENDATIONS:
+To address the potential issue, the reset conditions should be clearly separated into synchronous and asynchronous logic. The 'rst_ni' condition should be synchronized with the clock 'clk_i' before being used in the reset logic. This can be done by creating a separate flip-flop to synchronize the 'rst_ni' signal.
+
+For instance:
+
+```
+reg rst_ni_sync;
+reg [1:0] rst_ni_sync_reg;
+
+always @(posedge clk_i)
+begin
+    rst_ni_sync_reg <= {rst_ni_sync_reg[0], rst_ni};
+    rst_ni_sync <= rst_ni_sync_reg[0];
+end
+```
+
+Then, use 'rst_ni_sync' in the original reset logic instead of 'rst_ni':
+
+```
+if(~(rst_ni_sync && ~jtag_unlock && ~rst_9))
+```
+
+ORIGINAL CODE:
+```
+...
+always @(posedge clk_i)
+    begin
+        if(~(rst_ni && ~jtag_unlock && ~rst_9))
+            begin
+                for (j=0; j < 6; j=j+1) begin
+                    reglk_mem[j] <= 'h0;
+                end
+            end
+    ...
+```

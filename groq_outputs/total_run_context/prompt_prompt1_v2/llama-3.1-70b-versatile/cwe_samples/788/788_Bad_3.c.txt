@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability in message handling
+
+EXPLANATION:
+The code snippet provided contains several issues that can lead to a buffer overflow vulnerability. Specifically, there are two potential issues:
+1. The `getMessage` function is called without checking if the amount of data received is larger than `BUFFER_SIZE`, which could result in additional data being written beyond the end of the `buffer` array, assuming `getMessage` allows the write.
+2. The message body is copied from `msg->msgBody` to the `message` array using a loop that iterates up to `msg->msgLength`, without checking if `msg->msgLength` is greater than or equal to `MESSAGE_SIZE`, which could result in a buffer overflow.
+
+RECOMMENDATIONS:
+1. Implement bounds checking in `getMessage` to prevent reading beyond `BUFFER_SIZE`.
+2. Implement bounds checking when copying the message body into the `message` array to prevent writing beyond `MESSAGE_SIZE`.
+3. Use safer functions for string manipulation, like `strncpy` or `snprintf`, instead of manual loops.
+4. Validate that `msg->msgLength` is valid (non-negative) before using it.
+
+ORIGINAL CODE:
+```c
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE];
+    char message[MESSAGE_SIZE];
+
+    // get message from socket and store into buffer
+
+    //Ignoring possibliity that buffer > BUFFER_SIZE
+    if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+
+        // place contents of the buffer into message structure
+        ExMessage *msg = recastBuffer(buffer);
+
+        // copy message body into string for processing
+        int index;
+        for (index = 0; index < msg->msgLength; index++) {
+            message[index] = msg->msgBody[index];
+        }
+        message[index] = '\0';
+
+        // process message
+        success = processMessage(message);
+    }
+    return success;
+}
+```

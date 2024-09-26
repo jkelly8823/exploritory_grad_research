@@ -1,0 +1,84 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Unsynchronized Native Library Loading
+EXPLANATION:
+The code loads a native library using System.loadLibrary() in a static initializer block. This can lead to a potential vulnerability because static initializer blocks are not thread-safe, and concurrent access can result in undefined behavior. Multiple threads may attempt to load the library simultaneously, leading to unpredictable behavior.
+RECOMMENDATIONS:
+To fix this vulnerability, we can synchronize the library loading to ensure that only one thread loads the library at a time. This can be achieved by using a synchronized block or by using a double-checked locking pattern. However, the most straightforward way is to use System.loadLibrary() as an instance method in a synchronized block.
+
+ORIGINAL CODE:
+```java
+class Echo {
+        
+    public native void runEcho();
+    static {
+        System.loadLibrary("echo");
+    }
+    public static void main(String[] args) {
+        new Echo().runEcho();
+    }
+}
+```
+
+However, since you are dealing with Java Native Interface (JNI), you typically have only one initialization for the class. You might not need synchronization in the load library part. But still, to ensure everything is safe, here is how you do it.
+
+```java
+class Echo {
+        
+    public native void runEcho();
+    static synchronized {
+        System.loadLibrary("echo");
+    }
+    public static void main(String[] args) {
+        new Echo().runEcho();
+    }
+}
+```
+Make sure you also set the correct path where the library is, or else an UnsatisfiedLinkError will be thrown.
+
+If you are dealing with a multithreaded environment and can't guarantee the initialization order of your classes, consider using a holder class for lazy initialization:
+
+```java
+class Echo {
+        
+    public native void runEcho();
+    private synchronized void init() {
+        if (!initialized) {
+            System.loadLibrary("echo");
+            initialized = true;
+        }
+    }
+    private boolean initialized = false;
+
+    private Echo () {
+        init();
+    }
+
+    public static void main(String[] args) {
+        new Echo().runEcho();
+    }
+}
+```
+
+Or, even cleaner:
+
+```java
+class Echo {
+        
+    private static class EchoLoader {
+        static {
+            System.loadLibrary("echo");
+        }
+    }
+    
+    public native void runEcho();
+
+    public static void main(String[] args) {
+        new EchoLoader();
+        new Echo().runEcho();
+    }
+}
+```
+
+However, you must make sure the EchoLoader's initialization is already done or else again an UnsatisfiedLinkError will be thrown.

@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Error Message, with Potential Information Disclosure
+EXPLANATION:
+The code uses `WSAGetLastError()` to retrieve the last error code for the Windows Sockets implementation. However, the error message "Host lookup failed" is then passed to the `PHP_SOCKET_ERROR()` function along with the error code. The issue here is that the error code is not sanitized or validated, potentially allowing sensitive information about the system to be disclosed in the event of an error. Additionally, the `gethostbyname()` function is also used without any error handling for its buffer size, which can lead to a buffer overflow.
+RECOMMENDATIONS:
+To address this vulnerability, consider the following recommendations:
+
+1. Remove or sanitize any sensitive information from error messages, especially when dealing with system-specific errors.
+2. Validate and sanitize the `string` variable before passing it to `gethostbyname()`, to prevent potential buffer overflows or other security issues.
+3. Consider using a safer alternative to `gethostbyname()`, such as `getaddrinfo()`.
+
+ORIGINAL CODE:
+```c
+#include <arpa/inet.h>
+#endif
+
+extern int php_string_to_if_index(const char *val, unsigned *out TSRMLS_DC);
+
+#if HAVE_IPV6
+/* Sets addr by hostname, or by ip in string form (AF_INET6) */
+	if (inet_aton(string, &tmp)) {
+		sin->sin_addr.s_addr = tmp.s_addr;
+	} else {
+		if (! (host_entry = gethostbyname(string))) {
+			/* Note: < -10000 indicates a host lookup error */
+#ifdef PHP_WIN32
+			PHP_SOCKET_ERROR(php_sock, "Host lookup failed", WSAGetLastError());
+#else
+```
+Note that the actual fix may require more context than what's provided in this code snippet. The provided code snippet is only a small part of a larger system and addressing this vulnerability may require a more comprehensive review of the codebase.

@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21-25
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds buffer access potential when calculating the value of `iwmr->len` and later assign it as `stag_info->total_len` and `info->total_len`.
+
+EXPLANATION:
+The code multiplies `max_num_sg` with `PAGE_SIZE` and assigns the result to `iwmr->len`. However, `max_num_sg` is an unknown quantity and may cause `iwmr->len` to exceed the maximum allowed value for the `total_len` field in `stag_info` and `info`. This may lead to potential out-of-bounds buffer access.
+
+Furthermore, the code also updates `iwmr->len` with the calculated value but does not validate if the new length exceeds the maximum allowed length for the `iwmr` structure.
+
+RECOMMENDATIONS:
+Validate the value of `max_num_sg` before multiplying it with `PAGE_SIZE` to prevent out-of-bounds buffer access. Additionally, add bounds checking to ensure that the assigned length does not exceed the maximum allowed value for `iwmr->len` and `stag_info->total_len`.
+
+The length calculation and assignment should be modified to prevent potential buffer overflows:
+```c
+if (max_num_sg * PAGE_SIZE > MAX_ALLOWED_LENGTH) {
+    /* Handle error or exception */
+} else {
+    iwmr->len = max_num_sg * PAGE_SIZE;
+    stag_info->total_len = iwmr->len;
+    info->total_len = iwmr->len;
+}
+```
+Replace `MAX_ALLOWED_LENGTH` with the actual maximum allowed value for `iwmr->len` and `stag_info->total_len`.
+
+ORIGINAL CODE:
+(struct irdma_mr *iwmr)
+{
+    struct irdma_allocate_stag_info *info;
+    struct ib_pd *pd = iwmr->ibmr.pd;
+    struct irdma_pd *iwpd = to_iwpd(pd);
+    int status;
+    struct irdma_cqp_request *cqp_request;
+    struct cqp_cmds_info *cqp_info;
+
+    info->stag_idx = iwmr->stag >> IRDMA_CQPSQ_STAG_IDX_S;
+    info->pd_id = iwpd->sc_pd.pd_id;
+    info->total_len = iwmr->len;
+    info->all_memory = pd->flags & IB_PD_UNSAFE_GLOBAL_RKEY;
+    info->remote_access = true;
+    cqp_info->cqp_cmd = IRDMA_OP_ALLOC_STAG;
+    cqp_info->post_sq = 1;
+    cqp_info->in.u.alloc_stag.dev = &iwdev->rf->sc_dev;
+    iwmr->type = IRDMA_MEMREG_TYPE_MEM;
+    palloc = &iwpbl->pble_alloc;
+    iwmr->page_cnt = max_num_sg;
+    /* Use system PAGE_SIZE as the sg page sizes are unknown at this point */
+    iwmr->len = max_num_sg * PAGE_SIZE;
+    err_code = irdma_get_pble(iwdev->rf->pble_rsrc, palloc, iwmr->page_cnt,
+                              false);
+    if (err_code)
+        goto err_get_pble;
+{
+    struct irdma_pbl *iwpbl = &iwmr->iwpbl;
+    struct irdma_reg_ns_stag_info *stag_info;
+    struct ib_pd *pd = iwmr->ibmr.pd;
+    struct irdma_pd *iwpd = to_iwpd(pd);
+    struct irdma_pble_alloc *palloc = &iwpbl->pble_alloc;
+    struct irdma_cqp_request *cqp_request;
+    struct cqp_cmds_info *cqp_info;
+    int ret;
+    stag_info->total_len = iwmr->len;
+    stag_info->access_rights = irdma_get_mr_access(access);
+    stag_info->pd_id = iwpd->sc_pd.pd_id;
+    stag_info->all_memory = pd->flags & IB_PD_UNSAFE_GLOBAL_RKEY;
+    if (stag_info->access_rights & IRDMA_ACCESS_FLAGS_ZERO_BASED)
+        stag_info->addr_type = IRDMA_ADDR_TYPE_ZERO_BASED;
+    else
+        stag_info->addr_type = IRDMA_ADDR_TYPE_VA_BASED;
+```

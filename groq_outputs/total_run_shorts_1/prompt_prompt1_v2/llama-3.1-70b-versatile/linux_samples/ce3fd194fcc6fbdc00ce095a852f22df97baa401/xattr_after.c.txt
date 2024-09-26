@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 5 & 6, Line 9
+VULNERABILITY_DESCRIPTION:
+Dereference of user-controlled pointer and potentially undefined behavior upon index out of bounds.
+
+EXPLANATION:
+Although the check for `size > INT_MAX` ensures that `size` is within the limits of a signed 32-bit integer, there are two concerns in this code snippet.
+
+First, when loading the `entry->e_value_offs` into `offs`, it may lead to an undefined behavior in case `entry` is corrupted or out of bounds. Without knowing the declaration of `entry`, we assume that `e_value_offs` is inside the valid region.
+
+Second, there seems to be a load operation of the value using `offs`. Although the code loading the value is not shown in this snippet, normally, one should validate that the index is within bounds of the accessible memory before dereferencing a pointer to `offs`.
+
+Also, without the definition of the `value` and how it interacts with `offs` (which might be shown later in the code), it might lead to Buffer Overflows.
+
+One thing that's concerning is the incorrect assignment, this behavior seems to occur in off-by-one error's.
+
+RECOMMENDATIONS:
+1. Correctly validate the `offs` range before dereferencing the `offs` pointer.
+
+   Add a check before loading the data at the offset, such as:
+   ```c
+if (offs + size > MAX_VALUE_SIZE) {
+    return -EFSCORRUPTED;
+}
+```
+   Replace `MAX_VALUE_SIZE` with the correct size of the buffer.
+
+2. Ensure the `value` buffer is large enough to accommodate the maximum possible `offs` value. Without knowing the definition of `value`, this recommendation might need to be adjusted.
+   ```c
+void *value;
+size_t maxValueSize = 1024; /* some max value */
+value = kmalloc(maxValueSize, GFP_KERNEL);
+```
+
+3. While handling the pointer value after code before *value ensure buffer does indeed have the minimum necessary to prevent off-by-one error
+
+
+ORIGINAL CODE:
+
+```c
+/* Check the values */
+while (!IS_LAST_ENTRY(entry)) {
+    u32 size = le32_to_cpu(entry->e_value_size);
+
+    if (size > INT_MAX)
+        return -EFSCORRUPTED;
+
+    if (size != 0 && entry->e_value_inum == 0) {
+        u16 offs = le16_to_cpu(entry->e_value_offs);
+        void *value;
+
+        /*
+         * The value cannot overlap the names, and the value
+```

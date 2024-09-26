@@ -1,0 +1,21 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential Parameter Validation Vulnerability
+EXPLANATION:
+The code uses `zend_parse_parameters_none()` to check if the function is called with no parameters. However, if the function is called with parameters, the `zend_parse_parameters_none()` function will return `FAILURE`, but it does not prevent the function from continuing execution. The subsequent line of code, `intl_error_set(NULL, U_ILLEGAL_ARGUMENT_ERROR)`, indicates that the function intends to handle error conditions, but the error handling is triggered by a function call that may not be designed to handle malicious input. Additionally, the fact that this is marked as a U_ILLEGAL_ARGUMENT_ERROR could imply that there is specific error handling for intentionally passed incorrect parameters. 
+This indicates that the code does not properly check for valid parameters before continuing execution and this could potentially lead to issues with parameter validation. 
+Note that the Zend parsing function does not itself introduce the vulnerability, and I emphasize that there's limited context in a single commit hunk. I would encourage further auditing to determine whether these results are directly applicable to your code.
+RECOMMENDATIONS:
+Recommendations include adding explicit parameter validation and sanitization to prevent malicious input from being processed. The `intl_error_set(NULL, U_ILLEGAL_ARGUMENT_ERROR)` call could be considered sufficient error handling in this context. However, for increased security, you could verify the parameters and trigger the `intl_error_set` call with an error condition before execution proceeds. Consider using `zend_parse_parameters` to validate and extract the parameters instead of relying on `zend_parse_parameters_none`. 
+
+ORIGINAL CODE:
+```c
+U_CFUNC PHP_FUNCTION(intlcal_get_now)
+{
+	UErrorCode	status			= U_ZERO_ERROR;
+	intl_error_reset(NULL TSRMLS_CC);
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		intl_error_set(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+```

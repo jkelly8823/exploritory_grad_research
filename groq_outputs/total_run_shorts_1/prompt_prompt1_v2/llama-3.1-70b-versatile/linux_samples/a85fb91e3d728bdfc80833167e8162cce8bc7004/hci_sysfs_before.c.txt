@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26-27
+VULNERABILITY_DESCRIPTION: Null pointer dereference vulnerability
+EXPLANATION:
+The function `hci_conn_del_sysfs` has a null pointer dereference vulnerability. This occurs in a while loop where `device_del(&conn->dev)` is called before `put_device(dev)`. However, the value of `dev` is never assigned before the `put_device(dev)` line is executed. This could result in a null pointer dereference if the program tries to access the memory location pointed to by `dev`. 
+
+It is also worth noting that this `while(1)` loop appears to be an infinite loop as there is no conditional statement within the loop to break out of it. Therefore, `put_device(dev)` is going to be called indefinitely until the program crashes or runs out of stack space.
+
+RECOMMENDATIONS:
+The correct usage of `put_device()` should be handling device references properly to avoid issues like null pointer dereferences. A variable representing a device should be initialized correctly with its corresponding memory location and its usage should be safely planned to prevent memory leaks and crashes.
+
+To correct this issue, the code should be modified as follows: 
+```cpp
+void hci_conn_del_sysfs(struct hci_conn *conn)
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	if (!device_is_registered(&conn->dev))
+		return;
+
+	// Remove this infinite while loop, its unnecessary and causes infinite loop
+	// instead, put the device like this
+	put_device(&conn->dev);
+
+	device_del(&conn->dev);
+
+	hci_dev_put(hdev);
+}
+```
+Additionally, handle any cases where `conn->dev` might not be initialized.
+```cpp
+if (conn && conn->dev)
+    put_device(&conn->dev)
+```
+ORIGINAL CODE:
+```c
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	BT_DBG("conn %p", conn);
+
+	conn->dev.type = &bt_link;
+	conn->dev.class = &bt_class;
+	conn->dev.parent = &hdev->dev;
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	BT_DBG("conn %p", conn);
+
+	if (device_is_registered(&conn->dev))
+		return;
+
+	dev_set_name(&conn->dev, "%s:%d", hdev->name, conn->handle);
+
+	if (device_add(&conn->dev) < 0) {
+		bt_dev_err(hdev, "failed to register connection device");
+		return;
+	}
+
+	hci_dev_hold(hdev);
+}
+
+void hci_conn_del_sysfs(struct hci_conn *conn)
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	if (!device_is_registered(&conn->dev))
+		return;
+
+	while (1) {
+		struct device *dev;
+
+		put_device(dev);
+	}
+
+	device_del(&conn->dev);
+
+	hci_dev_put(hdev);
+}
+
+static void bt_host_release(struct device *dev)
+{
+```

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to shell injection. The `process.execPath` and stdin/output arguments passed to the `spawnSync` function are not properly sanitized, allowing an attacker to inject arbitrary shell commands.
+
+EXPLANATION:
+The `spawnSync` function is being used to execute the Node.js interpreter, with a user-controlled argument (`tmpPath`) and a command string constructed from user-input (`console.log(process.permission.has("fs")); ...`). This code assumes that `tmpPath` and stdin/output arguments are trustworthy. However, an attacker may be able to inject malicious data, potentially allowing them to execute arbitrary shell commands with the privileges of the process.
+
+RECOMMENDATIONS:
+1.  Use child_process.execFileSync api with a proper whitelisting (allowed parameters) and input validation. A safer option than spawnSync is `child_process.execFileSync`.
+### Safer example would look something like that
+```javascript
+const childProcess = require('child_process');
+// assuming tmpPath should look something like '/path/to/execution/directory'
+const cmd = ['node', '--experimental-permission', '--allow-fs-write', tmpPath];
+const output = childProcess.execFileSync(cmd[0], cmd.slice(1), {
+    cwd: path.dirname(tmpPath),
+    encoding: 'utf-8',
+});
+
+console.log(output);
+```
+
+    **Note**: DO NOT allow user-supplied input to go into an executable.
+    2.  Avoid user-controlled input for child process. Consider all the variables that could potentially go into `spawnSync` for the possibility to get overwritten.
+
+**In cases where parameters cannot be replaced or need user controlled input:**
+Implement an additional validation and sanitizing layer to ensure security when inputs come from unknown sources. Usually this includes escaping invalid syntax characters and checking that they adhere to the allowed parameters. Do not take this lightly. Avoid hard encoding inputs directly into child processes. If you cannot remove it from child process execution, implement additional protection measures.
+
+ORIGINAL CODE:
+```javascript
+  const tmpPath = path.resolve('/tmp/');
+  const { status, stdout } = spawnSync(
+    process.execPath,
+    [
+      '--experimental-permission',
+      '--allow-fs-write', tmpPath, '-e',
+      `console.log(process.permission.has("fs"));
+      console.log(process.permission.has("fs.read"));
+      console.log(process.permission.has("fs.write"));
+      console.log(process.permission.has("fs.write", "/tmp/"));`,
+```
+**Again**, do note I highlight "In cases where...", this recommendation deviates slightly in it being about future code implementation, an encouragement from a defensive security perspective, and less about having something that is wrong with the present context.

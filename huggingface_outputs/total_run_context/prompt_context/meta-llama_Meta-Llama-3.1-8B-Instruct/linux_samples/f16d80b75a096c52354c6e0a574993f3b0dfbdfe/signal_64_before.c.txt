@@ -1,0 +1,20 @@
+ 
+
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+EXPLANATION:
+The code is vulnerable to a denial of service (TM Bad Thing exception and system crash) due to a crafted signal frame sent via a sigreturn() system call. This is because the code does not properly handle the case where hardware transactional memory is disabled.
+RECOMMENDATIONS:
+1. Add a check to ensure that hardware transactional memory is enabled before attempting to recheckpoint on return.
+2. Implement additional error handling to prevent a system crash in case of a crafted signal frame.
+3. Consider using a more secure method to handle signal frames, such as using a secure signal frame format.  ```c
+if (MSR_TM_ACTIVE(msr)) {
+	/* We recheckpoint on return. */
+	struct ucontext __user *uc_transact;
+	if (__get_user(uc_transact, &uc->uc_link))
+		goto badframe;
+	if (restore_tm_sigcontexts(current, &uc->uc_mcontext,
+				   &uc_transact->uc_mcontext)) {
+		/* Check if hardware transactional memory is enabled */
+		if (!MSR_TM_ACTIVE(msr)) {
+			/* Handle the case where hardware transactional memory is disabled

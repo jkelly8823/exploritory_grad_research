@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION:
+Double check that potentially sensitive data is cleaned up after throwing or returning.
+EXPLANATION:
+This vulnerability occurs because the code is attempting to dispose of `req_wrap` when an error occurs, but the `DoTryWrite` function is called after the potential error has been checked for and potentially after `req_wrap` has been disposed of. This means that any subsequent operations involving `req_wrap` may be accessing freed memory.
+
+Additionally, the error handling is complex and involves checking for multiple potential error conditions, but the flow of control is not carefully controlled for in each branch.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that `req_wrap` is not accessed after it has potentially been disposed of. This involves carefully managing the flow of control through each branch of the error handling logic.
+
+It could also be beneficial to simplify the error handling in this code, potentially by returning an error code that prevents access to `req_wrap` if an error occurs, rather than allowing access and manually checking for potential NULL dereferences.
+
+In the `if (err != 0 && req_wrap != nullptr)` block, add a `return` after `req_wrap->Dispose();` or throw an exception or set an error flag to indicate that an error has occurred.
+
+ORIGINAL CODE:
+    StreamReq::ResetObject(req_wrap_obj);
+  }
+
+  AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(GetAsyncWrap());
+  ShutdownWrap* req-wrap = CreateShutdownWrap(req_wrap_obj);
+  int err = DoShutdown(req_wrap);
+
+  if (err != 0 && req_wrap != nullptr) {
+    req_wrap->Dispose();
+  if (send_handle == nullptr) {
+    err = DoTryWrite(&bufs, &count);
+    if (err != 0 || count == 0) {
+      return StreamWriteResult { false, err, nullptr, total_bytes };
+    }
+  }
+
+  v8::HandleScope handle_scope(env->isolate());
+    if (!env->write_wrap_template()
+             ->NewInstance(env->context())
+             .ToLocal(&req_wrap_obj)) {
+      return StreamWriteResult { false, UV_EBUSY, nullptr, 0 };
+    }
+    StreamReq::ResetObject(req_wrap_obj);
+  }
+
+  AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(GetAsyncWrap());
+  WriteWrap* req_wrap = CreateWriteWrap(req_wrap_obj);
+
+  err = DoWrite(req_wrap, bufs, count, send_handle);
+  bool async = err == 0;
+
+    ClearError();
+  }
+
+  return StreamWriteResult { async, err, req_wrap, total_bytes };
+}
+
+template <typename OtherBase>
+SimpleShutdownWrap<OtherBase>::SimpleShutdownWrap(

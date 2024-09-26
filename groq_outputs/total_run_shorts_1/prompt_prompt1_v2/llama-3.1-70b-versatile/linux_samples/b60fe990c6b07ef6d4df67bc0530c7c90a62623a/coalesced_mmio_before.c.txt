@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 38
+VULNERABILITY_DESCRIPTION:
+An out-of-bounds read vulnerability is present due to a lack of input validation on the length parameter passed to `memcpy`.
+
+EXPLANATION:
+In the code snippet, the `memcpy` function is used to copy `len` bytes from `val` to `ring->coalesced_mmio[ring->last].data`. However, there is no validation on the value of `len` to ensure it does not exceed the size of `ring->coalesced_mmio[ring->last].data`. If `len` is larger than the size of `ring->coalesced_mmio[ring->last].data`, this will result in an out-of-bounds read, potentially leading to a buffer overflow or undefined behavior.
+
+Additionally, there is no check on the value of `ring->last` to ensure it does not exceed the maximum index of `ring->coalesced_mmio`. If `ring->last` equals `KVM_COALESCED_MMIO_MAX`, this may result in an out-of-bounds read.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add input validation on the `len` parameter and the `ring->last` index to ensure they do not exceed the size of `ring->coalesced_mmio[ring->last].data` and `KVM_COALESCED_MMIO_MAX`, respectively. Also, ensure that the buffer `ring->coalesced_mmio[ring->last].data` is sufficiently large to hold `len` bytes.
+
+```c
+if (len > sizeof(ring->coalesced_mmio[ring->last].data)) {
+    // handle error or truncate len to prevent buffer overflow
+}
+
+// validate ring->last index
+if (ring->last >= KVM_COALESCED_MMIO_MAX) {
+    // handle error or reset ring->last index
+}
+```
+ORIGINAL CODE:
+```c
+return 1;
+}
+
+static int coalesced_mmio_has_room(struct kvm_coalesced_mmio_dev *dev)
+{
+    struct kvm_coalesced_mmio_ring *ring;
+    unsigned avail;
+
+    * there is always one unused entry in the buffer
+    */
+    ring = dev->kvm->coalesced_mmio_ring;
+    avail = (ring->first - ring->last - 1) % KVM_COALESCED_MMIO_MAX;
+    if (avail == 0) {
+        /* full */
+        return 0;
+    }
+}
+{
+    struct kvm_coalesced_mmio_dev *dev = to_mmio(this);
+    struct kvm_coalesced_mmio_ring *ring = dev->kvm->coalesced_mmio_ring;
+
+    if (!coalesced_mmio_in_range(dev, addr, len))
+        return -EOPNOTSUPP;
+
+    spin_lock(&dev->kvm->ring_lock);
+
+    if (!coalesced_mmio_has_room(dev)) {
+        spin_unlock(&dev->kvm->ring_lock);
+        return -EOPNOTSUPP;
+    }
+
+    /* copy data in first free entry of the ring */
+
+    ring->coalesced_mmio[ring->last].phys_addr = addr;
+    ring->coalesced_mmio[ring->last].len = len;
+    memcpy(ring->coalesced_mmio[ring->last].data, val, len);
+    ring->coalesced_mmio[ring->last].pio = dev->zone.pio;
+    smp_wmb();
+    ring->last = (ring->last + 1) % KVM_COALESCED_MMIO_MAX;
+    spin_unlock(&dev->kvm->ring_lock);
+    return 0;
+}

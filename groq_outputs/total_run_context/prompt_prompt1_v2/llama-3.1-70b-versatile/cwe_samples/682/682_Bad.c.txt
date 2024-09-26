@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an integer overflow attack in the allocation of memory for the `table_ptr` structure.
+
+EXPLANATION:
+In the code snippet, the `num_imgs` variable is used to allocate memory for an array of `img_t` structures using `malloc`. However, the `num_imgs` variable is not validated or checked for any potential overflows before being used to allocate memory. 
+
+If `num_imgs` is a very large value, the product `sizeof(img_t) * num_imgs` could overflow the maximum value that can be represented by the system's type (typically `size_t`), potentially resulting in an integer overflow. In this scenario, `malloc` could allocate much less memory than expected or even a negative amount of memory, leading to undefined behavior when trying to access or manipulate the allocated memory.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the `num_imgs` value is validated and checked for potential overflows before using it to allocate memory. 
+
+1. Verify the validity of `num_imgs` by checking its range and ensuring it does not exceed a reasonable limit. 
+
+```c
+if (num_imgs <= 0) {
+    // handle invalid input or error
+}
+```
+
+2. Use multiplication overflow detection to prevent integer overflows.
+
+```c
+size_t neededMemory = sizeof(img_t) * num_imgs;
+if (neededMemory / sizeof(img_t) != num_imgs) {
+    // overflow detected, handle it accordingly
+}
+```
+
+3. Consider using calloc to zero out the allocated memory to prevent leakage of sensitive data.
+
+```c
+table_ptr = (img_t*)calloc(num_imgs, sizeof(img_t));
+if (table_ptr == NULL) {
+    // memory allocation failed, handle it accordingly
+}
+```
+
+ORIGINAL CODE:
+```c
+img_t table_ptr; /*struct containing img data, 10kB each*/
+int num_imgs;
+...
+num_imgs = get_num_imgs();
+table_ptr = (img_t*)malloc(sizeof(img_t)*num_imgs);
+```

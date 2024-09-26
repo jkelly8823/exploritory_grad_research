@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 135-141
+VULNERABILITY_DESCRIPTION: 
+Insecure deserialization of Distinguished Names in X.509 certificates. 
+The function `GetX509NameObject` does not properly handle the deserialization 
+of Distinguished Names (DNs) in X.509 certificates, leading to potential 
+security vulnerabilities.
+
+EXPLANATION: 
+The `GetX509NameObject` function converts Distinguished Names (DNs) in X.509 
+certificates to a JavaScript object. However, this function does not properly 
+handle the deserialization of DNs, leading to potential security vulnerabilities. 
+Specifically, the function uses the `ASN1_STRING_to_UTF8` function to convert 
+the DN values to UTF-8 strings, but it does not properly validate the resulting 
+strings. This could allow an attacker to inject malicious data into the DN 
+values, potentially leading to security vulnerabilities.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, the `GetX509NameObject` function should be modified 
+to properly validate the DN values before deserializing them. Specifically, 
+the function should:
+
+1.  Use a secure parsing library to parse the DN values, rather than relying on 
+    `ASN1_STRING_to_UTF8`.
+2.  Validate the resulting strings to ensure they meet the expected format and 
+    do not contain any malicious data.
+3.  Consider using a more secure representation for DNs, such as a binary 
+    format, rather than relying on strings.
+
+Here is a suggested implementation of the modified `GetX509NameObject` function:
+```cpp
+Local<String> v8_value;
+if (!String::NewFromUtf8(env->isolate(),
+                         reinterpret_cast<const char*>(value_str),
+                         NewStringType::kNormal,
+                         value_str_size).ToLocal(&v8_value)) {
+  // Add validation logic here to ensure the DN value is valid and secure
+  // For example, you could use a regular expression to validate the string
+  if (!IsValidDnValue(v8_value)) {
+    OPENSSL_free(value_str);
+    return MaybeLocal<Value>();
+  }
+  OPENSSL_free(value_str);
+}
+
+// ...
+
+bool IsValidDnValue(Local<String> value) {
+  // Implement validation logic here to ensure the DN value is valid and secure
+  // For example, you could use a regular expression to validate the string
+  // ...
+}
+```
+ORIGINAL CODE:
+```cpp
+// ...
+unsigned char* value_str;
+int value_str_size = ASN1_STRING_to_UTF8(&value_str, value);
+if (value_str_size < 0) {
+  return Undefined(env->isolate());
+}
+
+Local<String> v8_value;
+if (!String::NewFromUtf8(env->isolate(),
+                         reinterpret_cast<const char*>(value_str),
+                         NewStringType::kNormal,
+                         value_str_size).ToLocal(&v8_value)) {
+  OPENSSL_free(value_str);
+  return MaybeLocal<Value>();
+}
+
+OPENSSL_free(value_str);
+// ...
+```

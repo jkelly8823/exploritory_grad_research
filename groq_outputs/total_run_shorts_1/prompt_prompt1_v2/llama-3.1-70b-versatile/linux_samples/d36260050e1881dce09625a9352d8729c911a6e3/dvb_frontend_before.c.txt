@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-8
+VULNERABILITY_DESCRIPTION:
+The code is using a non-reentrant function, `kfree`, after a system call, `dtv_property_process_get`. If `dtv_property_process_get` is interrupted, it could lead to a use-after-free vulnerability.
+
+EXPLANATION:
+The issue is that `dtv_property_process_get` can block or be interrupted, causing the kernel to reschedule the task. In this scenario, it is possible for another task to call `kfree` on the same memory, freeing `tvp` before the first task has a chance to use it again. This would result in a use-after-free vulnerability.
+
+The main concern is that `kfree` is called directly after `dtv_property_process_get` returns an error. This implies that `tvp` is no longer needed, but it does not account for the possibility of `dtv_property_process_get` being interrupted.
+
+RECOMMENDATIONS:
+The code should ensure that `tvp` is properly synchronized before calling `kfree`. Here are some possible fixes:
+
+- Use `kmem_cache_free` instead of `kfree` if `tvp` is allocated with `kmem_cache_alloc`. This function is safer for synchronization purposes.
+- Use `rmalloc` or another memory allocation function that provides a synchronization mechanism, and then free the memory with the corresponding deallocation function.
+- Protect `tvp` with a mutex or a semaphore, ensuring that it cannot be freed until it is safe to do so.
+
+ORIGINAL CODE:
+		}
+		for (i = 0; i < tvps->num; i++) {
+			err = dtv_property_process_get(
+			    fe, &getp, (struct dtv_property *)tvp + i, file);
+			if (err < 0) {
+				kfree(tvp);
+				return err;
+			}

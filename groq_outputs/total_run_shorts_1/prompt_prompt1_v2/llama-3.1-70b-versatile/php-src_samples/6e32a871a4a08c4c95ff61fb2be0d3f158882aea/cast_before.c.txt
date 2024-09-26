@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12, 16-24
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a resource leak and potential use-after-free vulnerability.
+
+EXPLANATION:
+The provided code snippet seems to be implementing a custom file-like object using the `funopen` and `COOKIE_IO_FUNCTIONS_T` functions. However, I found a few issues with the code snippet.
+
+Firstly, the `fopencookie` function declaration is incomplete and seems to be missing a closing bracket at the end. However, it also calls `php_stream_write` function without checking the result of the previous function call. This can lead to a resource leak if `php_stream_write` fails, but the file descriptor is not closed.
+
+Secondly, the `stream_cookie_closer` function does not check the result of the `php_stream_close` or equivalent function. If the `php_stream_close` fails, this function should report an error or allow the caller to handle the error.
+
+Lastly, the functions do not check if the `cookie` and `funcs` pointers are NULL before using them. If they are NULL, dereferencing them can lead to segmentation faults.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it is recommended to add error checking code to ensure that file descriptors are properly closed after use. 
+Here is a sample example of the modified functions.
+
+```python
+static fpos_t stream_cookie_seeker(void *cookie, off_t position, int whence)
+{
+	TSRMLS_FETCH();
+	if (cookie == NULL) {
+	 报错;
+	}
+
+	return (fpos_t)php_stream_seek((php_stream *)cookie, position, whence);
+}
+
+static int stream_cookie_closer(void *cookie)
+{
+	if (cookie != NULL) {
+		php_stream_close((php_stream *)cookie);
+	}
+	return 0;
+}
+
+/* 
+In fopencookie function
+FILE *fopencookie(void *cookie, const char *mode, COOKIE_IO_FUNCTIONS_T *funcs)
+{
+    ...
+    if (func != NULL) {
+        result = func(arg);
+        if(result != sucess) {
+        close(cookie);
+        }
+    }
+    return result;
+}
+*/
+ORIGINAL CODE:
+/* Under BSD, emulate fopencookie using funopen */
+#if defined(HAVE_FUNOPEN) && !defined(HAVE_FOPENCOOKIE)
+typedef struct {
+	int (*reader)(void *, char *, int);
+	int (*writer)(void *, const char *, int);
+	fpos_t (*seeker)(void *, fpos_t, int);
+	int (*closer)(void *);
+} COOKIE_IO_FUNCTIONS_T;
+
+FILE *fopencookie(void *cookie, const char *mode, COOKIE_IO_FUNCTIONS_T *funcs)
+	return php_stream_write((php_stream *)cookie, (char *)buffer, size);
+}
+
+static fpos_t stream_cookie_seeker(void *cookie, off_t position, int whence)
+{
+	TSRMLS_FETCH();
+
+	return (fpos_t)php_stream_seek((php_stream *)cookie, position, whence);
+}
+
+static int stream_cookie_closer(void *cookie)
+{

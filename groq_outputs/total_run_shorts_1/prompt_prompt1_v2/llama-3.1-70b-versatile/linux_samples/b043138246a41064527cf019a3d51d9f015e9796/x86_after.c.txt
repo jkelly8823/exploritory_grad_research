@@ -1,0 +1,95 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 45-47, 51-53, 56-58
+VULNERABILITY_DESCRIPTION: 
+Concurrent access with insufficient synchronization can cause data corruption in the steal time tracking mechanism.
+
+EXPLANATION:
+The kvm_steal_time_set_preempted function sets st->preempted and vcpu->arch.st.steal.preempted to KVM_VCPU_PREEMPTED simultaneously. However, this is done without sufficient synchronization between concurrent accesses to these variables in the record_steal_time function.
+
+In record_steal_time, the code checks if a TLB flush is required (line 19) and flushes it if necessary (line 20). This is followed by a barrier (smp_wmb()) at line 22. However, the increment of st->version is done after this barrier (lines 45-47, 51-53), which can potentially interfere with other concurrent accesses to st.
+
+Similarly, in record_steal_time, after updating st->steal and vcpu->arch.st.last_steal, another barrier (smp_wmb()) is added at line 48. This barrier prevents reordering of stores to st and other variables that are concurrently accessed by kvm_steal_time_set_preempted, but does not prevent concurrent updates to these variables.
+
+RECOMMENDATIONS:
+To prevent data corruption due to concurrent access to shared variables in record_steal_time and kvm_steal_time_set_preempted functions, appropriate synchronization should be used.
+
+Here are some recommendations:
+- Use a spinlock or mutex to synchronize the access to the shared variables. This will ensure that either record_steal_time or kvm_steal_time_set_preempted can access these variables at a time.
+- Alternatively, consider using atomic_t data type and the corresponding atomic operations (atomic_set, atomic_read, etc.) to update st->preempted, st->version, and st->steal. This will prevent race conditions in concurrent access to these variables.
+
+ORIGINAL CODE:
+```c
+static void record_steal_time(struct kvm_vcpu *vcpu)
+{
+	struct kvm_host_map map;
+	struct kvm_steal_time *st;
+
+	if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+		return;
+
+	/* -EAGAIN is returned in atomic context so we can just return. */
+	if (kvm_map_gfn(vcpu, vcpu->arch.st.msr_val >> PAGE_SHIFT,
+			&map, &vcpu->arch.st.cache, false))
+		return;
+
+	st = map.hva +
+		offset_in_page(vcpu->arch.st.msr_val & KVM_STEAL_VALID_BITS);
+
+	/*
+	 * Doing a TLB flush here, on the guest's behalf, can avoid
+	 * expensive IPIs.
+	 */
+	trace_kvm_pv_tlb_flush(vcpu->vcpu_id,
+		st->preempted & KVM_VCPU_FLUSH_TLB);
+	if (xchg(&st->preempted, 0) & KVM_VCPU_FLUSH_TLB)
+		kvm_vcpu_flush_tlb(vcpu, false);
+
+	vcpu->arch.st.steal.preempted = 0;
+
+	if (st->version & 1)
+		st->version += 1;  /* first time write, random junk */
+
+	st->version += 1;
+
+	smp_wmb();
+
+	st->steal += current->sched_info.run_delay -
+		vcpu->arch.st.last_steal;
+	vcpu->arch.st.last_steal = current->sched_info.run_delay;
+
+	smp_wmb();
+
+	st->version += 1;
+
+	kvm_unmap_gfn(vcpu, &map, &vcpu->arch.st.cache, true, false);
+}
+
+int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+{
+
+static void kvm_steal_time_set_preempted(struct kvm_vcpu *vcpu)
+{
+	struct kvm_host_map map;
+	struct kvm_steal_time *st;
+
+	if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+		return;
+
+	if (vcpu->arch.st.steal.preempted)
+		return;
+
+	if (kvm_map_gfn(vcpu, vcpu->arch.st.msr_val >> PAGE_SHIFT, &map,
+			&vcpu->arch.st.cache, true))
+		return;
+
+	st = map.hva +
+		offset_in_page(vcpu->arch.st.msr_val & KVM_STEAL_VALID_BITS);
+
+	st->preempted = vcpu->arch.st.steal.preempted = KVM_VCPU_PREEMPTED;
+
+	kvm_unmap_gfn(vcpu, &map, &vcpu->arch.st.cache, true, true);
+}
+
+void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
+{
+```

@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION: 
+Insecure Object Deserialization via Prototype Pollution.
+
+EXPLANATION: 
+This function is vulnerable to prototype pollution because it does not properly validate the `attr` variable in the `pathArray`. Although it checks for `"__proto__"`, `"constructor"`, and `"prototype"`, it does not account for other attributes that may lead to prototype pollution. A malicious user could craft a `path` that includes attributes which will be serialized into the object's prototype chain, effectively polluting the prototype and leading to potential code injection or data tampering.
+
+Moreover, the function sets `objectToModify[attr]` to an empty object if `objectToModify[attr]` is not an object, without validating if the attribute already exists on the object's prototype chain. This further increases the likelihood of a successful prototype pollution attack.
+
+RECOMMENDATIONS: 
+- Use a more robust validation mechanism for attributes to prevent prototype pollution.
+- Implement a deep freeze on the object's prototype chain to prevent modification.
+- Be cautious when accepting inputs from untrusted sources.
+- Use a safer method for object modification, such as using a library that has built-in protection against prototype pollution.
+- Perform additional validation and sanitization on the `path` variable.
+
+ORIGINAL CODE:
+```javascript
+function setValueByPath (object, path, value) {
+    
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+
+        // Ignore attributes which resolve to object prototype
+        if (attr === "__proto__" || attr === "constructor" || attr === "prototype") {
+
+            continue;
+        }
+
+        if (typeof objectToModify[attr] !== "object") {
+
+            objectToModify[attr] = {};
+        }
+
+        objectToModify = objectToModify[attr];
+    }
+
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```

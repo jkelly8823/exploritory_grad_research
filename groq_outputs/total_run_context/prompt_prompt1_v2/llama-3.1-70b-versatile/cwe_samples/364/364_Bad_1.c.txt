@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 11
+VULNERABILITY_DESCRIPTION:
+The code contains a Use After Free vulnerability in the signal handlers.
+
+EXPLANATION:
+The vulnerability occurs in the `sh` function, which is used as a signal handler for the `SIGHUP` and `SIGTERM` signals. The function calls `free(global2)` and `free(global1)`, which releases the memory allocated for these global variables. However, after freeing these variables, the function exits using `exit(0)`. The problem arises when the signal handler is triggered, because signal handlers are executed in the interrupt context and do not have their own stack frame. When `sh` is called as a signal handler, it frees the memory and then continues to execute. However, if the main function tries to access these variables again before exiting, this would result in undefined behavior. Furthermore, this vulnerability can also be used in a race condition attack where an attacker can use the freed variables to launch an exploit.
+
+In the code, this can happen if `main` is still executing and tries to access `global1` or `global2` after `sh` has already freed them.
+
+RECOMMENDATIONS:
+To address this vulnerability, you should design your signal handlers to not access or manipulate pointers that can be deleted later in the main function. One way to achieve this is by not freeing the memory in the signal handler and letting the main function handle memory deallocation.
+
+Here is an example of how you can fix this code:
+
+```c
+int interrupted = 0;
+
+void sh(int dummy) {
+    interrupted = 1;
+}
+
+int main(int argc, char* argv[]) {
+    ...
+    signal(SIGHUP, sh);
+    signal(SIGTERM, sh);
+    ...
+    while (!interrupted) {
+        // your main loop here
+    }
+    free(global2);
+    free(global1);
+    exit(0);
+}
+```
+In this revised code, the signal handler simply sets an `interrupted` flag, which is checked in the `main` loop. When the `main` loop is interrupted by a signal, it will exit and then free the memory, which avoids the use-after-free vulnerability.
+
+ORIGINAL CODE:
+```c
+#include <signal.h>
+#include <syslog.h>
+#include <string.h>
+#include <stdlib.h>
+
+void *global1, *global2;
+char *what;
+
+void sh (int dummy) {
+    syslog(LOG_NOTICE,"%s\n",what);
+    free(global2);
+    free(global1);
+
+    /* Sleep statements added to expand timing window for race condition */
+    
+    sleep(10);exit(0);
+}
+
+int main (int argc,char* argv[]) {
+    what=argv[1];global1=strdup(argv[2]);global2=malloc(340);signal(SIGHUP,sh);signal(SIGTERM,sh);
+
+    /* Sleep statements added to expand timing window for race condition */
+    
+    sleep(10);exit(0);
+}
+```

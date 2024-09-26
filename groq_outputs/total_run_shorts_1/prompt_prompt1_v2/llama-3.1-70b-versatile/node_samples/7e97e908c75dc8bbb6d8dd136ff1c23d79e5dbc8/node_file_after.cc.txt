@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION: Inconsistent and Inadequate Error Handling
+EXPLANATION:
+This vulnerability arises from inconsistent and inadequate error handling. The code checks if `req_wrap_async` is `nullptr` but does not propagate the error properly if it is. Instead, the code simply skips over the error and proceeds, potentially leading to unexpected behavior or crashes.
+
+Additionally, the code does not perform any validation on `args[0]` and `args[1]` beyond checking if `path` is not null and if `args[0]` is a boolean, leading to potential null pointer dereferences or incorrect usage.
+
+The use of `CHECK_NOT_NULL` macro in C++ can lead to program termination if the condition is not met, and it does not propagate the error in a manner that can be handled by the calling function. This makes error handling inconsistent and can lead to unexpected crashes or termination.
+
+RECOMMENDATIONS:
+Use a more robust error handling mechanism, such as throwing exceptions or returning error codes, to propagate errors in a way that can be handled by the calling function. Additionally, validate `args[0]` and `args[1]` to prevent potential null pointer dereferences or incorrect usage.
+
+For example, consider replacing `CHECK_NOT_NULL` with a more controlled error handling mechanism such as:
+
+```
+if (!path.HasValue()) {
+  throw std::invalid_argument("path is empty");
+}
+```
+
+Additionally, validate `args[0]` and `args[1]` with explicit checks:
+
+```
+if (args.Length() < 2 || !args[0]->IsString() || !args[1]->IsBoolean()) {
+  throw std::invalid_argument("invalid argument type");
+}
+```
+
+ORIGINAL CODE:
+```cpp
+BufferValue path(env->isolate(), args[0]);
+CHECK_NOT_NULL(*path);
+THROW_IF_INSUFFICIENT_PERMISSIONS(
+    env, permission::PermissionScope::kFileSystemRead, path.ToStringView());
+
+bool use_bigint = args[1]->IsTrue();
+FSReqBase* req_wrap_async = GetReqWrap(args, 2, use_bigint);
+if (req_wrap_async != nullptr) {  // statfs(path, use_bigint, req)
+```

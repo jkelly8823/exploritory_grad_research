@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 17
+VULNERABILITY_DESCRIPTION:
+The vulnerability found in this code snippet is related to potential null pointer dereferences and the use of potentially unvalidated function arguments.
+
+EXPLANATION:
+Upon analyzing the code, I found two instances of function calls with 'edkey' and its members 'pubkey' and 'privkey' used without prior null pointer checks. If 'edkey' or its members are null, this will result in a null pointer dereference when calling the 'ossl_ed25519_sign' and 'ossl_ed448_sign' functions.
+
+Similarly, the 'peddsactx' and its member 'libctx' are used without null pointer checks. If 'peddsactx' or 'libctx' is null, this will also result in a null pointer dereference.
+
+Additionally, there is no validation on the 'tbslen' parameter which could lead to out-of-bounds array access in the 'ossl_ed25519_sign' and 'ossl_ed448_sign' functions.
+
+RECOMMENDATIONS:
+To fix these potential vulnerabilities, I recommend the following:
+1. Add null pointer checks for 'edkey' and its members 'pubkey' and 'privkey' before calling 'ossl_ed25519_sign' and 'ossl_ed448_sign'.
+2. Add null pointer checks for 'peddsactx' and its member 'libctx' before calling 'ossl_ed448_sign'.
+3. Validate the 'tbslen' parameter to ensure it is within the expected bounds.
+
+```
+if (edkey == NULL || edkey->pubkey == NULL || edkey->privkey == NULL) {
+    // handle null pointer error
+}
+if (peddsactx == NULL || peddsactx->libctx == NULL) {
+    // handle null pointer error
+}
+if (tbslen <= 0 || tbslen > tbs_size) {
+    // handle out-of-bounds error
+}
+```
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+        return 0;
+    }
+#ifdef S390X_EC_ASM
+    if (S390X_CAN_SIGN(ED25519))
+        return s390x_ed25519_digestsign(edkey, sigret, tbs, tbslen);
+#endif /* S390X_EC_ASM */
+    if (ossl_ed25519_sign(sigret, tbs, tbslen, edkey->pubkey, edkey->privkey,
+                          peddsactx->libctx, NULL) == 0) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_SIGN);
+        return 0;
+    }
+#ifdef S390X_EC_ASM
+    if (S390X_CAN_SIGN(ED448))
+        return s390x_ed448_digestsign(edkey, sigret, tbs, tbslen);
+#endif /* S390X_EC_ASM */
+    if (ossl_ed448_sign(peddsactx->libctx, sigret, tbs, tbslen, edkey->pubkey,
+                        edkey->privkey, NULL, 0, edkey->propq) == 0) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_SIGN);
+```

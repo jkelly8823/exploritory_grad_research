@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Memory Leak due to use of `malloc` without corresponding `free`
+
+EXPLANATION:
+In this function, `malloc` is used to allocate memory for a string, but this memory is never `free`-d. When `retMessage` is set to `message` and then returned, the original `malloc`-ed memory is not properly released, resulting in a memory leak. Additionally, `message` is being overwritten with a new local variable declaration. This can lead to unexpected behavior and memory corruption. 
+
+RECOMMENDATIONS:
+Instead of using `malloc`, consider using a local array or a smart pointer that automatically handles memory management. Alternatively, ensure that the returned memory is properly `free`-d after it is no longer needed. Also, do not redeclare `message` as a local array. If it's intended to be used as a temporary string, consider renaming the local array to something else. Here's a revised version of the code:
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char* retMessage = malloc(sizeof(char) * (length + 1));
+    if (retMessage == NULL) {
+        // Handle memory allocation failure
+        return NULL;
+    }
+
+    char tempMessage[length + 1];
+    int index;
+    for (index = 0; index < length; index++) {
+        tempMessage[index] = strMessage[index];
+    }
+    tempMessage[index] = '\0';
+
+    int len = index - 1;
+    while (isspace(tempMessage[len])) {
+        tempMessage[len] = '\0';
+        len--;
+    }
+
+    strcpy(retMessage, tempMessage);
+    return retMessage;
+}
+```
+Please note that the caller of `trimTrailingWhitespace` is responsible for `free`-ing the returned memory after it's no longer needed.
+
+ORIGINAL CODE:
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage;
+    char *message = malloc(sizeof(char)*(length+1));
+
+    // copy input string to a temporary string
+    char message[length+1];
+    int index;
+    for (index = 0; index < length; index++) {
+        message[index] = strMessage[index];
+    }
+    message[index] = '\0';
+
+    // trim trailing whitespace
+    int len = index-1;
+    while (isspace(message[len])) {
+        message[len] = '\0';
+        len--;
+    }
+
+    // return string without trailing whitespace
+    retMessage = message;
+    return retMessage;
+}
+```

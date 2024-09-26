@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a vulnerability related to potential buffer overflows or data corruption when processing SSL/TLS records.
+
+EXPLANATION:
+The RECORD_LAYER_processed_read_pending and RECORD_LAYER_read_pending functions are used to check for and retrieve pending data in the SSL/TLS connection state. However, the code does not appear to validate or sanitize the data before returning it, which could potentially lead to buffer overflows or data corruption.
+
+Additionally, the RECORD_LAYER_processed_read_pending function returns an integer value (1 or 0) to indicate if data is available. However, the return value is not checked for potential errors or exceptions, which could lead to unintended behavior.
+
+Furthermore, the RECORD_LAYER_read_pending function may return a value that is not validated or sanitized, which could potentially lead to security vulnerabilities.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to validate and sanitize the return values of the RECORD_LAYER_processed_read_pending and RECORD_LAYER_read_pending functions to prevent buffer overflows and data corruption.
+
+Additionally, consider adding error handling to the RECORD_LAYER_processed_read_pending function to handle potential errors or exceptions.
+
+Here's a possible example of how the code could be modified to add validation and error handling:
+```c
+int pending = RECORD_LAYER_processed_read_pending(&s->rlayer);
+if (pending < 0) {
+    // Handle error
+    return -1;
+}
+if (pending > 0) {
+    return 1;
+}
+int ret = RECORD_LAYER_read_pending(&s->rlayer);
+if (ret < 0) {
+    // Handle error
+    return -1;
+}
+return ret;
+```
+
+ORIGINAL CODE:
+```c
+{
+    /*
+     * Similar to SSL_pending() but returns a 1 to indicate that we have
+     * unprocessed data available or 0 otherwise (as opposed to the number of
+     * bytes available). Unlike SSL_pending() this will take into account
+     * read_ahead data. A 1 return simply indicates that we have unprocessed
+     * data. That data may not result in any application data, or we may fail
+     * to parse the records for some reason.
+     */
+    if (RECORD_LAYER_processed_read_pending(&s->rlayer))
+        return 1;
+
+    return RECORD_LAYER_read_pending(&s->rlayer);
+```

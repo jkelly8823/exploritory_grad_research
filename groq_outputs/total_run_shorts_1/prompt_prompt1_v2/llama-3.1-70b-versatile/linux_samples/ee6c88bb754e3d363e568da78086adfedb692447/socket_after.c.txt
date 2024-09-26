@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+A potential memory corruption vulnerability due to an unchecked memcpy call.
+
+EXPLANATION:
+The memcpy function call on line 3 does not validate the input from prim->ipaddr. If the size of prim->ipaddr is larger than info->sctpi_p_address, this would result in a buffer overflow, leading to memory corruption. Furthermore, prim->ipaddr may be located on the stack or heap and could potentially be overwritten, causing undefined behavior.
+
+Additionally, there is no checking if prim is a valid pointer. If prim is null or not properly initialized, dereferencing it (e.g., prim->ipaddr, prim->state, prim->cwnd, etc.) would cause a null pointer dereference.
+
+RECOMMENDATIONS:
+Use safer functions such as strncpy or snprintf instead of memcpy to prevent potential buffer overflows. Include error checking for prim pointer validity. Use sizeof operator to calculate the size of destination variable as an argument to prevent integer overflow due to incorrect size.
+
+```c
+if (prim != NULL) {
+    if (sizeof(info->sctpi_p_address) > 0) {
+        size_t copy_size = sizeof(info->sctpi_p_address);
+        if (sizeof(prim->ipaddr) < copy_size) {
+            copy_size = sizeof(prim->ipaddr);
+        }
+        memset(info->sctpi_p_address, 0, sizeof(info->sctpi_p_address));
+        memcpy(&info->sctpi_p_address, &prim->ipaddr, copy_size);
+        info->sctpi_p_state = prim->state;
+        info->sctpi_p_cwnd = prim->cwnd;
+        info->sctpi_p_srtt = prim->srtt;
+        info->sctpi_p_rto = jiffies_to_msecs(prim->rto);
+    } else {
+        // Handle zero-sized sctpi_p_address
+    }
+} else {
+    // Handle null prim pointer
+}
+```
+
+ORIGINAL CODE:
+```c
+info->sctpi_ictrlchunks = asoc->stats.ictrlchunks;
+
+prim = asoc->peer.primary_path;
+memcpy(&info->sctpi_p_address, &prim->ipaddr, sizeof(prim->ipaddr));
+info->sctpi_p_state = prim->state;
+info->sctpi_p_cwnd = prim->cwnd;
+info->sctpi_p_srtt = prim->srtt;
+info->sctpi_p_rto = jiffies_to_msecs(prim->rto);
+```

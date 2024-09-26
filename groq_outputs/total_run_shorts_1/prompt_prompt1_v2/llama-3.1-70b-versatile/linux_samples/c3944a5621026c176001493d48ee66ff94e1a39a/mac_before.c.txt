@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+ Resource released before null check.
+EXPLANATION:
+The vulnerable code is that the spin lock is unlocked before checking if the `peer` pointer is `NULL`. If the `peer` pointer is used later in the code without re-acquiring the lock, there is a risk of data corruption or crashes due to concurrent access.
+RECOMMENDATIONS:
+The recommended fix for this code is to perform the null check before releasing the lock. If the `peer` pointer is null, release the lock before dealing with the error condition. If the `peer` pointer is not null, and it is going to be accessed later, the lock should be kept locked until the access is complete.
+
+```c
+spin_lock_bh(&ab->base_lock);
+peer = ath11k_peer_find(ab, arvif->vdev_id, peer_addr);
+
+if (!peer) {
+    spin_unlock_bh(&ab->base_lock);
+    // Handle null peer error
+    if (cmd == SET_KEY) {
+        // ...
+    }
+} else {
+    // peer is valid, use it safely while still holding the lock
+    spin_unlock_bh(&ab->base_lock);
+    // Use peer if safe to do so
+}
+```
+
+ORIGINAL CODE:
+```c
+/*
+spin_lock_bh(&ab->base_lock);
+peer = ath11k_peer_find(ab, arvif->vdev_id, peer_addr);
+spin_unlock_bh(&ab->base_lock);
+
+if (!peer) {
+    if (cmd == SET_KEY) {
+```
+
+Note that the recommendations assume a safe unlock before error handling and also assumes that it is safe to use `peer` after the unlock depending on the logic of your program.

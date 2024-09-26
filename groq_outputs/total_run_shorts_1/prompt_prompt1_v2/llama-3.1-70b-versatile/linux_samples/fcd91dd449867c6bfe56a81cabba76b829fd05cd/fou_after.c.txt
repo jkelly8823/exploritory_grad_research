@@ -1,0 +1,16 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 11-12
+VULNERABILITY_DESCRIPTION:
+The code has a potential double-free vulnerability when WARN_ON_ONCE is triggered.
+
+EXPLANATION:
+The given code contains two blocks of code where `rcu_read_unlock()` is called in a sequence that is executed when `ops->callbacks.gro_receive` is NULL, represented by the labels `out_unlock`. 
+
+In cases where `WARN_ON_ONCE` is triggered, the program would reach `out_unlock` and execute `rcu_read_unlock()` before jumping to the last block where another `out_unlock` exists, which would result in another call to `rcu_read_unlock()`. 
+
+The repeated call to `rcu_read_unlock()` potentially represents a double-free if `rcu_read_unlock()` assumes that it's unlocking an RCU-protected critical section. Although the code may not inherently use an unlocked data structure that requires being freed, a similar misuse could potentially lead to freeing a structure's descriptor or linked node when it wasn't properly checked.
+
+RECOMMENDATIONS:
+1. Remove all of the duplicate labels `out_unlock`. The intention behind having these labels might be for error handling, but label duplication in this context does more harm than good.
+
+2. If this code's structure and flow is intentionally double-checking `ops->callbacks.gro_receive` after it was checked previously and found valid at that instant, be wary of potential threading race condition possibility during that duration the second valid check is executed after some code flow progressed from the 1st `out_unlock:` occurrence to result in entering `if (WARN_ON_ONCE...`.

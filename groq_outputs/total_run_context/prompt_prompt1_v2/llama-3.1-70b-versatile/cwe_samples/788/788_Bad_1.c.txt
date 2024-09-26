@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES:  Lines with memcpy function call
+VULNERABILITY_DESCRIPTION:
+  The code is vulnerable to a buffer overflow vulnerability. The memcpy function is used with a dynamically calculated size that is one less than the return value of the returnChunkSize function, which may not be validated for its maximum value. If the returnChunkSize function returns a value close to the maximum value that can be stored in an int, subtracting one from it may cause integer underflow and result in a large value, potentially larger than the actual buffer size of srcBuf or destBuf.
+
+EXPLANATION:
+  The returnChunkSize function returns the size of the usable memory of a chunk. However, it's possible that the returned size is not validated before being used in the memcpy function call. The memcpy function then proceeds to copy data from srcBuf to destBuf with the calculated size, potentially causing a buffer overflow if the calculated size exceeds the actual buffer size of either srcBuf or destBuf.
+
+RECOMMENDATIONS:
+  To fix this vulnerability, ensure that the return value of the returnChunkSize function is validated for its maximum value and checked against the actual buffer size of srcBuf and destBuf to prevent potential buffer overflow. Additionally, consider using safer versions of memcpy such as memccpy or memcpy_s that can prevent buffer overflows.
+
+  Here is an example of how to fix the vulnerability:
+
+  ```c
+  size_t chunkSize = returnChunkSize(destBuf);
+  if (chunkSize > 0 && chunkSize <= SIZE_MAX)) { // SIZE_MAX is assumed to be the maximum size of the buffer
+    size_t copySize = chunkSize - 1;
+    if (copySize < chunkSize) {  // check for potential underflow
+      memcpy(destBuf, srcBuf, copySize);
+    } else {
+      // handle error
+    }
+  } else {
+    // handle error
+  }
+  ```
+
+ORIGINAL CODE:
+int returnChunkSize(void *) {
+  /* if chunk info is valid, return the size of usable memory, else, return -1 to indicate an error */
+  ...
+}int main() {...memcpy(destBuf, srcBuf, (returnChunkSize(destBuf)-1));...}

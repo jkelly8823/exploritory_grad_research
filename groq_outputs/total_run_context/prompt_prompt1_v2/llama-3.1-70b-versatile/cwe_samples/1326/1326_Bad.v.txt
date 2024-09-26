@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9
+VULNERABILITY_DESCRIPTION:
+Potential Buffer Overflow and Out-of-Bounds Array Access
+
+EXPLANATION:
+The code snippet uses array indexing with dynamically computed indices (addr_i and raddr_q). The indexing is not validated against the array bounds, which could lead to buffer overflows and out-of-bounds array accesses. The fact that `raddr_q` is assigned a value based on `addr_i` and used later to access the `mem` array means that exploiting the issue with `addr_i` could potentially lead to writing outside the bounds of `mem`.
+
+Additionally, in the line `rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;`, the check is done with `raddr_q < RomSize`, which is only preventing accesses to an invalid index if `RomSize` is less than 0. The upper bound of the `mem` array, however, is not checked.
+
+RECOMMENDATIONS:
+To address these issues:
+
+*   Validate `addr_i` against the bounds of the `mem` array before using it to assign a value to `raddr_q`.
+*   Validate `raddr_q` against the bounds of the `mem` array before using it to access the `mem` array in both assignments.
+
+Example:
+
+```SystemVerilog
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        if (!we_i) begin
+            if (addr_i[$clog2(RomSize)-1+3:3] >= 0 && addr_i[$clog2(RomSize)-1+3:3] < RomSize) begin
+                raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+            end else begin
+                // handle error or invalid address
+            end
+        end else begin
+            if (addr_i[$clog2(RomSize)-1+3:3] >= 0 && addr_i[$clog2(RomSize)-1+3:3] < RomSize) begin
+                mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;
+            end else begin
+                // handle error or invalid address
+            end
+        end
+    end
+end
+```
+
+And:
+
+```SystemVerilog
+assign rdata_o = (raddr_q >= 0 && raddr_q < RomSize) ? mem[raddr_q] : '0;
+```
+
+ORIGINAL CODE:
+```SystemVerilog
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        if (!we_i) begin
+            raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+        end else begin
+            mem[addr_i[$clog2(RomSize)-1+3:3]] <= wdata_i;
+        end
+    end
+end
+
+// this prevents spurious Xes from propagating into the speculative fetch stage of the core
+
+assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;
+```

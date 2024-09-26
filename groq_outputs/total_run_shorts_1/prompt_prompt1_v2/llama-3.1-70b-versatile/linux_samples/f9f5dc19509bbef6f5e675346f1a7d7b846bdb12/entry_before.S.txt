@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+The code is using an insecure input validation for a System Management Call (SMC) operation, allowing potential escalation of privileges.
+
+EXPLANATION:
+This code appears to be making a System Management Call (SMC), potentially modifying or querying the processor's internal state. However, the input to the SMC call is not thoroughly sanitized. While it appears the code is moving in a set value for x0, which holds the input parameters for the SMC call, any other input parameters (X1-X7) for the SMC call are left uninitialized. SMC calls often rely on both X0 and X1 for inputs; an attacker could potentially overwrite X1 to subvert the intended behavior of the SMC call.
+
+Additionally, on AArch64 platforms, it is generally recommended to use secure register values and sign-post them through using the mrs MSR or the "mrs CurrentEL; mrs MSR" pattern to introduce domain-specific, untrusted data. Since this code defines a function to sanitize the BTAC predictors, leaving lower-registers(esp x1-x7) uninitialised may lead an attacker to inject malicious arguments and execute potentially sensitive system resources.
+
+RECOMMENDATIONS:
+To avoid this vulnerability:
+1.  Ensure that all registers are initialized with secure values before the SMC call, specifically zeroed or validated (if taken from an insecure source).
+2.  Use an explicit return so that it is obvious when the function ends.
+3.  Ensure that a robust memory barrier exists before data is loaded into a target register (e.g., MSR, SPSR).
+An example of recommended modified code:
+
+```arm
+ENTRY(__qcom_hyp_sanitize_btac_predictors)
+    movz    x0, #0x1700
+    movk    x0, #0xc200, lsl #16
+    mov     x1, xzr          // zero initialize arguments for SMC call
+    mov     x2, xzr
+    mov     x3, xzr
+    str     xzr, [sp, #-16]! // Stash X4-X7 zeroes safely - an alternative way
+    str     xzr, [sp, #-16]!
+    str     xzr, [sp, #-16]!
+    str     xzr, [sp, #-16]! // Here at least once sp (stack-pointer) aligned with AArch64 Spec, for your program, offset accordingly of 'sp'
+
+    smc     #0
+    ret
+    str     xzr, [sp], #-16    // Free-up reserved stack (on exit)
+    str     xzr, [sp], #-16
+    str     xzr, [sp], #-16 // Do these with program-specific stack space (offset in source)
+    str     xzr, [sp], #-16
+ENDPROC(__qcom_hyp_sanitize_btac_predictors)
+```
+
+ORIGINAL CODE:
+```arm
+    eret
+ENDPROC(__fpsimd_guest_restore)
+
+ENTRY(__qcom_hyp_sanitize_btac_predictors)
+    /**
+     * Call SMC64 with Silicon provider serviceID 23<<8 (0xc2001700)
+     * 0xC2000000-0xC200FFFF: assigned to SiP Service Calls
+     * b15-b0: contains SiP functionID
+     */
+    movz    x0, #0x1700
+    movk    x0, #0xc200, lsl #16
+    smc     #0
+    ret
+ENDPROC(__qcom_hyp_sanitize_btac_predictors)
+```

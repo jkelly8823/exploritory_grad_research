@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+
+EXPLANATION:
+The vulnerability exists in lines 6-7, where user input `tmp_name2` is being concatenated into a SQL query without proper sanitization. The `php_addslashes` function is being used, but it is not sufficient to prevent SQL injection attacks. `php_addslashes` only escapes single quotes, but it does not prevent SQL injection through other means, such as using backslashes or exploiting vulnerabilities in the database.
+
+The `PQgetvalue` function is also being used, which can be vulnerable to SQL injection if the input is not properly sanitized. The `PQgetvalue` function returns a string value, which is not checked for SQL injection attacks.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use prepared statements with parameterized queries. This will prevent any user input from being executed as SQL code.
+
+```c
+// Replace lines 6-7 with the following code
+PGresult *pg_result;
+PGparamdesc *paramdesc;
+int numparams;
+const char *const paramValues[2];
+paramValues[0] = tmp_name2;
+paramValues[1] = NULL;
+
+// Prepare the SQL query with a parameter
+pg_result = PQprepare(pg_link, tmp_name2, "SELECT a.attname, a.attnum, t.typname, a.attlen, a.attnotNULL, a.atthasdef, a.attndims "
+"FROM pg_class as c, pg_attribute a, pg_type t, pg_namespace n "
+"WHERE a.attnum > 0 AND a.attrelid = c.oid AND c.relname = $1", 1, NULL);
+
+// Bind the parameter values
+PQexecPrepared(pg_link, tmp_name2, 1, (const char *const *)paramValues, NULL, NULL, 0);
+```
+
+ORIGINAL CODE:
+```c
+smart_str_appends(&querystr, 
+"SELECT a.attname, a.attnum, t.typname, a.attlen, a.attnotNULL, a.atthasdef, a.attndims "
+"FROM pg_class as c, pg_attribute a, pg_type t, pg_namespace n "
+"WHERE a.attnum > 0 AND a.attrelid = c.oid AND c.relname = '");
+tmp_name2 = php_addslashes(tmp_name2, strlen(tmp_name2), &new_len, 0 TSRMLS_CC);
+smart_str_appendl(&querystr, tmp_name2, new_len);
+add_assoc_bool(elem, "has default", 0);
+}
+add_assoc_long(elem, "array dims", atoi(PQgetvalue(pg_result,i,6)));
+name = PQgetvalue(pg_result,i,0);
+add_assoc_zval(meta, name, elem);
+}
+PQclear(pg_result);
+zval_dtor(return_value); /* destroy array */
+RETURN_FALSE;
+}
+} 
+/* }}} */
+
+/* {{{ php_pgsql_get_data_type
+ */
+char *field = NULL;
+uint field_len = -1;
+ulong num_idx = -1;
+zval *meta, **def, **type, **not_null, **has_default, **val, *new_val;
+int new_len, key_type, err = 0, skip_field;
+
+assert(pg_link != NULL);
+assert(Z_TYPE_P(values) == IS_ARRAY);
+assert(Z_TYPE_P(result) == IS_ARRAY);
+php_error_docref(NULL TSRMLS_CC, E_NOTICE, "Detected broken meta data. Missing 'has default'");
+err = 1;
+}
+if (!err && (Z_TYPE_PP(val) == IS_ARRAY ||
+ Z_TYPE_PP(val) == IS_OBJECT ||
+ Z_TYPE_PP(val) == IS_CONSTANT_ARRAY)) {
+php_error_docref(NULL TSRMLS_CC, E_NOTICE, "Expects scaler values as field values");
+err = 1;
+}
+if (err) {
+break; /* break out for() */
+}
+ALLOC_INIT_ZVAL(new_val);
+switch(php_pgsql_get_data_type(Z_STRVAL_PP(type), Z_STRLEN_PP(type)))
+{
+case PG_BOOL:
+switch (Z_TYPE_PP(val)) {
+case IS_STRING:
+```

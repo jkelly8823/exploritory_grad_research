@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 11-16
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a Resource Leak and Inconsistent Error Handling vulnerability.
+
+EXPLANATION:
+The code allocates a new skb (line 7) but does not free it in case of an error or when it is no longer needed. Although the skb is added to a queue (line 11), it might not be processed or dequeued. Furthermore, the code only prints a message when skb allocation fails (line 8) but continues to use the function call stack. This might lead to resource leaks. Additionally, lines 11-16 use resources without proper error checking.
+
+RECOMMENDATIONS:
+Before adding skb to the queue, add proper error checking. If adding skb to the queue fails, deallocate skb to prevent resource leak. The skb should be freed in the loop once it is dequeued and processed, or when the loop exits. 
+
+```c
+if (skb_put(skb, sizeof *h + sizeof *ch)) {
+    // handle skb_put error
+    kfree_skb(skb);
+    dev_put(ifp);
+    continue;
+}
+
+//...
+
+__skb_queue_tail(queue, skb);
+if (!__skb_queue_head(queue)) {
+    kfree_skb(skb);
+    dev_put(ifp);
+    // handle queue error
+}
+```
+Make sure that skb is freed properly after dequeueing and processing to prevent resource leaks.
+
+ORIGINAL CODE:
+
+
+	rcu_read_lock();
+	for_each_netdev_rcu(&init_net, ifp) {
+		dev_hold(ifp);
+		if (!is_aoe_netif(ifp)) {
+			dev_put(ifp);
+			continue;
+		}
+
+		skb = new_skb(sizeof *h + sizeof *ch);
+		if (skb == NULL) {
+			printk(KERN_INFO "aoe: skb alloc failure\n");
+			dev_put(ifp);
+			continue;
+		}
+		skb_put(skb, sizeof *h + sizeof *ch);
+		skb->dev = ifp;
+		__skb_queue_tail(queue, skb);
+		h->major = cpu_to_be16(aoemajor);
+		h->minor = aoeminor;
+		h->cmd = AOECMD_CFG;
+	}
+	rcu_read_unlock();
+}

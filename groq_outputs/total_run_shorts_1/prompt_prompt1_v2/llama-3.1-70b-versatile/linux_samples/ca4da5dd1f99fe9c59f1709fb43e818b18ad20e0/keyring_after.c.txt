@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+A potential race condition exists due to releasing a semaphore before operating on a shared resource.
+
+EXPLANATION:
+The code releases the semaphore `keyring_serialise_link_sem` before accessing and modifying the `keyring` object. However, there is no explicit synchronization mechanism in place to prevent concurrent access to `keyring` between the release of `keyring_serialise_link_sem` and the subsequent operations on `keyring`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider adding explicit synchronization between the release of `keyring_serialise_link_sem` and the subsequent operations on `keyring`. This can be achieved by holding a lock on `keyring` or using alternative synchronization mechanisms to ensure exclusive access.
+
+One possible fix is to introduce a new semaphore or lock that is held while operating on `keyring`, ensuring that no other thread can access it until the operation is complete.
+
+An example of the recommended fix is:
+
+```c
+if (index_key->type == &key_type_keyring)
+    up_write(&keyring_serialise_link_sem);
+
+down_write(&keyring_sem); // Acquire the semaphore
+if (edit) {
+    if (!edit->dead_leaf) {
+        key_payload_reserve(keyring,
+            keyring->datalen - KEYQUOTA_LINK_BYTES);
+    }
+    assoc_array_cancel_edit(edit);
+}
+up_write(&keyring->sem);
+up_write(&keyring_sem); // Release the semaphore
+}
+
+// Initialize keyring_sem at the beginning or declare it globally
+semaphore_t keyring_sem;
+```
+
+ORIGINAL CODE:
+```c
+if (index_key->type == &key_type_keyring)
+    up_write(&keyring_serialise_link_sem);
+
+if (edit) {
+    if (!edit->dead_leaf) {
+        key_payload_reserve(keyring,
+            keyring->datalen - KEYQUOTA_LINK_BYTES);
+    }
+    assoc_array_cancel_edit(edit);
+}
+up_write(&keyring->sem);
+}

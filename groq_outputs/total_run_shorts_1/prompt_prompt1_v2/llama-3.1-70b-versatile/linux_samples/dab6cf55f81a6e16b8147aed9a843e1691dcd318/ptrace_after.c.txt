@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-18
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential integer overflow.
+
+EXPLANATION:
+The code performs a left shift operation by 32 bits on the variable `tmp` of an unsigned type and assigns it to `regs->psw.mask`. However, it is not clear from the given code snippet whether `regs->psw.mask` and `tmp` are capable of handling this operation without causing an integer overflow.
+
+Given that the code left shifts `tmp` by 32 bits and assigns the result to `regs->psw.mask`, it can cause an integer overflow if `regs->psw.mask` is of type `uint32_t` or any other 64 bit type with less than 64 bit capacity. However, for systems of 64bits or systems implementing integers larger than 64bits as a substitute for the required operation this will work correctly.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, ensure that `regs->psw.mask` and `tmp` are able to handle a 64-bit operation without causing an integer overflow. This can be achieved by using data types that support a minimum of 64-bit operations (e.g., `uint64_t`).
+
+Additionally, some sanity checks should be applied to prevent overflows.
+
+ORIGINAL CODE:
+```c
+		mask |= is_ri_task(child) ? PSW_MASK_RI : 0;
+		if ((data ^ PSW_USER_BITS) & ~mask)
+			/* Invalid psw mask. */
+			return -EINVAL;
+		if ((data & PSW_MASK_ASC) == PSW_ASC_HOME)
+			/* Invalid address-space-control bits */
+			return -EINVAL;
+		if ((data & PSW_MASK_EA) && !(data & PSW_MASK_BA))
+			/* Invalid addressing mode bits */
+			return -EINVAL;
+	}
+		*(addr_t *)((addr_t) &task_pt_regs(child)->psw + addr) = data;
+// ...
+		mask |= is_ri_task(child) ? PSW32_MASK_RI : 0;
+		/* Build a 64 bit psw mask from 31 bit mask. */
+		if ((tmp ^ PSW32_USER_BITS) & ~mask)
+			/* Invalid psw mask. */
+			return -EINVAL;
+		if ((data & PSW32_MASK_ASC) == PSW32_ASC_HOME)
+			/* Invalid address-space-control bits */
+			return -EINVAL;
+		regs->psw.mask = (regs->psw.mask & ~PSW_MASK_USER) |
+			(regs->psw.mask & PSW_MASK_BA) |
+			(__u64)(tmp & mask) << 32;
+	} else if (addr == (addr_t) &dummy32->regs.psw.addr) {
+```

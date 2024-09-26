@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+The vulnerability present is a potential buffer overflow due to a lack of bounds checking in the `php_register_variable_safe` function.
+
+EXPLANATION:
+The `php_register_variable_safe` function's third argument `new_val_len` is supposed to prevent buffer overflows by limiting the length of the value being registered. However, the length check is not performed within the loop, and instead, the loop relies on the `zend_hash_get_current_key_ex` function's return values, which may not always indicate an error. Furthermore, the length check on `var_len` does not consider the null-terminator, which may also lead to buffer overflows.
+
+Moreover, the loop does not check if the `val` and `new_val_len` parameters have valid values before passing them to the `php_register_variable_safe` function. This can cause the function to operate on uninitialized or out-of-bounds memory, leading to undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the following steps can be taken:
+
+1. Add bounds checking within the loop to ensure that `var_len` and `new_val_len` do not exceed a certain threshold.
+
+2. Validate the `val` and `new_val_len` parameters before passing them to the `php_register_variable_safe` function.
+
+3. Ensure that the `var` and `new_val_len` parameters are properly initialized and do not point to out-of-bounds memory.
+
+4. Consider using a safer function to register variables, such as `php_register_variable_ex`, which allows for more fine-grained control over the registration process.
+
+ORIGINAL CODE:
+
+```c
+int filter_arg = (array_ptr == PG(http_globals)[TRACK_VARS_ENV])?PARSE_ENV:PARSE_SERVER;
+
+/* turn off magic_quotes while importing environment variables */
+if (PG(magic_quotes_gpc)) {
+	zend_alter_ini_entry_ex("magic_quotes_gpc", sizeof("magic_quotes_gpc"), "0", 1, ZEND_INI_SYSTEM, ZEND_INI_STAGE_ACTIVATE, 1 TSRMLS_CC);
+}
+for (zend_hash_internal_pointer_reset_ex(request->env, &pos);
+	zend_hash_get_current_key_ex(request->env, &var, &var_len, &idx, 0, &pos) == HASH_KEY_IS_STRING &&
+	php_register_variable_safe(var, *val, new_val_len, array_ptr TSRMLS_CC);
+	})
+}
+PG(magic_quotes_gpc) = magic_quotes_gpc;
+}
+}
+
+static void sapi_cgi_register_variables(zval *track_vars_array TSRMLS_DC)
+```

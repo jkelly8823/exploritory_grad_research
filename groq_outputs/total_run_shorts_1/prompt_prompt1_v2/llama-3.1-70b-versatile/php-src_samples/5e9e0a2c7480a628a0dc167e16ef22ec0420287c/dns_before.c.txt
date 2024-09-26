@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 145-169
+VULNERABILITY_DESCRIPTION:
+This code contains a heap overflow vulnerability. The `make_val` function (`memcpy`) doesn't check if there's enough space in `tp` to hold `dlen + 1` bytes of data. The `ll` variable that keeps track of the current position in `cp` is incremented in an inner loop (`while (ll < dlen)`) and then used to index `cp` in `memcpy` (`cp + ll + 1`), potentially overwriting data that shouldn't be written.
+
+EXPLANATION:
+This vulnerability is concerning because the data being copied into `tp` is sourced from the network (via `cp`). This could allow a malicious actor to control what data is copied to the heap, which in turn could allow for execution of arbitrary code.
+
+RECOMMENDATIONS:
+The solution is to limit the amount of data copied to `tp` in the `memcpy` function, to be the minimum between `n` and `dlen-ll-1`, like so:
+
+```c
+int min_len = ll + n <= dlen ? n : dlen - ll - 1;
+memcpy(tp + ll, cp + ll + 1, min_len);
+```
+
+This limits the maximum data being copied into `tp` at any given time, preventing potential heap overflows.
+
+ORIGINAL CODE:
+```c
+while (ll < dlen) {
+    n = cp[ll];
+    if ((ll + n) >= dlen) {
+        // Invalid chunk length, truncate
+        n = dlen - (ll + 1);
+    }
+    memcpy(tp + ll, cp + ll + 1, n);
+    add_next_index_stringl(entries, cp + ll + 1, n, 1);
+    ll = ll + n + 1;
+}
+```

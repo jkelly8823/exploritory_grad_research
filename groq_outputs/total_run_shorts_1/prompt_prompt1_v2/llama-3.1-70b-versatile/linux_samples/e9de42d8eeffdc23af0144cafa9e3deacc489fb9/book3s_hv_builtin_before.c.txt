@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: LineNumbers: 15-17
+VULNERABILITY_DESCRIPTION:
+In the code snippet, there is a potential race condition and use-after-free vulnerability. The `ri` pointer is allocated and its members are initialized before a potential allocation and pointer arithmetic. However, an exception can occur between the allocation of `page` and the initialization of `ri->base_pfn`. This might leave `ri` allocated but not fully initialized when an exception occurs.
+
+EXPLANATION:
+In the provided code snippet, `kmalloc` is used to allocate memory for `struct kvm_rma_info` with the `GFP_KERNEL` flag. This allocation may fail, and if it does, the function immediately returns. However, there is no check to see if an exception occurred during the `cma_alloc` of `page`. An exception can potentially occur after `kmalloc` has successfully allocated memory for `ri`. This could cause the memory allocated by `kmalloc` to leak if it's not freed in the error path.
+
+RECOMMENDATIONS:
+1. Free the `kmalloc`-allocated `ri` in the error path after the `page` allocation has failed. This will prevent memory leaks.
+2. Consider using a more robust error handling mechanism that prevents different types of memory leaks or resource leaks in case of exceptions.
+
+ORIGINAL CODE:
+
+```c
+ri = kmalloc(sizeof(struct kvm_rma_info), GFP_KERNEL);
+if (!ri)
+	return NULL;
+page = cma_alloc(kvm_cma, kvm_rma_pages, get_order(kvm_rma_pages));
+if (!page)
+	goto err_out;
+atomic_set(&ri->use_count, 1);
+ri->base_pfn = page_to_pfn(page);
+{
+	unsigned long align_pages = HPT_ALIGN_PAGES;
+
+	VM_BUG_ON(get_order(nr_pages) < KVM_CMA_CHUNK_ORDER - PAGE_SHIFT);
+
+	/* Old CPUs require HPT aligned on a multiple of its size */
+	if (!cpu_has_feature(CPU_FTR_ARCH_206))
+		align_pages = nr_pages;
+	return cma_alloc(kvm_cma, nr_pages, get_order(align_pages));
+}
+EXPORT_SYMBOL_GPL(kvm_alloc_hpt);
+
+void kvm_release_hpt(struct page *page, unsigned long nr_pages)
+```
+
+Add this code segment on error path to fix the vulnerability:
+```c
+err_out:
+    kfree(ri);
+    return NULL;
+```

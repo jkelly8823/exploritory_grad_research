@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+A lock can be acquired and released multiple times in the same function call, potentially leading to a deadlock scenario.
+
+EXPLANATION:
+In the given code snippet, the lock `&ar->ab->base_lock` is acquired via `spin_unlock_bh` and released via `spin_lock_bh`. This locking pattern can lead to a deadlock situation if the lock is not properly synchronized.
+
+However, looking closer at the locking calls, the sequence of locking calls appears to be correct: it's released before re-acquiring in a sequence inside the loop.
+
+The true issue appears in line 9: `spin_unlock_bh(&ar->ab->base_lock);` The call `spin_unlock_bh` is unsafe because the lock `ar->ab->base_lock` was obtained from `spin_lock_bh` is released - the risk now leaves open: Because `spin_unlock_bh` may actually sleep if a reschedule occurs.
+
+RECOMMENDATIONS:
+Using the regular spin lock functions `spin_unlock()` instead of `spin_unlock_bh()` could resolve the vulnerability.
+spin_lock_bh() is a regular spinlock variant designed for low-level performance that under normal operation should not introduce rescheduling based on the BH disabled requirement. And a call to BH enable is more or less necessary followed by an acquire back spin_lock followed that unlocks properly and isn't releasing based on a condition.
+
+It can be also recommended to introduce an additional check if BH is disabled before calling `spin_unlock()`. It adds increased fail-safes on nested operation.
+
+
+ORIGINAL CODE:
+```c
+__skb_queue_purge(&rx_tid->rx_frags);
+}
+
+void ath11k_peer_frags_flush(struct ath11k *ar, struct ath11k_peer *peer)
+{
+	struct dp_rx_tid *rx_tid;
+	int i;
+
+	lockdep_assert_held(&ar->ab->base_lock);
+
+	for (i = 0; i <= IEEE80211_NUM_TIDS; i++) {
+		rx_tid = &peer->rx_tid[i];
+
+		spin_unlock_bh(&ar->ab->base_lock);
+		del_timer_sync(&rx_tid->frag_timer);
+		spin_lock_bh(&ar->ab->base_lock);
+
+		ath11k_dp_rx_frags_cleanup(rx_tid, true);
+	}
+}
+
+void ath11k_peer_rx_tid_cleanup(struct ath11k *ar, struct ath11k_peer *peer)
+{
+	struct dp_rx_tid *rx_tid;
+	int i;
+```

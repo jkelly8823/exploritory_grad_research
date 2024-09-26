@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-14
+VULNERABILITY_DESCRIPTION: Potential Deadlock
+EXPLANATION:
+The current implementation holds the hash bucket (hb) lock and immediately after that calls `futex_wait_queue_me`, which likely unlocks the hash bucket and puts the current thread to sleep. The issue lies in the fact that after waking up from the sleep, the lock is re-acquired using `spin_lock` on the same hash bucket (hb). 
+
+This creates a classic deadlock situation, if two or more threads are competing to requeue the same pair of futexes, or for a particular order in which the threads will execute after requeueing is done. More specifically, if both threads can requeue and put themselves to sleep trying to wait for each other to finish their operation on the same hb, there is potential for deadlock.
+
+RECOMMENDATIONS:
+The fix would require careful reconsideration of what locks need to be held during the entire requeue operation. One solution would be to not unlock the hash bucket (hb) before putting the current thread to sleep and letting it be woken up from there. Instead, hold the lock and carefully determine if the operation can actually be performed, and release the lock once the operation has completed or has been properly prepared.
+
+ORIGINAL CODE:
+```
+struct futex_q *this, *next;
+
+if (requeue_pi) {
+	/*
+	 * requeue_pi requires a pi_state, try to allocate it now
+	 * without any locks in case it fails.
+	 */
+	if (unlikely(ret != 0))
+		goto out_put_key1;
+
+	hb1 = hash_futex(&key1);
+	hb2 = hash_futex(&key2);
+
+retry_private:
+	if (ret)
+		goto out_key2;
+
+	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
+	futex_wait_queue_me(hb, &q, to);
+
+	spin_lock(&hb->lock);
+```

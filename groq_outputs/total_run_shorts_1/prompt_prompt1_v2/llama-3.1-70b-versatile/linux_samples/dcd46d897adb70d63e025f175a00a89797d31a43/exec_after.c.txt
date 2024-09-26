@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+51-53, 54-56 
+lines 51-53 may have an issue as well; however more context is required - this falls into - we cannot afford to be incorrect..
+
+
+VULNERABILITY_DESCRIPTION: 
+Uncontrolled data expansion with user data from copy_string_kernel. 
+
+
+EXPLANATION: 
+Uncontrolled data expansion occurs when data received from a potentially untrusted source is not validated and then stored or manipulated without concern for size limits. 
+This code seems to handle expansions with user-supplied data in copy_string_kernel- a function that relies on untrusted user data- seemingly without controls on the size of the data (See: lines 51-53 though it is not clear if these lines are vulnerable as they partially lack context) If there are limits they are not visible in the copied code. Thus regardless of such limits, it is known that line 54 has issues with this problem. Additionally the code leaves untrusted data so close to control-flow (ie control return aka returning aka "goto statements" seen within this function; seemingly allowing an "attack" vector for a userland supplied and determined variable within a buffer overflow (assuming it occurs near line 51 by making certain this occurs post bprm -limits).
+
+
+RECOMMENDATIONS: 
+1. Validate and control data from untrusted sources - we can not guarantee the expansion size of strings. 
+Although lines 51-53 or lines near-by previous code 'MAY' seemingly have protections these protections are not clear from this analysis- regardless the protections - if even currenty exist- could possibly be 'broken' via issues elsewhere in code not in THIS copied snippet- thus these could face issues if they are not correctly secured from the known existing security problem as reported on line 54.
+Line 54 does seem insecure however without more information this is not entirely clear. 
+Therefore due to possible overflows, input length checking must occur, or handling must be reformed where this expansion occurs 'from' lines containing bprm argc. 
+
+
+ORIGINAL CODE: 
+
+	 * the stack. They aren't stored until much later when we can't
+	 * signal to the parent that the child has run out of stack space.
+	 * Instead, calculate it here so it's possible to fail gracefully.
+	 *
+	 * In the case of argc = 0, make sure there is space for adding a
+	 * empty string (which will bump argc to 1), to ensure confused
+	 * userspace programs don't start processing from argv[1], thinking
+	 * argc can never be 0, to keep them from walking envp by accident.
+	 * See do_execveat_common().
+	 */
+	ptr_size = (max(bprm->argc, 1) + bprm->envc) * sizeof(void *);
+	if (limit <= ptr_size)
+		return -E2BIG;
+	limit -= ptr_size;
+
+	}
+
+	retval = count(argv, MAX_ARG_STRINGS);
+	if (retval == 0)
+		pr_warn_once("process '%s' launched '%s' with NULL argv: empty string added\n",
+			     current->comm, bprm->filename);
+	if (retval < 0)
+		goto out_free;
+	bprm->argc = retval;
+
+	if (retval < 0)
+		goto out_free;
+
+	/*
+	 * When argv is empty, add an empty string ("") as argv[0] to
+	 * ensure confused userspace programs that start processing
+	 * from argv[1] won't end up walking envp. See also
+	 * bprm_stack_limits().
+	 */
+	if (bprm->argc == 0) {
+		retval = copy_string_kernel("", bprm);
+		if (retval < 0)
+		 goto out_free;
+		bprm->argc = 1;
+	}
+
+	retval = bprm_execve(bprm, fd, filename, flags);
+out_free:
+	free_bprm(bprm);
+
+	}
+
+	retval = count_strings_kernel(argv);
+	if (WARN_ON_ONCE(retval == 0))
+		retval = -EINVAL;
+	if (retval < 0)
+		goto out_free;
+	bprm->argc = retval;

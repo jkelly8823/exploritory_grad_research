@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a buffer overflow in the `decoded_query_string` variable due to the lack of bounds checking on the `strdup` and `php_url_decode` functions.
+
+EXPLANATION:
+The code retrieves a query string from the environment using `getenv`, then duplicates it using `strdup`. This duplicating function is not checking if the duplicated string will fit in the allocated buffer. Although it seems that the code then passes the duplicated string to `php_url_decode`, which implies it will decode certain url encoding. But it does not perform any bounds checking after it has decoded the url. After this, it directly assigns the decoded character to `decoded_query_string` which will result in a buffer overflow if the decoded query string is too large for the allocated space.
+
+RECOMMENDATIONS:
+To prevent buffer overflows, bounds checking must be performed on both the allocation and the usage of the `decoded_query_string` variable. 
+
+This can be achieved by checking if `strlen(query_string)` is not exceeding `MAX_LENGTH` (the maximum length allowed for the query string) before calling `strdup`. The length of `decoded_query_string` should also be checked again after calling `php_url_decode` since its size can change due to url decoding. If `decoded_query_string` is too large for the allocated space, an error should be returned or the allocated space for `decoded_query_string` needs to be reallocated.
+
+The vulnerable lines also contain another issue: assignment in condition expressions. The line `if(query_string = getenv("QUERY_STRING"))` tries to assign the result of `getenv` to `query_string`. This will almost always return true, and as a result, it may lead to unexpected code flow. To correct this, `==` should be used instead of `=`.
+
+ORIGINAL CODE:
+
+```
+		}
+	}
+
+	if(query_string = getenv("QUERY_STRING")) {
+		decoded_query_string = strdup(query_string);
+		php_url_decode(decoded_query_string, strlen(decoded_query_string));
+		if(*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+			skip_getopt = 1;
+		}
+		free(decoded_query_string);
+	}
+	}
+
+	zend_first_try {
+		while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 1, 2)) != -1) {
+			switch (c) {
+				case 'T':
+					benchmark = 1;
+					repeats = atoi(php_optarg);
+```

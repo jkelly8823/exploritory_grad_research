@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 9-11
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to Insufficient Bounds Checking
+
+EXPLANATION:
+The code provided uses the `memcpy` function to copy data from one memory location to another without properly checking the bounds of the destination buffer. The `info` pointer is incremented by `addrlen` after each copy, but there is no check to ensure that the destination buffer has enough space to accommodate the data being copied.
+
+This can lead to a buffer overflow vulnerability if the amount of data being copied exceeds the size of the destination buffer. An attacker could potentially exploit this vulnerability by manipulating the `attr` or `laddr` variables to overwrite adjacent memory locations, leading to arbitrary code execution or denial of service.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper bounds checking should be implemented to ensure that the destination buffer has enough space to accommodate the data being copied. Here are some recommended fixes:
+
+* Use a safer alternative to `memcpy`, such as `strncpy` or `memcpy_s`, which allow you to specify the maximum number of bytes to copy.
+* Check the size of the destination buffer before copying data into it.
+* Validate the `addrlen` variable to ensure it is within a reasonable range.
+
+Here is an example of how the code could be modified to include bounds checking:
+
+```c
+size_t buffer_size = /* assume this is the size of the info buffer */;
+size_t offset = 0;
+
+list_for_each_entry_rcu(laddr, address_list, list) {
+    size_t copy_size = addrlen;
+    if (offset + copy_size > buffer_size) {
+        /* handle error or truncate data */
+    }
+    memcpy(info + offset, &laddr->a, copy_size);
+    offset += copy_size;
+}
+
+/* repeat for the second loop */
+```
+
+ORIGINAL CODE:
+```c
+info = nla_data(attr);
+list_for_each_entry_rcu(laddr, address_list, list) {
+    memcpy(info, &laddr->a, addrlen);
+    info += addrlen;
+}
+
+return 0;
+info = nla_data(attr);
+list_for_each_entry(from, &asoc->peer.transport_addr_list,
+            transports) {
+    memcpy(info, &from->ipaddr, addrlen);
+    info += addrlen;
+}
+
+return 0;
+```

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-14
+VULNERABILITY_DESCRIPTION:
+Potential Path Traversal Vulnerability
+
+EXPLANATION:
+The code is resolving file paths using the `node::PathResolve` function and then removing certain leading characters. However, this process may not correctly handle all possible malicious input. For instance, an attacker could supply a path that, after the leading characters are removed, points to a sensitive location outside of the intended directory. This could potentially allow an attacker to read or write files that they should not have access to.
+
+Furthermore, the `Lookup` method is called on the `granted_tree` object with the resolved path and a boolean parameter `true`. Without knowing the exact behavior of this method, it is possible that this call also contributes to the vulnerability.
+
+RECOMMENDATIONS:
+To mitigate this potential vulnerability, consider the following recommendations:
+- Implement proper input sanitation and path normalization to prevent path traversal attacks.
+- Validate the resolved path to ensure it points to a location within the intended directory.
+- Limit the access rights of the `Lookup` method to prevent unintended actions.
+- Use a more robust and secure method of resolving and validating file paths, such as using a library that provides secure file handling functionality.
+
+ORIGINAL CODE:
+```
+const std::string_view& param) {
+  std::string resolved_param = node::PathResolve(env, {param});
+#ifdef _WIN32
+  // Remove leading "\\?\" from UNC path
+  if (resolved_param.substr(0, 4) == "\\\\?\\") {
+    resolved_param.erase(0, 4);
+  }
+
+  // Remove leading "UNC\" from UNC path
+  if (resolved_param.substr(0, 4) == "UNC\\") {
+    resolved_param.erase(0, 4);
+  }
+  // Remove leading "//" from UNC path
+  if (resolved_param.substr(0, 2) == "//") {
+    resolved_param.erase(0, 2);
+  }
+#endif
+  return granted_tree->Lookup(resolved_param, true);
+}
+```

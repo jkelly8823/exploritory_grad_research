@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code potentially allows for information disclosure via a register dump.
+
+EXPLANATION:
+The issue lies in the line `regs->loadrs = 0; regs->r8 = get_dumpable(current->mm);`. Here, `get_dumpable(current->mm)` is assigned to `regs->r8`, which is then used to check if the register dump should be zapped. However, this check is performed after the register has been set. This might allow an attacker to potentially dump the register area, leaking sensitive information between processes with different uid/privileges in the event of an exception or crash. The use of `unlikely()` suggests that the check is expected to fail, implying that most processes do not set this flag.
+
+Furthermore, the `unlikely()` check could potentially make this code path execute in userspace with elevated privileges.
+
+RECOMMENDATIONS:
+- Reorder the operations to set `regs->r8` only after checking `get_dumpable(current->mm)`.
+- Ensure that the handling of sensitive information (e.g., register values) is privileged and restricted to only the necessary code paths.
+
+ORIGINAL CODE:
+        regs->loadrs = 0;                                  \
+        regs->r8 = get_dumpable(current->mm);  /* set "don't zap registers" flag */        \
+        regs->r12 = new_sp - 16;   /* allocate 16 byte scratch area */          \
+        if (unlikely(get_dumpable(current->mm) != SUID_DUMP_USER)) {      \
+                /*                                       \
+                 * Zap scratch regs to avoid leaking bits between processes with different       \
+                 * uid/privileges.                              \
+                 */                                      \

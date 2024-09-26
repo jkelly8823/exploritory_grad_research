@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to Command Injection, which allows an attacker to execute arbitrary system commands by manipulating the input to the do_listing function.
+
+EXPLANATION:
+The vulnerability arises from the construction of the system command in line 10, where the filename passed to the do_listing function is directly appended to the command string without proper sanitization. Although the validate_name function is used to validate the input filename, it only checks if the name matches a pattern consisting of word characters, hyphens, and underscores. An attacker could still provide a malicious filename that bypasses this validation and injects shell commands.
+
+For example, if an attacker passes a filename such as "file; rm ../index.html", the resulting system command will execute the ls command as intended, followed by the rm command that deletes the index.html file. This could lead to serious consequences, including data loss or system compromise.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use a mechanism to properly escape or quote the filename when constructing the system command. One approach is to use the Perl module `IPC::System::Simple` and the `systemx` function to execute the command, which allows you to pass arguments separately and safely. Alternatively, you can use `shlex.quote` or `String::QuoteLike` to properly quote the filename.
+
+Here is an example of how to use `IPC::System::Simple` to fix the vulnerability:
+```perl
+use IPC::System::Simple qw(systemx);
+
+...
+
+# build command
+systemx('/bin/ls', '-l', $fname);
+```
+ORIGINAL CODE:
+```perl
+my $arg = GetArgument("filename");
+do_listing($arg);
+
+sub do_listing {
+  my($fname) = @_;
+  if (! validate_name($fname)) {
+    print "Error: name is not well-formed!\n";
+    return;
+  }
+  # build command
+  my $cmd = "/bin/ls -l $fname";
+  system($cmd);
+}
+
+sub validate_name {
+  my($name) = @_;
+  if ($name =~ /^[\w\-]+$/) {
+    return(1);
+  }
+  else {
+    return(0);
+  }
+}
+```

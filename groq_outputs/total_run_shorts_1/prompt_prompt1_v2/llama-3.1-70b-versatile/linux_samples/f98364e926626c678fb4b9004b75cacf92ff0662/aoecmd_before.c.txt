@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-16, 18
+VULNERABILITY_DESCRIPTION:
+Resource leak and potential memory corruption
+EXPLANATION:
+In the given code snippet, the function creates and fills a new skb (socket buffer) but does not handle the error case where skb_alloc fails and skb_put is never called. If skb_alloc fails, the function prints an error message and continues with the next iteration of the for loop, but it still calls dev_put later, which may lead to a resource leak. Furthermore, there is a possibility of memory corruption because skb_put may not have been called after new_skb returns a non-NULL value, yet skb is not checked for NULL after skb_put. The assignment to skb->dev and the call to __skb_queue_tail may also access memory that was not allocated if skb_put fails.
+
+Additionally, since skb_put may not have been called when new_skb returns a non-NULL value, there's a chance of writing beyond the allocated memory's end. Although skb is checked for NULL after new_skb, the(skb_put) allocation size is sizeof *h + sizeof *ch but it does not consider the space needed for skb headroom which skb_put requires. 
+
+However, considering skb headroom requirement is usually handled internally by skb_put and other functions, we cannot be certain of memory corruption occurring due to incorrect skb_put size from this limited code snippet. We do observe other vulnerabilities that can safely be reported.
+
+RECOMMENDATIONS:
+- Properly check and handle skb_put skb's result
+- Null-check skb before skb->dev assignment to prevent memory corruption
+- Null-check skb before __skb_queue_tail to prevent memory corruption.
+ 
+ORIGINAL CODE:
+```
+    rcu_read_lock();
+	for_each_netdev_rcu(&init_net, ifp) {
+		dev_hold(ifp);
+		if (!is_aoe_netif(ifp))
+			goto cont;
+
+		skb = new_skb(sizeof *h + sizeof *ch);
+		if (skb == NULL) {
+			printk(KERN_INFO "aoe: skb alloc failure\n");
+			goto cont;
+		}
+		skb_put(skb, sizeof *h + sizeof *ch);
+		skb->dev = ifp;
+		__skb_queue_tail(queue, skb);
+		h->major = cpu_to_be16(aoemajor);
+		h->minor = aoeminor;
+		h->cmd = AOECMD_CFG;
+
+cont:
+		dev_put(ifp);
+	}
+	rcu_read_unlock();
+} 
+```

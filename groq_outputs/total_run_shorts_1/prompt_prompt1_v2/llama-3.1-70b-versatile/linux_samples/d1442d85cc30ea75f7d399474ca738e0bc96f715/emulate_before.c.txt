@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 38
+VULNERABILITY_DESCRIPTION:
+Stack Buffer Overflow
+
+EXPLANATION:
+In the function `em_jmp_far`, there are a couple of memory copies using `memcpy` where the destination buffer size is not checked against the source buffer size before the copy. 
+
+At line 13 (`memcpy(&ctxt->_eip, ctxt->src.valptr, ctxt->op_bytes);`), the buffer size of `ctxt->_eip` (4 bytes) and `ctxt->src.valptr` (ctxt->op_bytes bytes) are not checked before copying. This can lead to a buffer overflow vulnerability if `ctxt->op_bytes` exceeds the length of `ctxt->_eip`. 
+
+Similarly, there might be other instances in the given code where similar issues might be there but they are out of the view from the presented code snippet.
+
+RECOMMENDATIONS:
+- Use safe memory copy functions such as `memmove` with a buffer size check before the actual memory operation to prevent potential overflows. For example:
+```c
+size_t bytes_to_copy = ctxt->op_bytes;
+if (bytes_to_copy > sizeof(ctxt->_eip)) {
+    bytes_to_copy = sizeof(ctxt->_eip);
+}
+memmove(&ctxt->_eip, ctxt->src.valptr, bytes_to_copy);
+```
+- Always verify that the data will fit in the destination buffer before performing a memory operation, and use safe functions like `memmove` instead of `memcpy`.
+
+ORIGINAL CODE:
+```c
+static int em_jmp_far(struct x86_emulate_ctxt *ctxt)
+{
+    int rc;
+    unsigned short sel;
+
+    memcpy(&sel, ctxt->src.valptr + ctxt->op_bytes, 2);
+
+    rc = load_segment_descriptor(ctxt, sel, VCPU_SREG_CS);
+    if (rc != X86EMUL_CONTINUE)
+        return rc;
+
+    ctxt->_eip = 0;
+    memcpy(&ctxt->_eip, ctxt->src.valptr, ctxt->op_bytes);
+    return X86EMUL_CONTINUE;
+}
+```

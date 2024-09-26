@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-15
+VULNERABILITY_DESCRIPTION:
+ This code is vulnerable to Command Injection. This vulnerability occurs when an attacker can inject their own commands into a system, potentially allowing them to execute malicious code or obtain unauthorized access.
+
+EXPLANATION:
+The command `spawnPromisified` is used to execute a process with arguments which contain user-controlled input (`${JSON.stringify(fixtures.fileURL('es-modules/export-name-code-injection.wasm'))}` and similar inputs). However, the inputs are not sanitized or validated to prevent malicious code injection. This can be exploited by an attacker to execute arbitrary commands on the system, potentially leading to security breaches. 
+
+It is also worth noting that the data is not validated to prevent command injection in line 15 as well.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, the input to `spawnPromisified` should be properly sanitized and validated. Ensure that only known good values are used as inputs, and implement proper whitelisting of inputs. Also consider using an allowance list or a parameters system to send information that can't be mistakenly used as code. Ensure that all inputs from users are properly validated to prevent malicious data injection.
+
+ORIGINAL CODE:
+```javascript
+  strictEqual(code, 0);
+});
+
+it('should not allow code injection through export names', async () => {
+  const { code, stderr, stdout } = await spawnPromisified(execPath, [
+    '--no-warnings',
+    '--experimental-wasm-modules',
+    '--input-type=module',
+    '--eval',
+    `import * as wasmExports from ${JSON.stringify(fixtures.fileURL('es-modules/export-name-code-injection.wasm'))};`,
+  ]);
+
+  strictEqual(stderr, '');
+  strictEqual(stdout, '');
+  strictEqual(code, 0);
+});
+
+it('should allow non-identifier export names', async () => {
+  const { code, stderr, stdout } = await spawnPromisified(execPath, [
+    '--no-warnings',
+    '--experimental-wasm-modules',
+    '--input-type=module',
+    '--eval',
+    [
+      'import { strictEqual } from "node:assert";',
+      `import * as wasmExports from ${JSON.stringify(fixtures.fileURL('es-modules/export-name-syntax-error.wasm'))};`,
+      'assert.strictEqual(wasmExports["?f!o:o<b>a[r]"]?.value, 12682);',
+    ].join('\n'),
+  ]);
+
+  strictEqual(stderr, '');
+  strictEqual(stdout, '');
+  strictEqual(code, 0);
+});
+
+it('should properly escape import names as well', async () => {
+  const { code, stderr, stdout } = await spawnPromisified(execPath, [
+    '--no-warnings',
+    '--experimental-wasm-modules',
+    '--input-type=module',
+    '--eval',
+    [
+      'import { strictEqual } from "node:assert";',
+      `import * as wasmExports from ${JSON.stringify(fixtures.fileURL('es-modules/import-name.wasm'))};`,
+      'assert.strictEqual(wasmExports.xor(), 12345);',
+    ].join('\n'),
+  ]);
+
+  strictEqual(stderr, '');
+  strictEqual(stdout, '');
+  strictEqual(code, 0);
+});
+
+it('should emit experimental warning', async () => {
+  const { code, signal, stderr } = await spawnPromisified(execPath, [
+    '--experimental-wasm-modules',
+    fixtures.path('es-modules/wasm-modules.mjs'),
+```

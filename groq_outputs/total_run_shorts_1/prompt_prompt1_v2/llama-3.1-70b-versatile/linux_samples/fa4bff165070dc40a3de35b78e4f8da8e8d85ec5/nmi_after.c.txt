@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Potential Integer Underflow Vulnerability in do_nmi function
+
+EXPLANATION:
+The code uses `this_cpu_dec_return(nmi_state)` which decreases the value and returns the result. This might lead to an integer underflow vulnerability if the value of `nmi_state` reaches zero. An underflow could occur if the decrement operation on a signed integer variable results in a value less than the type's minimum representable value, potentially causing undefined behavior.
+
+However, without more information about the type and current value of `nmi_state`, this vulnerability cannot be definitively confirmed. 
+
+RECOMMENDATIONS:
+To avoid a potential integer underflow vulnerability, you can add a check before decrementing the value. You can use an if-statement to check if `nmi_state` is already zero before calling `this_cpu_dec_return(nmi_state)`. Alternatively, consider using unsigned integers or using atomic operations with a saturating decrement. 
+
+Here's an example of a possible fix:
+```c
+if (this_cpu_read(nmi_state) > 0 && !this_cpu_dec_return(nmi_state)) {
+    goto nmi_restart;
+}
+```
+ORIGINAL CODE:
+```c
+#include <asm/x86_init.h>
+#include <asm/reboot.h>
+#include <asm/cache.h>
+#include <asm/nospec-branch.h>
+
+#define CREATE_TRACE_POINTS
+#include <trace/events/nmi.h>
+
+    write_cr2(this_cpu_read(nmi_cr2));
+if (this_cpu_dec_return(nmi_state))
+    goto nmi_restart;
+
+if (user_mode(regs))
+    mds_user_clear_cpu_buffers();
+}
+NOKPROBE_SYMBOL(do_nmi);
+
+void stop_nmi(void)
+```

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Use of `SSL_OP_ALL` options without proper validation
+
+EXPLANATION:
+The code uses the `SSL_OP_ALL` options without any validation. The `SSL_OP_ALL` options enable all available protocol options. This can potentially introduce vulnerabilities and negatively impact the security of the SSL/TLS connection.
+
+In particular, enabling all protocol options can lead to the use of insecure protocols such as TLS 1.0 and TLS 1.1, which have been deprecated due to security concerns. Additionally, it can also lead to the use of insecure key exchange algorithms, such as RC4 and MD5.
+
+Furthermore, the code does not validate the version of OpenSSL being used. While it checks if the version is greater than or equal to 0x0090806f (OpenSSL 0.9.8o), it does not account for the possibility of a patch or downgrade to an insecure version.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the code should specify which options are necessary for its specific use case and ensure they are properly validated.
+
+1.  Only enable necessary options for the SSL/TLS connection.
+2.  Ensure that the version of OpenSSL being used is up-to-date and supports modern, secure protocols.
+3.  Consider using more secure options such as `SSL_OP_NO_SSLv2`, `SSL_OP_NO_SSLv3`, `SSL_OP_NO_TLSv1`, and `SSL_OP_NO_TLSv1_1` to disable insecure protocols.
+
+Here is an example of how the options could be specified and validated:
+
+```c
+#ifdef OPENSSL_VERSION_NUMBER
+if (OPENSSL_VERSION_NUMBER < 0x10101000L) {
+    // Reject versions prior to 1.1.0
+    php_error_docref(NULL TSRMLS_CC, E_ERROR, "OpenSSL 1.1.0 or later required for secure connections");
+    return -1;
+}
+#endif
+
+SSL_CTX_set_options(sslsock->ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+```
+
+ORIGINAL CODE:
+```c
+        TSRMLS_DC)
+{
+        SSL_METHOD *method;
+        // ... (omitted code)
+        if (sslsock->ssl_handle) {
+                if (sslsock->s.is_blocked) {
+                        php_error_docref(NULL TSRMLS_CC, E_WARNING, "SSL/TLS already set-up for this stream");
+                return -1;
+        }
+
+        SSL_CTX_set_options(sslsock->ctx, SSL_OP_ALL);
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090806fL
+        {
+                zval **val;
+```

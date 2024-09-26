@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to buffer overflow attacks due to the incorrect use of strncpy and strlen functions when comparing user input with hard-coded username and password.
+
+EXPLANATION:
+In the AuthenticateUser function, strncmp is used to compare the input username and password with the hard-coded values. However, the third argument to strncmp is specified as strlen(inUser) for username comparison and strlen(inPass) for password comparison. This creates a vulnerability because it allows an attacker to potentially overflow the buffer by providing a longer input string than the length of the hard-coded username or password.
+
+For the password comparison, the code also uses sizeof instead of strlen, which is incorrect as sizeof returns the size of the pointer, not the length of the string.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should use the strlen function to get the length of the hard-coded username and password instead of relying on the length of the input string. Additionally, the code should use strncmp with the minimum length between the input string and the hard-coded value to prevent buffer overflow. Here is an example of how the AuthenticateUser function can be modified:
+
+```c
+int AuthenticateUser(char *inUser, char *inPass) {
+    size_t userLen = strlen(username);
+    size_t passLen = strlen(pass);
+    size_t inUserLen = strlen(inUser);
+    size_t inPassLen = strlen(inPass);
+
+    if (strncmp(username, inUser, (userLen > inUserLen ? userLen : inUserLen))) {
+        logEvent("Auth failure of username");
+        return AUTH_FAIL;
+    }
+
+    if (strncmp(pass, inPass, (passLen > inPassLen ? passLen : inPassLen))) {
+        logEvent("Auth fail of password");
+        return AUTH_FAIL;
+    } else {
+        logEvent("Auth success of password");
+        return AUTH_SUCCESS;
+    }
+}
+```
+
+ORIGINAL CODE:
+
+
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+
+char *username = "admin";
+char *pass = "password";
+
+int AuthenticateUser(char *inUser, char *inPass) {
+    if (strncmp(username, inUser, strlen(inUser))) {
+        logEvent("Auth failure of username using strlen of inUser");
+        return AUTH_FAIL;
+    }
+    if (!strncmp(pass, inPass, strlen(inPass))) {
+        logEvent("Auth success of password using strlen of inUser");
+        return AUTH_SUCCESS;
+    } else {
+        logEvent("Auth fail of password using sizeof");
+        return AUTH_FAIL;
+    }
+}
+
+int main (int argc, char **argv) {
+    int authResult;
+    if (argc < 3) {
+        ExitError("Usage: Provide a username and password");
+    }
+    authResult = AuthenticateUser(argv[1], argv[2]);
+    if (authResult == AUTH_SUCCESS) {
+        DoAuthenticatedTask(argv[1]);
+    } else {
+        ExitError("Authentication failed");
+    }
+}
+```

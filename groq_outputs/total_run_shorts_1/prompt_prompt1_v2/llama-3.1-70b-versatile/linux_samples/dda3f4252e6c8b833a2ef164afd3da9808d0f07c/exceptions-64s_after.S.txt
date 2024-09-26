@@ -1,0 +1,100 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-18, 26-29
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability may exist in the assembly code snippet due to unbounded loop iterations in the L1D_DISPLACEMENT_FLUSH macro and the absence of validation on the value stored in PACA_L1D_FLUSH_SIZE(r13).
+
+EXPLANATION:
+The code snippet uses the L1D_DISPLACEMENT_FLUSH macro to perform a displacement flush operation. This macro uses the value stored in PACA_L1D_FLUSH_SIZE(r13) as the number of iterations in a loop. However, the code does not validate the value of PACA_L1D_FLUSH_SIZE(r13) before using it, which could potentially lead to a buffer overflow if it contains an excessively large value.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to validate the value stored in PACA_L1D_FLUSH_SIZE(r13) before using it in the loop. This can be done by checking if the value is within an expected range and handling any out-of-bounds conditions accordingly.
+
+Specifically, consider adding a bounds check for the value of PACA_L1D_FLUSH_SIZE(r13) before the loop in the L1D_DISPLACEMENT_FLUSH macro:
+```
+ld    r11,PACA_L1D_FLUSH_SIZE(r13)
+cmp   r11, MAX_FLUSH_SIZE  # Define MAX_FLUSH_SIZE as a constant
+bgt   flush_size_error
+```
+Additionally, it's a good practice to limit the maximum number of iterations in the loop to prevent potential denial-of-service attacks.
+
+ORIGINAL CODE:
+ 
+```assembly
+.endr
+blr
+
+/* Clobbers r10, r11, ctr */
+.macro L1D_DISPLACEMENT_FLUSH
+	ld	r10,PACA_RFI_FLUSH_FALLBACK_AREA(r13)
+	ld	r11,PACA_L1D_FLUSH_SIZE(r13)
+	srdi	r11,r11,(7 + 3) /* 128 byte lines, unrolled 8x */
+	mtctr	r11
+	sync
+
+	/*
+	 * The load addresses are at staggered offsets within cachelines,
+	 * which suits some pipelines better (on others it should not
+	 * hurt).
+	 */
+1:
+	ld	r11,(0x80 + 8)*7(r10)
+	addi	r10,r10,0x80*8
+	bdnz	1b
+.endm
+
+TRAMP_REAL_BEGIN(entry_flush_fallback)
+	std	r9,PACA_EXRFI+EX_R9(r13)
+	std	r10,PACA_EXRFI+EX_R10(r13)
+	std	r11,PACA_EXRFI+EX_R11(r13)
+	mfctr	r9
+	L1D_DISPLACEMENT_FLUSH
+	mtctr	r9
+	ld	r9,PACA_EXRFI+EX_R9(r13)
+	ld	r10,PACA_EXRFI+EX_R10(r13)
+	ld	r11,PACA_EXRFI+EX_R11(r13)
+	blr
+
+TRAMP_REAL_BEGIN(rfi_flush_fallback)
+	SET_SCRATCH0(r13);
+	GET_PACA(r13);
+	std	r1,PACA_EXRFI+EX_R12(r13)
+	ld	r1,PACAKSAVE(r13)
+	std	r9,PACA_EXRFI+EX_R9(r13)
+	std	r10,PACA_EXRFI+EX_R10(r13)
+	std	r11,PACA_EXRFI+EX_R11(r13)
+	mfctr	r9
+	L1D_DISPLACEMENT_FLUSH
+	mtctr	r9
+	ld	r9,PACA_EXRFI+EX_R9(r13)
+	ld	r10,PACA_EXRFI+EX_R10(r13)
+	ld	r11,PACA_EXRFI+EX_R11(r13)
+	std	r10,PACA_EXRFI+EX_R10(r13)
+	std	r11,PACA_EXRFI+EX_R11(r13)
+	mfctr	r9
+	L1D_DISPLACEMENT_FLUSH
+	mtctr	r9
+	ld	r9,PACA_EXRFI+EX_R9(r13)
+	ld	r10,PACA_EXRFI+EX_R10(r13)
+	ld	r11,PACA_EXRFI+EX_R11(r13)
+	RFSCV
+
+USE_TEXT_SECTION()
+
+_GLOBAL(do_uaccess_flush)
+	UACCESS_FLUSH_FIXUP_SECTION
+	nop
+	nop
+	nop
+	blr
+	L1D_DISPLACEMENT_FLUSH
+	blr
+_ASM_NOKPROBE_SYMBOL(do_uaccess_flush)
+EXPORT_SYMBOL(do_uaccess_flush)
+
+
+MASKED_INTERRUPT
+MASKED_INTERRUPT hsrr=1
+
+#ifdef CONFIG_KVM_BOOK3S_64_HANDLER
+kvmppc_skip_interrupt:
+```

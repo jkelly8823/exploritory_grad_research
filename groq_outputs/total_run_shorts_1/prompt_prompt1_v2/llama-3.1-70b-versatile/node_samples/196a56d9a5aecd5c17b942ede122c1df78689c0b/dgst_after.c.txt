@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-15, 20-24
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a null dereference in the EVP_DigestVerifyInit_ex and EVP_DigestSignInit_ex functions. These functions do not check for null pointer dereferences before calling other functions. Additionally, the code does not handle potential null pointer dereferences in the sigkey and md objects.
+In general, null pointer dereferences occur when a program attempts to access memory that has not been allocated or has already been freed.
+
+EXPLANATION:
+The code does not properly handle the possibility of null pointer dereferences. For instance, the EVP_PKEY_new_raw_private_key function may return NULL if it fails, but the code does not check for this before using the returned value. If the returned value is NULL, the subsequent calls to EVP_DigestVerifyInit_ex and EVP_DigestSignInit_ex will result in a null pointer dereference. 
+Moreover, the code uses a goto statement with a label named "end", which can lead to unpredictable behavior if there is an error in the EVP_DigestVerifyInit_ex or EVP_DigestSignInit_ex function.
+
+RECOMMENDATIONS:
+1.  Check the return values of EVP_PKEY_new_raw_private_key, EVP_DigestVerifyInit_ex, EVP_DigestSignInit_ex for null or error conditions before using them.
+2.  Use error handling mechanisms such as try-catch blocks or error codes to handle the potential exceptions.
+3.  Avoid using goto statements as they can lead to unpredictable behavior in the presence of errors.
+
+ORIGINAL CODE:
+
+```cpp
+if (hmac_key != NULL) {
+    if (md == NULL) {
+        md = (EVP_MD *)EVP_sha256();
+        digestname = SN_sha256;
+    }
+    sigkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, impl,
+                                          (unsigned char *)hmac_key,
+                                          strlen(hmac_key));
+    if (sigkey == NULL)
+        goto end;
+    }
+    if (do_verify)
+        if (impl == NULL)
+            res = EVP_DigestVerifyInit_ex(mctx, &pctx, digestname,
+                                          app_get0_libctx(),
+                                          app_get0_propq(), sigkey, NULL);
+        else
+            res = EVP_DigestVerifyInit(mctx, &pctx, md, impl, sigkey);
+    else
+        if (impl == NULL)
+            res = EVP_DigestSignInit_ex(mctx, &pctx, digestname,
+                                        app_get0_libctx(),
+                                        app_get0_propq(), sigkey, NULL);
+        else
+            res = EVP_DigestSignInit(mctx, &pctx, md, impl, sigkey);
+    if (res == 0) {
+        BIO_printf(bio_err, "Error setting context\n");
+        goto end;
+    }
+    BIO_printf(bio_err, "Length can only be specified for XOF\n");
+    goto end;
+}
+```

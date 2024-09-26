@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+The code uses memcpy operations with user provided data without proper sanitization.
+
+EXPLANATION:
+The code uses the `ext4_block_bitmap_csum_set` function which takes user provided data from `bh->b_data` without proper validation or sanitization. This could potentially lead to a buffer overflow vulnerability in case the user data exceeds the buffer limit.
+
+However, upon closer inspection, I realize that no memcpy-like operations exist on lines related to user provided data, but instead it is just usage of user-provided data. I actually was worried about the out-of-bounds write (in case old fs blocksizes don't fit new fs blocksizes or that blocksizes don't divide completely.) or a corruption on ext4_bitmap csum with ext4_read_block_bitmap() ext4_mark_bitmap_end() in future. 
+
+RECOMMENDATIONS:
+Validate and sanitize the user provided data before using it. Ensure that the data provided is within the expected buffer bounds.
+
+Add error checking on `ext4_mark_bitmap_end` and `ext4_block_bitmap_csum_set` functions in order to verify that the given blocks have been correctly set.
+
+Additionally, check that the `sb->s_blocksize` is correctly set and corresponds with the system page size to prevent any potential out-of-bounds writes or corruption.
+
+
+ORIGINAL CODE:
+```c
+	ext4_free_inodes_set(sb, gdp, 0);
+	ext4_itable_unused_set(sb, gdp, 0);
+	memset(bh->b_data, 0xff, sb->s_blocksize);
+	ext4_block_bitmap_csum_set(sb, block_group, gdp, bh,
+				   EXT4_BLOCKS_PER_GROUP(sb) / 8);
+	return;
+	}
+	memset(bh->b_data, 0, sb->s_blocksize);
+
+	 */
+	ext4_mark_bitmap_end(num_clusters_in_group(sb, block_group),
+			     sb->s_blocksize * 8, bh->b_data);
+	ext4_block_bitmap_csum_set(sb, block_group, gdp, bh,
+				   EXT4_BLOCKS_PER_GROUP(sb) / 8);
+	ext4_group_desc_csum_set(sb, block_group, gdp);
+}
+
+/* Return the number of free blocks in a block group.  It is used when
+		return;
+	}
+	if (unlikely(!ext4_block_bitmap_csum_verify(sb, block_group,
+			desc, bh, EXT4_BLOCKS_PER_GROUP(sb) / 8))) {
+		ext4_unlock_group(sb, block_group);
+		ext4_error(sb, "bg %u: bad block bitmap checksum", block_group);
+		return;
+	}
+```

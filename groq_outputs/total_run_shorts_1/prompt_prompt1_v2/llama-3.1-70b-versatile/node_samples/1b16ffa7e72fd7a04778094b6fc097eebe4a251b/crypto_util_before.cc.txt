@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to improper error handling. An exception is not explicitly checked for after calling `args.GetReturnValue().Set()`, and `SetEngine()` may throw an exception if it fails.
+
+EXPLANATION:
+The code lacks proper error handling when calling `args.GetReturnValue().Set()`. This function may throw an exception if it fails to set the return value. If `SetEngine()` throws an exception, it is not caught and handled, potentially causing the program to crash. Additionally, if `SetEngine()` fails, no error message is returned, which could lead to unclear and hard-to-debug behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add proper error handling to check if `SetEngine()` was successful before calling `args.GetReturnValue().Set()`. This can be achieved by wrapping the call to `SetEngine()` and `args.GetReturnValue().Set()` in a try-catch block and handling any potential exceptions. Here is a recommended fix:
+
+```cpp
+try {
+  result = SetEngine(*engine_id, flags);
+  args.GetReturnValue().Set(result);
+} catch (const std::exception& e) {
+  // Handle the exception
+  // e.g. return an error message
+  char* error_message = strdup(e.what());
+  args.GetReturnValue().Set(const_cast<const char*>(error_message));
+  free(error_message);
+}
+```
+
+ORIGINAL CODE:
+```cpp
+const node::Utf8Value engine_id(env->isolate(), args[0]);
+
+args.GetReturnValue().Set(SetEngine(*engine_id, flags));
+}
+#endif  // !OPENSSL_NO_ENGINE
+```

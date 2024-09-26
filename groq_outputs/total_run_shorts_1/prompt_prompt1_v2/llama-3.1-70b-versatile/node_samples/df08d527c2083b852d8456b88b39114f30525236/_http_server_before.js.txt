@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 93-97, 113-115
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains potential vulnerabilities related to memory leaks and incorrect error handling. In the `onParserExecute` function, if the server emits a 'clientError' event and it doesn't have a listener, it will destroy the socket with the error but still write a response to the socket. This could potentially leak memory. Similarly, in the `resOnFinish` function, if there's no request event handler, the server will emit a 'request' event to an empty handler which could also lead to a memory leak.
+
+EXPLANATION:
+In the `onParserExecute` function, there's a potential memory leak when the `server` object doesn't handle the 'clientError' event. The `this.destroy(e)` call will close the socket, but if `this.writable` is true, the code will attempt to write a response to the socket. This could lead to a memory leak because the socket is being destroyed while still trying to write data to it. 
+
+Additionally, in the `resOnFinish` function, if there's no request event handler, the server emits a 'request' event. However, if there's no listener for this event, this could potentially lead to a memory leak because the event will not be handled.
+
+RECOMMENDATIONS:
+1. To handle the potential memory leak in `onParserExecute`, it's recommended to check if the socket has a listener for the 'close' event before destroying it. This will prevent attempts to write to a destroyed socket.
+
+```javascript
+if (!this.server.emit('clientError', e, this)) {
+  if (this.writable && this.bytesWritten === 0) {
+    const response = e.code === 'HPE_HEADER_OVERFLOW' ?
+      requestHeaderFieldsTooLargeResponse : badRequestResponse;
+    this.write(response);
+  }
+  this.destroy(e);
+  // Add a listener for the 'close' event
+  this.on('close', () => {
+    this.removeAllListeners();
+  });
+}
+```
+
+2. To prevent the memory leak in `resOnFinish`, it's recommended to check if there's an event listener for the 'request' event before emitting it.
+
+```javascript
+if (server._events['request']) {
+  server.emit('request', req, res);
+} else {
+  // Handle the case where there's no request event listener
+}
+```
+
+ORIGINAL CODE:
+```
+... (original code snippet)
+```
+Note that the `onParserExecuteCommon` and `onParserTimeout` functions are not publicly accessible in the given code snippet and therefore are not evaluated here.

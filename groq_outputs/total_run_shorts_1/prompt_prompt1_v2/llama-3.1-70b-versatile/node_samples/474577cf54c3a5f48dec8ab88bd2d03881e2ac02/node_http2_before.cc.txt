@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential Denial of Service (DoS) vulnerability due to unchecked error handling.
+ 
+EXPLANATION:
+The code checks if a new HTTP/2 stream can be added, and if not, sends a protocol-level response to reject the stream. However, the potential for unhandled edge cases in the `CanAddStream()` check and `Http2Stream::New` function calls might lead to a denial-of-service (DoS) vulnerability if an attacker can cause the error condition by intentionally opening too many streams.
+
+The call to `nghttp2_submit_rst_stream` typically closes the stream when an error occurs. However, if this error is intentionally or maliciously triggered, the function call can be repeatedly invoked, resulting in a high CPU load. This could potentially lead to Denial of Service.
+
+RECOMMENDATIONS:
+Implement comprehensive error checking and handling for `CanAddStream()` and `Http2Stream::New`. In the event of repeated failures, adding rate limiting to prevent such attacks, or alternative measures to prevent this kind of abuse, would be advisable.
+
+Additionally, validation and sanitization of input data can help mitigate Denial of Service attacks by reducing the possibility of maliciously triggering an error condition.
+
+The response value of the `nghttp2_submit_rst_stream` function should also be checked to make sure that the request to reset the stream was actually successfully submitted.
+
+ORIGINAL CODE:
+```c
+#include "node_http2.h"
+#include "node_http2_state.h"
+#include "node_perf.h"
+#include "util-inl.h"
+
+#include <algorithm>
+
+    if (UNLIKELY(!session->CanAddStream() ||
+                 Http2Stream::New(session, id, frame->headers.cat) ==
+                     nullptr)) {
+      // Too many concurrent streams being opened
+      nghttp2_submit_rst_stream(**session, NGHTTP2_FLAG_NONE, id,
+                                NGHTTP2_ENHANCE_YOUR_CALM);
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+  } else if (!stream->IsDestroyed()) {
+    stream->StartHeaders(frame->headers.cat);
+  }
+  return 0;
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a potential Insecure Direct Object Reference (IDOR) vulnerability and a potential Path Traversal vulnerability.
+
+EXPLANATION:
+The `file_get_contents` function is being used to read a file into a string, with the filename being passed as an argument. The issue lies in the fact that the `$filename` variable is directly being used in the `file_get_contents` function without proper validation or sanitization. An attacker who has control over the `$filename` variable could inject a malicious filename, potentially leading to unauthorized access to sensitive files on the system (Insecure Direct Object Reference) or even path traversal attacks, where the attacker could read files outside the intended directory.
+
+Additionally, the `isOwnerOf` function is vulnerable to timing attacks. The function seems to check the ownership of the file, but the way it is being used in this code can be exploited by an attacker who can measure the response time of the `echo` command to determine if a file exists or not.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation and sanitization of the `$filename` variable should be performed before passing it to the `file_get_contents` function. The filename should also be restricted to a specific directory to prevent path traversal attacks. 
+
+Here's a possible way to fix it:
+
+```php
+function printFile($username,$filename){
+  //filter filename to allow only certain filename extensions and restrict to a specific directory
+  $allowedExtensions = array('txt', 'pdf', 'doc');
+  $restrictedDirectory = './uploads/';
+  $filename = basename($filename);
+
+  if(pathinfo($filename, PATHINFO_EXTENSION) && !in_array(pathinfo($filename, PATHINFO_EXTENSION), $allowedExtensions)){
+    echo 'Invalid file extension';
+    return false;
+  }
+
+  $fullFilename = $restrictedDirectory . $filename;
+
+  //read file into string
+  if(file_exists($fullFilename)){
+    $file = file_get_contents($fullFilename);
+    if ($file && isOwnerOf($username,$fullFilename)){
+      echo $file;
+      return true;
+    } else {
+      echo 'You are not authorized to view this file';
+    }
+  } else {
+    echo 'File not found';
+  }
+  return false;
+}
+```
+
+ORIGINAL CODE:
+```
+function printFile($username,$filename){
+  //read file into string
+  $file = file_get_contents($filename);if ($file && isOwnerOf($username,$filename)){echo $file;return true;}else{echo 'You are not authorized to view this file';}return false;
+}
+```

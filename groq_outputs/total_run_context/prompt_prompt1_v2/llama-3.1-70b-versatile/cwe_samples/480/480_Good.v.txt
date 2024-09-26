@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-9, 15-16
+VULNERABILITY_DESCRIPTION:
+Privilege Escalation Vulnerability due to Inadequate Privilege Level Checks.
+
+EXPLANATION:
+The code snippet appears to be part of a RISC-V core implementation. It checks the current privilege level (`priv_lvl_o`) and sets the `debug_mode_d` signal accordingly. However, the code also has an assignment statement that sets `priv_lvl_o` to `riscv::PRIV_LVL_M` when `debug_mode_q` is high and `umode_i` is also high. This can lead to a situation where the privilege level is escalated in an unintended manner, potentially allowing for unauthorized access or execution of privileged instructions.
+
+The vulnerable lines are:
+- The case statement that sets `debug_mode_d` based on the current privilege level (lines 5-9).
+- The assignment statement that sets `priv_lvl_o` based on `debug_mode_q` and `umode_i` (lines 15-16).
+
+This vulnerability can lead to a situation where an attacker can potentially escalate their privilege level by manipulating the `debug_mode_q` and `umode_i` signals.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the assignment statement for `priv_lvl_o` should be revised to ensure that the privilege level is not escalated in an unintended manner. The condition for setting `priv_lvl_o` to `riscv::PRIV_LVL_M` should be carefully evaluated and restricted to only when it is necessary and safe to do so.
+
+An example of a potential fix is to add additional checks to ensure that the `priv_lvl_o` is not escalated to a higher privilege level without proper authorization:
+```verilog
+assign priv_lvl_o = (debug_mode_q && umode_i && authorized_i) ? riscv::PRIV_LVL_M : priv_lvl_q;
+```
+In this example, the `authorized_i` signal is assumed to be an additional input that represents the authorization to escalate the privilege level.
+
+ORIGINAL CODE:
+```verilog
+module csr_regfile #(
+  ...
+  
+  // check that we actually want to enter debug depending on the privilege level we are currently in
+  unique case (priv_lvl_o)
+        
+        riscv::PRIV_LVL_M: begin
+            
+        debug_mode_d = dcsr_q.ebreakm;
+    
+        
+      
+  ...
+        
+        riscv::PRIV_LVL_U: begin
+            
+        debug_mode_d = dcsr_q.ebreaku;
+    
+        
+      
+  ...
+        
+        assign priv_lvl_o = (debug_mode_q && umode_i) ? riscv::PRIV_LVL_M : priv_lvl_q;
+      
+  ...
+        
+        debug_mode_q  <= debug_mode_d;
+      
+  ...
+     
+     endmodule: csr_regfile
+```

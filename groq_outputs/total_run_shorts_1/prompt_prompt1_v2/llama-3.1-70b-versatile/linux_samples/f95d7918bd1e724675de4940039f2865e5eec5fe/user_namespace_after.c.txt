@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None (analysis applies to multiple lines)
+VULNERABILITY_DESCRIPTION: 
+Insufficient privilege checking
+EXPLANATION:
+The code snippet evaluates a user's credibility based on a given set of privileges and determines whether the user can establish certain mappings; however, this evaluation relies heavily on the `cred->euid`, which can potentially be changed by the user before this check, rendering the check ineffective.
+
+Specifically, this part of the code 
+```c
+if ((new_map->nr_extents == 1) && (new_map->extent[0].count == 1) &&
+    uid_eq(ns->owner, cred->euid))
+```
+only allows mappings when the user has permission to access the specific user ID (`id`). However, `cred->euid` could have been manipulated to allow bypassing this check.
+
+It's essential to verify not only the current effective user ID (`euid`), but also the user's actual privilege capabilities and ensure that no extra actions can be taken by someone who would not normally have the permission to do so.
+
+Moreover, 
+```c
+kuid_t uid = make_kuid(ns->parent, id);
+if (uid_eq(uid, cred->euid))
+    return true;
+```
+should also check if the user has an additional permission like CAP_SETUID before granting such ability to change the effective user ID. A potential exploitation may come from privilege set overlaps and underprotected specific edge cases associated to these set overlaps.
+
+RECOMMENDATIONS:
+To address this issue:
+
+1. Check additional privilege capabilities, such as CAP_SETUID and CAP_SETGID (as needed) before granting these permissions.
+2. Verify that the users' actual UID and euid have not changed after the `cred->euid` check to prevent race conditions.
+3. Always verify the effective UID with the current process's root namespace (typically) like this, but only if `cred->user == the_ns->owner.` and validate the `effective-UID.`
+
+ 
+ORIGINAL CODE:
+            ```c
+struct user_namespace *ns, int cap_setid,
+                struct uid_gid_map *new_map)
+{
+    const struct cred *cred = file->f_cred;
+    /* Don't allow mappings that would allow anything that wouldn't
+     * be allowed without the establishment of unprivileged mappings.
+     */
+    if ((new_map->nr_extents == 1) && (new_map->extent[0].count == 1) &&
+        uid_eq(ns->owner, cred->euid)) {
+        u32 id = new_map->extent[0].lower_first;
+        if (cap_setid == CAP_SETUID) {
+            kuid_t uid = make_kuid(ns->parent, id);
+            if (uid_eq(uid, cred->euid))
+                return true;
+        }
+    }
+```

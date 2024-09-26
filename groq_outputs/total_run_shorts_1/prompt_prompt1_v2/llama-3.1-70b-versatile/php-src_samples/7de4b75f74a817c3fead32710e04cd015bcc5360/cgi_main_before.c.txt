@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability exists due to the use of 'getenv' to retrieve the 'QUERY_STRING' environment variable, which is then copied to 'decoded_query_string' without proper bounds checking.
+
+EXPLANATION:
+The code calls 'getenv' to retrieve the 'QUERY_STRING' environment variable and then assigns it to 'query_string'. It then calls 'strdup' to copy this string into 'decoded_query_string'. However, 'strdup' can fail if the string is too long, and 'getenv' can return a string of arbitrary length. This could lead to a buffer overflow if the string is longer than the allocated buffer for 'decoded_query_string'.
+
+Furthermore, 'php_url_decode' does not perform any bounds checking on its input arguments, making it vulnerable to buffer overflows. This is especially concerning because it takes a pointer to 'decoded_query_string' as one of its arguments, which can cause undefined behavior if 'decoded_query_string' is not properly terminated or if 'strlen(decoded_query_string)' is not the correct length.
+
+RECOMMENDATIONS:
+To fix this vulnerability:
+
+1. Validate the length of the 'QUERY_STRING' environment variable before copying it to 'decoded_query_string' to prevent buffer overflows.
+2. Check the return value of 'strdup' to ensure that it was successful and that 'decoded_query_string' is not NULL.
+3. Use a safer alternative to 'strdup', such as 'strndup' or 'snprintf', to prevent buffer overflows.
+4. Perform bounds checking on the input arguments to 'php_url_decode' to prevent buffer overflows.
+5. Always check the return value of 'getenv' to ensure that it is not NULL before using its result.
+
+ORIGINAL CODE:
+
+		}
+	}
+
+	if(query_string = getenv("QUERY_STRING")) {
+		decoded_query_string = strdup(query_string);
+		php_url_decode(decoded_query_string, strlen(decoded_query_string));
+		if(*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+			skip_getopt = 1;
+		}
+		free(decoded_query_string);
+	}
+	}
+
+	zend_first_try {
+		while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 1, 2)) != -1) {
+			switch (c) {
+				case 'T':
+					benchmark = 1;
+					repeats = atoi(php_optarg);

@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-30, 38-40, 201-203
+VULNERABILITY_DESCRIPTION:
+Resource leak and double-free vulnerability.
+
+EXPLANATION:
+In this code, we see several instances where a struct page pointer is assigned to the `indirect_page` variable and then freed using `__free_page`. However, in the case of a persistent grant (`info->feature_persistent`), the page is freed again after the loop. This double-free can cause unpredictable behavior and potential crashes.
+
+Moreover, in the cases where `indirect_page` is added to the `indirect_pages` list using `list_add`, the page's reference count is not incremented. If this page is accessed later through the list, it may be freed before access, causing a use-after-free issue.
+
+Additionally, there is no check for `NULL` before assigning `s->indirect_grants[i]->page` to `indirect_page` in the line `indirect_page = s->indirect_grants[i]->page;`. If `s->indirect_grants[i]` is `NULL`, this will result in a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+
+* Remove the double-free calls for persistent grants.
+* Increment the page's reference count using `get_page` when adding it to the `indirect_pages` list.
+* Check for `NULL` before assigning `s->indirect_grants[i]->page` to `indirect_page`.
+
+ORIGINAL CODE:
+(given code, with lines and characters count that points to vulnurabitity)
+```c
+for_each_sg(s->sg, sg, num_sg, i) {
+    ...
+}
+
+if (!info->feature_persistent) {
+    indirect_page = s->indirect_grants[i]->page;
+    list_add(&indirect_page->lru, &rinfo->indirect_pages);
+} // line 28
+
+...
+
+BUG_ON(sg->offset + sg->length > PAGE_SIZE);
+
+data.bvec_offset = sg->offset;
+
+if (!info->feature_persistent) {
+    indirect_page = s->indirect_grants[i]->page;
+    list_add(&indirect_page->lru, &rinfo->indirect_pages);
+} // line 38
+```

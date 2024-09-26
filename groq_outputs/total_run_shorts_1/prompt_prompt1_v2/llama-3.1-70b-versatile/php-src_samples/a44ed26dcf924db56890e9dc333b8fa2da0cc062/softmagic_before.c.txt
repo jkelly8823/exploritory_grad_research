@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 115, 194
+VULNERABILITY_DESCRIPTION:
+The code snippet contains two security vulnerabilities:
+1)  Use of `strcspn()` function without proper null-termination check: In the `mget()` function, the `strcspn()` function is used to trim whitespace characters. However, there is no check to ensure that the string is null-terminated. If the string is not null-terminated, `strcspn()` may access memory beyond the end of the string, leading to undefined behavior.
+2)  Potential integer overflow in `OFFSET_OOB()` macro: The `OFFSET_OOB()` macro is used to check for out-of-bounds access to memory. However, the arithmetic operation `ms->offset + o` may overflow if `ms->offset` is large and `o` is also large. This could lead to incorrect results and potentially allow malicious data to be accessed.
+
+EXPLANATION:
+The vulnerabilities are caused by missing null-termination checks and potential integer overflow in the `OFFSET_OOB()` macro. The fix is to add null-termination checks and use integer overflow-safe arithmetic operations.
+
+RECOMMENDATIONS:
+1)  Add null-termination checks before calling `strcspn()`: Before calling `strcspn()`, add a check to ensure that the string is null-terminated. If the string is not null-terminated, return an error or handle it as an invalid input.
+2)  Use integer overflow-safe arithmetic operations in `OFFSET_OOB()` macro: Replace the arithmetic operation `ms->offset + o` with an overflow-safe operation, such as `ms->offset > SIZE_MAX - o ? true : false`. This will prevent integer overflows and ensure that the `OFFSET_OOB()` macro returns correct results.
+
+ORIGINAL CODE:
+(Snippet of code containing vulnerabilities)
+```c
+case FILE_BESTRING16:
+case FILE_LESTRING16:
+if (m->reln == '=' || m->reln == '!') {
+if (file_printf(ms, F(m->desc, "%s"), m->value.s) == -1)
+return -1;
+t = ms->offset + m->vallen;
+}
+else {
+t = ms->offset + strlen(str);
+
+if (*m->value.s == '\0')
+str[strcspn(str, "\n")] = '\0';
+
+if (m->str_flags & STRING_TRIM) {
+char *last;
+while (isspace((unsigned char)*str))
+*++last = '\0';
+}
+
+if (file_printf(ms, F(m->desc, "%s"), str) == -1)
+return -1;
+
+...
+...
+if (OFFSET_OOB(nbytes, offset, 2))
+return 0;
+...
+...
+```

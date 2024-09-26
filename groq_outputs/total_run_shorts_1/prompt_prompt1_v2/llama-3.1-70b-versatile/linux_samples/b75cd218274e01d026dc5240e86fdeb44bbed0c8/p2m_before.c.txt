@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15, 20-21
+VULNERABILITY_DESCRIPTION:
+Potential race condition and lock inversion in spinlock handling.
+
+EXPLANATION:
+In this code snippet, we observe that within the `while (n)` loop inside the `read_lock_irqsave` block, the same loop is executed again with a `write_lock_irqsave` and `irqflags` variable redeclared. However, in the outer scope, the variable 'irqflags' is declared with a different variable lifetime compared to 'irqflags' used inside.
+
+This could potentially lead to a lock inversion which happens when a thread that holds a lock tries to acquire a lower priority lock, thus leading to undefined behavior or even deadlocks in worst-case scenarios.
+
+This, in conjunction with the nested loops on the rb_node tree without an apparent "break" condition inside the inner while loop after finding 'mfn == INVALID_P2M_ENTRY', creates the possibility for potential unnecessary iterations causing the execution thread to fail to release the spinlock.
+
+It also poses an issue when attempting to read-lock followed immediately by write-lock. A writer has precedence over a reader, meaning if reader fails to release its lock in this configuration quickly the writer waits resulting potentially to deadlocks from inverted lock ordering.
+
+RECOMMENDATIONS:
+The correct order of locks should be enforced by design for concurrent interactions. Ensure write-lock is released as quickly as possible for a more optimal concurrent interaction. To resolve this vulnerability, ensure usage consistency across different threads. Remove nested usage of the same resource (spinlock here). Modify the function so that its logic follows:
+
+  1. Seek resource needed
+  2. Acquire needed locks that protects it and nothing higher priority and proceed.
+
+When working on lower-level locks ensure that higher-level locks won’t concurrently attempt usage. Avoid unnecessary iterations:
+
+When "finding a match" utilize the existing flag as follows. Include code that only goes through next iteration in the search tree when 'mfn == INVALID_P2M_ENTRY' proves true:
+
+    while (n) {
+        entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+        if (entry->pfn <= pfn &&
+             entry->pfn + entry->nr_pages > pfn) {
+            int rc;
+            write_lock_irqsave(&p2m_lock, irqflags);
+            n = phys_to_mach.rb_node;
+            while (n) {
+                //Only look in next entries IF 'mfn == INVALID_P2M_ENTRY'.
+                if ( mfn == INVALID_P2M_ENTRY) {
+                    // Go ahead and traverse rest of tree as p2m_entry
+                    break;
+                }
+                //Rest of matching operations and mfn updates, 
+                // or operations dependent on values found can continue operating.
+
+                //Make use of required flag accordingly using existing data structure.
+
+            }
+            write_unlock_irqrestore(&p2m_lock, irqflags);
+        }
+    }
+
+There isn’t the exact way to eliminate such interactions but a developer will have the knowledge and might include procedures to facilitate additional synchronization of resource. If the described nesting is still present once the structure of those interactions were resolved, it is recommended to debug deeper over the interaction requirements of such concurrent interactions to minimize chances of undefined behavior. 
+
+ORIGINAL CODE:
+```c
+unsigned long __pfn_to_mfn(unsigned long pfn)
+{
+	struct rb_node *n = phys_to_mach.rb_node;
+	struct xen_p2m_entry *entry;
+	unsigned long irqflags;
+
+	read_lock_irqsave(&p2m_lock, irqflags);
+	while (n) {
+		entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+		if (entry->pfn <= pfn &&
+				entry->pfn + entry->nr_pages > pfn) {
+	int rc;
+	unsigned long irqflags;
+	struct xen_p2m_entry *p2m_entry;
+	struct rb_node *n = phys_to_mach.rb_node;
+
+	if (mfn == INVALID_P2M_ENTRY) {
+		write_lock_irqsave(&p2m_lock, irqflags);
+		while (n) {
+			p2m_entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+			if (p2m_entry->pfn <= pfn &&
+					p2m_entry->pfn + p2m_entry->nr_pages > pfn) {
+}}}}}}}
+```

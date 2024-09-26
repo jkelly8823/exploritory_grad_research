@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 166, 168
+VULNERABILITY_DESCRIPTION:
+The provided code sample contains a potential integer overflow vulnerability in the calculation of `even_line_bytes` for YUV420 formats.
+
+EXPLANATION:
+The `even_line_bytes` variable is calculated as `(width_padded * 2 * bits_per_pixel + 7) >> 3`, which shifts the result right by 3 bits to effectively divide by 8. However, the multiplication `width_padded * 2 * bits_per_pixel` can overflow the maximum limit of an `unsigned int` type, especially for larger values of `width_padded` and `bits_per_pixel`. This overflow can result in incorrect values for `even_line_bytes`, potentially leading to incorrect memory allocation or copying.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a larger integer type, such as `uint64_t`, to store the intermediate result of the multiplication before shifting right by 3 bits. Alternatively, you can manually check for overflow conditions before performing the multiplication.
+
+Here is an example of how to modify the calculation to use a larger integer type:
+```c
+uint64_t temp = (uint64_t)width_padded * 2 * bits_per_pixel;
+even_line_bytes = (temp + 7) >> 3;
+```
+ORIGINAL CODE:
+```c
+enum ia_css_err
+ia_css_mipi_frame_calculate_size(const unsigned int width,
+				const unsigned int height,
+				const enum ia_css_stream_format format,
+				const bool hasSOLandEOL,
+				const unsigned int embedded_data_size_words,
+				unsigned int *size_mem_words)
+{
+	/* ... */
+
+	odd_line_bytes = (width_padded * bits_per_pixel + 7) >> 3; /* ceil ( bits per line / 8) */
+
+	/* Even lines for YUV420 formats are double in bits_per_pixel. */
+	if (format == IA_CSS_STREAM_FORMAT_YUV420_8
+			|| format == IA_CSS_STREAM_FORMAT_YUV420_10
+			|| format == IA_CSS_STREAM_FORMAT_YUV420_16) {
+		even_line_bytes = (width_padded * 2 * bits_per_pixel + 7) >> 3; /* ceil ( bits per line / 8) */
+	} else {
+		even_line_bytes = odd_line_bytes;
+	}
+
+	/* ... */
+```

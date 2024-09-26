@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION:
+A Potential Command Injection Vulnerability
+
+EXPLANATION:
+The vulnerability is identified in the line `$ENV{OPENSSL_CONF} = $provconf;`. This line assigns a potentially untrusted value to an environment variable, which can then be used in executions of the `openssl` command. This could potentially lead to command injection attacks if proper validation and sanitization are not performed. The variable `$provconf` is user-controlled and sourced from an external file (`srctop_file("test", "fips-and-base.cnf")`), posing a significant risk if the file is tampered with or contains malicious data.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation and sanitization of the `$provconf` variable should be performed before assigning it to the `OPENSSL_CONF` environment variable. Additionally, consider implementing secure coding practices such as using parameterized commands or avoiding directly assigning user-controlled input to environment variables.
+
+ORIGINAL CODE:
+```perl
+# Same as above but with base provider used for decoding
+SKIP: {
+    my $no_fips = disabled('fips') || ($ENV{NO_FIPS} // 0);
+    my $provconf = srctop_file("test", "fips-and-base.cnf");
+    my $provpath = bldtop_dir("providers");
+    my @prov = ("-provider-path", $provpath);
+
+    skip "EC is not supported or FIPS is disabled", 3
+        if disabled("ec") || $no_fips;
+
+    run(test(["fips_version_test", "-config", $provconf, ">3.0.0"]),
+             capture => 1, statusvar => \my $exit);
+    skip "FIPS provider version is too old", 3
+        if !$exit;
+
+    $ENV{OPENSSL_CONF} = $provconf;
+
+    ok(!verify("ee-cert-ec-explicit", "", ["root-cert"],
+               ["ca-cert-ec-named"], @prov),
+```

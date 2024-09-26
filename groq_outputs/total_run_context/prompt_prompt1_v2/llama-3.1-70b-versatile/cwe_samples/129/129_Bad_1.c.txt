@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-13
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow vulnerability.
+
+EXPLANATION:
+The `sscanf` function is used to parse data from the `buf` string into the `num` and `size` variables. However, the format string `%d %d` does not prevent `sscanf` from writing past the end of the `buf` array if the input string contains more data than expected. This is a classic buffer overflow vulnerability.
+
+Additionally, the `sscanf` function does not check if the `num` variable is within the valid range for indexing the `sizes` array. If `num` is greater than or equal to the `count` parameter, this will result in a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use `sscanf` with the `n` modifier to limit the number of characters read, and also add bounds checking for `num` to prevent indexing beyond the end of the `sizes` array.
+
+Here's an example of the fixed code:
+
+```c
+int getsizes(int sock, int count, int *sizes) {
+    char buf[BUFFER_SIZE];
+    int ok;
+    int num, size;
+    int consumed; // variable to hold the number of characters consumed by sscanf
+
+    while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0) {
+        if (DOTLINE(buf)) break;
+        else if (sscanf(buf, "%d %n", &num, &consumed) == 1) {
+            if (num > 0 && num <= count) {
+                // parse the size if we haven't exceeded the format string
+                if (sscanf(buf + consumed, "%d%n", &size, &consumed) == 1) {
+                    sizes[num - 1] = size;
+                }
+            }
+        }
+    }
+    // ...
+}
+```
+
+ORIGINAL CODE:
+```c
+/* capture the sizes of all messages */
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+   
+       // read values from socket and added to sizes array
+       while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+          
+            // continue read from socket until buf only contains '.'
+            if (DOTLINE(buf))break;
+            else if (sscanf(buf, "%d %d", &num, &size) == 2)sizes[num - 1] = size;
+          
+       }...
+    
+}
+```

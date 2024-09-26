@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow and use-after-free vulnerabilities due to incorrect handling of dynamically allocated memory.
+
+EXPLANATION:
+The code snippet contains potential buffer overflow and use-after-free vulnerabilities. The `OPENSSL_malloc` function is used to dynamically allocate memory for the `buf` variable. However, there is no bounds checking performed on the `return_size` variable, which is used to allocate the memory. This can lead to a buffer overflow if the `return_size` is too large. Furthermore, if the `EVP_PKEY_get_octet_string_param` function fails, the `buf` memory is freed using `OPENSSL_free`, but the `*ppub` pointer is not updated to NULL, which can lead to a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, bounds checking should be performed on the `return_size` variable before allocating the memory. Additionally, if the `EVP_PKEY_get_octet_string_param` function fails, the `*ppub` pointer should be updated to NULL after freeing the `buf` memory.
+
+Here is a modified version of the vulnerable code with the recommended fixes:
+```c
+if (pkey != NULL && evp_pkey_is_provided(pkey)) {
+    size_t return_size = OSSL_PARAM_UNMODIFIED;
+    unsigned char *buf = NULL;
+
+    if (return_size == OSSL_PARAM_UNMODIFIED)
+        return 0;
+
+    *ppub = NULL;
+    buf = OPENSSL_malloc(return_size);
+    if (buf == NULL)
+        return 0;
+
+    if (!EVP_PKEY_get_octet_string_param(pkey,
+                                         OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY,
+                                         buf, return_size, NULL)) {
+        if (buf != NULL) {
+            OPENSSL_free(buf);
+            buf = NULL;
+        }
+        *ppub = NULL;
+        return 0;
+    }
+    *ppub = buf;
+    return return_size;
+}
+```
+
+ORIGINAL CODE:
+```c
+if (pkey != NULL && evp_pkey_is_provided(pkey)) {
+    size_t return_size = OSSL_PARAM_UNMODIFIED;
+    unsigned char *buf;
+
+    /*
+     * We know that this is going to fail, but it will give us a size
+     * to allocate.
+    if (return_size == OSSL_PARAM_UNMODIFIED)
+        return 0;
+
+    *ppub = NULL;
+    buf = OPENSSL_malloc(return_size);
+    if (buf == NULL)
+        return 0;
+
+    if (!EVP_PKEY_get_octet_string_param(pkey,
+                                         OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY,
+                                         buf, return_size, NULL)) {
+        OPENSSL_free(buf);
+        return 0;
+    }
+    *ppub = buf;
+    return return_size;
+}
+```

@@ -1,0 +1,85 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 24, 33
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a "HTTP Request Smuggling" vulnerability. This vulnerability allows an attacker to send a request to the server that can cause it to forward the request to another server or return a response that was not intended by the server.
+
+EXPLANATION:
+The HTTP request smuggling vulnerability is present because the code does not properly handle the `Content-Length` and `Transfer-Encoding` headers. If an attacker can inject a request with a manipulated `Content-Length` or `Transfer-Encoding` header, they can potentially cause the server to treat the request as two separate requests or return a response that was not intended by the server. In the provided code, we can see that the server is being created without any code to handle such a scenario and is simply handing off the request to a networking client. This does not ensure that the request does not get manipulated.
+
+Additionally, this vulnerability can allow for various forms of attacks such as being able to bypass security restrictions or cause DoS attacks on the server.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should verify the length of the request body and its `Content-Length` or `Transfer-Encoding` headers to ensure they match before processing the request. Additionally, the server should be designed to discard any parts of a request that are not in the expected format to avoid becoming vulnerable to request smuggling attacks.
+
+If a request body is provided, ensure that it matches the declared size in the `Content-Length` header. If a `Transfer-Encoding` header is used, ensure that the size of the request body is correctly calculated.
+
+Also consider adding headers such as `Cache-Control: no-store;` and `Expires: 0;` to the server's responses to prevent information about the session being stored in the browser's cache.
+
+ORIGINAL CODE:
+
+const http = require('http');
+const net = require('net');
+
+function serverHandler(server, msg) {
+  const client = net.connect(server.address().port, 'localhost');
+
+  let response = '';
+
+  }));
+  client.write(msg);
+  client.resume();
+}
+
+{
+  const msg = [
+    'GET / HTTP/1.1',
+    'Host: localhost',
+    'Dummy: x\nContent-Length: 23',
+    '',
+    'GET / HTTP/1.1',
+    'Dummy: GET /admin HTTP/1.1',
+    'Host: localhost',
+    '',
+    '',
+  ].join('\r\n');
+
+  const server = http.createServer(common.mustNotCall());
+
+  server.listen(0, common.mustSucceed(serverHandler.bind(null, server, msg)));
+}
+
+{
+  const msg = [
+    'POST / HTTP/1.1',
+    'Host: localhost',
+    'x:x\nTransfer-Encoding: chunked',
+    '',
+    '1',
+    'A',
+    '0',
+    '',
+    '',
+  ].join('\r\n');
+
+  const server = http.createServer(common.mustNotCall());
+
+  server.listen(0, common.mustSucceed(serverHandler.bind(null, server, msg)));
+}
+
+{
+  const msg = [
+    'POST / HTTP/1.1',
+    'Host: localhost',
+    'x:\nTransfer-Encoding: chunked',
+    '',
+    '1',
+    'A',
+    '0',
+    '',
+    '',
+  ].join('\r\n');
+
+  const server = http.createServer(common.mustNotCall());
+
+  server.listen(0, common.mustSucceed(serverHandler.bind(null, server, msg)));
+}

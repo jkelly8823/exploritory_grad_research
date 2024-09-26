@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference and exposure of sensitive information due to the usage of the 'sslsock->s' and 'sslsock->ctx' structures without proper checks for null or initialized values.
+ 
+EXPLANATION:
+Although two initial checks for sslsock->ssl_handle and sslsock->s.is_blocked are conducted, there seems to be no protection against the structures 'sslsock->s' and 'sslsock->ctx' being null or uninitalized before they are used. This may result in an application crash or expose sensitive data if the null pointer is dereferenced.
+
+Moreover, it could also lead to a potential denial of service on the application as well.
+
+RECOMMENDATIONS:
+To address the vulnerabilities found:
+
+1.  Check for null values in the structures: Before accessing 'sslsock->s' and 'sslsock->ctx', ensure these structures are properly initialized and not null:
+
+```c
+if (sslsock && sslsock->s && sslsock->ctx) {
+    if (sslsock->s.is_blocked) {
+        // your code here
+    }
+    SSL_CTX_set_options(sslsock->ctx, ssl_ctx_options);
+    // rest of your code
+} else {
+    // handle initialisation error or null pointer
+    // For example, throw an exception or return an error
+}
+```
+
+2.  Use safe function calls for operations on sensitive data.
+
+ORIGINAL CODE:
+
+        TSRMLS_DC)
+{
+    SSL_METHOD *method;
+    long ssl_ctx_options = SSL_OP_ALL;
+    
+    if (sslsock->ssl_handle) {
+        if (sslsock->s.is_blocked) {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "SSL/TLS already set-up for this stream");
+        return -1;
+    }
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090605fL
+    ssl_ctx_options &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
+#endif
+    SSL_CTX_set_options(sslsock->ctx, ssl_ctx_options);
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090806fL
+    {
+        zval **val;

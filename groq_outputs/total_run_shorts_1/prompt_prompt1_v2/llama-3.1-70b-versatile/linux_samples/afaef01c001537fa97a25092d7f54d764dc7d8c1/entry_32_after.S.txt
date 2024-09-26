@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 22
+VULNERABILITY_DESCRIPTION: 
+Potential Spectre Variant 2 vulnerability due to use of indirect calls without mitigation, and a call instruction without zeroing the RPB (Return Prediction Barrier).
+
+EXPLANATION:
+The function uses `call` instructions without properly mitigating the Spectre Variant 2 vulnerability. Specifically, the calls to `syscall_return_slowpath` and `do_int80_syscall_32` are indirect calls that can be exploited by an attacker. Furthermore, the `call` instruction is used without zeroing the RPB, which can be exploited by an attacker who controls the branch predictor.
+
+RECOMMENDATIONS:
+To fix the vulnerability, the code can be modified to use the `retpoline` thunk to mitigate indirect calls, or `lp` instructions to zero the RPB before the call. The recommendation is to replace the calls to `syscall_return_slowpath` and `do_int80_syscall_32` with retpoline or lp instructions.
+
+ORIGINAL CODE:
+```c
+    #include <asm/frame.h>
+    #include <asm/nospec-branch.h>
+
+    #include "calling.h"
+
+    .section .entry.text, "ax"
+
+    /*
+     * We use macros for low-level operations which need to be overridden
+    /* When we fork, we trace the syscall return in the child, too. */
+    movl    %esp, %eax
+    call    syscall_return_slowpath
+    STACKLEAK_ERASE
+    jmp     restore_all
+
+    /* kernel thread */
+1:    movl    %edi, %eax
+    ALTERNATIVE "testl %eax, %eax; jz .Lsyscall_32_done", \
+            "jmp .Lsyscall_32_done", X86_FEATURE_XENPV
+
+    STACKLEAK_ERASE
+
+    /* Opportunistic SYSEXIT */
+    TRACE_IRQS_ON            /* User mode traces as IRQs on. */
+
+    /*
+    call    do_int80_syscall_32
+    .Lsyscall_32_done:
+
+    STACKLEAK_ERASE
+
+    restore_all:
+    TRACE_IRQS_IRET
+    SWITCH_TO_ENTRY_STACK
+    .Lrestore_all_notrace:
+```

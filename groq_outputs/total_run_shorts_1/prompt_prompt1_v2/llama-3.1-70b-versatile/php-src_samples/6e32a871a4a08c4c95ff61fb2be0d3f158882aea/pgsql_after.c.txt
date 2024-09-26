@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the way that user input is directly concatenated into a SQL query without proper sanitization. The variable `tmp_name2` is used to construct the query string, but it is passed through `php_addslashes` function which does not provide adequate protection against SQL injection attacks.
+
+In this specific case, the `php_addslashes` function only escapes certain special characters, but does not prevent an attacker from injecting malicious SQL code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should use prepared statements instead of concatenating user input into SQL queries. This will prevent an attacker from injecting malicious SQL code.
+
+Specifically, you should replace the lines 4-6 with the following code:
+
+```php
+smart_str_appendl(&querystr, "SELECT a.attname, a.attnum, t.typname, a.attlen, a.attnotnull, a.atthasdef, a.attndims, t.typtype = 'e' "
+    "FROM pg_class as c, pg_attribute a, pg_type t, pg_namespace n "
+    "WHERE a.attnum > 0 AND a.attrelid = c.oid AND c.relname = $1", tmp_name2);
+```
+
+Then, you should use a prepared statement to execute the query with the `tmp_name2` as a parameter:
+
+```php
+PGresult *pg_result = PQprepare(pg_link, "query", querystr, 1, NULL);
+if (PQresultStatus(pg_result) == PGRES_BAD_RESPONSE) {
+    // handle error
+} else {
+    // execute the query with the parameter
+    pg_result = PQexecPrepared(pg_link, "query", 1, &tmp_name2, NULL, NULL);
+}
+```
+
+ORIGINAL CODE:
+
+```php
+smart_str_appends(&querystr, 
+        "SELECT a.attname, a.attnum, t.typname, a.attlen, a.attnotnull, a.atthasdef, a.attndims, t.typtype = 'e' "
+        "FROM pg_class as c, pg_attribute a, pg_type t, pg_namespace n "
+        "WHERE a.attnum > 0 AND a.attrelid = c.oid AND c.relname = '");
+tmp_name2 = php_addslashes(tmp_name2, strlen(tmp_name2), &new_len, 0 TSRMLS_CC);
+smart_str_appendl(&querystr, tmp_name2, new_len);
+```

@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 4
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability
+EXPLANATION:
+The line `iloc->block_group = (inode->i_ino - 1) / EXT4_INODES_PER_GROUP(sb);` may cause an integer overflow. This is because the `(inode->i_ino - 1)` operation could potentially overflow or underflow if `inode->i_ino` is close to the maximum or minimum value of the type, and `EXT4_INODES_PER_GROUP(sb)` does not account for this case. However, considering the typical size of an inode number and block group count, integer overflow is more of a risk due to large values, but still appears likely given no relevant bounds checking.
+
+RECOMMENDATIONS:
+Check for potential overflow before performing the division. Implement it using something like below:
+
+```c
+uint32_t temp = inode->i_ino - 1;
+if (temp / EXT4_INODES_PER_GROUP(sb) > UINT_MAX) {
+    // handle the potential overflow
+}
+iloc->block_group = temp / EXT4_INODES_PER_GROUP(sb);
+```
+
+Another way to mitigate this is to validate the inode number (`inode->i_ino`) prior to the division to ensure it falls within the known valid range.
+
+ORIGINAL CODE:
+```c
+int			inodes_per_block, inode_offset;
+
+iloc->bh = NULL;
+if (inode->i_ino < EXT4_ROOT_INO ||
+    inode->i_ino > le32_to_cpu(EXT4_SB(sb)->s_es->s_inodes_count))
+    return -EFSCORRUPTED;
+
+iloc->block_group = (inode->i_ino - 1) / EXT4_INODES_PER_GROUP(sb);
+gdp = ext4_get_group_desc(sb, iloc->block_group, NULL);
+```

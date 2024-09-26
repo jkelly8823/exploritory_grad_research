@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-30
+VULNERABILITY_DESCRIPTION: 
+Arbitrary Configuration Register Write
+
+EXPLANATION:
+The code contains a vulnerability that allows an attacker to write arbitrary values to the PCI configuration registers. This is possible because the `command_write` function does not properly validate the `value` parameter before writing it to the configuration register. Specifically, the function does not check if the value is actually valid for the given offset.
+
+In the vulnerable lines (28-30), the code writes the `value` parameter directly to the PCI configuration register without any validation. This allows an attacker to write arbitrary values to the configuration registers, potentially leading to security issues.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should validate the `value` parameter before writing it to the configuration register. This can be done by checking if the value is within a valid range or by using a whitelist of allowed values.
+
+Additionally, the code should also check if the offset is valid for the given PCI device, to prevent writing to invalid or reserved configuration registers.
+
+Here's an example of how the `command_write` function could be modified to address this vulnerability:
+```c
+static int command_write(struct pci_dev *dev, int offset, u16 value, void *data)
+{
+    if (offset != PCI_COMMAND || value < 0 || value > PCI_COMMAND_MAX) {
+        // Handle invalid offset or value
+        return -EINVAL;
+    }
+    // ...
+}
+```
+ORIGINAL CODE:
+```c
+#include "pciback.h"
+#include "conf_space.h"
+
+struct pci_bar_info {
+    u32 val;
+    u32 len_val;
+    int which;
+#define is_enable_cmd(value) ((value)&(PCI_COMMAND_MEMORY|PCI_COMMAND_IO))
+#define is_master_cmd(value) ((value)&PCI_COMMAND_MASTER)
+
+static int command_read(struct pci_dev *dev, int offset, u16 *value, void *data)
+{
+    int i;
+    int ret;
+
+    ret = xen_pcibk_read_config_word(dev, offset, value, data);
+    if (!pci_is_enabled(dev))
+        return ret;
+
+    for (i = 0; i < PCI_ROM_RESOURCE; i++) {
+        if (dev->resource[i].flags & IORESOURCE_IO)
+            *value |= PCI_COMMAND_IO;
+        if (dev->resource[i].flags & IORESOURCE_MEM)
+            *value |= PCI_COMMAND_MEMORY;
+    }
+
+    return ret;
+}
+
+static int command_write(struct pci_dev *dev, int offset, u16 value, void *data)
+{
+    struct xen_pcibk_dev_data *dev_data;
+    int err;
+
+    dev_data = pci_get_drvdata(dev);
+    if (!pci_is_enabled(dev) && is_enable_cmd(value)) {
+        if (unlikely(verbose_request))
+    }
+    return pci_write_config_word(dev, offset, value);
+}
+
+static int rom_write(struct pci_dev *dev, int offset, u32 value, void *data)
+    {
+        .offset    = PCI_COMMAND,
+        .size      = 2,
+        .u.w.read  = command_read,
+        .u.w.write = command_write,
+    },
+```

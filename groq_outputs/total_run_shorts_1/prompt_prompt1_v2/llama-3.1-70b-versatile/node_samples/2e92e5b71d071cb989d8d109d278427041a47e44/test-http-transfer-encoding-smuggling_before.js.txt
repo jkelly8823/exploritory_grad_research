@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Duplicate 'Transfer-Encoding' header in the HTTP request.
+
+EXPLANATION:
+A Duplicate 'Transfer-Encoding' header in the HTTP request is present on line 3 ('Transfer-Encoding: chunked') and line 4 ('Transfer-Encoding: chunked-false'). This could potentially be exploited in a vulnerability that relies on duplicate headers, such as HTTP request smuggling or splitting.
+
+RECOMMENDATIONS:
+While HTTP doesn't explicitly prohibit duplicate headers, many servers and intermediaries don't handle them correctly, and certain configurations can lead to vulnerabilities. It is recommended to use only one Transfer-Encoding header per request. Therefore, remove or merge the duplicate Transfer-Encoding headers.
+
+ORIGINAL CODE:
+```
+const http = require('http');
+const net = require('net');
+
+const msg = [
+  'POST / HTTP/1.1',
+  'Host: 127.0.0.1',
+  'Transfer-Encoding: chunked',
+  'Transfer-Encoding: chunked-false',
+  'Connection: upgrade',
+  '',
+  '1',
+  'A',
+  '0',
+  '',
+  'GET /flag HTTP/1.1',
+  'Host: 127.0.0.1',
+  '',
+  '',
+].join('\r\n');
+
+const server = http.createServer(common.mustNotCall((req, res) => {
+  res.end();
+}, 1));
+
+server.listen(0, common.mustSucceed(() => {
+  const client = net.connect(server.address().port, 'localhost');
+
+  let response = '';
+
+  // Verify that the server listener is never called
+
+  client.on('data', common.mustCall((chunk) => {
+    response += chunk;
+  }));
+
+  client.setEncoding('utf8');
+  client.on('error', common.mustNotCall());
+  client.on('end', common.mustCall(() => {
+    assert.strictEqual(
+      response,
+      'HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'
+    );
+    server.close();
+  }));
+  client.write(msg);
+  client.resume();
+}));
+```

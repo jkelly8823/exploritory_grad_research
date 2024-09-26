@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 15
+VULNERABILITY_DESCRIPTION: 
+The code contains a data exposure vulnerability and an authorization bypass vulnerability in the password verification logic.
+
+EXPLANATION: 
+The provided code snippet appears to be part of a digital circuit (likely a Finite State Machine) that checks a user-entered password against a "golden" password. However, the logic has several issues.
+
+The first concern is in the line `if (entered_pass[(i*8 - 1) : i] eq golden_pass([i*8 - 1) : i])`, which attempts to compare a portion of the entered password to the corresponding part of the golden password. However, the syntax for bit slicing the `golden_pass` array is incorrect, which could lead to incorrect comparisons.
+
+A more significant issue is that if any part of the password does not match, the circuit immediately breaks out of the loop and assigns `check_pass[i] = 0;` for the rest of the index `i` (not just the current one). This can be exploited to bypass the password check. 
+
+Furthermore, the final line `assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;` is using the incorrect indexing for `check_pass`. It checks if all indices are 1, but the previous code only sets the specific indices that correspond to a match to 1, which can result in incorrect access grant.
+
+Additionally, the use of `assign` inside an `always` block is generally discouraged because it can lead to timing issues and race conditions. However, in this case, it seems to be used for combinational logic.
+
+RECOMMENDATIONS:
+- Fix the indexing in the golden_pass slice to use the correct syntax `golden_pass[(i*8 - 1) : i]`.
+- Change the logic to set `check_pass[i] = 0` only for the current index `i` when the password does not match, and allow the loop to continue checking the rest of the password.
+- Change the final line to correctly check the specific indices that were set to 1 for matches. Alternatively, reconsider the use of `check_pass` altogether.
+
+ORIGINAL CODE:
+
+```
+always_comb @ (posedge clk)
+                    
+begin
+  assign check_pass[3:0] = 4'b0;
+  for (i = 0; i < 4; i++) begin
+    if (entered_pass[(i*8 - 1) : i] eq golden_pass([i*8 - 1) : i])
+      assign check_pass[i] = 1;
+      continue;
+    else
+      assign check_pass[i] = 0;
+      break;
+    end
+  assign grant_access = (check_pass == 4'b1111) ? 1'b1: 1'b0;
+end
+
+```

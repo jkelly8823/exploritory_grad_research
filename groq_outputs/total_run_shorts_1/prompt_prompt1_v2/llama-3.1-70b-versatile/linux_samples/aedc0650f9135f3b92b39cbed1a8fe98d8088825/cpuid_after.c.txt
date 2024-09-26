@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION: Uncontrolled Switch Statement
+EXPLANATION:
+The code snippet contains a do-while loop that uses a switch statement to handle different CPUID entries. However, there is no loop control variable or end of loop statement. The `break` statements (lines 4-5) only exit the current case and not the loop. This can cause the loop to execute indefinitely if the CPUID entry does not match any of the specified cases. Furthermore, the return statement from the function `do_cpuid_func` does not control the loop as it is outside the loop.
+ 
+However, it seems that this is indeed the intended behavior since the switch statement is wrapped inside a do-while loop. Without knowing the loop control variable, it is impossible to tell how the loop terminates.
+
+Given the constraints, of only evaluating this code snippet I have made the best-educated guess that I can and given an answer assuming that knowledge.
+
+RECOMMENDATIONS:
+To avoid any potential issues, consider adding a condition variable to control the loop and ensure it terminates correctly. Alternatively, if the intention is to execute the loop indefinitely until a specific condition is met, consider adding a loop exit condition to avoid potential thread or process starvation.
+
+ORIGINAL CODE:
+```
+    r = -E2BIG;
+
+    if (WARN_ON(*nent >= maxnent))
+        goto out;
+
+    do_host_cpuid(entry, function, 0);
+    ++*nent;
+    case 0x8000001a:
+    case 0x8000001e:
+        break;
+    /* Support memory encryption cpuid if host supports it */
+    case 0x8000001F:
+        if (!boot_cpu_has(X86_FEATURE_SEV))
+            entry->eax = entry->ebx = entry->ecx = entry->edx = 0;
+        break;
+    /*Add support for Centaur's CPUID instruction*/
+    case 0xC0000000:
+        /*Just support up to 0xC0000004 now*/
+        entry->eax = min(entry->eax, 0xC0000004);
+static int do_cpuid_func(struct kvm_cpuid_entry2 *entry, u32 func,
+            int *nent, int maxnent, unsigned int type)
+{
+    if (*nent >= maxnent)
+        return -E2BIG;
+
+    if (type == KVM_GET_EMULATED_CPUID)
+        return __do_cpuid_func_emulated(entry, func, nent, maxnent);
+
+    return __do_cpuid_func(entry, func, nent, maxnent);
+```

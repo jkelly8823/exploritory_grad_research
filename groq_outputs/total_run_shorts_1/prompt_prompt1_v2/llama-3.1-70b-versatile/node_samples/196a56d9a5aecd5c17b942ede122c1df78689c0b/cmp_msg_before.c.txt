@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+Uninitialized variable use and unreachable code.
+
+EXPLANATION:
+The code has two main issues. Firstly, the code at lines 24-25 are unreachable due to the preceding `return NULL;` statement on line 23. This code seems intended to retrieve and manipulate objects but is never executed.
+
+The second and more critical vulnerability arises from using an uninitialized variable `refcert`. Although `refcert` is not explicitly declared in this code snippet, it is used in lines 24-25 without any initialization or checks for NULL. This undefined behavior can lead to potential crashes or incorrect behavior.
+
+RECOMMENDATIONS:
+Firstly, refactor the function to eliminate the unreachable code. Move the assignment of `EVP_PKEY *rkey = OSSL_CMP_CTX_get0_newPkey(ctx, 0);` and subsequent lines before the `return NULL;` statements.
+
+Secondly, ensure that `refcert` is properly initialized or checked for NULL before use. Add a NULL check for `refcert` before using it in lines 24-25. This will prevent potential segmentation faults or undefined behavior.
+
+ORIGINAL CODE:
+
+    (sk_GENERAL_NAME_num((ctx)->subjectAltNames) > 0 \
+         || OSSL_CMP_CTX_reqExtensions_have_SAN(ctx) == 1)
+
+static const X509_NAME *determine_subj(OSSL_CMP_CTX *ctx,
+                                       const X509_NAME *ref_subj,
+                                       int for_KUR)
+{
+    if (ctx->subjectName != NULL)
+        return IS_NULL_DN(ctx->subjectName) ? NULL : ctx->subjectName;
+
+    if (ref_subj != NULL && (ctx->p10CSR != NULL || for_KUR || !HAS_SAN(ctx)))
+        /*
+         * For KUR, copy subject from the reference.
+         * For IR or CR, do the same only if there is no subjectAltName.
+         */
+        return ref_subj;
+    return NULL;
+    EVP_PKEY *rkey = OSSL_CMP_CTX_get0_newPkey(ctx, 0);
+    STACK_OF(GENERAL_NAME) *default_sans = NULL;
+    const X509_NAME *ref_subj =
+        ctx->p10CSR != NULL ? X509_REQ_get_subject_name(ctx->p10CSR) :
+        refcert != NULL ? X509_get_subject_name(refcert) : NULL;
+    const X509_NAME *subject = determine_subj(ctx, ref_subj, for_KUR);
+    const X509_NAME *issuer = ctx->issuer != NULL || refcert == NULL
+        ? (IS_NULL_DN(ctx->issuer) ? NULL : ctx->issuer)
+        : X509_get_issuer_name(refcert);
+    int crit = ctx->setSubjectAltNameCritical || subject == NULL;

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Insecure use of 'SSL_get_verify_result' function.
+EXPLANATION:
+The code checks the result of 'SSL_get_verify_result' to verify the peer's certificate. However, it only checks if the result is 'X509_V_OK', which indicates successful verification. This approach has limitations, because it does not handle other verification results that also indicate success. For example, 'X509_V_OK' is a subset of the validation that can be performed, and other values might be considered valid in different scenarios.
+
+Moreover, using 'SSL_get_verify_result' with 'X509_V_OK' only indicates a successful verification of the peer's certificate, but does not imply that the verified identity matches the expected one. The code does not verify the peer's identity by checking the subject name or other attributes in the certificate, which can lead to a vulnerability. An attacker could obtain a valid certificate for a different identity and use it to impersonate the expected peer.
+
+RECOMMENDATIONS:
+Use a more comprehensive verification approach, which includes checking the peer's certificate against the expected identity. Verify the subject name or other attributes in the certificate to match the expected values.
+
+When using 'SSL_get_verify_result', consider checking for other successful verification results in addition to 'X509_V_OK'. Use a combination of OpenSSL functions to verify the peer's identity and certificate, such as 'SSL_get_peername' or 'X509_NAME_print_ex'.
+
+Here is an example of how to check the subject name in the certificate:
+
+```c
+X509 *cert = SSL_get_peer_certificate(ssl);
+if (cert) {
+    X509_NAME *subject = X509_get_subject_name(cert);
+    if (subject) {
+        // Check if the subject matches the expected value
+        char *expectedValue = "expected_subject_name";
+        int cmpResult = X509_NAME_cmp(subject, expectedValue);
+        if (cmpResult == 0) {
+            // do secret things
+        }
+    }
+}
+```
+ORIGINAL CODE:
+cert = SSL_get_peer_certificate(ssl);if (cert && (SSL_get_verify_result(ssl)==X509_V_OK)) {
+                        
+                           
+                           // do secret things
+                           
+                        
+                     }
+               
+              

@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to inconsistent application of security permissions in the case where the "experimental_permission" flag is set. 
+
+Specifically, when certain permissions are enabled, other features such as add-ons or inspector are disabled for security reasons, but child process and worker threads are disabled only conditionally, based on explicit 'allow_child_process' and 'allow_worker_threads' flags.
+
+However, this inconsistent application of security controls may be incorrect or incomplete, potentially allowing malicious activities to spawn or manipulate child processes and worker threads.
+
+EXPLANATION:
+Upon closer inspection, the suspicious lines of code appear to introduce an inconsistent application of security controls. On the one hand, when some permissions are enabled (in `options_->allow_fs_read`, `options_->allow_fs_write`), the process correctly disables certain security-critical features. However, child process and worker threads are disabled only when 'allow_child_process' and 'allow_worker_threads' flags are unset.
+
+The lack of explicit permission control here indicates that child process and worker threads may be able to evade the required permission checks and potentially bypass certain security checks.
+
+This inconsistent use of permission flags and disabled features poses a vulnerability that needs addressing.
+
+RECOMMENDATIONS:
+1. Introduce an additional explicit permission check for child process and worker threads to be disabled based on a condition - when certain permissions (i.e., `options_->allow_fs_read` or `options_->allow_fs_write`) are set and either `allow_child_process` or `allow_worker_threads` is unset.
+
+Here's an example of the revised lines (based on proposed solutions):
+
+```c
+if (!options_->allow_fs_read.empty() || !options_->allow_fs_write.empty()) {
+    options_->allow_native_addons = false;
+    flags_ = flags_ | EnvironmentFlags::kNoCreateInspector;
+    permission()->Apply("*", permission::PermissionScope::kInspector);
+    // if the explicit allow flags are unset, deny permission
+    if (!options_->allow_child_process && !options_->allow_worker_threads) {
+        permission()->Apply("*", permission::PermissionScope::kChildProcessAndWorkerThreads);
+    } else if (!options_->allow_child_process) {
+        permission()->Apply("*", permission::PermissionScope::kChildProcess);
+    } else if (!options_->allow_worker_threads) {
+        permission()->Apply("*", permission::PermissionScope::kWorkerThreads);
+    }
+}
+```
+
+This adjustment to permission controls minimizes risks of spawning malicious child processes or manipulating worker threads when permission checks are incomplete.
+
+ORIGINAL CODE:
+```c
+if (options_->experimental_permission) {
+    permission()->EnablePermissions();
+    // If any permission is set the process shouldn't be able to neither
+    // spawn/worker nor use addons or enable inspector
+    // unless explicitly allowed by the user
+    if (!options_->allow_fs_read.empty() || !options_->allow_fs_write.empty()) {
+      options_->allow_native_addons = false;
+      flags_ = flags_ | EnvironmentFlags::kNoCreateInspector;
+      permission()->Apply("*", permission::PermissionScope::kInspector);
+      if (!options_->allow_child_process) {
+        permission()->Apply("*", permission::PermissionScope::kChildProcess);
+      }
+      if (!options_->allow_worker_threads) { 
+```

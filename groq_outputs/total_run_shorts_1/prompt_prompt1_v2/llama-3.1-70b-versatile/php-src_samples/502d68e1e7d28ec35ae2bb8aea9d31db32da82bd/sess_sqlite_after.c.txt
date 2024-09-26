@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+ SQL Injection vulnerability, caused by passing dynamically generated data to sqlite_decode_binary without proper validation. Although it does not directly pass user input to a sql query, the lack of validation allows an attacker to manipulate the memory size allocated for the data.
+
+EXPLANATION:
+In the provided code, sqlite_decode_binary() is called with dynamically generated data. This function may allocate new memory that is only as large as necessary to hold the decoded binary data. The new length of the data is then assigned to *vallen. The decoded data is written into a buffer that was allocated based on a different length calculation (strlen(rowdata[0])). 
+If sqlite_decode_binary() returns a length greater than *vallen, this would result in writing past the end of the allocated buffer, leading to a potential buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that the allocated memory for *val is large enough to hold the decoded binary data and its null terminator. This can be done by reallocation the *val after *vallen has been updated. Here's a suggested modification to the vulnerable lines:
+
+```c
+if (*vallen) {
+    *val = emalloc(*vallen + 1); // add one for null terminator
+    *vallen = sqlite_decode_binary(rowdata[0], *val);
+    if (*vallen > strlen(rowdata[0])) {
+        // reallocate val if necessary
+        free(*val);
+        *val = emalloc(*vallen + 1);
+        *vallen = sqlite_decode_binary(rowdata[0], *val);
+    }
+    (*val)[*vallen] = '\0';
+}
+```
+Note: emalloc is assumed to be equivalent to malloc, and STR_EMPTY_ALLOC() is assumed to handle empty or other edge cases correctly.
+
+ORIGINAL CODE:
+```c
+case SQLITE_ROW:
+    if (rowdata[0] != NULL) {
+        *vallen = strlen(rowdata[0]);
+        if (*vallen) {
+            *val = emalloc(*vallen);
+            *vallen = sqlite_decode_binary(rowdata[0], *val);
+            (*val)[*vallen] = '\0';
+        } else {
+            *val = STR_EMPTY_ALLOC();
+        }
+    }
+    break;
+default:
+    sqlite_freemem(error);
+```

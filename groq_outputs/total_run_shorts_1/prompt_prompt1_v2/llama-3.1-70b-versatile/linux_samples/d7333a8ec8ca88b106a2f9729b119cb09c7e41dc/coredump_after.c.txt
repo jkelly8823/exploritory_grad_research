@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code is a potential null pointer dereference.
+
+EXPLANATION:
+The function `ath10k_coredump_get_mem_layout` checks for a specific condition using `test_bit`, and if that condition is not met, it returns `NULL`. However, in the subsequent function `_ath10k_coredump_get_mem_layout`, there is no null check on the `ar` parameter before it is dereferenced.
+
+The potential issue arises because if `ath10k_coredump_get_mem_layout` were to be modified to return `NULL` under different conditions, or if there were an issue with the bit testing, the function `_ath10k_coredump_get_mem_layout` could dereference a null pointer.
+
+Additionally, the return type of `ath10k_coredump_get_mem_layout` is `const struct ath10k_hw_mem_layout *`, and it's possible that this pointer could be null if `ath10k_coredump_get_mem_layout` is modified or if there was a coding error.
+
+Furthermore, the function `ath10k_coredump_get_mem_layout` does not perform any null checks on the `ar` parameter before calling `_ath10k_coredump_get_mem_layout`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, a null check should be added on the `ar` parameter in the functions `ath10k_coredump_get_mem_layout` and `_ath10k_coredump_get_mem_layout`. Furthermore, when calling `_ath10k_coredump_get_mem_layout`, check for a null return from `ath10k_coredump_get_mem_layout` before using its result.
+
+Here are the recommended fixes:
+- Add null checks on `ar` in `ath10k_coredump_get_mem_layout` and `_ath10k_coredump_get_mem_layout`.
+- Check for null returns from `ath10k_coredump_get_mem_layout` before using its result.
+
+ORIGINAL CODE:
+```c
+const struct ath10k_hw_mem_layout *ath10k_coredump_get_mem_layout(struct ath10k *ar)
+{
+	if (!test_bit(ATH10K_FW_CRASH_DUMP_RAM_DATA, &ath10k_coredump_mask))
+		return NULL;
+
+	return _ath10k_coredump_get_mem_layout(ar);
+}
+EXPORT_SYMBOL(ath10k_coredump_get_mem_layout);
+
+const struct ath10k_hw_mem_layout *_ath10k_coredump_get_mem_layout(struct ath10k *ar)
+{
+	int i;
+
+	if (WARN_ON(ar->target_version == 0))
+		return NULL;
+
+	for (i = 0; i < ARRAY_SIZE(hw_mem_layouts); i++) {
+
+	return NULL;
+}
+
+struct ath10k_fw_crash_data *ath10k_coredump_new(struct ath10k *ar)
+{
+	struct ath10k_fw_crash_data *crash_data = ar->coredump.fw_crash_data;
+```

@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-17
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability in Private Key Generation
+EXPLANATION:
+The provided code snippet appears to be part of a test case for generating and validating private keys using the OpenSSL library. However, upon closer examination, a potential vulnerability is detected in the `ossl_ffc_generate_private_key` function calls. Specifically, the number of bits for the prime 'q' is hardcoded to 112, but the lengths of the parameter 'N' are variable. The hardcoded value of 112 could potentially lead to an integer overflow vulnerability if the provided 'N' exceeds the assigned range, as there is no explicit bounds checking.
+
+Additionally, lines 11-17 appear to contain code that is trying to generate private keys for a fixed bit length 'N' and another parameter representing the bit length of 'q'. However, no validation or error checking is performed before calling the `ossl_ffc_generate_private_key` function. This could potentially lead to exploitable conditions when dealing with large bit lengths and possibly other inputs from untrusted sources.
+
+RECOMMENDATIONS:
+To resolve this vulnerability, I would recommend the following adjustments:
+- Validate user input before passing it to `ossl_ffc_generate_private_key` and ensure that bit lengths 'N' fall within an acceptable range to avoid potential overflows.
+- Validate and check the lengths of all parameters prior to calling `ossl_ffc_generate_private_key` and ensure the number of bits in 'q' does not exceed the designated limit.
+
+```c
+int a_safe_max_bit_length;
+if (N + 1 > a_safe_max_bit_length || N >= a_safe_max_bit_length || N <= 0)
+{
+    handle_error("Invalid bit length, potentially vulnerable to overflow");
+}
+if (!TEST_false(ossl_ffc_generate_private_key(ctx, params, N + 1, 112, priv)))
+{
+    goto err;
+}
+/* Rest of your code */
+```
+Here we assume 'a_safe_max_bit_length' is previously set to an allowed highest bit length 'q', a fixed maximum the variable parameters should not exceed.
+
+ORIGINAL CODE:
+/*
+ * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright (c) 2019-2020, Oracle and/or its affiliates.  All rights reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+#include "testutil.h"
+
+#include "internal/ffc.h"
+
+#ifndef OPENSSL_NO_DSA
+static const unsigned char dsa_2048_224_sha224_p[] = {
+    0x93, 0x57, 0x93, 0x62, 0x1b, 0x9a, 0x10, 0x9b, 0xc1, 0x56, 0x0f, 0x24,
+    /* fail since N > len(q) */
+    if (!TEST_false(ossl_ffc_generate_private_key(ctx, params, N + 1, 112, priv)))
+        goto err;
+    /* pass since 2s <= N <= len(q) */
+    if (!TEST_true(ossl_ffc_generate_private_key(ctx, params, N, 112, priv)))
+        goto err;
+    /* pass since N = len(q) */
+        goto err;
+    if (!TEST_true(ossl_ffc_validate_private_key(params->q, priv, &res)))
+        goto err;
+
+    /* N and s are ignored in this case */
+    if (!TEST_true(ossl_ffc_generate_private_key(ctx, params, 0, 0, priv)))
+        goto err;
+    if (!TEST_true(ossl_ffc_validate_private_key(params->q, priv, &res)))
+        goto err;
+
+    BN_CTX_free(ctx);
+    return ret;
+}
+#endif /* OPENSSL_NO_DH */
+
+int setup_tests(void)
+{
+    ADD_TEST(ffc_public_validate_test);
+    ADD_TEST(ffc_private_validate_test);
+    ADD_ALL_TESTS(ffc_private_gen_test, 10);
+#endif /* OPENSSL_NO_DH */
+    return 1;
+}

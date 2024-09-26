@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a null pointer dereference.
+
+EXPLANATION:
+The `stream` variable is checked for null before the `if (rv != 0)` statement. However, the null check comes after the stream is potentially utilized in the previous line. If the `stream` variable is null when `nghttp2_session_get_stream(session, stream_id)` is called, the function will attempt to use a null pointer without first checking its validity. Then it tries to check if `stream` is null.
+
+However, the problem really starts on line 14, where even though `stream` has already been checked to be null earlier, there's a repeated null check after using `stream`. In cases where `stream` is null the previous null check `if (stream == NULL)` would have been triggered already and it will never reach to `if (rv != 0)` condition. In that case executing lines below that does not pose a problem. 
+
+RECOMMENDATIONS:
+Move the null check to the point right after `nghttp2_session_get_stream(session, stream_id)`. Add null checks before every use of the `stream` variable. This will help ensure that a null pointer is never dereferenced. Here is how the code should look like.
+
+```c
+stream = nghttp2_session_get_stream(session, stream_id);
+
+if (stream == NULL) {
+  return -1; // or any other suitable error code
+}
+```
+or 
+```c
+if (stream != NULL) {
+  // code to be executed
+}
+```
+ 
+ORIGINAL CODE:
+
+```c
+    if (rv != 0) {
+      return rv;
+    }
+
+    if (window_size_increment > 0) {
+      return nghttp2_session_add_window_update(session, 0, stream_id,
+                                               window_size_increment);
+    }
+
+    return nghttp2_session_update_recv_connection_window_size(session, 0);
+  } else {
+    stream = nghttp2_session_get_stream(session, stream_id);
+
+    if (stream == NULL) {
+    if (rv != 0) {
+      return rv;
+    }
+
+    if (window_size_increment > 0) {
+      return nghttp2_session_add_window_update(session, 0, stream_id,
+                                               window_size_increment);
+    }
+
+    return nghttp2_session_update_recv_stream_window_size(session, stream, 0,
+                                                          1);
+  }
+
+  return 0;
+}
+```

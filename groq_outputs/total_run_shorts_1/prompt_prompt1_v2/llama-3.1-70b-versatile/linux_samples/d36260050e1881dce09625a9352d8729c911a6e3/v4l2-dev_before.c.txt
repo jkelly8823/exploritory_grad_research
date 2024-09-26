@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Time-of-Check to Time-of-Use (TOCTOU) Vulnerability
+
+EXPLANATION:
+This code snippet appears to be part of a driver or kernel module that handles video devices. The potential vulnerability is in the `WARN_ON` statement, which checks if the `video_device[vdev->minor]` is not `NULL`. However, this check does not prevent a concurrency issue. Another thread or process could have allocated the same minor number after the check but before the assignment of `vdev` to `video_device[vdev->minor]`, causing a race condition. This type of issue is known as a Time-of-Check to Time-of-Use (TOCTOU) vulnerability, where the check and use of a resource are not atomic.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the check and assignment should be atomic. Instead of using `WARN_ON` and a separate assignment, the code should use a lock-protected block to handle the assignment and avoid the concurrency issue. Here's an example of a recommended fix:
+
+```
+mutex_lock(&videodev_lock);
+if (video_device[vdev->minor] != NULL) {
+    // Handle error or panic
+}
+video_device[vdev->minor] = vdev;
+mutex_unlock(&videodev_lock);
+```
+
+ORIGINAL CODE:
+```c
+#endif
+	vdev->minor = i + minor_offset;
+	vdev->num = nr;
+	devnode_set(vdev);
+
+	/* Should not happen since we thought this minor was free */
+	WARN_ON(video_device[vdev->minor] != NULL);
+	vdev->index = get_index(vdev);
+	video_device[vdev->minor] = vdev;
+	mutex_unlock(&videodev_lock);
+```

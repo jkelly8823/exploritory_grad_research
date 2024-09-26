@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 6
+VULNERABILITY_DESCRIPTION:
+Integer Overflow in memory allocation multiplication.
+
+EXPLANATION:
+This code is vulnerable to integer overflow when the imagecrop function is called with large parameters. Specifically, the code does not check if the product of the width and height exceeds the maximum value of an integer, which can cause an integer overflow. In the first call to imagecrop, the "x" parameter is set to a large value (0x7fffff00), which can lead to an overflow when width * height is calculated. Similarly, in the second call to imagecrop, the "width" and "height" parameters are both set to large values (65535), which can also lead to an overflow.
+
+In both cases, the overflow can lead to the function failing to allocate the necessary memory, resulting in a warning message and a failed operation. This can potentially be exploited by an attacker to cause a denial-of-service or other malicious behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check for potential integer overflows before calling the imagecrop function. This can be done by calculating the product of the width and height before passing them to the function and checking if the result exceeds the maximum value of an integer.
+
+Additionally, the code should validate the input parameters to ensure that they are valid and reasonable for the imagecrop function. This can help prevent potential attacks that rely on overflowing the memory allocation multiplication.
+
+ORIGINAL CODE:
+// POC #4
+var_dump(imagecrop($img, array("x" => 0x7fffff00, "y" => 0, "width" => 10, "height" => 10)));
+
+// bug 66815
+var_dump(imagecrop($img, array("x" => 0, "y" => 0, "width" => 65535, "height" => 65535)));
+?>
+--EXPECTF--
+resource(%d) of type (gd)
+resource(%d) of type (gd)
+    [width] => 10
+    [height] => 10
+)
+
+Warning: imagecrop(): gd warning: one parameter to a memory allocation multiplication is negative or zero, failing operation gracefully
+ in %sbug66356.php on line %d
+bool(false)
+resource(%d) of type (gd)
+resource(%d) of type (gd)
+
+Warning: imagecrop(): gd warning: product of memory allocation multiplication would exceed INT_MAX, failing operation gracefully
+ in %sbug66356.php on line %d
+bool(false)

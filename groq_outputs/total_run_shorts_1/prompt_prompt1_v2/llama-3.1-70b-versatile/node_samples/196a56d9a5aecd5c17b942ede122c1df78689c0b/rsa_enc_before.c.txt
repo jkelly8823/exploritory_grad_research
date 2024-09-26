@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 25
+VULNERABILITY_DESCRIPTION: 
+This vulnerability is a potential denial-of-service (DoS) attack.
+EXPLANATION:
+The code is using `OSSL_PARAM_get_utf8_string` function without checking for buffer overflow attacks. If a parameter is too long, it can cause a buffer overflow. This could result in a crash of the application.
+
+For instance, `OSSL_PARAM_get_utf8_string(p, &str, sizeof(mdname))` might write beyond the `mdname` array's bounds. The result of writing to memory outside of an object's boundaries is undefined in C.
+
+A similar bug exists for `mdprops` array.
+
+RECOMMENDATIONS:
+The `OSSL_PARAM_get_utf8_string` function's last argument should be the size of the destination buffer decresed by one (to account for a potential null character).
+
+However, some versions of OpenSSL did not support passing a length to `OSSL_PARAM_get_utf8_string`. Starting from OpenSSL 3.0 `OSSL_PARAM_get_utf8_string` function returns incorrect lengths if string sizes are limited.
+
+If you are using an OpenSSL version older than 3.0 it is highly recommended to upgrade.
+
+For further measures, implement additional error checking after each call of `OSSL_PARAM_get_utf8_string`. If the call does not fail and returns, verify that `str` points to the correct range relative to `mdname` and `mdprops` respectively.
+
+Here's how it might look like:
+
+```c
+if (p != NULL) {
+    size_t len = sizeof(mdname);
+    if (!OSSL_PARAM_get_utf8_string(p, &str, &len)) {
+        return 0;
+    }
+    if (str + len > mdname + sizeof(mdname) || str < mdname) {
+        // handle error: buffer overflow
+        return 0;
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+const OSSL_PARAM *p;
+char mdname[OSSL_MAX_NAME_SIZE];
+char mdprops[OSSL_MAX_PROPQUERY_SIZE] = { '\0' };
+char *str = mdname;
+
+if (prsactx == NULL)
+    return 0;
+if (params == NULL)
+
+p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_OAEP_DIGEST);
+if (p != NULL) {
+    if (!OSSL_PARAM_get_utf8_string(p, &str, sizeof(mdname)))
+        return 0;
+
+    str = mdprops;
+    p = OSSL_PARAM_locate_const(params,
+                                OSSL_ASYM_CIPHER_PARAM_OAEP_DIGEST_PROPS);
+    if (p != NULL) {
+        if (!OSSL_PARAM_get_utf8_string(p, &str, sizeof(mdprops)))
+            return 0;
+    }
+
+
+p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_MGF1_DIGEST);
+if (p != NULL) {
+    if (!OSSL_PARAM_get_utf8_string(p, &str, sizeof(mdname)))
+        return 0;
+
+    str = mdprops;
+    p = OSSL_PARAM_locate_const(params,
+                                OSSL_ASYM_CIPHER_PARAM_MGF1_DIGEST_PROPS);
+    if (p != NULL) {
+        if (!OSSL_PARAM_get_utf8_string(p, &str, sizeof(mdprops)))
+            return 0;
+    } else {
+        str = NULL;
+```

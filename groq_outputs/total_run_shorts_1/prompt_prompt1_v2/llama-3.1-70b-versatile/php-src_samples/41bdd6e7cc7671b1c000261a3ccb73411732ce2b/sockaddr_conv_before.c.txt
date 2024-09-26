@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 10
+VULNERABILITY_DESCRIPTION:
+Usage of insecure gethostbyname function and potential buffer overflow vulnerability.
+
+EXPLANATION:
+The gethostbyname function is insecure and does not provide sufficient validation. It can return NULL for valid hostnames and is not thread-safe. Additionally, the usage of inet_aton followed by assignment to sin->sin_addr.s_addr can lead to a potential buffer overflow vulnerability, as inet_aton returns a different structure type than what is assigned.
+
+The function inet_aton is not suitable for IPv6 addresses, and an IPv6 capable function, inet_pton(AF_INET6,  ...) should be used instead for more robust network functions.
+
+RECOMMENDATIONS:
+1. Replace gethostbyname with getaddrinfo or gethostbyname2 for more secure name resolution.
+2. Validate the return value of inet_aton to prevent potential integer overflows or errors.
+3. Verify the assignment to sin->sin_addr.s_addr for IPv4 and IPv6 addresses.
+
+For a more secure approach in dealing with hostnames, applications should consider using getaddrinfo() and its family of functions which have built-in support for both IPv4 and IPv6 and for name resolution. For error-free network functions, these are suitable alternatives:
+
+ - inet_pton(AF_INET6,  ...) for parsing IPv6 addresses,
+ - inet_pton(AF_INET, ...)  for parsing IPv4 addresses.
+
+Additionally, for robust error handling in C, the error code from get_last_error()  or  h_errno() for hostname resolving failures for socket communication should be reviewed. Below is an updated excerpt in using getaddrinfo.
+
+   ```c
+#include <netdb.h>
+struct addrinfo hints, *res;
+hint.ai_flags = AI_PASSIVE;
+hint.ai_socktype = SOCK_STREAM;
+hint.ai_family = AF_INET6; // IPv6
+
+if (getaddrinfo(host, serv, &hints, &res) != 0) {
+   return -1;
+}
+```
+
+ORIGINAL CODE:
+```c
+#include <arpa/inet.h>
+#endif
+
+extern int php_string_to_if_index(const char *val, unsigned *out TSRMLS_DC);
+
+#if HAVE_IPV6
+/* Sets addr by hostname, or by ip in string form (AF_INET6) */
+	if (inet_aton(string, &tmp)) {
+		sin->sin_addr.s_addr = tmp.s_addr;
+	} else {
+		if (! (host_entry = gethostbyname(string))) {
+			/* Note: < -10000 indicates a host lookup error */
+#ifdef PHP_WIN32
+			PHP_SOCKET_ERROR(php_sock, "Host lookup failed", WSAGetLastError());
+#else```

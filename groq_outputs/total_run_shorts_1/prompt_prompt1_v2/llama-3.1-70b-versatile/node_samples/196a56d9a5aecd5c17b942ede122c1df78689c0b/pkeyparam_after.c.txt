@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7, 15-18
+VULNERABILITY_DESCRIPTION:
+Unvalidated Error Handling and Information Leak
+EXPLANATION:
+The code does not validate user input before passing it to the EVP_PKEY_CTX_new_from_pkey and EVP_PKEY_CTX_new functions. Additionally, if the check is successful and pkey, ctx, or e are NULL, the code only prints an error message without properly handling the error. This can potentially lead to an information leak if the error messages are inadvertently sent to the user.
+
+Furthermore, the code does not check the return values of BIO_printf and ERR_print_errors. If these functions fail, the code does not handle these errors, potentially leading to unexpected behavior.
+
+RECOMMENDATIONS:
+1. Add input validation before passing user input to sensitive functions like EVP_PKEY_CTX_new_from_pkey and EVP_PKEY_CTX_new.
+2. Implement proper error handling. Instead of only printing error messages, consider using a custom error handling function that logs errors securely.
+3. Check the return values of BIO_printf and ERR_print_errors, and handle any potential errors.
+4. Consider using secure coding practices like secure error logging, proper resource deallocation, and secure exception handling.
+
+ORIGINAL CODE:
+```
+out = bio_open_default(outfile, 'w', FORMAT_PEM);
+if (out == NULL)
+    goto end;
+pkey = PEM_read_bio_Parameters_ex(in, NULL, app_get0_libctx(),
+                                  app_get0_propq());
+if (pkey == NULL) {
+    BIO_printf(bio_err, "Error reading parameters\n");
+    ERR_print_errors(bio_err);
+    goto end;
+}
+
+if (check) {
+    if (e == NULL)
+        ctx = EVP_PKEY_CTX_new_from_pkey(app_get0_libctx(), pkey,
+                                         app_get0_propq());
+    else
+        ctx = EVP_PKEY_CTX_new(pkey, e);
+    if (ctx == NULL) {
+        ERR_print_errors(bio_err);
+        goto end;
+    }
+```

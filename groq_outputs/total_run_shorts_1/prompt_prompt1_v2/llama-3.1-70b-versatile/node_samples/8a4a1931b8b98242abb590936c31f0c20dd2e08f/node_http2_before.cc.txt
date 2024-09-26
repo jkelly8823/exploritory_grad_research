@@ -1,0 +1,47 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION: None
+EXPLANATION: After analyzing the provided code snippet, no obvious security vulnerabilities were found. The code appears to be handling HTTP/2 session management and data transfer, but there are no clear issues with input validation, buffer management, or sensitive data handling that could be exploited by an attacker. 
+
+It is worth noting that there are several areas where additional validation or error checking could be beneficial, such as checking for potential null pointer dereferences or handling unexpected return values from function calls. However, these do not appear to be security vulnerabilities in and of themselves.
+
+Additionally, there are a number of unchecked return values and a potential integer underflow, but these do not appear to be directly exploitable for an attack. Without more context about the surrounding code and how these values are used, it is difficult to say for certain whether these are issues or not.
+
+Overall, the code appears to be well-structured and follows good practices for handling data and errors, but it is always a good idea to perform additional testing and review before considering it secure. 
+
+There are no specific recommendations as no vulnerabilities were found.
+
+ORIGINAL CODE:
+```cpp
+// various callback functions. Each of these will typically result in a call
+// out to JavaScript so this particular function is rather hot and can be
+// quite expensive. This is a potential performance optimization target later.
+ssize_t Http2Session::Write(const uv_buf_t* bufs, size_t nbufs) {
+  size_t total = 0;
+  // Note that nghttp2_session_mem_recv is a synchronous operation that
+  // will trigger a number of other callbacks. Those will, in turn have
+  // multiple side effects.
+  for (size_t n = 0; n < nbufs; n++) {
+    Debug(this, "receiving %d bytes [wants data? %d]",
+          bufs[n].len,
+          nghttp2_session_want_read(session_));
+    ssize_t ret =
+      nghttp2_session_mem_recv(session_,
+                               reinterpret_cast<uint8_t*>(bufs[n].base),
+                               bufs[n].len);
+    CHECK_NE(ret, NGHTTP2_ERR_NOMEM);
+
+    if (ret < 0)
+      return ret;
+
+    total += ret;
+  }
+  // Send any data that was queued up while processing the received data.
+  if (!IsDestroyed()) {
+    SendPendingData();
+  }
+  return total;
+}
+
+// ... other functions ...
+```

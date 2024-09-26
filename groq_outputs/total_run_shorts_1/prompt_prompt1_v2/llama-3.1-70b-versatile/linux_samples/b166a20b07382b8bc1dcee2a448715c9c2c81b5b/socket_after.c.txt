@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-15, 18-20
+VULNERABILITY_DESCRIPTION:
+Double locking vulnerability and double unlock not in use.
+EXPLANATION:
+The code snippet provided shows potential double locking vulnerability in lines 11-15. Specifically, the same lock `&sock_net(sk)->sctp.addr_wq_lock` is re-acquired after it has already been locked without unlocking it, which may cause a deadlock. 
+
+Additionally, there is an issue of not maintaining the lock hierarchy, as `spin_lock_bh` is used after `spin_lock`, which can lead to different locking sequence in different threads. 
+
+Lines 18-20 show that, once you add to the `auto_asconf_list`, you are immediately turning off `do_auto_asconf` and removing it from the list using `list_del`. The behavior can be considered more of a race condition vulnerability or resource competition rather than an error.
+
+
+RECOMMENDATIONS:
+Make sure to not lock the same mutex twice without first releasing it to prevent deadlocks. The second lock operation (line 18) should be re-ordered after release of the first lock to prevent potential issues. Instead of locking the same lock twice, refactor code to avoid repetition. The order of acquiring locks should always be consistent across functions.
+
+Also the lock used in line 15 does not unlock the same one used in line 11.
+ORIGINAL CODE:
+
+
+	/* Supposedly, no process has access to the socket, but
+	 * the net layers still may.
+	 */
+	local_bh_disable();
+	bh_lock_sock(sk);
+
+	/* Hold the sock, since sk_common_release() will put sock_put()
+	 * and we have just a little more cleanup.
+	 */
+	sk_common_release(sk);
+
+	bh_unlock_sock(sk);
+	local_bh_enable();
+
+	sock_put(sk);
+
+	SCTP_DBG_OBJCNT_DEC(sock);
+	sk_sockets_allocated_inc(sk);
+	sock_prot_inuse_add(net, sk->sk_prot, 1);
+
+	if (net->sctp.default_auto_asconf) {
+		spin_lock(&sock_net(sk)->sctp.addr_wq_lock);
+		list_add_tail(&sp->auto_asconf_list,
+		    &net->sctp.auto_asconf_splist);
+
+	if (sp->do_auto_asconf) {
+		sp->do_auto_asconf = 0;
+		spin_lock_bh(&sock_net(sk)->sctp.addr_wq_lock);
+		list_del(&sp->auto_asconf_list);
+		spin_unlock_bh(&sock_net(sk)->sctp.addr_wq_lock);
+	}
+	sctp_endpoint_free(sp->ep);
+	local_bh_disable();
+	sk_sockets_allocated_dec(sk);

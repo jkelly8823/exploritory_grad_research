@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 6-15, 7
+VULNERABILITY_DESCRIPTION:
+Path Traversal and Potential Code Injection Vulnerability. 
+The code is vulnerable to path traversal attacks and potentially code injection attacks.
+
+EXPLANATION:
+The main concern here is that the script takes a filename from the command line (sys.argv[1]) and uses it to directly open a file with os.path.normpath. The os.path.normpath function does prevent directory traversal, but it doesn't prevent directory traversal attacks that involve symlinks, nor does it prevent code injection if this is the first step in building a command to execute.
+
+However, for the immediate code snippet there is a potential path traversal issue if the user writes a path to a directory outside of the application. And there is also a potential code injection vulnerability if the contents of the file are later used in an eval statement or executed as code directly.
+
+More importantly, the main concern is that sys.argv[1] is allowing user-entered data to control what file is opened without validation. There are certain inputs to sys.argv[1] that could result in traversal operations (for example, a relative path) that wouldn't be caught by this attempt to include the filename within the current path. Nor does the code prevent opening special files like FIFOs and sockets if a symbolic link to FIFOs or sockets is encountered.
+
+RECOMMENDATIONS:
+To prevent path traversal attacks:
+
+- Use a whitelist of allowed paths, instead of letting the user directly specify the path.
+- Use a secure method of joining paths together like os.path.join, to prevent user input specifying a different location on disk.
+
+To prevent code injection attacks and path traversal issues:
+
+- Always validate and sanitize your inputs before using them for any operation.
+- Always limit the access control to only what is required for your application's functionality.
+
+- Ensure that the file you're trying to open exists within a trusted location.
+- Never execute dynamically constructed strings as code if it includes user-entered data.
+ 
+ORIGINAL CODE:
+```python
+import os
+import sys
+def main():
+    #filename = '/home/user/input.txt'   # change here 
+    filename = sys.argv[1]
+    path = os.path.normpath(f"{os.getcwd()}{os.sep}{filename}")
+    try:       # Try to open the file
+       # Does the file exist?
+       with open(path, 'r') as f: # Open the file with read only permission if 'w' is added and file does not exist it will create a file.
+ 
+          file_data = f.read()
+ 
+ 
+    except FileNotFoundError as e:
+       # Notify the user 
+       print("Error - file not found")
+ 
+main()
+```

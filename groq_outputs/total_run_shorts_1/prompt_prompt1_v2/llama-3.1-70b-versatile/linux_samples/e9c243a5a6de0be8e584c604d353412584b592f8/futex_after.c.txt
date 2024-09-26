@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-8, 23-24
+VULNERABILITY_DESCRIPTION:
+Time of check to time of use (TOCTOU) vulnerability and a potential deadlock condition.
+
+EXPLANATION:
+A TOCTOU vulnerability is present in the given code snippet. This class of vulnerability occurs when a program first checks the status of a resource (the "check" phase), and then later accesses or uses the same resource (the "use" phase), without rechecking its status. In this case, the code checks if `requeue_pi` is set and if `uaddr1` is equal to `uaddr2` (lines 4-8), and then later attempts to acquire the lock `hb->lock` (line 23). Meanwhile, the check `match_futex(&key1, &key2)` is executed before this, but the code does not recheck if the lock status or other state has changed.
+
+Additionally, there's a potential deadlock condition present in this code. In the `retry_private` label, it attempts to acquire the lock `hb->lock`, but if `ret` is non-zero, it jumps to `out_key2` after `retry_private`. If the `hb->lock` is not released before jumping to `out_key2`, it can cause a deadlock. This situation occurs due to the misuse of labels and goto statements in error handling.
+
+RECOMMENDATIONS:
+To address the TOCTOU vulnerability, the check and use of the resource should be atomic or synchronized, so that the status cannot change between the check and the use. One way to do this is to recheck the condition right before using the resource, and to consider using synchronization primitives like locks or semaphores to ensure the resource's status does not change.
+
+Regarding the potential deadlock condition, the code should ensure that the lock `hb->lock` is always released before jumping to other labels. This can be done by always acquiring and releasing locks in a nested and paired manner, or by using more structured error handling mechanisms such as exception handling.
+
+ORIGINAL CODE:
+```c
+struct futex_q *this, *next;
+
+if (requeue_pi) {
+    /*
+     * Requeue PI only works on two distinct uaddrs. This
+     * check is only valid for private futexes. See below.
+     */
+    if (uaddr1 == uaddr2)
+        return -EINVAL;
+
+    /*
+     * requeue_pi requires a pi_state, try to allocate it now
+     * without any locks in case it fails.
+     */
+    if (unlikely(ret != 0))
+        goto out_put_key1;
+
+    /*
+     * The check above which compares uaddrs is not sufficient for
+     * shared futexes. We need to compare the keys:
+     */
+    if (requeue_pi && match_futex(&key1, &key2)) {
+        ret = -EINVAL;
+        goto out_put_keys;
+    }
+
+    hb1 = hash_futex(&key1);
+    hb2 = hash_futex(&key2);
+
+retry_private:
+    if (ret)
+        goto out_key2;
+
+    /*
+     * The check above which compares uaddrs is not sufficient for
+     * shared futexes. We need to compare the keys:
+     */
+    if (match_futex(&q.key, &key2)) {
+        ret = -EINVAL;
+        goto out_put_keys;
+    }
+
+    /* Queue the futex_q, drop the hb lock, wait for wakeup. */
+    futex_wait_queue_me(hb, &q, to);
+
+    spin_lock(&hb->lock);
+```

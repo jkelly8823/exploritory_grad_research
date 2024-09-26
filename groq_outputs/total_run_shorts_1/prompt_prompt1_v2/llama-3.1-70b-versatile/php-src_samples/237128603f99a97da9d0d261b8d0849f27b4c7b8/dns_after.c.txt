@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow due to the use of an unchecked string length in the RETURN_STRINGL function call.
+
+EXPLANATION:
+The code checks if the hostname length exceeds MAXHOSTNAMELEN and issues a warning if it does. However, instead of checking for buffer overflow or truncating the hostname string, it still passes the unchecked hostname length to the RETURN_STRINGL function call. This can lead to a buffer overflow and potentially allow for arbitrary code execution. 
+
+Additionally, in the second snippet, the gethostbyname function is used, which is known to return a potentially null-terminated list of host addresses. However, there's no bounds checking on the hp->h_addr_list structure, which can lead to a NULL pointer dereference if the h_addr_list is NULL.
+
+RECOMMENDATIONS:
+1. Validate the hostname length and truncate it to the maximum allowed length before passing it to RETURN_STRINGL.
+2. Use a safer alternative to gethostbyname that includes bounds checking, such as getaddrinfo.
+3. Check the malloc result of gethostbyname to prevent potential memory corruption in case of a buffer overflow.
+4. Verify the php_error_docref error handling is adequate for hostile input in order to prevent information disclosure.
+
+ORIGINAL CODE:
+```c
+	return;
+}
+
+if(hostname_len > MAXHOSTNAMELEN) {
+	/* name too long, protect from CVE-2015-0235 */
+	php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+	RETURN_STRINGL(hostname, hostname_len, 1);
+}
+addr = php_gethostbyname(hostname);
+
+RETVAL_STRING(addr, 0);
+}
+	return;
+}
+
+if(hostname_len > MAXHOSTNAMELEN) {
+	/* name too long, protect from CVE-2015-0235 */
+	php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+	RETURN_FALSE;
+}
+
+hp = gethostbyname(hostname);
+if (hp == NULL || hp->h_addr_list == NULL) {
+	RETURN_FALSE;
+}
+```

@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION: 
+Unvalidated User Input Used in a SQL Query
+
+EXPLANATION: 
+This vulnerability occurs because user input, specifically `$_GET['EmployeeName']`, is used directly in the SQL query without proper validation or sanitization. Although the query is prepared, the preparation only protects against SQL injection if the input is bound as a parameter and not directly concatenated into the SQL string. In this case, the code correctly uses a prepared statement and parameter binding. However, I must address the context of 'globalDbHandle' and 'mysql_select_db'. Utilizing the old 'mysql_' functions is strongly discouraged due to those functions being removed from PHP starting in 7.0.0.
+
+However, there is a crucial detail: although the preparation is what protects against CWE-89 (SQL Injection), in the context provided I don't see anything that definitively ensures that 'globalDbHandle' holds an object to the database that the prepare() method can be called on; for instance, that variable holds a correctly instantiated instance of the PDO object. Without knowledge of that instantiation it's uncertain whether or not a vulnerability exists.
+
+Unfortunately, the real potential vulnerability I see is that the employeeRecord is being directly fetched and not being validated. If that output goes onto some display without being validated (e.g., not being properly sanitized to protect against XSS), potential vulnerabilities could arise from the data (if it includes malicious HTML code).
+
+That said, technically speaking I think a bigger risk is still present. Input validation needs to be present as a pre-step before sending any data to the function. Although that item isn't technically part of the input we're given, do ensure proper validation and/or sanitation exist for any values coming in from $_GET.
+
+RECOMMENDATIONS: 
+- Ensure any user-provided data (like 'EmployeeName') that is used in any capacity, SQL or otherwise, meets the expected types & valid ranges as prescribed for that data before processing or passing that along any further to other processes. 
+- Ensure it is explicitly defined what type of sanitization should occur in a given scenario (e.g., for simple name, perhaps ensure that only alpha characters exist).
+- Ensure 'globalDbHandle' is a correctly instantiated instance of the PDO object prior to calling the prepare() method.
+- Upgrade to a more current module to facilitate the connection as the old 'mysql_' functions should be replaced. 
+
+ORIGINAL CODE:
+```
+function runEmployeeQuery($dbName, $name){mysql_select_db($dbName,$globalDbHandle) or die("Could not open Database".$dbName);
+    //Use a prepared statement to avoid CWE-89
+    $preparedStatement = $globalDbHandle->prepare('SELECT * FROM employees WHERE name = :name');$preparedStatement->execute(array(':name' => $name));return $preparedStatement->fetchAll();}
+ 
+ $employeeRecord = runEmployeeQuery('EmployeeDB',$_GET['EmployeeName']);
+```

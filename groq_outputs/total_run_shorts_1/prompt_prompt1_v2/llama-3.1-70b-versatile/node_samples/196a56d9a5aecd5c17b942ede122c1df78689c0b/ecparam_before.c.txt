@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 8, 14, 20
+VULNERABILITY_DESCRIPTION:
+The code contains two potential vulnerabilities related to incorrect error handling. 
+
+EXPLANATION:
+This vulnerability arises from the incorrect error handling of the OpenSSL library functions. In lines 8 and 14, after checking if any of the EVP_PKEY functions have returned a value less than or equal to 0, indicating a failure, the function only prints an error message and jumps to the end of the function without properly cleaning up allocated memory. However, line 20 provides a more clear failure scenario where we have no conditional to check failures of EVP_PKEY_CTX_new_from_pkey NULL check below.
+
+RECOMMENDATIONS:
+To prevent potential memory leaks and mitigate these vulnerabilities, always ensure that memory allocated by the EVP_PKEY functions are properly cleaned up when failures occur. Both EVP_PKEY_CTX_new_from_pkey() and EVP_PKEY_CTX_new_from_name() can cause memory leaks if not cleaned up. Implement a conditional to deinitialize EVP_PKEY_CTX_new_from_pkey parameters_key if NULL
+Add error handling for each EVP_PKEY function to ensure proper cleanup. For example, the EVP_PKEY_CTX_new_from_name and EVP_PKEY_CTX_new_from_pkey should be freed using EVP_PKEY_CTX_free().
+
+ORIGINAL CODE:
+```c
+*p = OSSL_PARAM_construct_end();
+
+if (OPENSSL_strcasecmp(curve_name, "SM2") == 0)
+    gctx_params = EVP_PKEY_CTX_new_from_name(NULL, "sm2", NULL);
+else
+    gctx_params = EVP_PKEY_CTX_new_from_name(NULL, "ec", NULL);
+if (gctx_params == NULL
+    || EVP_PKEY_keygen_init(gctx_params) <= 0
+    || EVP_PKEY_CTX_set_params(gctx_params, params) <= 0
+    || EVP_PKEY_keygen(gctx_params, &params_key) <= 0) {
+        BIO_printf(bio_err, "unable to set check_type\n");
+        goto end;
+}
+pctx = EVP_PKEY_CTX_new_from_pkey(NULL, params_key, NULL);
+if (pctx == NULL || EVP_PKEY_param_check(pctx) <= 0) {
+    BIO_printf(bio_err, "failed\n");
+    goto end;
+}
+ *    EVP_PKEY_CTX_set_group_name(gctx, curvename);
+ *    EVP_PKEY_keygen(gctx, &key) <= 0)
+ */
+gctx_key = EVP_PKEY_CTX_new_from_pkey(NULL, params_key, NULL);
+if (EVP_PKEY_keygen_init(gctx_key) <= 0
+    || EVP_PKEY_keygen(gctx_key, &key) <= 0) {
+    BIO_printf(bio_err, "unable to generate key\n");
+    goto end;
+}
+```

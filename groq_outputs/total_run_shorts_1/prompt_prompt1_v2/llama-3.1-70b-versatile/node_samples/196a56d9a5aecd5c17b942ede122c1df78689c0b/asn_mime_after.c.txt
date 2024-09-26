@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 25, 26, 48
+VULNERABILITY_DESCRIPTION:
+Potential Memory Corruption and Information Disclosure due to Improper Error Handling and Potential Double-Free
+EXPLANATION:
+The code has multiple potential vulnerabilities. In lines 3-6, it does not properly check for errors when allocating memory with `BIO_new_NDEF()` or opening a file stream with `BIO_new()`. If either of these operations fail, it calls `ERR_raise()` and continues executing without freeing the already allocated memory. This can cause a double-free vulnerability.
+
+Additionally, in lines 25-26, there is an attempt to read input with `BIO_read()` without checking its result. A partial read or error can lead to unexpected behavior or potential information disclosure. Moreover, without proper bounds checking, it is possible to overflow the buffer.
+
+Another issue is in line 48, the variable `bf` is checked for null, but this check only looks at the result of `BIO_new()`. However, the subsequent call to `BIO_push()` could also fail, and without proper error checking, it may also lead to crashes or unexpected behavior.
+
+RECOMMENDATIONS:
+1. Properly error handle `BIO_new_NDEF()` and `BIO_new()`, checking for both null pointers and `ERR_get_error()`.
+2. Always check the return value of `BIO_read()` and `BIO_write()` to prevent partial reads/writes and potential buffer overflows.
+3. Check the return value of `BIO_push()` to ensure that the BIO chain was successfully created.
+
+ORIGINAL CODE:
+/*
+ * Copyright 2008-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+int i2d_ASN1_bio_stream(BIO *out, ASN1_VALUE *val, BIO *in, int flags,
+                        const ASN1_ITEM *it)
+{
+    int rv = 1;
+
+    /* If streaming create stream BIO and copy all content through it */
+    if (flags & SMIME_STREAM) {
+        BIO *bio, *tbio;
+        bio = BIO_new_NDEF(out, val, it);
+            ERR_raise(ERR_LIB_ASN1, ERR_R_MALLOC_FAILURE);
+            return 0;
+        }
+        if (!SMIME_crlf_copy(in, bio, flags)) {
+            rv = 0;
+        }
+
+        (void)BIO_flush(bio);
+        /* Free up successive BIOs until we hit the old output BIO */
+        do {
+            tbio = BIO_pop(bio);
+     */
+    else
+        ASN1_item_i2d_bio(it, out, val);
+    return rv;
+}
+
+/* Base 64 read and write of ASN1 structure */
+
+     * set up to finalise when it is written through.
+     */
+    if (!(flags & SMIME_DETACHED) || (flags & PKCS7_REUSE_DIGEST)) {
+        return SMIME_crlf_copy(data, out, flags);
+    }
+
+    if (!aux || !aux->asn1_cb) {
+        ERR_raise(ERR_LIB_ASN1, ASN1_R_STREAMING_NOT_SUPPORTED);
+        return 0;
+
+    /* Copy data across, passing through filter BIOs for processing */
+    if (!SMIME_crlf_copy(data, sarg.ndef_bio, flags))
+        rv = 0;
+
+    /* Finalize structure */
+    if (aux->asn1_cb(ASN1_OP_DETACHED_POST, &val, it, &sarg) <= 0)
+        rv = 0;
+     * when streaming as we don't end up with one OCTET STRING per line.
+     */
+    bf = BIO_new(BIO_f_buffer());
+    if (bf == NULL) {
+        ERR_raise(ERR_LIB_ASN1, ERR_R_MALLOC_FAILURE);
+        return 0;
+    }
+    out = BIO_push(bf, out);
+    if (flags & SMIME_BINARY) {
+        while ((len = BIO_read(in, linebuf, MAX_SMLEN)) > 0)
+            BIO_write(out, linebuf, len);

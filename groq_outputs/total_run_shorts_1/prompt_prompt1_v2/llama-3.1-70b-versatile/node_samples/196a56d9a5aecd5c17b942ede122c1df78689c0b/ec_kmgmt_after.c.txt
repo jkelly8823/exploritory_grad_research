@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20-22 (corresponding to lines 1-3 in the given snippet)
+VULNERABILITY_DESCRIPTION:
+The given code is vulnerable to a potential null pointer dereference error. The variable `bnctx` is initially set to `NULL` and is passed as the last parameter to the `EC_POINT_point2oct` function without being initialized or checked for null before use.
+
+EXPLANATION:
+The `EC_POINT_point2oct` function uses the `bnctx` context to perform the conversion. However, in the given code, `bnctx` is initialized as `NULL` and is used directly in the function call without any initialization or null checks. This can lead to a null pointer dereference error when the function tries to access or use the memory pointed by `bnctx`. Additionally, if `EC_POINT_point2oct` does not handle null contexts properly, this can cause a crash or unpredictable behavior in the application.
+
+However, there is another, potential vulnerability in lines 16 and 18, when the value of `p->return_size` is checked directly after the call. If the call to `EC_POINT_point2oct` fails (returns 0), there is no null check on the 'p' pointer before 'goto err;'. If 'p' is NULL in this scenario, the code will attempt a 'goto' from an undefined memory location. Therefore, line 18 is technically vulnerable.
+
+RECOMMENDATIONS:
+1. Initialize the `bnctx` context properly before using it in the `EC_POINT_point2oct` function.
+2. Check for null before using `p->return_size` after the call.
+
+ORIGINAL CODE:
+    BN_CTX *bnctx = NULL;
+
+    ecg = EC_KEY_get0_group(eck);
+    if (ecg == NULL) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_NO_PARAMETERS_SET);
+        return 0;
+    }
+
+    libctx = ossl_ec_key_get_libctx(eck);
+    propq = ossl_ec_key_get0_propq(eck);
+
+    }
+    if ((p = OSSL_PARAM_locate(params,
+                               OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY)) != NULL) {
+        const EC_POINT *ecp = EC_KEY_get0_public_key(key);
+
+        if (ecp == NULL) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_NOT_A_PUBLIC_KEY);
+            goto err;
+        }
+        p->return_size = EC_POINT_point2oct(ecg, ecp,
+                                            POINT_CONVERSION_UNCOMPRESSED,
+                                            p->data, p->return_size, bnctx);
+        if ((p != NULL) && (p->return_size == 0))
+            goto err;
+    }

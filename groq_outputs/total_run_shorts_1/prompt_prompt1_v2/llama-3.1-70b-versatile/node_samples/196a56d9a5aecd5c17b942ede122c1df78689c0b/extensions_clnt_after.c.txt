@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 1-3
+VULNERABILITY_DESCRIPTION:
+Potential Time-of-Check-to-Time-of-Use (TOCTOU) vulnerability
+
+EXPLANATION:
+The `agesec` variable is calculated based on the current time using `time(NULL)` and the `session->time` value. However, this calculation is done at a specific point in time, and the `agesec` value may not accurately reflect the elapsed time when the rest of the code is executed. This could potentially lead to a TOCTOU vulnerability, where an attacker exploits the time difference between the time check and the actual usage of the value.
+
+In this case, the `agesec` value is used to calculate the age of a session, but an attacker could potentially manipulate the time on the server or the client to cause this value to be incorrect. This could lead to security issues such as expired sessions being used or incorrect session ids being generated.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a monotonic clock instead of `time(NULL)` to calculate the `agesec` value. Additionally, consider verifying the age of the session immediately before using it, rather than caching the result.
+
+In OpenVPN, a `openssl_renew_session()` function could be used to verify the age of the session immediately before using it. Here's an example of how this could be done:
+
+```c
+uint32_t ssl_verify_time(SSL *s) {
+    return (uint32_t)(s->session->time - s->session->created);
+}
+```
+
+Then replace the `time(NULL) - s->session->time` with this `ssl_verify_time(s)`
+
+Additionally, use a monotonic clock:
+
+```c
+agesec = (uint32_t)(clock_gettime(CLOCK_MONOTONIC_RAW).tv_sec - s->session->time);
+```
+
+ORIGINAL CODE:
+```c
+if (!tls_group_allowed(s, pgroups[i], SSL_SECOP_CURVE_SUPPORTED))
+                continue;
+
+            if (!tls_valid_group(s, pgroups[i], TLS1_3_VERSION, TLS1_3_VERSION,
+                                 0, NULL))
+                continue;
+
+            curve_id = pgroups[i];
+            break;
+        }
+    }
+                                  X509 *x, size_t chainidx)
+{
+#ifndef OPENSSL_NO_TLS1_3
+    uint32_t agesec, agems = 0;
+    size_t reshashsize = 0, pskhashsize = 0, binderoffset, msglen;
+    unsigned char *resbinder = NULL, *pskbinder = NULL, *msgstart = NULL;
+    const EVP_MD *handmd = NULL, *mdres = NULL, *mdpsk = NULL;
+    int dores = 0;
+         * this in multiple places in the code, so portability shouldn't be an
+         * issue.
+         */
+        agesec = (uint32_t)(time(NULL) - s->session->time);
+        /*
+         * We calculate the age in seconds but the server may work in ms. Due to
+         * rounding errors we could overestimate the age by up to 1s. It is
+         * better to underestimate it. Otherwise, if the RTT is very short, when
+                break;
+        }
+        if (i >= num_groups
+                || !tls_group_allowed(s, group_id, SSL_SECOP_CURVE_SUPPORTED)
+                || !tls_valid_group(s, group_id, TLS1_3_VERSION, TLS1_3_VERSION,
+                                    0, NULL)) {
+            SSLfatal(s, SSL_AD_ILLEGAL_PARAMETER, SSL_R_BAD_KEY_SHARE);
+            return 0;
+```
+Please note that fixing this vulnerability might require changes in other parts of the codebase as well, and should be thoroughly tested to ensure the desired functionality is maintained.

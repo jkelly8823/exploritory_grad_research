@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-14
+VULNERABILITY_DESCRIPTION:
+Improper Privilege Level Management leading to Incorrect Debug Mode.
+
+EXPLANATION:
+The vulnerability lies in the management of privilege levels and the setting of debug mode. Specifically, when in `riscv::PRIV_LVL_U` mode, the code checks `dcsr_q.ebreaku` to enter debug mode. However, when in other modes, it checks `dcsr_q.ebreakm` to enter debug mode. This is problematic because `PRIV_LVL_U` has access to more privileged debug resources. 
+
+Moreover, it is later checked if `debug_mode_q || umode_i` and sets `priv_lvl_o` to `PRIV_LVL_M`. However, `umode_i` is set regardless of the current privilege level.
+
+RECOMMENDATIONS:
+1. Always check the current privilege level when entering debug mode.
+2. Verify the user mode (`umode_i`) access correctly and in accordance with the system privilege requirements.
+3. Avoid setting `priv_lvl_o` based on debug mode only.
+
+ORIGINAL CODE:
+               module csr_regfile #(
+               ...
+                  
+                  // check that we actually want to enter debug depending on the privilege level we are currently in
+                  unique case (priv_lvl_o)
+                        
+                        riscv::PRIV_LVL_M: begin
+                           
+                           debug_mode_d = dcsr_q.ebreakm;
+                           
+                        
+                  ...
+                  
+                        riscv::PRIV_LVL_U: begin
+                           
+                           debug_mode_d = dcsr_q.ebreaku;
+                           
+                        
+                  ...
+                  
+                  assign priv_lvl_o = (debug_mode_q || umode_i) ?  riscv::PRIV_LVL_M : priv_lvl_q;
+                  
+               ...
+                  
+                  debug_mode_q  <= debug_mode_d;
+                  
+               ...

@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+Unauthenticated Primitive Usage
+EXPLANATION:
+Although there are not actual lines to pinpoint for vulnerability, the presence of cryptographic operation primitives (such as get_evp_method_store, reserve_evp_method_store, unreserve_evp_method_store, etc.) along with context describing hash operations with a maximum limit of 2^23 names or 2^8 operations types hints towards potential misuse of these primitives.
+
+If they are used as is and provided as an API for users, we can envision potential security weaknesses arising from unwary usage. Moreover, for both functions reserve_evp_method_store and unreserve_evp_method_store, the store variable check (store == NULL) is potentially prone to issues as successful exploitation depends upon error return handling elsewhere in code. These problems arise when critical action error information "leaks", and a malicious actor builds upon that.
+
+RECOMMENDATIONS:
+1. It is good practice to ensure any application relying on these cryptographic methods will correctly handle exceptions generated from them and assure that exposure risk remains contained.
+2. Secure defaults and cryptographic parameters that are less fallible given typical user use case knowledge would be helpful. Implement sufficient input validation and sanitization for mitigation purposes.
+3. Depending on actual implementation context or their position in API call chain hierarchy where additional information might exist, improve or properly handle all exceptions triggered when returning 0 or passing NULL values to upstream logic from 'reserve_evp_method_store' and 'unreserve_evp_method_store'.
+
+ORIGINAL CODE:
+```c
+static int reserve_evp_method_store(void *store, void *data)
+{
+    struct evp_method_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_evp_method_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_lock_store(store);
+}
+
+static int unreserve_evp_method_store(void *store, void *data)
+{
+    struct evp_method_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_evp_method_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_unlock_store(store);
+}
+```

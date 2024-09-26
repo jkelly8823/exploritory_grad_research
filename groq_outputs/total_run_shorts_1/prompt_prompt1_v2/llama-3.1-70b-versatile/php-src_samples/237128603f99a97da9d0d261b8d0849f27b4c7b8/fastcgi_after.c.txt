@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a DNS resolution-based input validation weakness and a possible NULL pointer dereference.
+
+EXPLANATION:
+The code uses the `gethostbyname` function to perform a DNS lookup. If the DNS lookup is successful, the code then checks if `hep->h_addr_list[0]` is not NULL. However, it does not validate the contents of `hep->h_addr_list[0]` or `hep->h_addr_list[1]`, which can potentially be NULL, leading to a NULL pointer dereference if an attempt is made to access the contents of these pointers. 
+
+Additionally, the code does not validate the DNS response's IP address type or check if `hep->h_addr_list` points to a valid IP address. This could potentially lead to inconsistencies in DNS resolution.
+
+RECOMMENDATIONS:
+1. Validate the contents of `hep->h_addr_list[0]` and `hep->h_addr_list[1]` to ensure they are not NULL before attempting to access them.
+
+2. Validate the DNS response's IP address type to ensure it matches the expected type (e.g., `AF_INET`).
+
+3. Consider using `getaddrinfo` function instead of `gethostbyname`, as the former is the modern, thread-safe, and more robust way to perform DNS lookups.
+
+Here is an example of how the code could be modified to address these concerns:
+
+```c
+if (sa.sa_inet.sin_addr.s_addr == INADDR_NONE) {
+    struct hostent *hep;
+
+    if(strlen(host) > MAXHOSTNAMELEN) {
+        hep = NULL;
+    } else {
+        hep = gethostbyname(host);
+    }
+    if (!hep || hep->h_addrtype != AF_INET || !hep->h_addr_list[0] || !hep->h_addr_list[0]->s_addr) {
+        fprintf(stderr, "Cannot resolve host name '%s'!\n", host);
+        return -1;
+    } else {
+        struct in_addr *ipaddr = (struct in_addr *)hep->h_addr_list[0];
+        if (ipaddr && ipaddr->s_addr != INADDR_NONE) {
+            // Handle the DNS lookup result
+        } else {
+            // Handle invalid DNS lookup
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+if (sa.sa_inet.sin_addr.s_addr == INADDR_NONE) {
+    struct hostent *hep;
+
+    if(strlen(host) > MAXHOSTNAMELEN) {
+        hep = NULL;
+    } else {
+        hep = gethostbyname(host);
+    }
+    if (!hep || hep->h_addrtype != AF_INET || !hep->h_addr_list[0]) {
+        fprintf(stderr, "Cannot resolve host name '%s'!\n", host);
+        return -1;
+    } else if (hep->h_addr_list[1]) {
+```

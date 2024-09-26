@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow due to the explicit passing of a fixed-size buffer to the `recvfrom` function without any bounds checking.
+
+EXPLANATION:
+The code uses the `recvfrom` function to receive data into the `kvp_recv_buffer` with a fixed size of `sizeof(kvp_recv_buffer)`. However, there is no validation to ensure that the received data does not exceed the buffer size, potentially causing a buffer overflow. While the `recvfrom` function does return the number of bytes received, it does not prevent the buffer from overflowing.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+
+1.  Validate the length of the data received from `recvfrom` to ensure it does not exceed the buffer size.
+2.  Use the `recvfrom` function safely by checking the actual length of the received data and truncating it if necessary.
+
+Here is an example of a safe way to use the `recvfrom` function:
+
+```c
+len = recvfrom(fd, kvp_recv_buffer, sizeof(kvp_recv_buffer) - 1, 0, addr_p, &addr_l);
+
+if (len < 0 || len >= sizeof(kvp_recv_buffer)) {
+    syslog(LOG_ERR, "recvfrom failed; pid:%u error:%d %s", addr.nl_pid, errno, strerror(errno));
+    close(fd);
+    return -1;
+}
+```
+
+ORIGINAL CODE:
+```c
+pfd.fd = fd;
+
+while (1) {
+    struct sockaddr *addr_p = (struct sockaddr *) &addr;
+    socklen_t addr_l = sizeof(addr);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    poll(&pfd, 1, -1);
+
+    len = recvfrom(fd, kvp_recv_buffer, sizeof(kvp_recv_buffer), 0,
+            addr_p, &addr_l);
+
+    if (len < 0 || addr.nl_pid) {
+        syslog(LOG_ERR, "recvfrom failed; pid:%u error:%d %s",
+                addr.nl_pid, errno, strerror(errno));
+        close(fd);
+        return -1;
+    }
+}
+```

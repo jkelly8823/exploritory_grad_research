@@ -1,0 +1,93 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-19
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Denial of Service (DoS) attack. Specifically, if an attacker sends a request with a very large header, the server will not reject it immediately, but will instead continue to parse the header until the headers timeout is reached.
+
+EXPLANATION:
+This vulnerability occurs because the code does not enforce the `maxHeadersCount` limit while parsing the header. While the code does propagate the `maxHeadersCount` limit from the server instance to the parser, it does not actually enforce this limit in the `onParserExecute` function. As a result, an attacker could potentially send a request with an extremely large header, which would cause the server to continue parsing the header until the headers timeout is reached, consuming system resources and potentially leading to a denial of service.
+
+Note that the `onParserExecute` function does check if the server has a `maxHeadersCount` limit and does not apply it when the limit is not present. If the `maxHeadersCount` is set as a number when the server instance is configured, this vulnerability will not occur.
+
+RECOMMENDATIONS:
+- The check for the `maxHeadersCount` limit should be performed and the headers should be rejected if they exceed this limit.
+- Additionally, consider adding validation to ensure that the `maxHeadersCount` limit is enforced when it is configured.
+
+Here is a basic example of what this might look like:
+```
+  // Propagate headers limit from server instance to parser
+  if (typeof server.maxHeadersCount === 'number') {
+    var headerCount = 0;
+    for (var key in parser.headers) {
+      if (parser.headers.hasOwnProperty(key)) {
+        headerCount++;
+        if (headerCount >= server.maxHeadersCount) {
+          // reject the headers
+          socket.destroy();
+          return;
+        }
+      }
+    }
+  }
+```
+
+ORIGINAL CODE:
+```
+  _checkInvalidHeaderChar: checkInvalidHeaderChar
+} = require('_http_common');
+const { OutgoingMessage } = require('_http_outgoing');
+const { outHeadersKey, ondrain, nowDate } = require('internal/http');
+const {
+  defaultTriggerAsyncIdScope,
+  getOrSetAsyncId
+} = require('internal/async_hooks');
+  this.keepAliveTimeout = 5000;
+  this._pendingResponseData = 0;
+  this.maxHeadersCount = null;
+  this.headersTimeout = 40 * 1000; // 40 seconds
+}
+util.inherits(Server, net.Server);
+
+
+  var parser = parsers.alloc();
+  parser.reinitialize(HTTPParser.REQUEST, parser[is_reused_symbol]);
+  parser.socket = socket;
+
+  // We are starting to wait for our headers.
+  parser.parsingHeadersStart = nowDate();
+  socket.parser = parser;
+
+  // Propagate headers limit from server instance to parser
+  if (typeof server.maxHeadersCount === 'number') {
+
+function onParserExecute(server, socket, parser, state, ret) {
+  socket._unrefTimer();
+  const start = parser.parsingHeadersStart;
+  debug('SERVER socketOnParserExecute %d', ret);
+
+  // If we have not parsed the headers, destroy the socket
+  // after server.headersTimeout to protect from DoS attacks.
+  // start === 0 means that we have parsed headers.
+  if (start !== 0 && nowDate() - start > server.headersTimeout) {
+    const serverTimeout = server.emit('timeout', socket);
+
+    if (!serverTimeout)
+      socket.destroy();
+    return;
+  }
+
+  onParserExecuteCommon(server, socket, parser, state, ret, undefined);
+}
+
+const badRequestResponse = Buffer.from(
+function parserOnIncoming(server, socket, state, req, keepAlive) {
+  resetSocketTimeout(server, socket, state);
+
+  // Set to zero to communicate that we have finished parsing.
+  socket.parser.parsingHeadersStart = 0;
+
+  if (req.upgrade) {
+    req.upgrade = req.method === 'CONNECT' ||
+                  server.listenerCount('upgrade') > 0;
+    if (req.upgrade)
+```
+Note that the above code only performs a simple check and does not include further validation.

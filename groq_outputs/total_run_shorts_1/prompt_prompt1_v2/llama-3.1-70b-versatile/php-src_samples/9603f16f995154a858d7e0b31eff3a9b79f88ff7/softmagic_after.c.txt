@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-21
+VULNERABILITY_DESCRIPTION:
+Integer overflow and data truncation vulnerability.
+
+EXPLANATION:
+The provided code snippet appears to handle string searching and buffer management. However, there is a potential integer overflow vulnerability on lines 18-21. 
+
+The calculation of `bytecnt_max` on line 14 ensures that it does not exceed `1 << 14` (16,384) to prevent PCRE from getting stuck with large input buffers. However, the value of `bytecnt` is later checked against `bytecnt_max` and assigned to it if it is greater. This could potentially lead to data truncation.
+
+Furthermore, on line 18, `bytecnt` is assigned to `bytecnt_max` if it is greater. However, since `bytecnt_max` is already limited to `1 << 14`, this check appears to be redundant. The potential issue lies in the fact that the assignment of `bytecnt` to `bytecnt_max` might cause data truncation if `bytecnt` is larger than `bytecnt_max`.
+
+Lastly, on line 21, the `end` and `last` pointers are set to `s + bytecnt`. Although the `mget()` function is claimed to guarantee `buf <= last`, there is no explicit check to ensure that `last` does not exceed the bounds of the buffer.
+
+RECOMMENDATIONS:
+To fix the potential vulnerability, it is recommended to add explicit checks for integer overflow and data truncation. Additionally, the handling of `bytecnt` and `bytecnt_max` should be reviewed and simplified to prevent potential issues.
+
+- Verify the input values to prevent integer overflow.
+- Implement bounds checking to ensure that `last` does not exceed the buffer bounds.
+- Review the calculation of `bytecnt_max` and its handling to prevent data truncation.
+
+ORIGINAL CODE:
+```c
+const char *last;    /* end of search region */
+const char *buf;    /* start of search region */
+const char *end;
+size_t lines, linecnt, bytecnt, bytecnt_max;
+
+if (s == NULL) {
+    ms->search.s_len = 0;
+    ms->search.s = NULL;
+    bytecnt = m->str_range;
+}
+
+/* XXX bytecnt_max is to be kept for PHP, see cve-2014-3538.
+    PCRE might stuck if the input buffer is too big. To ensure
+    the correctness, the check for bytecnt > nbytes is also
+    kept (might be abundant). */
+bytecnt_max = nbytes - offset;
+bytecnt_max = bytecnt_max > (1 << 14) ? (1 << 14) : bytecnt_max;
+bytecnt_max = bytecnt > nbytes ? nbytes : bytecnt_max;
+if (bytecnt == 0 || bytecnt > bytecnt_max)
+    bytecnt = bytecnt_max;
+
+buf = RCAST(const char *, s) + offset;
+end = last = RCAST(const char *, s) + bytecnt;
+/* mget() guarantees buf <= last */
+```

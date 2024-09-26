@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 8-9
+VULNERABILITY_DESCRIPTION:
+This code suffers from a Failure to Check Certificate Verification Results vulnerability. The code properly checks the result of certificate verification on the first call to `SSL_get_verify_result`, but it does not perform the same check after the second call, which makes it vulnerable to a potential certificate verification bypass.
+
+EXPLANATION:
+In this code, after retrieving the peer certificate and verifying it using `SSL_get_verify_result`, the function checks the result against `X509_V_OK` (which equals 0) to make sure the verification was successful. However, after doing some additional work, the code calls `SSL_get_verify_result` again but does not check the result. If the verification fails in the second call (for example, if the certificate has been revoked), the code will still proceed with further actions as if the verification was successful, effectively bypassing the certificate verification process.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the result of the second call to `SSL_get_verify_result` must be checked and an error must be handled if the verification fails. Here is an example of how to fix this:
+```c
+if (cert = SSL_get_peer_certificate(ssl)) {
+    foo=SSL_get_verify_result(ssl);
+    if (X509_V_OK==foo) {
+        //do stuff
+        foo=SSL_get_verify_result(ssl);
+        if (X509_V_OK != foo) {
+            //handle error
+            break;
+        }
+        //do more stuff if the second verification is successful
+    } else {
+        //handle error
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+if (cert = SSL_get_peer_certificate(ssl)) {
+    foo=SSL_get_verify_result(ssl);if (X509_V_OK==foo)
+        //do stuff
+        foo=SSL_get_verify_result(ssl);
+        //do more stuff without the check.
+} 
+```

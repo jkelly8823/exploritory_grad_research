@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: Potential use-after-free or buffer overflow vulnerability in 'pending_cleartext_input_' insertion.
+
+EXPLANATION:
+The vulnerability arises from the fact that `pending_cleartext_input_.insert()` is being called with a range starting at `&bufs[i]`. The potential issue lies in that we do not have guarantees that all elements in this range will be valid after the insert operation completes. 
+
+If `pending_cleartext_input_` is not designed to properly handle this case, such as preventing iterators from being invalidated, then we run the risk of accessing memory that has already been freed, resulting in a use-after-free vulnerability. Furthermore, if `count` exceeds the bounds of `bufs` we run the risk of accessing memory outside the limits of the array, resulting in a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we would need to add bounds checking on the `count` variable to ensure it does not exceed the bounds of the `bufs` array. Furthermore, we should make sure `pending_cleartext_input_` is designed to handle iterators being inserted into the container and that they do not become invalidated.
+
+```cpp
+if (i != count) {
+    int err;
+    Local<Value> arg = GetSSLError(written, &err, &error_);
+    if (!arg.IsEmpty())
+      return UV_EPROTO;
+
+    // Check if 'count' is within the bounds of 'bufs'
+    if (count > sizeof(bufs) / sizeof(bufs[0])) 
+      return UV_EINVAL;
+
+    pending_cleartext_input_.insert(pending_cleartext_input_.end(),
+                                    &bufs[i],
+                                    &bufs[count]);
+}
+```
+
+ORIGINAL CODE:
+```cpp
+  if (i != count) {
+    int err;
+    Local<Value> arg = GetSSLError(written, &err, &error_);
+    if (!arg.IsEmpty())
+      return UV_EPROTO;
+
+    pending_cleartext_input_.insert(pending_cleartext_input_.end(),
+                                    &bufs[i],
+                                    &bufs[count]);
+```

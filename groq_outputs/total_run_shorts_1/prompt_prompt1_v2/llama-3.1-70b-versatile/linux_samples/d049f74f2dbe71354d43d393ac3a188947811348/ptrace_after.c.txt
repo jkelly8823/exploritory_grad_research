@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Time-of-Check to Time-of-Use (TOCTOU) vulnerability
+
+EXPLANATION:
+The code snippet is vulnerable to a Time-of-Check to Time-of-Use (TOCTOU) attack. The permissions are checked at one point in time (when ptrace_has_cap is called), but the actual execution of the action happens later. 
+
+In this case, a malicious actor can potentially change the capability after the check but before the read lock is released, thus bypassing the intended security check.
+
+RECOMMENDATIONS:
+To mitigate this TOCTOU vulnerability, the code should lock the resource (in this case, `__task_cred(task)->user_ns`) for the duration of the operation, preventing any external modifications from occurring between the permission check and the actual action. This can be achieved by replacing `rcu_read_lock()` and `rcu_read_unlock()` with `cred->mutex` or an equivalent synchronization mechanism that ensures mutual exclusivity.
+
+ORIGINAL CODE:
+```c
+if (task->mm)
+    dumpable = get_dumpable(task->mm);
+rcu_read_lock();
+if (dumpable != SUID_DUMP_USER &&
+    !ptrace_has_cap(__task_cred(task)->user_ns, mode)) {
+    rcu_read_unlock();
+    return -EPERM;
+}
+rcu_read_unlock();
+```

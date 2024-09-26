@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Command Injection vulnerability.
+
+EXPLANATION:
+Although it's stated that `getCurrentUser()` returns a username that is guaranteed to be alphanumeric, this does not prevent the code from being vulnerable to a Command Injection attack. If an attacker can control or manipulate the `$userName` variable, they can inject malicious shell commands into the `system($command)` call. Although alphanumeric characters can't be used to inject malicious commands directly, an attacker might try to exploit this vulnerability by attempting to inject commands that would be available to execute in an auxiliary or subordinate process. Moreover, even with alphanumeric usernames, there could be other injection points if not sanitized properly.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider using prepared shell commands or an API that doesn't require constructing command strings with user-supplied input. Here's a revised version of the code:
+
+```php
+// Use the escapeshellarg function to escape the username
+$userName = getCurrentUser();
+$command = 'ps aux | grep ' . escapeshellarg($userName);
+system($command);
+```
+However, an even better solution is to use an API function specifically designed for this task, avoiding the use of the shell altogether:
+
+```php
+$userName = getCurrentUser();
+$processes = shell_exec('ps aux');
+$lines = explode("\n", $processes);
+foreach($lines as $line) {
+  // Parse the process info from the line and check if the user matches
+  if (strpos($line, $userName) !== false) {
+    // Handle the process
+  }
+}
+```
+
+This revised version eliminates the dependency on the `grep` command, reducing the risk of a Command Injection attack.
+
+ORIGINAL CODE:
+```php
+$userName = getCurrentUser();$command = 'ps aux | grep ' . $userName;system($command);
+```

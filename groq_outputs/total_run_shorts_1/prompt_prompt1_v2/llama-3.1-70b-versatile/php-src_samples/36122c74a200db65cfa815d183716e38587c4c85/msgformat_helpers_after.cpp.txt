@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7, 11-13
+VULNERABILITY_DESCRIPTION:
+Potential overflow vulnerabilities when casting double to int32/int64.
+
+EXPLANATION:
+In both the kLong and kInt64 cases, a double value is being cast to an integer type (int32 or int64). This can result in an overflow if the double value exceeds the limits of the integer type. For example, if Z_DVAL_PP(elem) is a very large number that cannot be represented by an int32 or int64, the casting operation could result in an integer overflow, potentially leading to unexpected behavior.
+
+Furthermore, the code is checking the range of the double value against INT32_MAX and INT32_MIN (or U_INT64_MAX and U_INT64_MIN for the int64 case), but the negations of U_INT64_MAX and U_INT64_MIN are actually greater than the positive values when casted to a 32-bit signed integer or a 64-bit signed integer due to integer promotion and overflow semantics. However, neither INT64_MIN nor INT64_MAX seems defined, while U_INT64_MIN and U_INT64_MAX were used to define a boundary check against them, implying U_INT64_MIN could be 0 for a 64-bit two's complement signed value.
+
+
+RECOMMENDATIONS:
+In both cases, use range checking before performing the cast. 
+
+Additionally, the code does not return or handle any exceptions that could potentially be raised during casting. Error-checking code should be added to handle cases where the double value exceeds the limits of the integer type. Also, you could consider using a safer conversion function like `std::stoi()` or `std::stol()` which handles exceptions for out-of-range conversions.
+
+
+ORIGINAL CODE:
+				}
+			case Formattable::kLong:
+				{
+					int32_t tInt32 = 0;
+retry_klong:
+					if (Z_TYPE_PP(elem) == IS_DOUBLE) {
+						if (Z_DVAL_PP(elem) > (double)INT32_MAX ||
+								Z_DVAL_PP(elem) < (double)INT32_MIN) {
+				}
+			case Formattable::kInt64:
+				{
+					int64_t tInt64 = 0;
+retry_kint64:
+					if (Z_TYPE_PP(elem) == IS_DOUBLE) {
+						if (Z_DVAL_PP(elem) > (double)U_INT64_MAX ||
+								Z_DVAL_PP(elem) < (double)U_INT64_MIN) {

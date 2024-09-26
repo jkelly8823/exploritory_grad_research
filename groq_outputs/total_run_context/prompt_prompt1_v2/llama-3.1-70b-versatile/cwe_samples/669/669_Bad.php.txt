@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to SQL Injection attacks. 
+
+EXPLANATION:
+The function `authenticate($username,$password)` is vulnerable to SQL Injection attacks because it directly concatenates user-provided input into a SQL query without proper sanitization or parameterization. The variables `$username` and `$password` are not escaped or validated, which allows an attacker to inject malicious SQL code. 
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to:
+1. Use prepared statements with parameterized queries to prevent user input from being executed as SQL code. This can be achieved with PHP's MySQLi or PDO extensions.
+2. Validate and sanitize all user input to prevent any malicious data from being inserted into the database.
+
+Here's an example of how the code can be rewritten to use prepared statements:
+
+```php
+// assume the password is already encrypted, avoiding CWE-312
+
+// Using MySQLi extension
+function authenticate($username,$password){
+    include("http://external.example.com/dbInfo.php");
+    
+    $conn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
+    
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    }
+    
+    $stmt = $conn->prepare("SELECT * FROM users WHERE username=? AND password=?");
+    $stmt->bind_param("ss", $username, $password);
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if($result->num_rows == 1) {
+        $conn->close();
+        return true;
+    }else{
+        $conn->close();
+        return false;
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```php
+//assume the password is already encrypted, avoiding CWE-312
+
+function authenticate($username,$password){
+    include("http://external.example.com/dbInfo.php");
+    
+    //dbInfo.php makes $dbhost, $dbuser, $dbpass, $dbname available
+    mysql_connect($dbhost, $dbuser, $dbpass) or die ('Error connecting to mysql');mysql_select_db($dbname);$query = 'Select * from users where username='.$username.' And password='.$password;$result = mysql_query($query);
+    if(mysql_numrows($result) == 1){mysql_close();return true;}else{mysql_close();return false;}
+}
+```

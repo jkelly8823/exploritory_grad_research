@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an incomplete masking of sensitive data. When writing to the Data_out register, the code only masks bit 0 of the Data_in variable, but does not properly handle the case where Data_in contains sensitive information in the other bits.
+
+EXPLANATION:
+In the given code snippet, when the write signal is asserted and the Write_once_status is low, the code writes the Data_in variable to the Data_out register after masking bit 0. However, this masking only occurs for bit 0 and not for the other bits. As a result, sensitive information in the other bits of Data_in could be exposed when written to Data_out.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should proper mask all sensitive bits of the Data_in variable before writing it to the Data_out register. This can be achieved by using a proper mask that covers all sensitive bits. For example, if only the upper 15 bits of Data_in contain sensitive information, the code should use a mask that sets those bits to 0.
+
+```verilog
+Data_out <= Data_in & 16'hFFFF; 
+```
+
+However, the exact mask used depends on the nature of the sensitive data and its location within the Data_in variable.
+
+ORIGINAL CODE:
+
+```verilog
+module register_write_once_example
+(
+  input [15:0] Data_in,
+  input Clk,
+  input ip_resetn,
+  input global_resetn,
+  input write,
+  output reg [15:0] Data_out
+);
+
+reg Write_once_status;
+
+always @(posedge Clk or negedge ip_resetn)
+if (~ip_resetn)
+
+  begin
+    Data_out <= 16'h0000; 
+    Write_once_status <= 1'b0;
+  
+  end
+
+else if (write & ~Write_once_status) 
+
+  begin
+    Data_out <= Data_in & 16'hFFFE; // Input data written to register after masking bit 0
+    Write_once_status <= 1'b1; // Write once status set after first write.
+  
+  end
+
+else if (~write)
+
+  begin
+    Data_out[15:1] <= Data_out[15:1];
+    Data_out[0] <= Write_once_status;
+  
+  end
+  
+endmodule
+```

@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-14
+VULNERABILITY_DESCRIPTION:
+Error Handling Vulnerability - Unclear handling of memcpy function with null pointer used later in code.
+EXPLANATION:
+The memset function does not prevent the following null pointer usage in code not evaluated here. 
+gic_kvm_info->maint_irq, and/or any unknown pointer to vgic or its value could be initialized to null. 
+This bug may have cascaded impacts, null pointer dereferences likely elsewhere in the file if not the entire project if called on before later being initialized.
+
+RECOMMENDATIONS:
+For starters, verification of all pointers and the state of 'params' being set to a value beforehand should be added before dereferencing it. This is in addition to providing clear in-line or external documentation with potential error handling states such that other developers will know what they can expect.
+
+ORIGINAL CODE:
+
+	.enable			= vgic_v2_enable,
+};
+
+struct vgic_params __section(.hyp.text) vgic_v2_params;
+
+static void vgic_cpu_init_lrs(void *params)
+{
+	struct vgic_params *vgic = params;
+	const struct resource *vctrl_res = &gic_kvm_info->vctrl;
+	const struct resource *vcpu_res = &gic_kvm_info->vcpu;
+
+	memset(vgic, 0, sizeof(*vgic));
+
+	if (!gic_kvm_info->maint_irq) {
+		kvm_err("error getting vgic maintenance irq\n");
+		ret = -ENXIO;
+		goto out;

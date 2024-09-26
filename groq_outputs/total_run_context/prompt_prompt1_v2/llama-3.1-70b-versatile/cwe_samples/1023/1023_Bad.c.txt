@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a buffer overflow attack in the AuthenticateUser function. 
+Specifically, the strncmp function is used with the strlen of the user-provided input strings without checking their length. 
+If the input strings are longer than the hardcoded strings, this will lead to buffer overflow.
+
+EXPLANATION:
+The AuthenticateUser function uses the strncmp function to compare the input strings with the hardcoded username and password. However, it uses the strlen of the input strings as the length parameter, without checking the length of the input strings. 
+This is a problem because the input strings could be longer than the hardcoded strings, causing a buffer overflow when the strncmp function tries to access memory outside the bounds of the hardcoded strings.
+Furthermore, the strncmp function is used with different length parameters in the two comparisons. In the first comparison, the length parameter is the length of the input username, while in the second comparison, the length parameter is the length of the input password. 
+This inconsistency could lead to incorrect authentication results.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should use a fixed length parameter for the strncmp function that is equal to the length of the hardcoded username and password. 
+Additionally, the code should validate the length of the input strings before passing them to the AuthenticateUser function. 
+Here is an example of how the corrected code could look:
+
+```c
+#define USERNAME_LENGTH 5
+#define PASSWORD_LENGTH 8
+
+int AuthenticateUser(char *inUser, char *inPass) {
+  if (strlen(inUser) > USERNAME_LENGTH || strlen(inPass) > PASSWORD_LENGTH) {
+    logEvent("Invalid input length");
+    return AUTH_FAIL;
+  }
+  if (strncmp(username, inUser, USERNAME_LENGTH) != 0) {
+    logEvent("Auth failure of username");
+    return AUTH_FAIL;
+  }
+  if (strncmp(pass, inPass, PASSWORD_LENGTH) != 0) {
+    logEvent("Auth failure of password");
+    return AUTH_FAIL;
+  }
+  logEvent("Auth success");
+  return AUTH_SUCCESS;
+}
+```
+
+ORIGINAL CODE:
+```c
+/* Ignore CWE-259 (hard-coded password) and CWE-309 (use of password system for authentication) for this example. */
+char *username = "admin"; char *pass = "password";
+
+int AuthenticateUser(char *inUser, char *inPass) {
+  if (strncmp(username, inUser, strlen(inUser))) {
+    logEvent("Auth failure of username using strlen of inUser");
+    return(AUTH_FAIL);
+  }
+  if (! strncmp(pass, inPass, strlen(inPass))) {
+    logEvent("Auth success of password using strlen of inUser");
+    return(AUTH_SUCCESS);
+  } else {
+    logEvent("Auth fail of password using sizeof");
+    return(AUTH_FAIL);
+  }
+}
+
+int main (int argc, char **argv) {
+  int authResult;
+  if (argc < 3) {
+    ExitError("Usage: Provide a username and password");
+  }
+  authResult = AuthenticateUser(argv[1], argv[2]);
+  if (authResult == AUTH_SUCCESS) {
+    DoAuthenticatedTask(argv[1]);
+  } else {
+    ExitError("Authentication failed");
+  }
+}
+```

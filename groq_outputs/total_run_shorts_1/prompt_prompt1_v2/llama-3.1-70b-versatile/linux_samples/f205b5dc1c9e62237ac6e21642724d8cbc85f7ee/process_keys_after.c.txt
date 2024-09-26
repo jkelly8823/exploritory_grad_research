@@ -1,0 +1,121 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 10, 15, 20, 25, 35
+VULNERABILITY_DESCRIPTION:
+The code appears to be vulnerable to potential null pointer dereferences.
+
+EXPLANATION:
+In multiple places throughout the code, the pointer `new` is used without a null check before being dereferenced. Although there are checks for `new` being null, these checks are incomplete or do not handle all cases.
+
+In the `install_thread_keyring` function, the variable `new` is checked to see if it is null, but if it is not null, it is not checked again before being dereferenced.
+
+Similarly, in the `install_process_keyring` function, the variable `new` is not checked to see if it is null before being dereferenced.
+
+Furthermore, in multiple functions, the return value of `install_thread_keyring_to_cred` and `install_process_keyring_to_cred` is not checked before being assigned to the `ret` variable. If these functions fail, they will return a negative value, which will cause the `ret` variable to be negative, potentially leading to an incorrect interpretation of the result.
+
+Additionally, there are missing checks for the return value of `keyring_alloc` in `install_thread_keyring_to_cred` and `install_process_keyring_to_cred`. If `keyring_alloc` fails, it will return NULL, which will not be checked for before being dereferenced.
+
+RECOMMENDATIONS:
+To fix the potential null pointer dereferences, additional null checks should be added to ensure that `new` is not null before being dereferenced.
+
+Additionally, the return value of `install_thread_keyring_to_cred` and `install_process_keyring_to_cred` should be checked before being assigned to the `ret` variable.
+
+Moreover, the return value of `keyring_alloc` in `install_thread_keyring_to_cred` and `install_process_keyring_to_cred` should be checked for NULL before being dereferenced.
+
+ORIGINAL CODE:
+```c
+}
+
+/*
+ * Install a thread keyring to the given credentials struct if it didn't have
+ * one already.  This is allowed to overrun the quota.
+ *
+ * Return: 0 if a thread keyring is now present; -errno on failure.
+ */
+int install_thread_keyring_to_cred(struct cred *new)
+{
+	struct key *keyring;
+
+	if (new->thread_keyring)
+		return 0;
+
+	keyring = keyring_alloc("_tid", new->uid, new->gid, new,
+				KEY_POS_ALL | KEY_USR_VIEW,
+				KEY_ALLOC_QUOTA_OVERRUN,
+				NULL, NULL);
+}
+
+/*
+ * Install a thread keyring to the current task if it didn't have one already.
+ *
+ * Return: 0 if a thread keyring is now present; -errno on failure.
+ */
+static int install_thread_keyring(void)
+{
+	struct cred *new;
+	if (!new)
+		return -ENOMEM;
+
+	ret = install_thread_keyring_to_cred(new);
+	if (ret < 0) {
+		abort_creds(new);
+		return ret;
+}
+
+/*
+ * Install a process keyring to the given credentials struct if it didn't have
+ * one already.  This is allowed to overrun the quota.
+ *
+ * Return: 0 if a process keyring is now present; -errno on failure.
+ */
+int install_process_keyring_to_cred(struct cred *new)
+{
+	struct key *keyring;
+
+	if (new->process_keyring)
+		return 0;
+
+	keyring = keyring_alloc("_pid", new->uid, new->gid, new,
+				KEY_POS_ALL | KEY_USR_VIEW,
+				KEY_ALLOC_QUOTA_OVERRUN,
+}
+
+/*
+ * Install a process keyring to the current task if it didn't have one already.
+ *
+ * Return: 0 if a process keyring is now present; -errno on failure.
+ */
+static int install_process_keyring(void)
+{
+	struct cred *new;
+	ret = install_process_keyring_to_cred(new);
+	if (ret < 0) {
+		abort_creds(new);
+		return ret;
+	}
+
+	return commit_creds(new);
+}
+
+/*
+ * Install the given keyring as the session keyring of the given credentials
+ * struct, replacing the existing one if any.  If the given keyring is NULL,
+ * then install a new anonymous session keyring.
+ *
+ * Return: 0 on success; -errno on failure.
+ */
+int install_session_keyring_to_cred(struct cred *cred, struct key *keyring)
+{
+	unsigned long flags;
+}
+
+/*
+ * Install the given keyring as the session keyring of the current task,
+ * replacing the existing one if any.  If the given keyring is NULL, then
+ * install a new anonymous session keyring.
+ *
+ * Return: 0 on success; -errno on failure.
+ */
+static int install_session_keyring(struct key *keyring)
+{
+	struct cred *new;
+```

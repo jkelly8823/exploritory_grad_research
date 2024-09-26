@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 8
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to a buffer overflow and a null pointer dereference.
+
+EXPLANATION: 
+The function `host_lookup` is vulnerable to a buffer overflow when copying the hostname into the `hostname` array with `strcpy`. The `hostname` array has a fixed size of 64 characters, but `strcpy` does not check for buffer overflows. If the hostname returned by `gethostbyaddr` is longer than 63 characters, it will overflow the buffer and potentially crash the program or allow an attacker to execute arbitrary code.
+
+Furthermore, the code does not check if `gethostbyaddr` returns a null pointer. If the DNS lookup fails, `gethostbyaddr` will return null, and the subsequent `strcpy` will dereference a null pointer, causing the program to crash.
+
+RECOMMENDATIONS: 
+To fix the buffer overflow vulnerability, use `strncpy` instead of `strcpy` and ensure that the destination buffer is null-terminated. Additionally, check if `gethostbyaddr` returns a null pointer before dereferencing it.
+
+Here's an example of the fixed code:
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;
+    in_addr_t *addr;
+    char hostname[64];
+
+    validate_addr_form(user_supplied_addr);
+    addr = inet_addr(user_supplied_addr);
+    hp = gethostbyaddr(addr, sizeof(struct in_addr), AF_INET);
+
+    if (hp == NULL) {
+        // handle DNS lookup failure
+        return;
+    }
+
+    strncpy(hostname, hp->h_name, 64);
+    hostname[63] = '\0'; // null-terminate the string
+}
+```
+ORIGINAL CODE:
+```
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+       
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+       
+    validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+}
+```

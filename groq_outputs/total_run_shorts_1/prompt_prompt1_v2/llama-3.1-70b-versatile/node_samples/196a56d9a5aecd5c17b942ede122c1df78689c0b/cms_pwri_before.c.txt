@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+Potential failure to handle insufficient randomness when generating an initialization vector (IV) using RAND_bytes_ex.
+
+EXPLANATION:
+The code checks if RAND_bytes_ex failed to generate the required number of random bytes for an initialization vector. However, it does not validate that the required number of bytes were actually generated before proceeding with further operations. If RAND_bytes_ex were to only partially generate the IV buffer, this would introduce unpredictability in the security of the system and this could have unintended consequences.
+
+RECOMMENDATIONS:
+1. Additionally check the return value of RAND_bytes_ex for the exact number of bytes generated, ensuring that the generated IV matches the expected IV length.
+Example: 
+```c
+int bytesGenerated = RAND_bytes_ex(ossl_cms_ctx_get0_libctx(cms_ctx), iv, ivlen, 0);
+if(bytesGenerated < ivlen) {
+    // handle insufficient randomness generated
+    goto err;
+}
+```
+This ensures that if RAND_bytes_ex fails to generate the requested number of bytes for the initialization vector, an error condition will be triggered.
+
+ORIGINAL CODE:
+```c
+    ivlen = EVP_CIPHER_CTX_get_iv_length(ctx);
+
+    if (ivlen > 0) {
+        if (RAND_bytes_ex(ossl_cms_ctx_get0_libctx(cms_ctx), iv, ivlen, 0) <= 0)
+            goto err;
+```

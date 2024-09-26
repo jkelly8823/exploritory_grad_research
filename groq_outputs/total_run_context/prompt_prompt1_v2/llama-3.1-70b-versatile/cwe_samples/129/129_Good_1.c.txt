@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 11-12
+VULNERABILITY_DESCRIPTION:
+Format String Vulnerability
+EXPLANATION:
+The function report() in line 12 is called with a format string from stderr, but also includes user controlled data. The string from stderr may be treated as a format string and executed. This is known as a Format String Vulnerability, where an attacker can inject arbitrary format specifiers and execute malicous code.
+
+In addition, sscanf() in line 9 is used to parse data from the buf. This data comes directly from a network socket, which presents the risk of a buffer overflow if the formatted string does not match the format string, as the extra characters will continue writing past the buffer boundaries.
+
+RECOMMENDATIONS:
+1. Ensure report() is not called with user controlled format strings, but use a safe version of report() that doesn't interpret the string as a format specifier.
+2. Use %n format specifier to prevent buffer overflow in sscanf(), or increase size of buffer if possible.
+3. Implement proper input validation on all data that comes from the network, to prevent a malicious server or a man-in-the-middle from injecting exploit data.
+4. Always use a safe library version of sscanf(), i.e., sscanf_s() instead.
+
+ORIGINAL CODE:
+/** capture the sizes of all messages */
+int getsizes(int sock, int count, int *sizes) {
+    ...char buf[BUFFER_SIZE];int ok;int num, size;
+       
+       // read values from socket and added to sizes array
+       while ((ok = gen_recv(sock, buf, sizeof(buf))) == 0){
+          
+         // continue read from socket until buf only contains '.'
+         if (DOTLINE(buf))break;
+         else if (sscanf(buf, "%d %d", &num, &size) == 2) {
+            if (num > 0 && num <= (unsigned)count)sizes[num - 1] = size;
+               else
+           
+                  // warn about possible attempt to induce buffer overflow */
+                  report(stderr, "Warning: ignoring bogus data for message sizes returned by server.\n");
+            
+         }
+       }...

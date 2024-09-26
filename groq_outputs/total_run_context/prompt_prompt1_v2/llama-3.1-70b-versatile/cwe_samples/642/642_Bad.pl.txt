@@ -1,0 +1,18 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to Command Injection and Arbitrary Environmental Variable Modification. 
+
+EXPLANATION:
+The code is using user-supplied input from the `$stream` variable to set environment variables and construct a command. Specifically, the regular expressions `(/^ENV ([\w\_]+) (.*)/)` and `(/^LIST/)` are used to parse user input and execute a system command. This creates a security vulnerability because an attacker could inject malicious commands by crafting their input carefully. Additionally, an attacker could modify arbitrary environment variables by sending input in the expected format. 
+
+The line that opens the filehandle `$fh` to execute the system command `/bin/ls -l $ENV{HOMEDIR}` also creates a vulnerability because it uses unsanitized user input directly in the command. This could be used to execute arbitrary system commands by manipulating the `HOMEDIR` environment variable.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should ensure that any user-supplied input is sanitized and validated before using it to construct system commands or set environment variables. Consider whitelisting allowed environment variable names and commands to prevent arbitrary modifications. Use the `system` function's taint mode to prevent tainted data from being used in system calls. Consider using more secure alternatives to system calls such as Perl's `File::Find` module to list directory contents.
+
+ORIGINAL CODE:
+
+$ENV{"HOMEDIR"} = "/home/mydir/public/";my $stream = AcceptUntrustedInputStream();while (<$stream>) {
+ chomp;if (/^ENV ([\w\_]+) (.*)/) {$ENV{$1} = $2;}elsif (/^QUIT/) { ... }elsif (/^LIST/) {open($fh, "/bin/ls -l $ENV{HOMEDIR}|");while (<$fh>) {SendOutput($stream, "FILEINFO: $_");}close($fh);}
+}

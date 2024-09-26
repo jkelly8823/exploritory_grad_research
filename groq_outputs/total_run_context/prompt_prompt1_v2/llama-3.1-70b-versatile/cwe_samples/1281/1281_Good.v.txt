@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+A potential memory corruption vulnerability is present due to a lack of bounds checking when accessing array data.
+
+EXPLANATION:
+The issue arises in the line "if (csr_exception_i.valid && csr_exception_i.cause[63] && !amo_valid_commit_o && commit_instr_i[0].fu != CSR)" where an array "cause" of presumably bit width 64 is indexed at the 63rd position. However, this code snippet does not validate whether the array "cause" has a predefined length. Even assuming the array has 64 bits (0-63 indexing), directly accessing the 63rd index could lead to problems if there's any mistake in array length or offset calculation due to misaligned data, or specific runtime conditions.
+
+
+RECOMMENDATIONS:
+Ensure that the array "cause" has a length of at least 64 elements before accessing its 63rd index. Consider adding bounds checking to prevent an out-of-bounds array access. Verify that the offset calculations and run-time conditions in both this and other portion of the code prevent excessive indexing of arrays.
+
+```c
+// assume we know cause will have required length of 64 elements if it is valid
+if (csr_exception_i.valid && csr_exception_i.cause_length >= 64 && csr_exception_i.cause[63] && !amo_valid_commit_o && commit_instr_i[0].fu != CSR) 
+```
+
+ORIGINAL CODE:
+```verilog
+if (csr_exception_i.valid && csr_exception_i.cause[63] && !amo_valid_commit_o && commit_instr_i[0].fu != CSR) begin
+    exception_o = csr_exception_i;
+    exception_o.tval = commit_instr_i[0].ex.tval;
+end
+```

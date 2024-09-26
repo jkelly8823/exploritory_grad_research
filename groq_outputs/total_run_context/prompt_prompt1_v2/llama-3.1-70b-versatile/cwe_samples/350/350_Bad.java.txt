@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a DNS rebinding attack.
+
+EXPLANATION:
+The vulnerability exists in the line where the code checks if the canonical hostname ends with "trustme.com". This is a naive approach to determine trust, as an attacker could exploit this by configuring their DNS server to return a hostname that ends with "trustme.com", effectively bypassing the trust mechanism. 
+Additionally, this code also relies on the trusted nature of the canonical hostname which is obtained from a DNS query. 
+The code also assumes that the canonical hostname is always correctly set by the DNS server.
+
+Another potential issue is that getCanonicalHostName() can throw an unknownHostException, which should be handled.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should implement a more secure way to determine trust. Here are some possible recommendations:
+
+1. Implement a whitelist of trusted IP addresses instead of relying on the hostname.
+2. Use a secure way to get the client's IP address, for example by checking if the 'X-Forwarded-For' header exists, and if so, verify its contents.
+3. Handle potential exceptions and unknown host exceptions.
+
+Here is a revised example:
+
+```java
+String ip = request.getRemoteAddr();
+String[] trustedIPs = new String[]{"192.0.2.1", "192.0.2.2"};
+
+if (Arrays.asList(trustedIPs).contains(ip)) {
+    trusted = true;
+} else {
+    // Handle the case where the IP is not trusted.
+}
+```
+
+Please note that this revised example does not solve all potential security issues and you should carefully evaluate your use case and implement the solution accordingly.
+
+ORIGINAL CODE:
+
+```java
+String ip = request.getRemoteAddr();
+InetAddress addr = InetAddress.getByName(ip);
+if (addr.getCanonicalHostName().endsWith("trustme.com")) {
+    trusted = true;
+}
+```

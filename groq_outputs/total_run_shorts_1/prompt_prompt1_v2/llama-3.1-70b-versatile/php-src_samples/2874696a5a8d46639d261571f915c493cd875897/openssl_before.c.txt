@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-20
+VULNERABILITY_DESCRIPTION:
+ Lack of error checking and bounds validation when working with the OpenSSL library.
+
+EXPLANATION:
+ The provided code snippet is vulnerable to potential buffer overflows and undefined behavior. Specifically, when using the `BIO_get_mem_ptr` and `BIO_s_mem` functions, there is no validation to ensure that the returned memory buffer is not null or that its length does not exceed the allocated size.
+
+ Furthermore, when using `OBJ_obj2txt`, there is no validation to ensure that the output buffer size is large enough to hold the result, which can lead to buffer overflows. This issue is partially mitigated by the fact that the buffer size is set to `sizeof(buf)-1`, which means the buffer is smaller than the actual size of the `buf` array. However, relying solely on buffer size is not sufficient for robust security.
+
+ Additionally, when using `X509_EXTENSION_get_data`, there is no validation to ensure that the returned data is not null or that its length does not exceed the allocated size.
+
+RECOMMENDATIONS:
+ 1. Add null checks for the returned values from `BIO_get_mem_ptr`, `OBJ_obj2txt`, and `X509_EXTENSION_get_data`.
+ 2. Validate the lengths of the returned data to prevent buffer overflows.
+ 3. Use secure buffer sizes and check the return values of the functions to ensure that they do not indicate errors.
+
+ The `X509V3_EXT_print` function also needs to be checked for errors to ensure that the data is valid before using it.
+
+ 4. Consider using the `OBJ_obj2txt` function with a safe buffer size, to avoid potential overflows.
+
+ The `BIO_new` function also needs to be checked for errors to ensure that the memory was allocated correctly.
+
+ Note: Due to the code being a PHP internal function, the context is C but interacting with PHP.
+
+ORIGINAL CODE:
+}
+/* }}} */
+
+/* {{{ proto array openssl_x509_parse(mixed x509 [, bool shortnames=true])
+   Returns an array of the fields/values of the CERT */
+PHP_FUNCTION(openssl_x509_parse)
+{
+
+
+	for (i = 0; i < X509_get_ext_count(cert); i++) {
+		extension = X509_get_ext(cert, i);
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(extension)) != NID_undef) {
+			extname = (char *)OBJ_nid2sn(OBJ_obj2nid(X509_EXTENSION_get_object(extension)));
+		} else {
+			OBJ_obj2txt(buf, sizeof(buf)-1, X509_EXTENSION_get_object(extension), 1);
+			extname = buf;
+		}
+		bio_out = BIO_new(BIO_s_mem());
+		if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+			BIO_get_mem_ptr(bio_out, &bio_buf);
+			add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+		} else {
+			add_assoc_asn1_string(subitem, extname, X509_EXTENSION_get_data(extension));

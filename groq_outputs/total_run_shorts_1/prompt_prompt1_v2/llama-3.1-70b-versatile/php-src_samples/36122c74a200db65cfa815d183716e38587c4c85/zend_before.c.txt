@@ -1,0 +1,81 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION:
+The vulnerability arises due to the efree() function call potentially leading to a use-after-free error.
+
+EXPLANATION:
+The zend_vspprintf() function dynamically allocates memory for the dtrace_error_buffer. However, this buffer is then passed as an argument to the DTRACE_ERROR() function before being freed by efree(). 
+
+The DTRACE_ERROR() function may potentially not finish executing before the efree() call, due to its asynchronous nature. This could result in the buffer being freed before DTRACE_ERROR() has a chance to use it, leading to a potential use-after-free error.
+
+Additionally, there is also a possibility that the DTRACE_ERROR() function is implemented in such a way that it stores the buffer address and uses it later. In such a scenario, efree() would result in the memory being freed while the DTRACE_ERROR() function still holds a reference to the freed memory.
+
+RECOMMENDATIONS:
+To fix this issue, it is recommended to make sure that efree() is only called after DTRACE_ERROR() has finished executing. This can be achieved by ensuring that DTRACE_ERROR() is synchronous or redesigning the code to avoid freeing memory that might still be in use.
+
+```c
+error_filename = "Unknown";
+}
+
+va_start(args, format);
+
+#ifdef HAVE_DTRACE
+if(DTRACE_ERROR_ENABLED()) {
+    char *dtrace_error_buffer;
+    zend_vspprintf(&dtrace_error_buffer, 0, format, args);
+    DTRACE_ERROR(dtrace_error_buffer, (char *)error_filename, error_lineno);
+
+    // Do not free the buffer here. Instead, let the DTRACE_ERROR() handle it.
+    // efree(dtrace_error_buffer);
+}
+#endif /* HAVE_DTRACE */
+
+/* if we don't have a user defined error handler */
+if (!EG(user_error_handler)
+    || !(EG(user_error_handler_error_reporting) & type)
+    || EG(error_handling) != EH_NORMAL) {
+
+```
+OR
+
+Another approach is to use a smart pointer that will manage the lifetime of the dtrace_error_buffer.
+
+```c
+error_filename = "Unknown";
+}
+
+va_start(args, format);
+
+#ifdef HAVE_DTRACE
+if(DTRACE_ERROR_ENABLED()) {
+    zend_string *dtrace_error_buffer;
+    zend_vspprintf(&dtrace_error_buffer, 0, format, args);
+    DTRACE_ERROR(ZSTR_VAL(dtrace_error_buffer), (char *)error_filename, error_lineno);
+}
+#endif /* HAVE_DTRACE */
+
+/* if we don't have a user defined error handler */
+if (!EG(user_error_handler)
+    || !(EG(user_error_handler_error_reporting) & type)
+    || EG(error_handling) != EH_NORMAL) {
+
+```
+ORIGINAL CODE:
+    error_filename = "Unknown";
+}
+
+va_start(args, format);
+
+#ifdef HAVE_DTRACE
+if(DTRACE_ERROR_ENABLED()) {
+    char *dtrace_error_buffer;
+    zend_vspprintf(&dtrace_error_buffer, 0, format, args);
+    DTRACE_ERROR(dtrace_error_buffer, (char *)error_filename, error_lineno);
+    efree(dtrace_error_buffer);
+}
+#endif /* HAVE_DTRACE */
+
+/* if we don't have a user defined error handler */
+if (!EG(user_error_handler)
+    || !(EG(user_error_handler_error_reporting) & type)
+    || EG(error_handling) != EH_NORMAL) {

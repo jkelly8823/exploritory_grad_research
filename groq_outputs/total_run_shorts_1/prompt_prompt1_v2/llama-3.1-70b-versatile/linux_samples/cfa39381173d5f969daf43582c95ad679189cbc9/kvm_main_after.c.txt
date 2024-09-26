@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 5-11
+VULNERABILITY_DESCRIPTION:
+Resource leak vulnerability
+EXPLANATION:
+This vulnerability arises due to potential resource leaks. Specifically, if the `anon_inode_getfd` function fails with a non-negative return value (indicating success) but `kvm_put_kvm(kvm)` fails, it may cause a double-close or other synchronization issues when destroying the `dev`. This could potentially result in resource leaks. However, considering the context and the operations being performed, it appears that the bug only occurs for some other less common occasions. There is also no indication of multiple or excessive closure as the function just unlocks and not double. The main issue identified is when `kvm_put_kvm(kvm)` is called after the failure to retrieve the file descriptor resulting in memory leaks or double-closure if `kvm_put_kvm(kvm)` is not successful.
+
+
+RECOMMENDATIONS:
+- Change the order of cleanup in error path for clarity. 
+- Check the type for return values instead of only negative return values. Anon_inode_getfd() returns EFAULT or EINVAL instead.
+
+
+This bug would likely be low-moderate so would be expected to do either of the recommended actions mentioned here also due to its lower nature.
+
+ORIGINAL CODE:
+```c
+if (ops->init)
+		ops->init(dev);
+
+	kvm_get_kvm(kvm);
+	ret = anon_inode_getfd(ops->name, &kvm_device_fops, dev, O_RDWR | O_CLOEXEC);
+	if (ret < 0) {
+		kvm_put_kvm(kvm);
+		mutex_lock(&kvm->lock);
+		list_del(&dev->vm_node);
+		mutex_unlock(&kvm->lock);
+		ops->destroy(dev);
+		return ret;
+	}
+
+	cd->fd = ret;
+	return 0;
+}
+```
+
+Please confirm with the team and run further tests for an error or different opinions before correcting this vulnerabilty

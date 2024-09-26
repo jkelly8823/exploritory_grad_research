@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference and a buffer overflow.
+
+EXPLANATION:
+In the provided code snippet, it appears that when the `ar->bus_param.dev_type` is not `ATH10K_DEV_TYPE_HL`, the `dma_alloc_coherent` function is used to allocate memory for the `arvif->beacon_buf`. However, when the `dev_type` is `ATH10K_DEV_TYPE_HL`, the `kmalloc` function is used. This might lead to inconsistent memory allocation and deallocation, potentially resulting in memory leaks. Additionally, there is no check for the return value of `kmalloc` or `dma_alloc_coherent`, which means that if these functions fail to allocate memory and return a null pointer, the subsequent assignments to `arvif->beacon_buf` and `arvif->beacon_paddr` could result in a null pointer dereference. Furthermore, there is no check for the return value of the `dma_addr_t` conversion, which could result in a buffer overflow if the address is not properly aligned.
+
+RECOMMENDATIONS:
+1.  Check the return values of `kmalloc` and `dma_alloc_coherent` to ensure that memory allocation is successful before assigning the result to `arvif->beacon_buf`.
+2.  Check the return value of the `dma_addr_t` conversion to ensure that it is properly aligned to prevent buffer overflows.
+3.  Consider using a single, consistent memory allocation function throughout the code to avoid potential inconsistencies.
+4.  Ensure that memory deallocation is performed correctly and consistently when `arvif->beacon_buf` is no longer needed.
+
+ORIGINAL CODE:
+
+		if (ar->bus_param.dev_type == ATH10K_DEV_TYPE_HL) {
+			arvif->beacon_buf = kmalloc(IEEE80211_MAX_FRAME_LEN,
+						    GFP_KERNEL);
+			arvif->beacon_paddr = (dma_addr_t)arvif->beacon_buf;
+		} else {
+			arvif->beacon_buf =
+				dma_alloc_coherent(ar->dev,
+						   IEEE80211_MAX_FRAME_LEN,

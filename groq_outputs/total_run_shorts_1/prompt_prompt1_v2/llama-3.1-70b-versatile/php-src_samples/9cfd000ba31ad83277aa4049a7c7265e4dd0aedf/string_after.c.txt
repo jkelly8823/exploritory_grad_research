@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16-20
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability due to Unchecked Memory Copy.
+
+EXPLANATION:
+The vulnerability exists in the `memcpy` function call within the for loop. The `memcpy` function copies data from the source `p` to the destination `q` without checking the bounds of the destination buffer. Although there is a check before allocating the memory for `dest` to ensure it's within `INT_MAX` bounds, the actual check does not account for the buffer's total allocated size. 
+
+This is because `out_len` is calculated based on the multiplication of `chunks`, `endlen`, `srclen`, and other variables. However, there's no validation for the final allocation size in the loop's iteration (`chunklen`). This could result in exceeding the buffer's capacity.
+
+Furthermore, even though `safe_emalloc` suggests that it may perform error checking, there's no validation of the `out_len` multiplication factor which might have an overflow.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, the following recommendations should be implemented:
+1. Introduce bounds checking within the loop to ensure the copy does not exceed the allocated memory for `dest`.
+2. Validate the final value for `out_len` in the loop's iteration to ensure it does not exceed the allocated size for `dest`.
+
+Here is an example for bounds checking within the loop:
+```c
+int bytes_left = (int)out_len * charsize;
+for (p = src, q = dest; p < (src + charsize * (srclen - chunklen + 1)); ) {
+    int chunk_bytes = chunklen * charsize;
+    if (chunk_bytes > bytes_left) {
+        // handle error: cannot copy more data than allocated
+        break;
+    }
+    memcpy(q, p, chunk_bytes);
+    q += chunk_bytes;
+    p += chunk_bytes;
+    bytes_left -= chunk_bytes;
+}
+if (bytes_left != 0) {
+    // handle error: unfinished copying
+}
+```
+Additionally, ensure that `srclen` and `srclen - chunklen + 1` are validated within the loop's condition.
+3. Verify that the `safe_emalloc` function does indeed perform the required error checking on the allocation.
+
+ORIGINAL CODE:
+```c
+int chunks; /* complete chunks! */
+int restlen;
+int charsize = sizeof(char);
+float out_len;
+
+if (str_type == IS_UNICODE) {
+    charsize = sizeof(UChar);
+}
+chunks = srclen / chunklen;
+restlen = srclen - chunks * chunklen; /* srclen % chunklen */
+
+out_len = chunks + 1;
+out_len *= endlen;
+out_len += srclen + 1;
+
+if ((out_len > INT_MAX || out_len <= 0) || ((out_len * charsize) > INT_MAX || (out_len * charsize) <= 0)) {
+    return NULL;
+}
+
+dest = safe_emalloc((int)out_len, charsize, 0);
+
+for (p = src, q = dest; p < (src + charsize * (srclen - chunklen + 1)); ) {
+    memcpy(q, p, chunklen * charsize);
+    q += chunklen * charsize;
+}
+```

@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a signal handling vulnerability that allows for a potential denial of service (DoS) attack or arbitrary code execution through signal hijacking.
+EXPLANATION:
+The code attempts to handle signals sent to a subprocess by sending the same signal to the current process. However, this approach is vulnerable to signal handling exploits. Specifically, if the subprocess was killed by a signal that was not handled by the subprocess (i.e., not in its signal mask), the current process will attempt to send the same signal to itself, potentially causing a denial of service or arbitrary code execution.
+
+The issue lies in the fact that the code does not properly check if the signal was handled by the subprocess before attempting to send it to the current process. Additionally, the use of `$? & 255` to determine the signal number and the `kill` function to send the signal can be insecure if not properly validated.
+
+The recommended approach is to use a safer signal handling mechanism that takes into account the signal mask and properly handles unambiguous signal receptions.
+RECOMMENDATIONS:
+To mitigate this vulnerability, consider the following recommendations:
+
+1. Use a safer signal handling mechanism, such as `sigaction` or `sigsetjmp`, to handle signals sent to the subprocess.
+2. Validate and sanitize the signal number received from the subprocess before attempting to send it to the current process.
+3. Consider implementing a more robust signal handling framework that takes into account the specific operating system and signal mask.
+
+ORIGINAL CODE:
+```
+die "wrap.pl: Failed to execute '", join(' ', @cmd), "': $!\n"
+    if $waitcode == -1;
+
+# When the subprocess aborted on a signal, we simply raise the same signal.
+kill(($? & 255) => $$) if ($? & 255) != 0;
+
+# If that didn't stop this script, mimic what Unix shells do, by
+# converting the signal code to an exit code by setting the high bit.
+# This only happens on Unix flavored operating systems, the others don't
+# have this sort of signaling to date, and simply leave the low byte zero.
+exit(($? & 255) | 128) if ($? & 255) != 0;
+```

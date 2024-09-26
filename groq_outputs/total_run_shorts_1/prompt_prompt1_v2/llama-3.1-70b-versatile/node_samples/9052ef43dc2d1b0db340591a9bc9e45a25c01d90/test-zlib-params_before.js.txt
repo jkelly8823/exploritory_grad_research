@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+Potential Information Disclosure due to assert strict equality in a non-secure environment.
+
+EXPLANATION:
+The use of `assert.deepStrictEqual` in a non-secure environment, such as this code snippet, can potentially lead to an Information Disclosure vulnerability. When an assertion fails, the `assert` module will throw an error with a detailed message that includes the expected and actual values. If an attacker has some influence over the `actual` or `expected` values, this could lead to information disclosure. Additionally, it's worth noting that `assert` is typically used for debugging purposes, and should not be used in production code.
+
+RECOMMENDATIONS:
+- Do not use `assert` module in production code.
+- Instead of using `assert`, consider using a secure way to verify the integrity of the data. This could involve using a secure method to compare the actual and expected values.
+- Ensure that any error messages that could potentially be exposed to attackers are sanitized and do not include sensitive information.
+
+ORIGINAL CODE:
+```javascript
+const chunk1 = file.slice(0, chunkSize);
+const chunk2 = file.slice(chunkSize);
+const blkhdr = Buffer.from([0x00, 0x5a, 0x82, 0xa5, 0x7d]);
+const expected = Buffer.concat([blkhdr, chunk2]);
+let actual;
+
+deflater.write(chunk1, function() {
+  deflater.params(0, zlib.constants.Z_DEFAULT_STRATEGY, function() {
+    while (deflater.read());
+    deflater.end(chunk2, function() {
+      const bufs = [];
+      let buf;
+      while ((buf = deflater.read()) !== null)
+        bufs.push(buf);
+      actual = Buffer.concat(bufs);
+    });
+  });
+  while (deflater.read());
+});
+
+process.once('exit', function() {
+  assert.deepStrictEqual(actual, expected);
+});
+```

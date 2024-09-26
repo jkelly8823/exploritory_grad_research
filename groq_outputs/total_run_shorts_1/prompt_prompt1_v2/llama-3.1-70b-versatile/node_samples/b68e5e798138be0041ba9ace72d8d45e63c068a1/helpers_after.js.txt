@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11, 14-15
+VULNERABILITY_DESCRIPTION:
+The given code snippet appears to contain a potential security vulnerability due to the lack of proper input validation for the `mod` object and the `redirects` object.
+
+EXPLANATION:
+In lines 10-11, the code checks if the `mod` object is an instance of the `Module` class. However, it does not validate the `mod.filename` and `mod.id` properties, which are later used in lines 14-15 to construct the `id` variable. This lack of validation could potentially lead to a Code Injection vulnerability, where an attacker could inject malicious code through the `mod.filename` or `mod.id` properties.
+
+Additionally, the `redirects` object is not validated in any way. This could lead to a potential Prototype Pollution vulnerability, where an attacker could maliciously modify the prototype chain of the `redirects` object.
+
+RECOMMENDATIONS:
+1. Validate the `mod.filename` and `mod.id` properties to ensure they do not contain malicious input. This could be done using a whitelist of allowed characters or using a library like `sanitize-filename` to sanitize the input.
+
+2. Validate the `redirects` object to ensure it does not contain malicious properties. This could be done by using a library like `lodash.merge` with the `{ customizer: fn }` option to recursively merge the `redirects` object with a safe default object.
+
+ORIGINAL CODE:
+```
+StringPrototypeStartsWith,
+} = primordials;
+const {
+  ERR_INVALID_ARG_TYPE,
+  ERR_MANIFEST_DEPENDENCY_MISSING,
+  ERR_UNKNOWN_BUILTIN_MODULE,
+} = require('internal/errors').codes;
+const { BuiltinModule } = require('internal/bootstrap/realm');
+  return mod;
+}
+
+let $Module = null;
+function lazyModule() {
+  $Module = $Module || require('internal/modules/cjs/loader').Module;
+  return $Module;
+}
+
+// Invoke with makeRequireFunction(module) where |module| is the Module object
+// to use as the context for the require() function.
+// Use redirects to set up a mapping from a policy and restrict dependencies
+const urlToFileCache = new SafeMap();
+function makeRequireFunction(mod, redirects) {
+  // lazy due to cycle
+  const Module = lazyModule();
+  if (mod instanceof Module !== true) {
+    throw new ERR_INVALID_ARG_TYPE('mod', 'Module', mod);
+  }
+
+  let require;
+  if (redirects) {
+    const id = mod.filename || mod.id;
+```

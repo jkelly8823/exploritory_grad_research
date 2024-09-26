@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential buffer overflow attacks and potential NUL-termination errors due to unhandled error scenarios.
+EXPLANATION:
+In the provided code snippet, a potential buffer overflow vulnerability is present in the lines where EVP_CIPHER_CTX_get_iv_length and EVP_GCM_TLS_FIXED_IV_LEN are used to determine 'crypto_info->iv_len'. The error checking for EVP_CIPHER_CTX_get_iv_length is handled correctly by checking for negative values, but the value of EVP_GCM_TLS_FIXED_IV_LEN is assigned directly to crypto_info->iv_len.
+
+Additionally, if EVP_CIPHER_CTX_get_iv_length returns 0, an incorrect assumption could be made about the IV's length. However, for cryptographic safety, TLS RFC requires a minimum tag length of 128 bits for GCM mode. 
+
+However, more critical concerns surround how crypto_info->iv might be used in memory-based operations in potential future sections of the main code. In order to mitigate potential buffer overflow attacks, it is crucial to consider the cipher-specific IV length constraints as specified in the respective TLS or SSL documentation for individual ciphers.
+
+The snippet from when crypto_info->cipher_algorithm = CRYPTO_AES_NIST_GCM_16 is used will reveal this code is SSL/TLS specific.  From the available evidence it seems to be correctly set in conjunction with iv_len using EVP_GCM_TLS_FIXED_IV_LEN but would be best cross-referenced to detect if related functions use other variable cipher-algorithms without their corresponding cipher-length specifications.
+
+RECOMMENDATIONS:
+1. Cross-check the provided `iv_len` value with the respective TLS or SSL documentation and manually ensure that this matches the expected IV value that the cipher-algorithm utilizes.
+2. Use secure, API-provided functions for deriving `iv_len` and update error checking when possible to include scenario for zero return value or insufficient value.
+3. Make an immediate search in related sections of the full source file that any crypto operations that depend on crypto_info->iv are able to dynamically detect any unusual amounts for the IV and/or length they are expecting.
+4. Ensure access any source materials describing error-free execution practices for these algorithms according to their specific established norms.
+
+ORIGINAL CODE:
+/*
+ * Copyright 2018-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+    case SSL_AES128GCM:
+    case SSL_AES256GCM:
+        crypto_info->cipher_algorithm = CRYPTO_AES_NIST_GCM_16;
+        if (s->version == TLS1_3_VERSION) {
+            crypto_info->iv_len = EVP_CIPHER_CTX_get_iv_length(dd);
+            if (crypto_info->iv_len < 0)
+                return 0;
+        }
+        else
+            crypto_info->iv_len = EVP_GCM_TLS_FIXED_IV_LEN;
+        break;
+    case SSL_AES128:

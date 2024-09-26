@@ -1,0 +1,86 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24 and 29
+VULNERABILITY_DESCRIPTION:
+The code snippet uses a double lock on the socket (`lock_sock(sk)`), which can cause a deadlock if not properly handled.
+
+EXPLANATION:
+In the provided code, a socket is locked twice (`lock_sock(sk)`) without a proper release between them. This can lead to a deadlock if another thread is also trying to acquire the lock on the same socket. This is because the second `lock_sock(sk)` call will block indefinitely if another thread already holds the lock.
+
+RECOMMENDATIONS:
+To fix the vulnerability, one of the `lock_sock(sk)` calls should be removed, and the locking mechanism should be carefully reviewed to ensure it does not lead to deadlocks in other parts of the code.
+
+Here are some possible recommendations:
+
+- Remove the second `lock_sock(sk)` call. It is unclear why this is necessary since the socket is already locked.
+- Use a more fine-grained locking mechanism that allows for the possibility of releasing the lock and re-acquiring it in a safe manner.
+- Ensure that there are no other locks that can cause a deadlock in conjunction with `lock_sock(sk)`.
+
+ORIGINAL CODE:
+```c
+	char              comm[TASK_COMM_LEN];
+};
+
+void hci_sock_set_flag(struct sock *sk, int nr)
+{
+	set_bit(nr, &hci_pi(sk)->flags);
+}
+	if (event == HCI_DEV_UNREG) {
+		struct sock *sk;
+
+		/* Detach sockets from device */
+		read_lock(&hci_sk_list.lock);
+		sk_for_each(sk, &hci_sk_list.head) {
+			lock_sock(sk);
+			if (hci_pi(sk)->hdev == hdev) {
+				hci_pi(sk)->hdev = NULL;
+				sk->sk_err = EPIPE;
+				sk->sk_state = BT_OPEN;
+				sk->sk_state_change(sk);
+
+				hci_dev_put(hdev);
+			}
+			release_sock(sk);
+		}
+		read_unlock(&hci_sk_list.lock);
+	}
+}
+static int hci_sock_bound_ioctl(struct sock *sk, unsigned int cmd,
+				unsigned long arg)
+{
+	struct hci_dev *hdev = hci_pi(sk)->hdev;
+
+	if (!hdev)
+		return -EBADFD;
+
+	if (hci_dev_test_flag(hdev, HCI_USER_CHANNEL))
+		return -EBUSY;
+
+
+	lock_sock(sk);
+
+	if (sk->sk_state == BT_BOUND) {
+		err = -EALREADY;
+		goto done;
+	}
+
+	lock_sock(sk);
+
+	hdev = hci_pi(sk)->hdev;
+	if (!hdev) {
+		err = -EBADFD;
+		goto done;
+	}
+
+	haddr->hci_family = AF_BLUETOOTH;
+		goto done;
+	}
+
+	hdev = hci_pi(sk)->hdev;
+	if (!hdev) {
+		err = -EBADFD;
+		goto done;
+	}
+
+	if (!test_bit(HCI_UP, &hdev->flags)) {
+```
+Please note that there are other potential issues with this code that are not being addressed here, such as the use of `goto` and potential issues with error handling.

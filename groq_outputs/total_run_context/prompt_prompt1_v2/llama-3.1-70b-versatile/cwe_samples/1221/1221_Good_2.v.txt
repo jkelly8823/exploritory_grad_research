@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-17
+VULNERABILITY_DESCRIPTION:
+The code contains a vulnerability related to synchronous reset in the form of an asynchronous reset (reset_ni) being used in combination with another asynchronous signal (rst_6).
+
+EXPLANATION:
+The code uses a synchronous reset mechanism, which is the recommended practice in digital design. However, the reset condition itself combines two asynchronous signals (rst_ni and rst_6) using the logical operators '~' and '&&'. The tilde operator inverts the rst_6 signal, while the '&&' operator is used to AND this inverted signal with rst_ni.
+
+This may result in timing issues between these asynchronous signals. Specifically, this setup could cause metastability, where the combinational logic sees these signals as transitioning between states at different times and may then corrupt the reset operation.
+
+Another potential issue with this setup is that using two asynchronous resets to control the same synchronous reset is generally an avoidable anti-pattern. Generally, a single synchronous reset should take priority over other restorative logic.
+
+RECOMMENDATIONS:
+
+- Change the resets to a unified, synchronous reset.
+- Alternatively, make the reset asynchronous, instead of evaluating their combined asynchronous states in combination during a synchronous reset action.
+- Further investigation into system-wide reset management should be performed, and system constraints be evaluated to guide where & how reset sync is implemented, e.g., which one makes sense and is most used.
+
+ORIGINAL CODE:
+```vhdl
+module acct_wrapper #(
+  ...
+  
+    always @(posedge clk_i)
+    
+      begin
+      
+        if(~(rst_ni && ~rst_6))
+        
+          begin
+          
+            for (j=0; j < AcCt_MEM_SIZE; j=j+1)
+            
+              begin
+              
+                acct_mem[j] <= 32'h00000000;
+              
+              end
+          
+          
+        end
+      
+    
+  ...
+  
+```

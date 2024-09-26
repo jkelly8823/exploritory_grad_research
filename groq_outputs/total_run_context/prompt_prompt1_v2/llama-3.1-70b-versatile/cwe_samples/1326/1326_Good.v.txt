@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 7
+VULNERABILITY_DESCRIPTION:
+This code contains an out-of-bounds access vulnerability in the `rdata_o` assignment.
+
+EXPLANATION:
+The code snippet appears to be part of a hardware design implementation in Verilog. The `raddr_q` variable is being assigned a value based on `addr_i` and `RomSize`, and then used to index into the `mem` array to assign a value to `rdata_o`.
+
+However, the indexing operation in the `rdata_o` assignment only checks if `raddr_q` is less than `RomSize`, but does not check if it is greater than or equal to 0. If `raddr_q` is negative, it will still be used to index into the `mem` array, resulting in an out-of-bounds access. Additionally, the use of the ternary operator with an unsized literal '0 may introduce unwanted bitwise operations or truncation in some contexts, depending on the type of rdata_o.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend adding bounds checking to ensure that `raddr_q` is within the valid range of indices for the `mem` array. Additionally, we recommend explicitly declaring the size and type of the unsized literal '0 to prevent unwanted bitwise operations or truncation.
+
+Here is an example of the recommended fix:
+
+    assign rdata_o = (raddr_q >= 0 && raddr_q < RomSize) ? mem[raddr_q] : '{default: 1'b0};
+
+ORIGINAL CODE:
+```
+always_ff @(posedge clk_i) begin
+    if (req_i) begin
+        raddr_q <= addr_i[$clog2(RomSize)-1+3:3];
+    end
+end
+...
+// this prevents spurious Xes from propagating into the speculative fetch stage of the core
+assign rdata_o = (raddr_q < RomSize) ? mem[raddr_q] : '0;
+...
+```

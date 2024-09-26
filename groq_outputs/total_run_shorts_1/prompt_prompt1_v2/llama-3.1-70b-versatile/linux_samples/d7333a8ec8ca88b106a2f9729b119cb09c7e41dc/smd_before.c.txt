@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory copying vulnerability through `memcpy` function.
+
+EXPLANATION:
+The `memcpy` function is used to copy data from the `buf` to `wcn->hal_buf`, but there is no check performed to ensure that the length of the data copied (`len`) does not exceed the size of the `wcn->hal_buf`. If the length of the data in `buf` is greater than the size of `wcn->hal_buf`, this will result in a buffer overflow. This is a common vulnerability that can lead to remote code execution.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to validate the length of the data copied (`len`) against the size of the `wcn->hal_buf` before calling `memcpy`. The size of `wcn->hal_buf` should be known and compared with `len` to prevent buffer overflow. The corrected code should look like this:
+```c
+if (len <= sizeof(wcn->hal_buf)) {
+    memcpy(wcn->hal_buf, buf, len);
+    wcn->hal_rsp_len = len;
+    complete(&wcn->hal_rsp_compl);
+} else {
+    // Handle the error or truncate the data to prevent buffer overflow
+}
+```
+
+ORIGINAL CODE:
+```c
+static int wcn36xx_smd_switch_channel_rsp(void *buf, size_t len)
+{
+    struct wcn36xx_hal_switch_channel_rsp_msg *rsp;
+    int ret;
+    INIT_HAL_MSG(msg_body, WCN36XX_HAL_FEATURE_CAPS_EXCHANGE_REQ);
+
+    set_feat_caps(msg_body.feat_caps, STA_POWERSAVE);
+    if (wcn->rf_id == RF_IRIS_WCN3680)
+        set_feat_caps(msg_body.feat_caps, DOT11AC);
+
+    PREPARE_HAL_BUF(wcn->hal_buf, msg_body);
+
+    ret = wcn36xx_smd_send_and_wait(wcn, msg_body.header.len);
+    case WCN36XX_HAL_HOST_RESUME_RSP:
+    case WCN36XX_HAL_ENTER_IMPS_RSP:
+    case WCN36XX_HAL_EXIT_IMPS_RSP:
+        memcpy(wcn->hal_buf, buf, len);
+        wcn->hal_rsp_len = len;
+        complete(&wcn->hal_rsp_compl);
+        break;
+```

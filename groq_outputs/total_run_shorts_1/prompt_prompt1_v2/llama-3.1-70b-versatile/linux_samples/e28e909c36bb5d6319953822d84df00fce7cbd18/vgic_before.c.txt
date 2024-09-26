@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 165-168
+VULNERABILITY_DESCRIPTION:
+Double-free vulnerability in kvm_vgic_unmap_phys_irq function.
+EXPLANATION:
+In the provided code, the kvm_vgic_unmap_phys_irq function is used to remove an existing mapping between a virtual IRQ and a physical IRQ. However, in the function, if the target entry is not found in the list, it will return -ENOMEM, and then a 'break' statement is encountered. This means the lock will not be unlocked in this case. But in a normal situation, the lock will be unlocked after the loop. This inconsistency in lock handling may lead to a situation where a double-free is possible.
+
+The issue lies in these lines:
+```c
+    if (&entry->map == map) {
+        list_del_rcu(&entry->entry);
+        call_rcu(&entry->rcu, vgic_free_phys_irq_map_rcu);
+        break;
+    }
+    return -ENOMEM;
+```
+Here, when the correct entry is found, the list is removed and an RCU callback is scheduled to free the memory. If the correct entry is not found (and an error is returned), the function exits before the lock is released. However, if an error had occurred, the list had been previously manipulated incorrectly. 
+
+RECOMMENDATIONS:
+```c
+static int vgic_irq_map_search(struct kvm_vcpu *vcpu, int virt_irq);
+int kvm_vgic_unmap_phys_irq(struct kvm_vcpu *vcpu, struct irq_phys_map *map)
+{
+    struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
+    struct irq_phys_map_entry *entry;
+    struct list_head *root;
+
+    if (!map)
+        return -EINVAL;
+
+    root = vgic_get_irq_phys_map_list(vcpu, map->virt_irq);
+
+    spin_lock(&dist->irq_phys_map_lock);
+
+    int result = -ENOMEM;
+
+    list_for_each_entry(entry, root, entry) {
+        if (&entry->map == map) {
+            list_del_rcu(&entry->entry);
+            call_rcu(&entry->rcu, vgic_free_phys_irq_map_rcu);
+            result = 0;
+            break;
+        }
+    }
+
+    spin_unlock(&dist->irq_phys_map_lock);
+
+    return result;
+}
+```
+Here, the unlocking of the lock is brought outside of the loop and put in a place where it will always be executed. If we failed to find the correct entry, an error is still correctly reported.

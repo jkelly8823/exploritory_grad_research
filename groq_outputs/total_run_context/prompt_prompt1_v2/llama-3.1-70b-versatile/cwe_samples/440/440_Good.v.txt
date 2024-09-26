@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-19
+VULNERABILITY_DESCRIPTION:
+A potential vulnerability related to a register write operation has been identified.
+
+EXPLANATION:
+In the given code snippet, a potential issue is identified when writing to the `riscv::CSR_SIE` register. Specifically, the code checks if a write operation is being performed (`csr_we` is true) and then applies a mask to the write data (`csr_wdata`) before assigning it to `mie_d`. The mask involves two other registers, `mideleg_q` and `mie_q`. The write operation is not validated to check if the request is legitimate or if the write data is being manipulated by an attacker.
+
+The identified vulnerability is a potential **Unvalidated Register Write**.
+
+RECOMMENDATIONS:
+To mitigate the potential vulnerability, consider the following recommendations:
+
+* Validate the `csr_wdata` value before writing it to the `mie_d` register. Check for compliance with the expected protocol or range, and handle out-of-range or invalid values.
+* Ensure that the `mideleg_q` and `mie_q` registers are properly initialized and updated before using them in the mask calculation.
+* Consider adding additional checks or assertions to verify the correct behavior of the write operation.
+* Implement input validation to prevent an attacker from manipulating the write data and potentially gaining control over the system.
+
+ORIGINAL CODE:
+```
+               module csr_regfile #(...)(...);
+               ...
+               // ---------------------------
+               // CSR Write and update logic
+               // ---------------------------
+               ...
+                  
+                  if (csr_we) begin
+                     
+                     unique case (csr_addr.address)
+                     ...
+                        
+                        riscv::CSR_SIE: begin
+                              :(empty_end)
+                              // the mideleg makes sure only delegate-able register
+                              //(and therefore also only implemented registers) are written
+                              mie_d = (mie_q & ~mideleg_q) | (csr_wdata & mideleg_q);
+                              
+                        end
+                        ...
+                        
+                     endcase
+                     
+                  end
+                  
+               endmodule
+               ```

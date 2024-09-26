@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Potential Use After Free vulnerability.
+
+EXPLANATION:
+The provided code snippet includes an inline function `RemoveStream` that seems to be responsible for removing a stream from the `Http2Session` class. However, the function sets the `stream` to be removed as `nullptr` only after it has been removed from the `streams_` data structure. This can lead to a situation where the stream is still used elsewhere in the code after its removal (and potential destruction) from the session.
+
+In particular, the `Http2Stream` object is erased from the `streams_` map, but there is no guarantee that the `stream` pointer will be set to `nullptr` in other parts of the code that may hold a reference to this stream. This can result in use-after-free issues.
+
+RECOMMENDATIONS:
+To fix the potential vulnerability, the `stream` pointer should be set to `nullptr` in all locations where it is used, after the stream has been removed from the session. Here is a suggested modification:
+
+```cpp
+inline void Http2Session::RemoveStream(Http2Stream* stream) {
+  stream->session_ = nullptr;  // set stream to nullptr to prevent use after free
+  streams_.erase(stream->id());
+  DecrementCurrentSessionMemory(stream->self_size());
+}
+```
+
+It is also recommended to add additional checks in the `RemoveStream` method to ensure that the stream is not being used elsewhere in the code before it is removed and potentially destroyed.
+
+ORIGINAL CODE:
+```cpp
+Http2Session::~Http2Session() {
+  CHECK_EQ(flags_ & SESSION_STATE_HAS_SCOPE, 0);
+  Debug(this, "freeing nghttp2 session");
+  for (const auto& stream : streams_)
+    stream.second->session_ = nullptr;
+  nghttp2_session_del(session_);
+}
+
+std::string Http2Session::diagnostic_name() const {
+
+
+inline void Http2Session::RemoveStream(Http2Stream* stream) {
+  streams_.erase(stream->id());
+  DecrementCurrentSessionMemory(stream->self_size());
+}
+```
+
+Please note that a review of the complete codebase is recommended to ensure that this fix addresses all potential use-after-free issues.

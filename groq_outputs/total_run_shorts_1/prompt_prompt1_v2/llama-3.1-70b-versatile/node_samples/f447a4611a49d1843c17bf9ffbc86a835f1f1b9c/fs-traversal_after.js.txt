@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-4
+VULNERABILITY_DESCRIPTION:
+ Directory traversal vulnerability.
+
+EXPLANATION:
+The given code snippet is vulnerable to a directory traversal attack. The variables `traversalPath` and `traversalFolderPath` are constructed by concatenating user-controlled input (`allowedFolder`) with relative paths. An attacker could potentially manipulate `allowedFolder` to traverse the directory hierarchy and access sensitive files.
+
+While the code does attempt to prevent directory traversal by asserting permissions, it can be bypassed if an attacker can manipulate the `allowedFolder` variable to point to a location that is within the allowed directory. The use of `Buffer.from()` and `TextEncoder().encode()` does not mitigate this vulnerability.
+
+The fact that `process.permission.has()` checks are performed on `traversalPath` and `traversalFolderPath` does not prevent the vulnerability, as the directory traversal can still occur when `fs.readFile()` is called with `uint8ArrayTraversalPath`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that user-controlled input is validated and sanitized before using it to construct file paths. This can be achieved by:
+
+1. Avoiding concatenation of user-controlled input with relative paths.
+2. Using path normalization functions (e.g., `path.normalize()`) to prevent directory traversal.
+3. Implementing strict input validation and whitelisting allowed paths.
+4. Using secure file access functions that handle path traversal attempts, such as `fs.access()`.
+
+ORIGINAL CODE:
+
+```javascript
+const traversalPath = allowedFolder + '../file.md';
+const traversalFolderPath = allowedFolder + '../folder';
+const bufferTraversalPath = Buffer.from(allowedFolder + '../file.md');
+const uint8ArrayTraversalPath = new TextEncoder().encode(traversalPath);
+
+{
+  assert.ok(process.permission.has('fs.read', allowedFolder));
+  assert.ok(process.permission.has('fs.write', allowedFolder));
+  }));
+}
+
+{
+  assert.throws(() => {
+    fs.readFile(uint8ArrayTraversalPath, (error) => {
+      assert.ifError(error);
+    });
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: resolve(traversalPath),
+  }));
+}
+
+{
+  assert.ok(!process.permission.has('fs.read', traversalPath));
+  assert.ok(!process.permission.has('fs.write', traversalPath));
+  assert.ok(!process.permission.has('fs.read', traversalFolderPath));
+```

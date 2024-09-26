@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+A potential resource leak vulnerability is present due to an inconsistent mutex unlock.
+
+EXPLANATION:
+In the provided code snippet, the `mutex_unlock` function is called, but the corresponding `mutex_lock` function is not visible within this snippet. However, the `mutex_unlock` function is called without checking if the mutex was actually locked. This could lead to a resource leak if an exception is thrown before the mutex is unlocked, or if the mutex was never locked to begin with. 
+
+Additionally, the `tuner_info` and `r820t_release` functions are called after the `mutex_unlock`, which may potentially access resources protected by the mutex. This could lead to inconsistent state or even a crash in the program if the mutex was not locked.
+
+RECOMMENDATIONS:
+Add a check to ensure that the mutex is locked before attempting to unlock it. This can be achieved by storing the result of the `mutex_lock` function in a variable and checking its value before calling `mutex_unlock`.
+
+e.g.
+```c
+int locked = mutex_lock(&r820t_list_mutex);
+if (locked == 0) {
+    // Mutex is locked, proceed with critical section
+    // ...
+    mutex_unlock(&r820t_list_mutex);
+} else {
+    // Mutex could not be locked, handle error
+}
+```
+Alternatively, consider using a lock_guard or a similar RAII (Resource Acquisition Is Initialization) idiom, which will automatically unlock the mutex when going out of scope.
+
+ORIGINAL CODE:
+```c
+err_no_gate:
+        mutex_unlock(&r820t_list_mutex);
+
+        tuner_info("%s: failed=%d\n", __func__, rc);
+        r820t_release(fe);
+        return NULL;
+}
+EXPORT_SYMBOL_GPL(r820t_attach);
+```

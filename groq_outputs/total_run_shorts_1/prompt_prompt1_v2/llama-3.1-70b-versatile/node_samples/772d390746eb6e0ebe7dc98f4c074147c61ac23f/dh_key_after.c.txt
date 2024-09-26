@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+ The `BN_CTX_new()` function is vulnerable to a potential memory leak in case of failure.
+
+EXPLANATION:
+In the provided code snippet, memory is allocated using `BN_CTX_new()` and assigned to the `ctx` pointer. However, in case `BN_CTX_new()` fails and returns `NULL`, the `ctx` pointer is checked for `NULL`, but the function returns immediately afterwards. Although it does appear that this will trigger an error, `goto err` suggests that error handling is present later in the code that we are not able to see. However, without this code, it is possible that incomplete error handling will lead to a memory leak because any allocated resources are not freed.
+
+RECOMMENDATIONS:
+Verify that there is proper error handling later in the function, utilizing the `err` label to handle the freeing of `ctx`, as well as other allocated memory, in the case of an error. Free `ctx` and other memory if there is no existing error handling that handles these cases.
+
+ORIGINAL CODE:
+
+```c
+    int ok = 0;
+    int generate_new_key = 0;
+    unsigned l;
+    BN_CTX *ctx = NULL;
+    BN_MONT_CTX *mont = NULL;
+    BIGNUM *pub_key = NULL, *priv_key = NULL;
+
+    if (BN_num_bits(dh->p) > OPENSSL_DH_MAX_MODULUS_BITS) {
+        DHerr(DH_F_GENERATE_KEY, DH_R_MODULUS_TOO_LARGE);
+        return 0;
+    }
+
+    ctx = BN_CTX_new();
+    if (ctx == NULL)
+        goto err;
+```

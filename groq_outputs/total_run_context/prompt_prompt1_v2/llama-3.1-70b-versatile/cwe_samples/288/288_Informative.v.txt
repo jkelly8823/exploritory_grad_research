@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 14
+VULNERABILITY_DESCRIPTION:
+The code contains a static initialization of a sensitive variable (`acl_oh_allowlist`), and a static comparison of another sensitive variable (`address`), in a seemingly insecure manner. Specifically, the addresses and allowlist values are hardcoded and publicly accessible.
+
+EXPLANATION:
+The code initializes `acl_oh_allowlist` to a static value (`32'h8312`) and uses `address == 32'hF00` for comparison in a security-relevant operation (`addr_auth` and `write_auth`). These static values should ideally be configurable and not hardcoded. A potential attacker may exploit this by obtaining knowledge of these hardcoded values and crafting an attack to bypass address-based access control.
+
+RECOMMENDATIONS:
+Replace hardcoded sensitive values with secure and configurable storage mechanisms, such as firmware or software variables, config files, or environment variables. Use secure methods (e.g., secure storage or encryption) to handle the storage and retrieval of these values.
+
+Instead of initializing `acl_oh_allowlist` with a static value, consider using a configuration register or parameter to load this value securely during initialization.
+
+Insecure comparisons of sensitive data (e.g., `address == 32'hF00`) should be treated carefully, especially if this value is being checked for authorization purposes. Consider implementing secure methods to handle address comparison (e.g., hash comparison, masked comparison) and use secure variables to define access control list entries.
+
+ORIGINAL CODE:
+```vhdl
+module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+    output [31:0] data_out;
+    input [31:0] data_in, incoming_id, address;
+    input clk, rst_n;
+    wire write_auth, addr_auth;
+    reg [31:0] data_out, acl_oh_allowlist, q;
+    assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+    always @*
+    // VULNERABILITY INTRODUCED HERE
+    acl_oh_allowlist <= 32'h8312; 
+    assign addr_auth = (address == 32'hF00) ? 1: 0;
+    always @ (posedge clk or negedge rst_n)
+      if (!rst_n)
+        begin
+        q <= 32'h0;
+        data_out <= 32'h0;
+        end
+      else
+        begin
+        q <= (addr_auth & write_auth) ? data_in: q;
+        data_out <= q;
+        end
+      end
+    endmodule
+```

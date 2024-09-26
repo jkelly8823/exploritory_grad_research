@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: Use of User-Controlled Input Data in a Potentially Tainted Pointer Dereference.
+
+EXPLANATION:
+On line 7, the code accesses `F2FS_INODE(page)`, which appears to be a macro that possibly evaluates to `(struct f2fs_inode *)((char *)((long)page + (page)->private))`. However, in the given snippet, `page` is a stored value from `grab_cache_page(NODE_MAPPING(sbi), ino)`. Since `ino` can potentially be influenced by the user or be untrusted, there is a potentiel risk if this value is not properly sanitized and validated prior to being used to access memory. This can lead to out-of-bounds access, data corruption, or even arbitrary code execution.
+
+RECOMMENDATIONS:
+To address this vulnerability, ensure proper sanitization and validation of `ino` and `page` prior to using them to access memory. It is essential to verify that the indices and pointers are within the expected bounds and can be safely dereferenced. Additionally, a bounds check before accessing `F2FS_INODE(page)` would help prevent out-of-bounds access.
+
+ORIGINAL CODE:
+	struct node_info old_ni, new_ni;
+	struct page *ipage;
+
+	ipage = grab_cache_page(NODE_MAPPING(sbi), ino);
+	if (!ipage)
+		return -ENOMEM;
+
+	/* Should not use this inode  from free nid list */
+	remove_free_nid(NM_I(sbi), ino);
+
+	get_node_info(sbi, ino, &old_ni);
+	SetPageUptodate(ipage);
+	fill_node_footer(ipage, ino, ino, 0, true);
+
+.src = F2FS_INODE(page);

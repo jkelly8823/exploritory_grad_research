@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The issue lies in the line `stream->status_code = (int16_t)parse_uint(nv->value->base, nv->value->len);`. The `parse_uint` function is expected to return an unsigned integer, which can lead to integer overflow when cast to a signed `int16_t` type. This is because the range of unsigned integers is typically much larger than the range of signed integers. 
+
+When an unsigned integer is cast to a signed integer of the same size, the resulting value will depend on the bit representation of the value. In the case of `int16_t`, which is typically a 16-bit signed integer, values above 32767 will overflow when cast to a signed integer, potentially resulting in values below -32768. 
+
+This could potentially lead to an incorrect status code being stored in `stream->status_code`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you can add error checking code to ensure that the parsed integer value is within the range of `int16_t` before casting it to this type. 
+
+Here's an example of how this can be done:
+
+```c
+uint16_t statusBar_code = parse_uint(nv->value->base, nv->value->len);
+if (statusBar_code > INT16_MAX || statusBar_code == 101) {
+  return NGHTTP2_ERR_HTTP_HEADER;
+}
+stream->status_code = (int16_t)statusBar_code;
+```
+
+Alternatively, you can consider using a type that is more suitable for the range of values you expect `parse_uint` to return.
+
+ORIGINAL CODE:
+
+```c
+return NGHTTP2_ERR_HTTP_HEADER;
+}
+stream->status_code = (int16_t)parse_uint(nv->value->base, nv->value->len);
+if (stream->status_code == -1 || stream->status_code == 101) {
+  return NGHTTP2_ERR_HTTP_HEADER;
+}
+break;
+}

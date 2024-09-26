@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+Resource leakage vulnerability due to unhandled socket closure.
+
+EXPLANATION:
+The provided code snippet shows a ServerSocket and a Socket being initialized in the StockSymbolBean constructor. The ServerSocket is created on a specified port and the clientSocket is accepted from the serverSocket. However, there are potential resource leakage issues. 
+
+The serverSocket and clientSocket are not closed in case of exceptions or after use, which can cause the socket resource to be held indefinitely. This issue is known as a resource leakage vulnerability. 
+
+In a server application, this can lead to denial of service (DoS) as the server may eventually run out of available sockets.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that the serverSocket and clientSocket are properly closed after use, even if exceptions occur. This can be achieved by using try-with-resources or try-finally blocks. Here is a recommended fix:
+
+```java
+public StockSymbolBean() {
+    try (ServerSocket serverSocket = new ServerSocket(Constants.SOCKET_PORT)) {
+        try (Socket clientSocket = serverSocket.accept()) {
+            // use clientSocket
+        }
+    } catch (IOException e) {
+        // handle exception
+    }
+}
+```
+
+Alternatively, you can use try-finally blocks to ensure the sockets are closed:
+
+```java
+public StockSymbolBean() {
+    ServerSocket serverSocket = null;
+    Socket clientSocket = null;
+    try {
+        serverSocket = new ServerSocket(Constants.SOCKET_PORT);
+        clientSocket = serverSocket.accept();
+        // use clientSocket
+    } catch (IOException e) {
+        // handle exception
+    } finally {
+        if (clientSocket != null) {
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                // handle close exception
+            }
+        }
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                // handle close exception
+            }
+        }
+    }
+}
+```
+
+Both of these approaches will ensure that the sockets are properly closed after use, preventing resource leakage vulnerabilities.
+
+ORIGINAL CODE:
+```java
+@Statelesspublic class StockSymbolBean implements StockSymbolRemote {
+                        
+    ServerSocket serverSocket = null;Socket clientSocket = null;
+    public StockSymbolBean() {
+        try {serverSocket = new ServerSocket(Constants.SOCKET_PORT);} catch (IOException ex) {...}
+        try {clientSocket = serverSocket.accept();} catch (IOException e) {...}
+    }
+    public String getStockSymbol(String name) {...}
+    public BigDecimal getStockValue(String symbol) {...}
+    private void processClientInputFromSocket() {...}
+}
+```

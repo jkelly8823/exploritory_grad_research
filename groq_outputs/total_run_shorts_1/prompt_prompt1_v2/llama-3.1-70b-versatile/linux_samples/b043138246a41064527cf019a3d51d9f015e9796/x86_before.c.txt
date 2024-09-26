@@ -1,0 +1,83 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No vulnerability was detected in the code snippet.
+
+EXPLANATION:
+The code snippet provided does not contain any apparent vulnerabilities. It appears to be a routine for recording steal time in a KVM (Kernel-based Virtual Machine) context. The code properly checks for certain conditions before performing actions and also uses proper memory synchronization primitives (e.g., `smp_wmb()`).
+
+However, there are some interesting operations such as incrementing `vcpu->arch.st.steal.version` by 1 in two places, and reading/writing `vcpu->arch.st.steal.preempted` directly. But in the context of this snippet, these do not appear to introduce any obvious vulnerabilities.
+
+It's also worth noting that there's a variable `vcpu->arch.st.steal.version` which seems to be used for tracking stale values, but it's not used in any conditional statement for error handling.
+
+RECOMMENDATIONS:
+No specific recommendations can be made as no vulnerability was detected in the code snippet. However, it's always a good practice to follow general secure coding guidelines such as properly validating input, handling errors, and using secure functions for memory management.
+
+ORIGINAL CODE:
+
+
+static void record_steal_time(struct kvm_vcpu *vcpu)
+{
+	if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+		return;
+
+	if (unlikely(kvm_read_guest_cached(vcpu->kvm, &vcpu->arch.st.stime,
+		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time))))
+		return;
+
+	/*
+	 * Doing a TLB flush here, on the guest's behalf, can avoid
+	 * expensive IPIs.
+	 */
+	trace_kvm_pv_tlb_flush(vcpu->vcpu_id,
+		vcpu->arch.st.steal.preempted & KVM_VCPU_FLUSH_TLB);
+	if (xchg(&vcpu->arch.st.steal.preempted, 0) & KVM_VCPU_FLUSH_TLB)
+		kvm_vcpu_flush_tlb(vcpu, false);
+
+	if (vcpu->arch.st.steal.version & 1)
+		vcpu->arch.st.steal.version += 1;  /* first time write, random junk */
+
+	vcpu->arch.st.steal.version += 1;
+
+	kvm_write_guest_cached(vcpu->kvm, &vcpu->arch.st.stime,
+		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time));
+
+	smp_wmb();
+
+	vcpu->arch.st.steal.steal += current->sched_info.run_delay -
+		vcpu->arch.st.last_steal;
+	vcpu->arch.st.last_steal = current->sched_info.run_delay;
+
+	kvm_write_guest_cached(vcpu->kvm, &vcpu->arch.st.stime,
+		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time));
+
+	smp_wmb();
+
+	vcpu->arch.st.steal.version += 1;
+
+	kvm_write_guest_cached(vcpu->kvm, &vcpu->arch.st.stime,
+		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time));
+
+	smp_wmb();
+
+int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+{
+
+static void kvm_steal_time_set_preempted(struct kvm_vcpu *vcpu)
+{
+	if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+		return;
+
+	if (vcpu->arch.st.steal.preempted)
+		return;
+
+	vcpu->arch.st.steal.preempted = KVM_VCPU_PREEMPTED;
+
+	kvm_write_guest_offset_cached(vcpu->kvm, &vcpu->arch.st.stime,
+			&vcpu->arch.st.steal.preempted,
+			offsetof(struct kvm_steal_time, preempted),
+			sizeof(vcpu->arch.st.steal.preempted));
+}
+
+void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
+{

@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION:
+Insecure handling of DNS resolution using `gethostbyname()`.
+
+EXPLANATION:
+The use of `gethostbyname()` is insecure because it does not properly handle DNS spoofing and other types of DNS-based attacks. This function returns a pointer to a `struct hostent` which may contain untrusted data, and does not provide enough information to properly validate the DNS response. Furthermore, the `gethostbyname()` function is considered obsolete and has been replaced by `getaddrinfo()` in modern systems.
+
+Additionally, the code does not properly validate the input `hostname` before passing it to `gethostbyname()`. This could potentially lead to a crash or other unforeseen behavior if `hostname` contains invalid characters or is not a valid hostname.
+
+RECOMMENDATIONS:
+- Replace `gethostbyname()` with `getaddrinfo()` which provides more information about the DNS response and is considered a secure replacement.
+- Validate the input `hostname` before passing it to `getaddrinfo()`.
+- Use secure coding practices to handle DNS responses and consider using the `getaddrinfo_a()` function if available, which provides even more secure behavior.
+
+ORIGINAL CODE:
+```
+			return;
+		}
+
+		if(hostname_len > MAXHOSTNAMELEN) {
+			/* name too long, protect from CVE-2015-0235 */
+			php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+			RETURN_STRINGL(hostname, hostname_len, 1);
+		}
+		addr = php_gethostbyname(hostname);
+
+		RETVAL_STRING(addr, 0);
+	}
+			return;
+		}
+
+		if(hostname_len > MAXHOSTNAMELEN) {
+			/* name too long, protect from CVE-2015-0235 */
+			php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+			RETURN_FALSE;
+		}
+
+		hp = gethostbyname(hostname);
+		if (hp == NULL || hp->h_addr_list == NULL) {
+			RETURN_FALSE;
+		}
+```

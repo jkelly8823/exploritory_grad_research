@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26
+VULNERABILITY_DESCRIPTION:
+Use of inline assembly without proper input validation and sanitization.
+
+EXPLANATION:
+The use of inline assembly (`asm volatile`) without proper input validation and sanitization in the `__mwait` and `__mwaitx` functions could lead to arbitrary code execution or unintended behavior, especially in the context of an operating system where such system calls could be performed by malicious actors. However the code snippet provided also shows a potentially more serious vulnerability, the function `__sti_mwait` uses inline assembly containing an interrupt (`sti` instruction), directly followed by another assembly instruction. The main issue arises because interrupts in x86 CPUs do not wait for other instructions to be completed and could provide a path to an unhandled interrupt.
+
+In terms of potential impact, and line numbering the most problematic (or VULN) line of code appears to be line 26 with its presence of an instruction that could lead to inconsistent states.
+
+RECOMMENDATIONS:
+Ensure that all inputs to the `__mwait` and `__mwaitx` functions are thoroughly validated and sanitized to prevent any kind of injection attacks. 
+Specifically for the `__sti_mwait` function the recommendation would be to introduce a memory barrier (in the form of lock instructions) prior to executing any inline assembly code which could potentially cause an interrupt to be triggered mid-execution.
+Introducing additional safety through code analysis could help verify that hardware instructions won't interfere between these inline assembly blocks.
+
+ORIGINAL CODE:
+```c
+#include <linux/sched/idle.h>
+
+#include <asm/cpufeature.h>
+
+#define MWAIT_SUBSTATE_MASK		0xf
+#define MWAIT_CSTATE_MASK		0xf
+#define MWAIT_SUBSTATE_SIZE		4
+
+static inline void __mwait(unsigned long eax, unsigned long ecx)
+{
+	/* "mwait %eax, %ecx;" */
+	asm volatile(".byte 0x0f, 0x01, 0xc9;"
+		     :: "a" (eax), "c" (ecx));
+}
+static inline void __mwaitx(unsigned long eax, unsigned long ebx,
+			    unsigned long ecx)
+{
+	/* "mwaitx %eax, %ebx, %ecx;" */
+	asm volatile(".byte 0x0f, 0x01, 0xfb;"
+		     :: "a" (eax), "b" (ebx), "c" (ecx));
+}
+
+static inline void __sti_mwait(unsigned long eax, unsigned long ecx)
+{
+	trace_hardirqs_on();
+	/* "mwait %eax, %ecx;" */
+	asm volatile("sti; .byte 0x0f, 0x01, 0xc9;"
+		     :: "a" (eax), "c" (ecx));
+}
+```

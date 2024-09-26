@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-9
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to prototype pollution.
+
+EXPLANATION:
+The `ObjectCreate(null)` function creates a new object with no prototype. However, when assigning properties to `c.infoAccess`, it might be possible to introduce properties with names that share keys from the prototype chain. This can lead to denial-of-service or code injection attacks if an attacker can manipulate the values of `c.infoAccess`.
+
+However, in this specific case, the more concerning vulnerability is that `ObjectCreate(null)` introduces new properties to `c.infoAccess`, but it does not prevent prototype pollution if those properties include `__proto__`. Although the code here does not show any `__proto__` properties being injected, the use of `ObjectCreate(null)` combined with assignment from another object (which might include properties with prototype-polluting keys) creates a potential for prototype pollution.
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, make sure any properties that are to be assigned to `c.infoAccess` are safe and controlled. Use more secure alternatives to `ObjectCreate(null)`, such as creating an object literal with `Object.create(null)`. Avoid assigning untrusted values to `c.infoAccess` properties. In addition, ensure that any objects or values that `c.infoAccess` will hold are safe for JavaScript execution.
+
+However, the actual weak point in this code is with the assignment that happens after this `ObjectCreate` call. Not shown in this code snippet.
+
+Ideally this code should instead be written in a more secure way to handle this case. Here is a simple example of how it could be modified:
+
+```javascript
+const safeInfoAccess = Object.create(null);
+for (const key in info) {
+    if (Object.hasOwnProperty.call(info, key)) {
+        safeInfoAccess[key] = info[key];
+    }
+}
+c.infoAccess = safeInfoAccess;
+```
+
+ORIGINAL CODE:
+```javascript
+if (!c)
+    return null;
+
+// TODO(tniessen): can we remove parseCertString without breaking anything?
+if (typeof c.issuer === 'string') c.issuer = parseCertString(c.issuer);
+if (c.issuerCertificate != null && c.issuerCertificate !== c) {
+    c.issuerCertificate = translatePeerCertificate(c.issuerCertificate);
+}
+// TODO(tniessen): can we remove parseCertString without breaking anything?
+if (typeof c.subject === 'string') c.subject = parseCertString(c.subject);
+if (c.infoAccess != null) {
+    const info = c.infoAccess;
+    c.infoAccess = ObjectCreate(null);
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION: 
+Information leaks through un validated user input through 'pfn' in the function xen_hvm_connect_shared_info.
+EXPLANATION: 
+In the function xen_hvm_connect_shared_info, the parameter 'pfn' is not validated before being used in the structure 'xatp'. This allows an attacker to potentially inject arbitrary data into the 'xen_add_to_physmap' structure which can cause the HYPERVISOR_memory_op function to behave unpredictably. 
+Moreover, 'HYPERVISOR_memory_op' function errors are not properly handled and just print a BUG() message, without terminating or stopping execution. Lack of proper error checking for critical operations may lead to security vulnerabilities or crashes. 
+Furthermore, BUG() macro behavior can be influenced by environment and not fully under developer's control.
+RECOMMENDATIONS:
+Implement input validation on 'pfn' to ensure it is within a valid range and/or sanitized. 
+Error handling should catch an error condition of HYPERVISOR_memory_op function and behave accordingly.
+Original BUG() function should be either removed in favor for panic(), or provided with conditional error handling if an immediate crash isn't desired.
+ORIGINAL CODE:
+```c
+#endif
+}
+
+#ifdef CONFIG_XEN_PVHVM
+#define HVM_SHARED_INFO_ADDR 0xFE700000UL
+static struct shared_info *xen_hvm_shared_info;
+static unsigned long xen_hvm_sip_phys;
+static int xen_major, xen_minor;
+
+static void xen_hvm_connect_shared_info(unsigned long pfn)
+{
+	struct xen_add_to_physmap xatp;
+
+	xatp.domid = DOMID_SELF;
+	xatp.idx = 0;
+	xatp.space = XENMAPSPACE_shared_info;
+	xatp.gpfn = pfn;
+	if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
+		BUG();
+
+}
+...```

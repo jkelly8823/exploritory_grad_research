@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a buffer overflow attack. The `strcat` function does not perform any boundary checks on the destination buffer, which can lead to a buffer overflow when concatenating strings.
+
+EXPLANATION:
+The `strcat` function is used to concatenate the `PATH_HOSTS` string with the `WIN_PATH_HOSTS` string. However, there is no check to ensure that the resulting string does not exceed the maximum capacity of the `PATH_HOSTS` buffer. This can lead to a buffer overflow, allowing an attacker to potentially execute arbitrary code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use a safer string concatenation function, such as `strncat`, which allows specifying the maximum number of characters to append. Alternatively, use `strcpy` and `strncpy` to ensure that the buffer is not overflowed.
+
+Additionally, to prevent buffer overflows, it's also recommended to check the length of the `PATH_HOSTS` and `WIN_PATH_HOSTS` strings before concatenating them and ensure that the resulting string does not exceed the maximum capacity of the `PATH_HOSTS` buffer.
+
+Example of safe fix:
+```c
+size_t len = strlen(PATH_HOSTS);
+if (len + strlen(WIN_PATH_HOSTS) + 1 <= MAX_PATH) {
+  strcat(PATH_HOSTS, WIN_PATH_HOSTS);
+} else {
+  // handle error: buffer would overflow
+}
+```
+
+ORIGINAL CODE:
+```c
+char tmp[MAX_PATH];
+HKEY hkeyHosts;
+
+if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, WIN_NS_NT_KEY, 0, KEY_READ,
+                 &hkeyHosts) == ERROR_SUCCESS)
+{
+  DWORD dwLength = MAX_PATH;
+  RegQueryValueExA(hkeyHosts, DATABASEPATH, NULL, NULL, (LPBYTE)tmp,
+                  &dwLength);
+  ExpandEnvironmentStringsA(tmp, PATH_HOSTS, MAX_PATH);
+  RegCloseKey(hkeyHosts);
+}
+else if (platform == WIN_9X)
+  GetWindowsDirectoryA(PATH_HOSTS, MAX_PATH);
+else
+  return ARES_ENOTFOUND;
+
+strcat(PATH_HOSTS, WIN_PATH_HOSTS);
+```

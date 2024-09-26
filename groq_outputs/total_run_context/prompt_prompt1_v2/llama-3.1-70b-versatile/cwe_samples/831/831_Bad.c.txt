@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None (multiple lines not numbered, but vulnerability spans lines with signal calls)
+VULNERABILITY_DESCRIPTION:
+Insecure Signal Handling
+
+EXPLANATION:
+The code snippet uses the `signal` function to register a custom signal handler for `SIGUSR1` and `SIGUSR2`. However, the `signal` function is not thread-safe, and its behavior is also not well-defined if the signal occurs while the signal handler is being installed. This can lead to unpredictable behavior or even crashes.
+
+Moreover, if the signal handler itself raises another signal (e.g., by calling `abort` or `kill`), the program can enter an infinite recursion. Modern programs should use `sigaction` instead of `signal` to register signal handlers, as `sigaction` provides more fine-grained control over signal handling.
+
+RECOMMENDATIONS:
+Replace the `signal` calls with `sigaction` to register signal handlers. Here's an example of how to do this:
+```cpp
+struct sigaction sa;
+sa.sa_handler = handler;
+sigemptyset(&sa.sa_mask);
+sa.sa_flags = 0;
+if (sigaction(SIGUSR1, &sa, NULL) < 0) {
+    // Handle error
+}
+if (sigaction(SIGUSR2, &sa, NULL) < 0) {
+    // Handle error
+}
+```
+ORIGINAL CODE:
+                  void handler (int sigNum) {...}
+                     int main (int argc, char* argv[]) {signal(SIGUSR1, handler)signal(SIGUSR2, handler)}

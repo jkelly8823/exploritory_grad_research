@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 12
+VULNERABILITY_DESCRIPTION:
+Potential null pointer dereferences and resource leaks.
+EXPLANATION:
+The code does not properly check for null pointer dereferences before using the `params` and `dh` variables. While the function checks if `params` and `dh` are null pointers at the beginning, it does not check if the `dh` variable is null before calling the `DH_get_length` function. 
+
+Additionally, if the `ffc_params_to_text` function fails, the function returns 0 without freeing or handling the resources associated with the `params` and `dh` variables, potentially leading to resource leaks.
+
+Furthermore, on line 12, if the `BIO_printf` function fails and returns a value less than or equal to 0, the function returns 0 without checking if the `dh` or `params` variables point to allocated resources that need to be released.
+
+RECOMMENDATIONS:
+Add checks to ensure that `dh` and `params` are not null before using them. Free or handle any resources associated with `dh` and `params` in case of errors or failures.
+
+For example, consider adding a check for `dh` before calling `DH_get_length` and `BIO_printf`:
+```c
+if (dh == NULL) {
+    ERR_raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER);
+    return 0;
+}
+```
+
+Additionally, ensure that any resources allocated or associated with `params` and `dh` are properly handled in case of errors or failures.
+
+ORIGINAL CODE:
+```c
+const BIGNUM *priv_key = NULL, *pub_key = NULL;
+const FFC_PARAMS *params = NULL;
+const BIGNUM *p = NULL;
+long length;
+
+if (out == NULL || dh == NULL) {
+    ERR_raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER);
+    return 0;
+if (params != NULL
+    && !ffc_params_to_text(out, params))
+    return 0;
+length = DH_get_length(dh);
+if (length > 0
+    && BIO_printf(out, "recommended-private-length: %ld bits\n",
+                  length) <= 0)
+    return 0;
+
+return 1;
+}
+```

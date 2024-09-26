@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION:
+The code contains a potential NULL pointer dereference vulnerability.
+
+EXPLANATION:
+In the given code snippet, we see a conditional statement `if (IS_NOT_NULL(einfo))` which checks if the `einfo` pointer is not null. However, on line 12, `einfo->par` is being assigned a null value. This is not a direct vulnerability, but in the following lines where `einfo->par` is used (not visible in this code snippet), it may cause a NULL pointer dereference if `einfo->par` is being used without proper null checks.
+
+However, a different, more pressing concern arises from line 13. If `einfo` is `NULL`, then accessing `einfo->par` on line 12 should not occur. This is a potential null pointer dereference vulnerability, but only if `einfo` was supposed to be evaluated before line 12.
+
+But an even bigger vulnerability arises from the conditional itself. 
+The function as shown does not return after setting `einfo->par` to `NULL`. Given the variable name `einfo` and its type `OnigErrorInfo*`, it can be inferred that `einfo` might contain information about an error. Yet the code continues executing after possibly setting this ErrorInfo. In addition, passing an OnigErrorInfo struct with a NULL `par` (whatever that field means to OnigErrorInfo) could also lead to unexpected results, if that result is passed up to another part of a larger system. 
+
+RECOMMENDATIONS:
+- Check `einfo` before using it, to prevent null pointer dereferences.
+- Ensure that after setting `einfo->par` to a non-null value, `einfo->par` is never null when used down the line.
+- Verify that the entire error handling path of this system is properly set up with conditions where OnigErrorInfo can and cannot be null.
+- Check whether or not returning `ONIGERR_NOT_SUPPORTED_ENCODING_COMBINATION;` when there's a possibility that `einfo` will be `NULL` is an issue.
+
+ORIGINAL CODE:
+```
+#include "regint.h"
+
+#if 0
+static void
+conv_ext0be32(const UChar* s, const UChar* end, UChar* conv)
+{
+  while (s < end) {
+
+  return ONIGERR_NOT_SUPPORTED_ENCODING_COMBINATION;
+}
+#endif
+
+extern int
+onig_new_deluxe(regex_t** reg, const UChar* pattern, const UChar* pattern_end,
+                OnigCompileInfo* ci, OnigErrorInfo* einfo)
+  if (IS_NOT_NULL(einfo)) einfo->par = (UChar* )NULL;
+
+  if (ci->pattern_enc != ci->target_enc) {
+    return ONIGERR_NOT_SUPPORTED_ENCODING_COMBINATION;
+  }
+  else {
+    cpat     = (UChar* )pattern;
+    cpat_end = (UChar* )pattern_end;
+```

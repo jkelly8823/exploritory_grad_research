@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+Potential Error in Exception Handling. The code snippet uses "ERR_raise" function which does not halt or terminate the program. This could potentially cause some statements to be executed after an error has been encountered.
+
+EXPLANATION:
+In the given code, it uses the "ERR_raise" function to set the error code of the OpenSSL library when certain conditions fail. However, "ERR_raise" does not halt or terminate the program like some other error handling mechanisms. Instead, it just sets the error code and the program continues executing from the next line. As you can see in the given code snippet, there are still multiple lines that are executed after calling "ERR_raise". This can lead to unpredictable behavior because an error has occurred but the program does not immediately respond to it.
+
+RECOMMENDATIONS:
+To handle errors more robustly, after raising an error with "ERR_raise", it is recommended that you stop execution of the current block of code and either return an error code or jump out of it. In this context, there is already a "goto err" statement but it is only executed in some cases and not when setting the error with "ERR_raise" in the "if (!PKCS7_dataFinal(p7, p7bio))" block. The fix would be to add a goto statement immediately after "ERR_raise" function, so that execution immediately transfers to the error handling block. Here is an example:
+
+```
+if (!PKCS7_dataFinal(p7, p7bio)) {
+    ERR_raise(ERR_LIB_PKCS7, ERR_R_X509_LIB);
+    goto err;
+}
+```
+
+ORIGINAL CODE:
+```
+return 0;
+}
+
+if (!SMIME_crlf_copy(data, p7bio, flags))
+    goto err;
+
+(void)BIO_flush(p7bio);
+
+if (!PKCS7_dataFinal(p7, p7bio)) {
+                    ERR_raise(ERR_LIB_PKCS7, ERR_R_X509_LIB);
+                    goto err;
+                }
+                if (!X509_STORE_CTX_set_default(cert_ctx, "smime_sign"))
+                    goto err;
+            } else if (!X509_STORE_CTX_init(cert_ctx, store, signer, NULL)) {
+                ERR_raise(ERR_LIB_PKCS7, ERR_R_X509_LIB);
+                goto err;
+            }
+```

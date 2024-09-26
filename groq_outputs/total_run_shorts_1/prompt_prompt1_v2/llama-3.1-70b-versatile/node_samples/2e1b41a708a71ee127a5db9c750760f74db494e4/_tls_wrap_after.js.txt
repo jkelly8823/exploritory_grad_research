@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 25, 26
+VULNERABILITY_DESCRIPTION:
+The code snippet uses the `_handle` property to check if `socket` is a connected instance of `net.Socket`. However, this property is internal to the Node.js implementation and should not be used for this purpose.
+
+EXPLANATION:
+The `_handle` property is an internal property of `net.Socket` instances in Node.js, which represents the underlying handle of the socket. Using this property to determine if a socket is connected or not is not reliable and might not work across different versions of Node.js or even across different platforms. A more reliable approach is to use the `isConnected()` or `readyState` properties of the `net.Socket` instance.
+
+RECOMMENDATIONS:
+Replace the check `(socket instanceof net.Socket && socket._handle)` with `socket.readyState === 'open'`. This property is officially documented by Node.js and provides a reliable way to check if a socket is connected.
+
+Additionally, consider adding a check for `socket.readyState === 'closed'` to handle the case where the socket is already closed.
+
+ORIGINAL CODE:
+
+```javascript
+const kEnableTrace = Symbol('enableTrace');
+const kPskCallback = Symbol('pskcallback');
+const kPskIdentityHint = Symbol('pskidentityhint');
+const kPendingSession = Symbol('pendingSession');
+const kIsVerified = Symbol('verified');
+
+const noop = () => {};
+
+let ipServernameWarned = false;
+function onnewsessionclient(sessionId, session) {
+  debug('client emit session');
+  const owner = this[owner_symbol];
+  if (owner[kIsVerified]) {
+    owner.emit('session', session);
+  } else {
+    owner[kPendingSession] = session;
+  }
+}
+
+function onnewsession(sessionId, session) {
+  debug('onnewsession');
+  this.authorized = false;
+  this.authorizationError = null;
+  this[kRes] = null;
+  this[kIsVerified] = false;
+  this[kPendingSession] = null;
+
+  let wrap;
+  if ((socket instanceof net.Socket && socket._handle) || !socket) {
+    // 1. connected socket
+    this.ssl._secureContext.context = null;
+  }
+  this.ssl = null;
+  this[kPendingSession] = null;
+  this[kIsVerified] = false;
+};
+
+// Constructor guts, arbitrarily factored out.
+let warnOnTlsKeylog = true;
+    this.emit('secureConnect');
+  }
+
+  this[kIsVerified] = true;
+  const session = this[kPendingSession];
+  this[kPendingSession] = null;
+  if (session)
+    this.emit('session', session);
+
+  this.removeListener('end', onConnectEnd);
+}
+
+function onConnectEnd() {
+```

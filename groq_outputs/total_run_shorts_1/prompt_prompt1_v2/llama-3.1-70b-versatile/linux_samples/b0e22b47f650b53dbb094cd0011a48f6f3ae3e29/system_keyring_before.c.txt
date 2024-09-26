@@ -1,0 +1,98 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-20, 32-33
+VULNERABILITY_DESCRIPTION:
+The code contains potential out-of-bounds access and integer overflow vulnerabilities.
+
+EXPLANATION:
+The code parses an in-kernel X.509 certificate list, checking for a minimum certificate size of 256 bytes, but does not properly validate the certificate's length tag. The certificate's length is extracted from the ASN.1 encoding, which uses a 2-byte value (p[2] and p[3]). However, the code does not check for potential integer overflows when calculating the length. If the encoded length value exceeds the maximum value that can be represented by a size_t, it can cause an out-of-bounds access.
+
+Additionally, the code does not check if the key creation or update operation was successful before using the key. If an error occurs, the IS_ERR macro will be true, and the code will print an error message but continue executing with an invalid key.
+
+RECOMMENDATIONS:
+Verify the integer value represented by p[2] and p[3] does not exceed the maximum value of a size_t. This can be done using a bounds check before calculating the length.
+
+    if (plen > SIZE_MAX - 4) {
+        pr_err("Certificate length exceeds maximum allowed value.\n");
+        goto dodgy_cert;
+    }
+
+Validate the success of key creation or update operations before using the key. If an error occurs, exit the function or take other corrective measures to prevent further execution.
+
+    if (IS_ERR(key)) {
+        pr_err("Problem loading in-kernel X.509 certificate (%ld)\n",
+               PTR_ERR(key));
+        return PTR_ERR(key);  // or take other corrective measures
+    }
+
+ORIGINAL CODE:
+```c
+#include <keys/asymmetric-type.h>
+#include <keys/system_keyring.h>
+#include <crypto/pkcs7.h>
+
+static struct key *builtin_trusted_keys;
+#ifdef CONFIG_SECONDARY_TRUSTED_KEYRING
+static struct key *secondary_trusted_keys;
+ */
+static __init int load_system_certificate_list(void)
+{
+    key_ref_t key;
+    const u8 *p, *end;
+    size_t plen;
+
+    pr_notice("Loading compiled-in X.509 certificates\n");
+
+    p = system_certificate_list;
+    end = p + system_certificate_list_size;
+    while (p < end) {
+        /* Each cert begins with an ASN.1 SEQUENCE tag and must be more
+         * than 256 bytes in size.
+         */
+        if (end - p < 4)
+            goto dodgy_cert;
+        if (p[0] != 0x30 &&
+            p[1] != 0x82)
+            goto dodgy_cert;
+        plen = (p[2] << 8) | p[3];
+        plen += 4;
+        if (plen > end - p)
+            goto dodgy_cert;
+
+        key = key_create_or_update(make_key_ref(builtin_trusted_keys, 1),
+                                   "asymmetric",
+                                   NULL,
+                                   p,
+                                   plen,
+                                   ((KEY_POS_ALL & ~KEY_POS_SETATTR) |
+                                   KEY_USR_VIEW | KEY_USR_READ),
+                                   KEY_ALLOC_NOT_IN_QUOTA |
+                                   KEY_ALLOC_BUILT_IN |
+                                   KEY_ALLOC_BYPASS_RESTRICTION);
+        if (IS_ERR(key)) {
+            pr_err("Problem loading in-kernel X.509 certificate (%ld)\n",
+                   PTR_ERR(key));
+        } else {
+            pr_notice("Loaded X.509 cert '%s'\n",
+                       key_ref_to_ptr(key)->description);
+            key_ref_put(key);
+        }
+        p += plen;
+    }
+
+    return 0;
+
+dodgy_cert:
+    pr_err("Problem parsing in-kernel X.509 certificate list\n");
+    return 0;
+}
+late_initcall(load_system_certificate_list);
+
+#ifdef CONFIG_SYSTEM_DATA_VERIFICATION
+            pr_devel("PKCS#7 platform keyring is not available\n");
+            goto error;
+        }
+    }
+    ret = pkcs7_validate_trust(pkcs7, trusted_keys);
+    if (ret < 0) {
+        if (ret == -ENOKEY) 
+```

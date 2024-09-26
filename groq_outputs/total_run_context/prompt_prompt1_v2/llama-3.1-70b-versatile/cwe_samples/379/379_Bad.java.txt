@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to Resource Leak due to not closing the FileWriter in case of an IOException.
+
+EXPLANATION:
+In Java, when working with file I/O operations, it is essential to ensure that the resources (e.g., Files, Writers, Readers) are properly closed to avoid resource leaks. However, in the provided code, if an IOException occurs during the out.write() or out.close() operation, the BufferedWriter will not be closed, which can lead to resource leaks. Moreover, the call to out.close() is not necessary as it is already being closed when exiting the 'try' block due to the temp.deleteOnExit() statement. However, this call could introduce the mentioned potential resource leak.
+
+RECOMMENDATIONS:
+The recommendations are to close the resources (FileWriter and BufferedWriter) properly, even when an exception occurs, using try-catch-finally or try-with-resources blocks. 
+
+Here's an example using try-with-resources:
+
+```java
+try (File temp = File.createTempFile("pattern", ".suffix");
+     BufferedWriter out = new BufferedWriter(new FileWriter(temp))) {
+    out.write("aString");
+    temp.deleteOnExit();
+} catch (IOException e) {
+    // Handle the exception
+}
+```
+
+Alternatively, using try-catch-finally block:
+
+```java
+File temp = File.createTempFile("pattern", ".suffix");
+BufferedWriter out = null;
+FileWriter writer = null;
+
+try {
+    writer = new FileWriter(temp);
+    out = new BufferedWriter(writer);
+    out.write("aString");
+    temp.deleteOnExit();
+} catch (IOException e) {
+    // Handle the exception
+} finally {
+    if (out != null) {
+        try {
+            out.close();
+        } catch (IOException ex) {
+            // Handle the exception
+        }
+    } else if (writer != null) {
+        try {
+            writer.close();
+        } catch (IOException ex) {
+            // Handle the exception
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+try {File temp = File.createTempFile("pattern", ".suffix");temp.deleteOnExit();BufferedWriter out = new BufferedWriter(new FileWriter(temp));out.write("aString");out.close();}catch (IOException e) {}
+```

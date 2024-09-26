@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8, 9, 10, 15
+VULNERABILITY_DESCRIPTION:
+This code contains a time-of-check-to-time-of-use (TOCTOU) vulnerability in the comparison of hash values. This vulnerability can allow an attacker to bypass authentication by manipulating the `exp_hash`, `pass_hash`, or `hashValid` values.
+
+EXPLANATION:
+The code first checks if the `hashValid` flag is set. If it is, the code then compares the `exp_hash` and `pass_hash` values. However, there is no atomicity in this check-and-use process. An attacker can potentially inject malicious code to modify either `hashValid`, `exp_hash`, or `pass_hash` between the check and the use of these values, effectively bypassing the authentication mechanism. This can allow an attacker to pass through an invalid or compromised hash, leading to a security breach.
+
+RECOMMENDATIONS:
+To address this vulnerability, you can follow these recommended fixes:
+- Consider using an atomically protected critical section of code to perform the comparison of hash values and check of the `hashValid` flag. This will prevent any manipulation of these values between the check and use of the values.
+- Implement defensive programming techniques, such as parameterized input validation and validation of external inputs to ensure that the inputs passed to the authenticating module are secure and reliable.
+- Utilize synchronized synchronization primitives that ensure proper authentication value checking.
+
+Additionally, I recommend applying access controls to `hashValid`, `exp_hash`, and `pass_hash` to prevent their modification during authentication. This will further protect against potential manipulation attempts by an attacker.
+
+ORIGINAL CODE:
+
+
+			...
+			case (state_q)
+				Idle: begin
+				...
+					else if ( (dm::dtm_op_e'(dmi.op) == dm::DTM_PASS) && (miss_pass_check_cnt_q != 2'b11) )
+					begin
+						state_d = Write;pass_mode = 1'b1;
+					end
+				...
+				end
+				...
+				PassChkValid: begin
+					if(hashValid) begin
+						if(exp_hash == pass_hash) begin
+							pass_check = 1'b1;
+							end else begin
+							pass_check = 1'b0;
+							miss_pass_check_cnt_d = miss_pass_check_cnt_q + 1
+							
+							end
+							state_d = Idle;
+							
+						end else begin
+							state_d = PassChkValid;
+						end
+					end
+				...
+				

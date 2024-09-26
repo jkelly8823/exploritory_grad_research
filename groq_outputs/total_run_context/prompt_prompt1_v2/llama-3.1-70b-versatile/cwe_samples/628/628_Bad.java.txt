@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Insecure Deserialization via Method Invoker 
+EXPLANATION:
+In this code, we observe that the 'accessGranted' method calls another method, also named 'accessGranted', but with different parameters. The second 'accessGranted' method appears to be involved in the actual logic of granting or denying access based on user roles.
+
+Upon closer examination, the call to the second 'accessGranted' method uses a fixed set of 'ADMIN_ROLES', without actually using the 'userRoles' passed to the first method. This pattern indicates an instance of the Insecure Deserialization via Method Invoker vulnerability. It would allow an attacker who has access to this code to bypass access control by using the fixed 'ADMIN_ROLES' instead of the 'userRoles' meant for the user.
+
+However, an alternative explanation for the call is to first evaluate if any admin access is required to the 'resource' before moving on with normal access control flow.
+
+
+RECOMMENDATIONS:
+Consider adding a new identifier to specify whether to check for a particular set of roles or the user's own roles, like so:
+```java
+public boolean checkAccess(String resource, String user, boolean checkAdmin) {
+    String[] userRoles = getUserRoles(user);
+    if(checkAdmin) {
+        return accessGranted(resource, ADMIN_ROLES);
+    }
+    return accessGranted(resource, userRoles);
+}
+```
+Another possible solution is to reconsider whether having two methods with the same name is required for your use case. If the use cases for both 'accessGranted' can be merged into one, it will eliminate the problem directly. An updated version might look something like so:
+```java
+private boolean accessGranted(String resource, String[] rolesToCheck) {
+    if(Arrays.equals(rolesToCheck, ADMIN_ROLES)) {
+        // Admin-specific access logic
+    }
+    // grant or deny access based on user roles
+    // original role evaluation logic
+}
+private boolean void accessGranted(String resource, String user) {
+    String[] userRoles = getUserRoles(user);
+    return accessGranted(resource, userRoles);
+}
+```
+In both examples, clear and concise code minimizes vulnerabilities such as Insecure Deserialization via Method Invoker, leading to fewer exploitable vulnerabilities in your codebase.
+
+ORIGINAL CODE:
+```java
+private static final String[] ADMIN_ROLES = ...;public boolean void accessGranted(String resource, String user) {String[] userRoles = getUserRoles(user);return accessGranted(resource, ADMIN_ROLES);}
+                     private boolean void accessGranted(String resource, String[] userRoles) {
+                        
+                           
+                           // grant or deny access based on user roles
+                           ...
+                     }
+```

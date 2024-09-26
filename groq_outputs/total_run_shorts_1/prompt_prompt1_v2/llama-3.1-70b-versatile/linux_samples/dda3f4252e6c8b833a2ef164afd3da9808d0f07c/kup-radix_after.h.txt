@@ -1,0 +1,119 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No specific vulnerability is found.
+EXPLANATION:
+The provided code snippet appears to be a collection of macros and inline functions related to PowerPC architecture, specifically handling AMR (Access Management Register) and KUAP (Kernel Userspace Access Protection). The code checks for specific features and configurations, but there are no obvious vulnerabilities in the code itself.
+
+However, there are potential issues with the use of inline functions and macros that could lead to unintended behavior or security vulnerabilities if not used carefully. Specifically, the use of `static_branch_unlikely` and `DECLARE_STATIC_KEY_FALSE` could lead to issues with branch prediction and control flow, but these do not appear to be directly exploitable in this code snippet.
+
+RECOMMENDATIONS:
+None specific to the code snippet, but general recommendations include:
+
+* Use of meaningful variable names and comments to improve code readability and understandability.
+* Stricter checking of return values from functions to prevent potential issues with error handling.
+* Careful consideration of the use of inline functions and macros to avoid unintended behavior or control flow vulnerabilities.
+* Regular review and testing of the code to ensure it works as intended.
+
+ORIGINAL CODE:
+(The original code was not modified, but here it is as you requested)
+
+#endif
+.endm
+
+#ifdef CONFIG_PPC_KUAP
+.macro kuap_check_amr gpr1, gpr2
+#ifdef CONFIG_PPC_KUAP_DEBUG
+	BEGIN_MMU_FTR_SECTION_NESTED(67)
+	mfspr	\gpr1, SPRN_AMR
+	END_MMU_FTR_SECTION_NESTED_IFSET(MMU_FTR_RADIX_KUAP, 67)
+#endif
+.endm
+#endif
+
+.macro kuap_save_amr_and_lock gpr1, gpr2, use_cr, msr_pr_cr
+#ifdef CONFIG_PPC_KUAP
+	BEGIN_MMU_FTR_SECTION_NESTED(67)
+
+#else /* !__ASSEMBLY__ */
+
+DECLARE_STATIC_KEY_FALSE(uaccess_flush_key);
+
+#ifdef CONFIG_PPC_KUAP
+
+#include <asm/mmu.h>
+#include <asm/ptrace.h>
+
+static inline unsigned long get_kuap(void)
+{
+	/*
+	 * We return AMR_KUAP_BLOCKED when we don't support KUAP because
+	 * prevent_user_access_return needs to return AMR_KUAP_BLOCKED to
+	 * cause restore_user_access to do a flush.
+	 *
+	 * This has no effect in terms of actually blocking things on hash,
+	 * so it doesn't break anything.
+	 */
+	if (!early_mmu_has_feature(MMU_FTR_RADIX_KUAP))
+		return AMR_KUAP_BLOCKED;
+
+	return mfspr(SPRN_AMR);
+}
+
+	isync();
+}
+
+static inline bool
+bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
+{
+	return WARN(mmu_has_feature(MMU_FTR_RADIX_KUAP) &&
+		    (regs->kuap & (is_write ? AMR_KUAP_BLOCK_WRITE : AMR_KUAP_BLOCK_READ)),
+		    "Bug: %s fault blocked by AMR!", is_write ? "Write" : "Read");
+}
+#else /* CONFIG_PPC_KUAP */
+static inline void kuap_restore_amr(struct pt_regs *regs, unsigned long amr) { }
+
+static inline unsigned long kuap_get_and_check_amr(void)
+{
+	return 0UL;
+}
+
+static inline unsigned long get_kuap(void)
+{
+	return AMR_KUAP_BLOCKED;
+}
+
+static inline void set_kuap(unsigned long value) { }
+#endif /* !CONFIG_PPC_KUAP */
+
+static __always_inline void allow_user_access(void __user *to, const void __user *from,
+					      unsigned long size, unsigned long dir)
+{
+	// This is written so we can resolve to a single case at build time
+				       unsigned long size, unsigned long dir)
+{
+	set_kuap(AMR_KUAP_BLOCKED);
+	if (static_branch_unlikely(&uaccess_flush_key))
+		do_uaccess_flush();
+}
+
+static inline unsigned long prevent_user_access_return(void)
+{
+	unsigned long flags = get_kuap();
+
+	set_kuap(AMR_KUAP_BLOCKED);
+	if (static_branch_unlikely(&uaccess_flush_key))
+		do_uaccess_flush();
+
+	return flags;
+}
+
+static inline void restore_user_access(unsigned long flags)
+{
+	set_kuap(flags);
+	if (static_branch_unlikely(&uaccess_flush_key) && flags == AMR_KUAP_BLOCKED)
+		do_uaccess_flush();
+}
+#endif /* __ASSEMBLY__ */
+
+#endif /* _ASM_POWERPC_BOOK3S_64_KUP_RADIX_H */

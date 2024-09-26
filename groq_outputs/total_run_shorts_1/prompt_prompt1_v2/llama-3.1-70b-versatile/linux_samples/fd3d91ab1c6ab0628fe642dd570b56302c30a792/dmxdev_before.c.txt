@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Insecure Loop Condition
+EXPLANATION:
+The loop condition is vulnerable because it does not account for the possibility that `dmxdev->filternum` could be 0 or that `dmxdev->filter` could be `NULL`. This could lead to a segmentation fault when the loop tries to access `dmxdev->filter[i].state`. Additionally, even if `dmxdev->filternum` is greater than 0, the loop does not prevent out-of-bounds access if `dmxdev->filter` has fewer elements than `dmxdev->filternum`. However, a more critical issue exists in lines 3-4, as the loop may reach an unspecified behavior when `dmxdev->filter` or `dmxdev->filter[i]` is not properly initialized.
+
+Further, I would like to bring to attention a potential dead lock situation that could arise in the function `dvb_dmxdev_release`. If a thread executes `mutex_lock_interruptible` and fails (because of -ERESTARTSYS being thrown), then later down in the execution the wait is set on the variable `dmxdev->dvbdev->users` which may introduce dead-locks due to dependencies of previous interrupt that locks `dmxdev->mutex` (However just considering the snippet it seems difficult to understand actual bug potential due to that).
+
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, add a null check and a bounds check before accessing `dmxdev->filter[i].state`. Add error handling to verify the proper initialization of `dmxdev->filter` or `dmxdev->filter[i]`. Also introduce some protection method to ensure threads are waiting on the condition `dmxdev->dvbdev->users` don't end up yielding (sleep) on the actual acquiring attempt of the variable `dmxdev->mutex`. Additionally, properly synchronize all processes waiting on a variable before modifying the condition itself.
+
+ORIGINAL CODE:
+```c
+if (mutex_lock_interruptible(&dmxdev->mutex))
+        return -ERESTARTSYS;
+
+for (i = 0; i < dmxdev->filternum; i++)
+        if (dmxdev->filter[i].state == DMXDEV_STATE_FREE)
+                break;
+
+void dvb_dmxdev_release(struct dmxdev *dmxdev)
+{
+        dmxdev->exit = 1;
+        if (dmxdev->dvbdev->users > 1) {
+                wait_event(dmxdev->dvbdev->wait_queue,
+                            dmxdev->dvbdev->users == 1);
+        }
+```

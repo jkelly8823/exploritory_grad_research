@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9
+VULNERABILITY_DESCRIPTION: 
+Potential Buffer Overflow Vulnerability
+
+EXPLANATION: 
+The vulnerability lies in the way the filename is copied to the buffer using strncpy. Although strncpy guarantees that the buffer will be null-terminated, it doesn't prevent a buffer overflow if the filename is longer than the buffer size. The 'length' parameter is used as the maximum number of characters to be copied, but it doesn't prevent the buffer from being overwritten if the filename is longer. This is because the compiler doesn't perform bounds checking on arrays, and the buffer's size is fixed at compile time.
+
+The issue becomes more severe because the 'length' parameter isn't validated before calling strncpy. If the 'length' is set to a value greater than or equal to LOG_INPUT_SIZE, it could lead to buffer overflow, potentially causing memory corruption, crashes, or even code injection attacks.
+
+RECOMMENDATIONS:
+1. Use a safer version of strcpy like strncpy_s or strlcpy for platforms that support it. For platforms that don't support it, create a wrapper function that validates the 'length' parameter before performing the copy operation.
+2. Ensure that the 'length' parameter is validated before calling strncpy. It should be validated against the buffer size to prevent potential buffer overflow.
+3. Consider using a dynamically allocated buffer to handle filenames of varying lengths.
+
+Here's an example of how you could validate the 'length' parameter:
+
+```c
+if (length > LOG_INPUT_SIZE - 1) {
+    // handle the error here
+    return -1;
+}
+```
+And a safer way of copying the filename using strncpy_s on platforms that support it:
+
+```c
+int success;
+size_t chars_copied = strncpy_s(buf, LOG_INPUT_SIZE, filename, length);
+if (chars_copied == -1 || chars_copied == size_t(length)) {
+    // handle the error here
+    return -1;
+}
+```
+
+ORIGINAL CODE:
+```c
+#define LOG_INPUT_SIZE 40
+                   
+// saves the file name to a log file
+int outputFilenameToLog(char *filename, int length) {
+    int success;
+       
+    // buffer with size set to maximum size for input to log file
+    char buf[LOG_INPUT_SIZE];
+       
+    // copy filename to buffer
+    strncpy(buf, filename, length);
+       
+    // save to log file
+    success = saveToLogFile(buf);
+    return success;
+}
+```

@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION: 
+Use After Free vulnerability in EVP_MD_free and subsequent pointer accesses.
+
+EXPLANATION:
+In the provided code snippet, there is a potential Use After Free vulnerability. The `EVP_MD_free(ctx->fetched_digest)` call frees the `ctx->fetched_digest` object, but the pointer is not set to `NULL` until after a potential read access (`ctx->digest == ctx->fetched_digest`) and a subsequent pointer access (`ctx->fetched_digest = NULL`). 
+
+If the condition `ctx->digest == ctx->fetched_digest` evaluates to true, then `ctx->digest` will be set to `NULL` but `ctx->fetched_digest` has already been freed. Then `ctx->fetched_digest` is accessed again to set it to `NULL`, which is a use after free vulnerability.
+
+It is essential to avoid using pointers to objects after they have been freed to prevent this class of vulnerabilities.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to re-order the operations as follows: 
+
+1. Check if `ctx->digest` is still referencing the freed `ctx->fetched_digest` object. 
+2. Free the `ctx->fetched_digest` object.
+3. Set both `ctx->digest` and `ctx->fetched_digest` to `NULL`.
+
+Here's the corrected code:
+
+            || tmpimpl != NULL
+#endif
+            || (ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0
+            || type->origin == EVP_ORIG_METH) {
+        if (ctx->digest == ctx->fetched_digest)
+            ctx->digest = NULL;
+        EVP_MD_free(ctx->fetched_digest);
+        ctx->fetched_digest = NULL;
+        ctx->digest = NULL;  // Add this line
+
+However, a more elegant solution would be to avoid unnecessary comparisons as follows:
+
+            || tmpimpl != NULL
+#endif
+            || (ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0
+            || type->origin == EVP_ORIG_METH) {
+        EVP_MD_free(ctx->fetched_digest);
+        ctx->fetched_digest = NULL;
+        ctx->digest = NULL;
+
+ORIGINAL CODE:
+|| tmpimpl != NULL
+#endif
+|| (ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0
+|| type->origin == EVP_ORIG_METH) {
+    if (ctx->digest == ctx->fetched_digest)
+        ctx->digest = NULL;
+    EVP_MD_free(ctx->fetched_digest);
+    ctx->fetched_digest = NULL;

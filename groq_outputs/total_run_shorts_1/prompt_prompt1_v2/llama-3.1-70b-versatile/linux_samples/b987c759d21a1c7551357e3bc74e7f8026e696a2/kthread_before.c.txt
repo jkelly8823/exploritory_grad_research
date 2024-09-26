@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+Potential Use-After-Free vulnerability due to a missing check for NULL pointers before accessing the `*lower_file` pointer.
+
+EXPLANATION:
+The code snippet demonstrates a potential Use-After-Free vulnerability in the way it handles the `*lower_file` pointer. Specifically, in the lines containing `fput(*lower_file);` and `*lower_file = NULL;`, the `*lower_file` pointer is first used to call the `fput()` function and then immediately set to `NULL`. This sequence of events could potentially lead to a situation where the `*lower_file` pointer is accessed after its contents have been freed, resulting in undefined behavior.
+
+However, it is worth noting that this issue only becomes relevant if `fput(*lower_file);` has dropped the last reference to the file and it has already been deallocated by the time `*lower_file = NULL;` is executed.
+
+Additionally, even if `fput(*lower_file);` has not dropped the last reference to the file, setting `*lower_file = NULL;` will make it impossible to safely use the file again, as it may now point to freed memory.
+
+RECOMMENDATIONS:
+To mitigate this issue, consider replacing the lines of code mentioned above with a more robust approach that ensures the `*lower_file` pointer is not accessed after its contents have been freed.
+
+Instead, consider setting `*lower_file = NULL;` immediately after checking that it's NULL, before releasing any resources with `fput(*lower_file);`. This will help prevent Use-After-Free errors.
+
+Code modifications:
+```c
+if ((*lower_file)->f_op->mmap == NULL) {
+	*lower_file = NULL;  // Set to NULL before fput.
+	if (*lower_file != NULL)  // Avoid use-after-free, this check is likely to never pass, given the preceding NULL assignment.
+	fput(*lower_file);
+	rc = -EMEDIUMTYPE;
+}
+```
+Alternatively, assign to `*lower_file` a null-safe call, for example using fget() and unconditionally freeing with fput():
+```c
+if ((*lower_file)->f_op->mmap == NULL) {
+	fput(*lower_file);
+	*lower_file = NULL;
+	rc = -EMEDIUMTYPE;
+}
+``` 
+
+ORIGINAL CODE:
+```c
+#include <linux/slab.h>
+#include <linux/wait.h>
+#include <linux/mount.h>
+#include <linux/file.h>
+#include "ecryptfs_kernel.h"
+
+struct ecryptfs_open_req {
+	struct file **lower_file;
+	flags |= IS_RDONLY(d_inode(lower_dentry)) ? O_RDONLY : O_RDWR;
+	(*lower_file) = dentry_open(&req.path, flags, cred);
+	if (!IS_ERR(*lower_file))
+		goto have_file;
+	if ((flags & O_ACCMODE) == O_RDONLY) {
+		rc = PTR_ERR((*lower_file));
+		goto out;
+	}
+	mutex_unlock(&ecryptfs_kthread_ctl.mux);
+	wake_up(&ecryptfs_kthread_ctl.wait);
+	wait_for_completion(&req.done);
+	if (IS_ERR(*lower_file)) {
+		rc = PTR_ERR(*lower_file);
+		goto out;
+	}
+have_file:
+	if ((*lower_file)->f_op->mmap == NULL) {
+		fput(*lower_file);
+		*lower_file = NULL;
+		rc = -EMEDIUMTYPE;
+	}
+out:
+	return rc;
+}
+```

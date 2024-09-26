@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 19
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential out-of-bounds read and integer underflow.
+
+EXPLANATION:
+The code snippet checks if the length is less than EVP_GCM_TLS_EXPLICIT_IV_LEN and performs calculations on aad_len, however it does not perform checks for edge cases. 
+
+For example, on line 7, there is no check for negative aad_len before performing buf[aad_len - 2]. This could lead to an out-of-bounds read. Additionally, the if statement on line 19 checks for len < EVP_GCM_TLS_EXPLICIT_IV_LEN but len can be larger than the buffer size if the last two bytes of the buffer contain a value greater than the size of the buffer. This can lead to a buffer overflow when the function uses this value to access the buffer later.
+
+Additionally, the line `len = buf[aad_len - 2] << 8 | buf[aad_len - 1];` can cause an integer underflow when aad_len is less than 2.
+
+RECOMMENDATIONS:
+To fix the vulnerability, you should perform checks to ensure that aad_len is within a valid range before using it to access the buffer.
+
+Here's a potential fix:
+
+```c
+if (aad_len < 2) {
+    // handle error, invalid aad_len
+}
+
+if (aad_len - 2 < 0) {
+    // handle error, aad_len is too small
+}
+
+len = buf[aad_len - 2] << 8 | buf[aad_len - 1];
+
+if (len < 0 || len > aad_len) {
+    // handle error, invalid len
+}
+
+if (aad_len < EVP_GCM_TLS_EXPLICIT_IV_LEN) {
+    // handle error, invalid aad_len
+}
+
+```
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+                               size_t *padlen, const unsigned char *in,
+                               size_t len);
+
+void ossl_gcm_initctx(void *provctx, PROV_GCM_CTX *ctx, size_t keybits,
+                      const PROV_GCM_HW *hw)
+{
+    ctx->pad = 1;
+    ctx->libctx = PROV_LIBCTX_OF(provctx);
+}
+
+static int gcm_init(void *vctx, const unsigned char *key, size_t keylen,
+                    const unsigned char *iv, size_t ivlen,
+                    const OSSL_PARAM params[], int enc)
+{
+        }
+        if (!ctx->hw->setkey(ctx, key, ctx->keylen))
+            return 0;
+    }
+    return ossl_gcm_set_ctx_params(ctx, params);
+}
+
+    buf = dat->buf;
+    memcpy(buf, aad, aad_len);
+    dat->tls_aad_len = aad_len;
+    dat->tls_enc_records = 0;
+
+    len = buf[aad_len - 2] << 8 | buf[aad_len - 1];
+    /* Correct length for explicit iv. */
+    if (len < EVP_GCM_TLS_EXPLICIT_IV_LEN)
+```

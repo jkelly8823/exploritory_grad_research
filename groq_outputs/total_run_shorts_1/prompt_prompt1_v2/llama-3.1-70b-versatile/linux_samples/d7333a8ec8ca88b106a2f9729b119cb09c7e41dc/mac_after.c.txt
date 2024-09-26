@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The code uses a kernel pointer (arvif->beacon_buf) allocated using kmalloc, but later uses it as if it were a DMA-allocated address (assigning it to arvif->beacon_paddr as a DMA address). This can lead to undefined behavior if that pointer is used in DMA operations.
+
+EXPLANATION:
+The use of kmalloc to allocate memory for arvif->beacon_buf is not suitable for DMA operations. The kernel provides dma_alloc_coherent for allocating memory that can be used in DMA operations. In the provided code, when ar->bus_param.dev_type is ATH10K_DEV_TYPE_HL, the allocation is done using kmalloc, but later the code tries to use arvif->beacon_buf as a DMA-allocated address.
+
+RECOMMENDATIONS:
+Replace kmalloc with dma_alloc_coherent to ensure that the allocated memory is suitable for DMA operations. Also, the assignment of DMA_MAPPING_ERROR to arvif->beacon_paddr should be reconsidered as it might cause other issues. The dma_free_coherent should also be used to free the memory allocated using dma_alloc_coherent.
+
+ORIGINAL CODE:
+```
+if (ar->bus_param.dev_type == ATH10K_DEV_TYPE_HL) {
+	arvif->beacon_buf = kmalloc(IEEE80211_MAX_FRAME_LEN,
+						    GFP_KERNEL);
+
+	/* Using a kernel pointer in place of a dma_addr_t
+	 * token can lead to undefined behavior if that
+	 * makes it into cache management functions. Use a
+	 * known-invalid address token instead, which
+	 * avoids the warning and makes it easier to catch
+	 * bugs if it does end up getting used.
+	 */
+	arvif->beacon_paddr = DMA_MAPPING_ERROR;
+} else {
+	arvif->beacon_buf =
+		dma_alloc_coherent(ar->dev,
+				   IEEE80211_MAX_FRAME_LEN,
+```

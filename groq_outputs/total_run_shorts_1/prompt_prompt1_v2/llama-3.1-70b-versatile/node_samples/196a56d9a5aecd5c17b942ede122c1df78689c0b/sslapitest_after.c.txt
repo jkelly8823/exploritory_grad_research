@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 83-117
+VULNERABILITY_DESCRIPTION:
+Key exchange vulnerability due to a missing check on the return value of the EVP_CIPHER_fetch function.
+
+EXPLANATION:
+This vulnerability occurs due to the fact that the EVP_CIPHER_fetch function's return value is not properly checked for NULL before being used. This can lead to a segmentation fault if the cipher cannot be fetched. The issue is in the lines of code that fetch the "AES-128-CBC" and "SHA-256" ciphers.
+
+In lines 82-117 of the code, an attempt is made to fetch two ciphers "AES-128-CBC" and "SHA-256" using the EVP_CIPHER_fetch and EVP_MD_fetch functions. The return values of these functions are checked for NULL using a TEST_ptr function. However, this check only verifies if the pointer returned is NULL, but does not guarantee that the cipher or digest is actually available. If the cipher or digest cannot be fetched for some reason (e.g., due to a configuration issue), the program will continue to run, possibly leading to a segmentation fault when trying to use the cipher or digest.
+
+RECOMMENDATIONS:
+To fix this issue, you should add proper error handling to ensure that the cipher and digest are actually available before trying to use them.
+
+Here is an example of how to add proper error handling:
+
+```c
+EVP_CIPHER *aes128cbc;
+EVP_MD *sha256;
+
+aes128cbc = EVP_CIPHER_fetch(libctx, "AES-128-CBC", NULL);
+if (aes128cbc == NULL) {
+    // Handle error, log message, throw exception, etc.
+    TEST_err("Failed to fetch AES-128-CBC cipher");
+    return 0;
+}
+
+sha256 = EVP_MD_fetch(libctx, "SHA-256", NULL);
+if (sha256 == NULL) {
+    EVP_CIPHER_free(aes128cbc);
+    // Handle error, log message, throw exception, etc.
+    TEST_err("Failed to fetch SHA-256 digest");
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+static int test_export_key_mat(int test_index)
+{
+    EVP_CIPHER_CTX *ctx;
+    EVP_CIPHER *ciph;
+    const unsigned char tick_aes_key[16] = "0123456789abcdef";
+    const unsigned char tick_hmac_key[16] = "0123456789abcdef";
+    OSSL_PARAM params[2];
+    unsigned char iv[16];
+    unsigned char key_name[16];
+    int ret;
+
+    tick_key_cb_called = 1;
+
+    if (tick_key_renew == -1)
+        return 0;
+
+    ciph = EVP_CIPHER_fetch(libctx, fetchable_ciphers[test_index], "");
+    if (ciph == NULL) {
+        TEST_skip("Multiblock cipher is not available for %s", cipherlist);
+        return 1;
+    }
+
+    // ...
+
+    /* 
+    ... 
+    rest of the code
+    */
+```

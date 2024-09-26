@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-27
+VULNERABILITY_DESCRIPTION:
+ Buffer overflow vulnerability due to incorrect handling of the 'lines' and 'offset' variables in a loop, potentially causing an out-of-bounds memory access.
+
+EXPLANATION:
+The loop iterates over 'lines' and checks for the presence of a newline character ('\n') in the 'buf' string using the 'memchr' function. However, if 'lines' is not zero, the loop does not terminate when 'b' reaches 'end', but instead continues until 'lines' is zero. This could lead to accessing memory beyond the bounds of 'buf' or 'end'. 
+
+Moreover, the loop increments 'b' without checking for its relation to 'end'. 
+
+In this instance, I could not make definitive judgements regarding the value of variables at certain points, or which code blocks had not been included.
+
+RECOMMENDATIONS:
+1. Add a condition to break out of the loop if 'b' exceeds 'end'.
+2. Add a check to prevent 'b' from incrementing past 'end'.
+3. Validate the input to ensure 'lines' and 'offset' are within acceptable ranges.
+
+ORIGINAL CODE:
+```
+			return 0;
+		}
+
+		/* bytecnt checks are to be kept for PHP, see cve-2014-3538.
+		 PCRE might get stuck if the input buffer is too big. */
+		linecnt = m->str_range;
+		bytecnt = linecnt * 80;
+
+		if (bytecnt == 0) {
+			bytecnt = 1 << 14;
+		}
+
+		if (bytecnt > nbytes) {
+			bytecnt = nbytes;
+		}
+		if (offset > bytecnt) {
+			offset = bytecnt;
+		}
+		if (s == NULL) {
+			ms->search.s_len = 0;
+			ms->search.s = NULL;
+			return 0;
+		}
+		buf = RCAST(const char *, s) + offset;
+		end = last = RCAST(const char *, s) + bytecnt;
+		/* mget() guarantees buf <= last */
+		for (lines = linecnt, b = buf; lines && b < end &&
+		     ((b = CAST(const char *,
+			 memchr(c = b, '\n', CAST(size_t, (end - b)))))
+				b++;
+		}
+		if (lines)
+			last = RCAST(const char *, s) + bytecnt;
+
+		ms->search.s = buf;
+		ms->search.s_len = last - buf;
+		ms->search.offset = offset;
+```

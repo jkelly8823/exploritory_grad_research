@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION: 
+Insecure lock handling and potential denial of service (DoS) vulnerability.
+
+EXPLANATION: 
+The given code snippet shows lock handling issues that could potentially lead to a denial of service (DoS) vulnerability. The `lock_mount_hash()` function is called to lock the mount hash, but the corresponding `unlock_mount_hash()` function is not visible in the given snippet. This can lead to a dead lock situation if the function does not get unlocked properly. Additionally, it appears that the mounts (`new_mnt` and `root_mnt`) are being detached without checking their usage counts. If another thread or process is trying to access the mount point, this can lead to undefined behavior or even a potential denial of service.
+
+RECOMMENDATIONS: 
+To fix this vulnerability, the following steps should be taken:
+
+1. Unmounting: Ensure that `new_mnt` and `root_mnt` are not being used by other threads or processes before detaching. This can be achieved by properly keeping track of their usage counts and only detaching when they are zero.
+2. Lock handling: Ensure that the lock obtained through `lock_mount_hash()` is properly released with the `unlock_mount_hash()` function. The lock release should be properly balanced to prevent dead locks.
+3. Deadlock prevention: To prevent deadlocks, consider using a lock ranking system where locks are always acquired in a specific order.
+
+ORIGINAL CODE:
+
+```c
+/* make sure we can reach put_old from new_root */
+if (!is_path_reachable(old_mnt, old.dentry, &new))
+    goto out4;
+/* make certain new is below the root */
+if (!is_path_reachable(new_mnt, new.dentry, &root))
+    goto out4;
+root_mp->m_count++; /* pin it so it won't go away */
+lock_mount_hash();
+detach_mnt(new_mnt, &parent_path);
+detach_mnt(root_mnt, &root_parent);
+```

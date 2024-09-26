@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 11
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds memory access and incorrect data copying.
+
+EXPLANATION:
+The code uses `memcpy` and `memset` to copy and zero-out memory, but it assumes that the `info` pointer has enough space to accommodate the data being written. However, there is no check to ensure that the `info` buffer is large enough to hold the data, which can lead to out-of-bounds memory access. Additionally, the code assumes that `addrlen` is valid and will not exceed the buffer size.
+
+Furthermore, the code is vulnerable to a data copying issue. The `memcpy` function is used to copy data from `laddr->a` and `from->ipaddr` to the `info` buffer, but the `info` pointer is incremented by `addrlen` without checking whether the data was successfully copied. If the data copying fails or the buffer is too small to hold the data, this will result in incorrect data being copied.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it is recommended to:
+
+1. Validate the `info` buffer size before copying data to it.
+2. Check the return value of `memcpy` to ensure that the data was successfully copied.
+3. Use a safer function such as `memcpy_safe` or `strncpy` to copy data, which will prevent buffer overflows.
+4. Consider using a more secure and reliable way of copying data, such as using a library that provides safer string copying functions.
+
+ORIGINAL CODE:
+
+
+    info = nla_data(attr);
+    list_for_each_entry_rcu(laddr, address_list, list) {
+        memcpy(info, &laddr->a, sizeof(laddr->a));
+        memset(info + sizeof(laddr->a), 0, addrlen - sizeof(laddr->a));
+        info += addrlen;
+    }
+
+    return 0;
+    info = nla_data(attr);
+    list_for_each_entry(from, &asoc->peer.transport_addr_list,
+                transports) {
+        memcpy(info, &from->ipaddr, sizeof(from->ipaddr));
+        memset(info + sizeof(from->ipaddr), 0,
+                addrlen - sizeof(from->ipaddr));
+        info += addrlen;
+    }
+
+    return 0;

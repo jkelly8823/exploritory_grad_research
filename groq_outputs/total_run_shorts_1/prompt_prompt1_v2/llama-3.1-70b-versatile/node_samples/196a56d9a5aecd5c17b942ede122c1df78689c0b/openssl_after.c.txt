@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability in BIO_free and BIO_free_all calls.
+
+EXPLANATION:
+The code calls BIO_free_all(bio_in) then immediately calls BIO_free_all(bio_out) and later calls BIO_free_all(bio_err). In the given code snippet, we have to consider the case in which bio_in equals bio_out, which would result in bio_out being freed twice - first as bio_in and then as its original value - since BIO_free_all is used recursively and tries to free the whole 'BIO' chain.
+
+RECOMMENDATIONS:
+Call BIO_free(bio) instead of BIO_free_all(bio) if bio_in or bio_out only refer to a chain of one 'BIO'. Also call BIO_free all on each separately in the case the result of these will always refer to the first item in a chain or to NULL, avoiding the double-free problem:
+
+```c
+BIO_free_all(bio_in);
+bio_out = bio_in = NULL; // Reset after freeing the chain to prevent other calls
+```
+or 
+```c
+bio_in = bio_out = NULL;
+BIO_free_all(bio_err);
+```
+However, because our analysis is so incomplete given we do not have information for bio_in and bio_err, you should ensure that the bio_out is pointed to different chain from bio_in when we decide to free bio_in.
+
+ORIGINAL CODE:
+/*
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+    BIO_free(bio_in);
+    BIO_free_all(bio_out);
+    apps_shutdown();
+    BIO_free_all(bio_err);
+    EXIT(ret);
+}
+
+typedef enum HELP_CHOICE {

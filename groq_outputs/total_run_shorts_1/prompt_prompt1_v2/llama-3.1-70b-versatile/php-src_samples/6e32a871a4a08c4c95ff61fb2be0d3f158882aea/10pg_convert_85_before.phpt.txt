@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION: 
+Insecure use of user-provided input in PostgreSQL query.
+
+EXPLANATION: 
+The code uses the `pg_convert` function to convert the data types of the fields before sending it to the PostgreSQL database. However, there is no validation or sanitization performed on the data before sending it. Additionally, the value of `$table_name` is not sanitized or validated.
+
+In this case, even though the data is defined in the code snippet itself, if this snippet were part of a larger codebase, and this array `$fields` were instead populated by user-supplied data, or if the variable `$table_name` were defined elsewhere in the codebase and populated with user-supplied data, this could be vulnerable to SQL injection.
+
+Furthermore, if `$conn_str` contains any sensitive credentials in plain text or if the connection details can be manipulated by an attacker, this code may be vulnerable to more severe attacks.
+
+RECOMMENDATIONS:
+To address this vulnerability, ensure that any user-provided data is properly validated and sanitized before it is sent to the PostgreSQL database. Use prepared statements or parameterized queries to avoid injecting user-provided data directly into the query.
+
+Here's an example using parameterized queries:
+
+```php
+$stmt = "INSERT INTO table_name (num, str, bin) VALUES ($1, $2, $3)";
+$params = array($fields['num'], $fields['str'], $fields['bin']);
+pg_query_params($db, $stmt, $params);
+```
+
+This approach prevents user-provided data from being injected directly into the query and reduces the risk of SQL injection attacks.
+
+ORIGINAL CODE:
+```php
+include 'config.inc';
+
+$db = pg_connect($conn_str);
+
+$fields = array('num'=>'1234', 'str'=>'AAA', 'bin'=>'BBB');
+$converted = pg_convert($db, $table_name, $fields);
+```

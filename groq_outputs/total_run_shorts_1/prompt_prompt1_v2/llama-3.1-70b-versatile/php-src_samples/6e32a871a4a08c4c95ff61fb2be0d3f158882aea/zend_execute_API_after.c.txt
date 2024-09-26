@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3, 7-9
+VULNERABILITY_DESCRIPTION:
+Use of Double-Free Vulnerability and Potential Null Pointer Dereference.
+EXPLANATION:
+The provided code snippet appears to be a part of the PHP error handling mechanism. It checks if custom error and exception handlers are set and if so, it cleans them up by resetting them to NULL and calling the `zval_ptr_dtor` function to release any resources held by them.
+
+However, the potential issue here is that if the `EG(user_error_handler)` and `EG(user_exception_handler)` are the same function (i.e., zeh is the same in both cases), the code will attempt to call `zval_ptr_dtor` twice on the same zval, which is essentially a double-free. This is undefined behavior and can potentially lead to memory corruption and crashes.
+
+Furthermore, the code does not check if `zeh` is NULL before calling `zval_ptr_dtor` on it, which can lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to add a NULL check before calling `zval_ptr_dtor` on the `zeh`. Additionally, to prevent the double-free issue, you can add a check to ensure that `EG(user_error_handler)` and `EG(user_exception_handler)` are not the same before calling `zval_ptr_dtor` on them.
+
+Here is an example of how the code can be fixed:
+
+```c
+zval *zeh_error = EG(user_error_handler);
+zval *zeh_exception = EG(user_exception_handler);
+
+EG(user_error_handler) = NULL;
+EG(user_exception_handler) = NULL;
+
+if (zeh_error != zeh_exception || zeh_exception == NULL) {
+    if (zeh_error) {
+        zval_ptr_dtor(&zeh_error);
+    }
+    if (zeh_exception) {
+        zval_ptr_dtor(&zeh_exception);
+    }
+} else if (zeh_error) {
+    zval_ptr_dtor(&zeh_error);
+}
+
+zend_stack_destroy(&EG(user_error_handlers_error_reporting));
+zend_stack_init(&EG(user_error_handlers_error_reporting));
+```
+ORIGINAL CODE:
+
+```c
+	if (EG(user_error_handler)) {
+		zeh = EG(user_error_handler);
+		EG(user_error_handler) = NULL;
+		zval_ptr_dtor(&zeh);
+	}
+
+	if (EG(user_exception_handler)) {
+		zeh = EG(user_exception_handler);
+		EG(user_exception_handler) = NULL;
+		zval_ptr_dtor(&zeh);
+	}
+
+	zend_stack_destroy(&EG(user_error_handlers_error_reporting));
+	zend_stack_init(&EG(user_error_handlers_error_reporting));
+```

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+In the provided code snippet, the variable `buflen` is used without being validated for its value. It is then divided by the size of `dst` (which is a `uint16_t`) to calculate `max_chars`. 
+
+However, `buflen` is not checked for its value prior to this operation. If `buflen` were to be exactly divisible by `sizeof(*dst)` (in this case, 2), and then actually a little more than that, then that final extra value would then be effectively ignored. 
+
+However, there's an actual more critical risk. 
+
+If buflen is 0, then there's an effectively infinite write outside the parameters, which can corrupt an area of memory. 
+
+Moreover, when calculating `alignment` using the modulo operator, the potential for overflow remains - though given it's of size uintptr_t, it's significantly broader than might have been expected.
+
+To be specific though - simply casting to a uintptr_t without actually validating the buflen value puts us at risk, here.
+
+RECOMMENDATIONS:
+1. Validate `buflen` to prevent integer overflow.
+2. Perform input validation on the `buflen` variable, verifying its value before using it.
+3. In case `buflen` matches `sizeof(*dst)`, add 1 to `max_chars` or simply take the maximum of `buflen / 2` and `buflen/2+1` for safety.
+
+Additionally:
+Avoid writing outside the scope of a particular parameter as done with maxchars/destination.
+
+```c++
+if (buflen <= 0) {
+    // Handle invalid input (preferably by throwing an exception)
+}
+
+// Validate the buflen before casting.
+size_t max_chars = buf + buflen - reinterpret_cast<uint16_t*>(buf);
+size_t nchars;
+size_t alignment = reinterpret_cast<uintptr_t>(dst) % sizeof(*dst);
+if (alignment == 0) {
+    nchars = str->Write(dst, 0, std::min(max_chars,static_max_value), flags);
+}
+```
+4. Remember, there's an additional threat on line 7: nchars.
+
+For clarity we assume str and destination and even flags aren't being fed anything that can mess these up, more than usual risks of max writing size. Though they could pose unaddressed threats of more or simmilar stripe as what was suggested above:
+
+Even basic defensive measures, such as limiting destination writing are present here.
+
+ORIGINAL CODE:
+
+```c++
+size_t* chars_written) {
+  uint16_t* const dst = reinterpret_cast<uint16_t*>(buf);
+
+  size_t max_chars = (buflen / sizeof(*dst));
+  size_t nchars;
+  size_t alignment = reinterpret_cast<uintptr_t>(dst) % sizeof(*dst);
+  if (alignment == 0) {
+    nchars = str->Write(dst, 0, max_chars, flags);
+```

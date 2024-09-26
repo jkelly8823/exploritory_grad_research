@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-12
+VULNERABILITY_DESCRIPTION:
+Potential Command Injection Vulnerability
+
+EXPLANATION:
+The code snippet provided is vulnerable to command injection attacks. The `argv_v` variable is retrieved from the `js_options` object without proper validation or sanitization. This allows an attacker to potentially inject malicious commands into the `argv_v` array.
+
+The vulnerability arises when the `uv_spawn` function is called with the `options` struct that contains the `argv_v` array. If an attacker can control the contents of `argv_v`, they may be able to inject malicious commands or arguments.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation and sanitization of the `argv_v` array should be performed before passing it to the `uv_spawn` function. Here are some recommended steps:
+- Validate the contents of `argv_v` to ensure it only contains allowed commands and arguments.
+- Use a whitelist approach to only allow specific commands and arguments.
+- Use a library or function that properly escapes and sanitizes the input, such as `nodejs-escapeshellarg`.
+
+Example of safe usage:
+```c
+Local<Value> argv_v =
+    js_options->Get(context, env->args_string()).ToLocalChecked();
+if (!argv_v.IsEmpty() && argv_v->IsArray()) {
+  // Validate and sanitize argv_v here
+  // For example:
+  // Use nodejs-escapeshellarg to escape each argument
+  escapeshellarg(ctx, argv_v);
+  options.flags |= UV_PROCESS_DETACHED;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
+THROW_IF_INSUFFICIENT_PERMISSIONS(
+    env, permission::PermissionScope::kChildProcess, "");
+
+Local<Object> js_options =
+    args[0]->ToObject(env->context()).ToLocalChecked();
+
+node::Utf8Value file(env->isolate(), file_v);
+options.file = *file;
+// options.args
+Local<Value> argv_v =
+    js_options->Get(context, env->args_string()).ToLocalChecked();
+if (!argv_v.IsEmpty() && argv_v->IsArray()) {
+  options.flags |= UV_PROCESS_DETACHED;
+}
+
+int err = uv_spawn(env->event_loop(), &wrap->process_, &options);
+wrap->MarkAsInitialized();
+
+if (err == 0) {
+  CHECK_EQ(wrap->process_.data, wrap);
+  wrap->object()->Set(context, env->pid_string(),
+```

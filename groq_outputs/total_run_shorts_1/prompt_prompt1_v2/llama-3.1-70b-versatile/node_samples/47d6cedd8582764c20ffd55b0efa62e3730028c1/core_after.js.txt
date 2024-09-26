@@ -1,0 +1,89 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 29-41, 43
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains two potential vulnerabilities. The first one is related to the setTimeout function call with a potentially untrusted timeout value (options.unknownProtocolTimeout). The second one is related to a cleartext transmission of a 403 Forbidden response over an unencrypted connection.
+
+EXPLANATION:
+The code snippet uses the setTimeout function to schedule a timer that destroys a socket if it's not successfully closed within a certain time period (options.unknownProtocolTimeout). However, the validation of this timeout value is done using the validateUint32 function, which does not prevent a value of 0 or a negative value being passed to setTimeout. Passing a value of 0 or a negative value to setTimeout could result in unintended behavior, potentially leading to a vulnerability.
+
+Furthermore, when an unknown protocol is detected, the server responds with a 403 Forbidden message in an HTTP/1.0 format. This message is sent over the socket in cleartext, potentially revealing the error message to an attacker who is monitoring the communication. A more secure approach would be to use HTTPS or to mask the error message.
+
+RECOMMENDATIONS:
+To fix the first vulnerability, validate the timeout value to ensure it is a positive number before passing it to setTimeout.
+
+```javascript
+if (options.unknownProtocolTimeout !== undefined && options.unknownProtocolTimeout > 0) {
+  validateUint32(options.unknownProtocolTimeout, 'unknownProtocolTimeout');
+} else {
+  // Handle invalid or missing timeout value
+}
+```
+
+To fix the second vulnerability, consider using a more secure method of communication, such as HTTPS. If this is not possible, mask the error message sent in the 403 Forbidden response.
+
+```javascript
+socket.end('HTTP/1.0 403\r\n\r\n');
+```
+
+ORIGINAL CODE:
+```javascript
+const net = require('net');
+const { Duplex } = require('stream');
+const tls = require('tls');
+const { setImmediate, setTimeout, clearTimeout } = require('timers');
+
+const {
+  kIncomingMessage,
+  _checkIsHttpToken: checkIsHttpToken
+  this.emit('continue');
+}
+
+const setTimeoutValue = {
+  configurable: true,
+  enumerable: true,
+  writable: true,
+  value: setStreamTimeout
+};
+ObjectDefineProperty(Http2Stream.prototype, 'setTimeout', setTimeoutValue);
+ObjectDefineProperty(Http2Session.prototype, 'setTimeout', setTimeoutValue);
+
+
+// When the socket emits an error, destroy the associated Http2Session and
+// forward it the same error.
+debug('Unknown protocol from %s:%s',
+          socket.remoteAddress, socket.remotePort);
+if (!this.emit('unknownProtocol', socket)) {
+  debug('Unknown protocol timeout:  %s', options.unknownProtocolTimeout);
+  // Install a timeout if the socket was not successfully closed, then
+  // destroy the socket to ensure that the underlying resources are
+  // released.
+  const timer = setTimeout(() => {
+    if (!socket.destroyed) {
+      debug('UnknownProtocol socket timeout, destroy socket');
+      socket.destroy();
+    }
+  }, options.unknownProtocolTimeout);
+  // Un-reference the timer to avoid blocking of application shutdown and
+  // clear the timeout if the socket was successfully closed.
+  timer.unref();
+
+  socket.once('close', () => clearTimeout(timer));
+
+  // We don't know what to do, so let's just tell the other side what's
+  // going on in a format that they *might* understand.
+  socket.end('HTTP/1.0 403 Forbidden\r\n' +
+             'Content-Type: text/plain\r\n\r\n' +
+  );
+}
+
+if (options.unknownProtocolTimeout !== undefined)
+  validateUint32(options.unknownProtocolTimeout, 'unknownProtocolTimeout');
+else
+  // TODO(danbev): is this a good default value?
+  options.unknownProtocolTimeout = 10000;
+
+// Used only with allowHTTP1
+options.Http1IncomingMessage = options.Http1IncomingMessage ||
+  http.IncomingMessage;
+options.Http1ServerResponse = options.Http1ServerResponse ||
+```

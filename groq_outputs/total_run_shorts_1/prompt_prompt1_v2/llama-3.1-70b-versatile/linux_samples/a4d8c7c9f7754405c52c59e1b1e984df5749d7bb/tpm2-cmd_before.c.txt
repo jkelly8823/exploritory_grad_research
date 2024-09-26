@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-17
+VULNERABILITY_DESCRIPTION:
+This code snippet contains a potential buffer overflow vulnerability due to the use of `memcpy` without bounds checking.
+
+EXPLANATION:
+The code uses `memcpy` to copy data into `payload->key`. However, the source buffer (`buf.data`) and destination buffer (`payload->key`) sizes are not checked. This creates a risk of buffer overflow, where the `payload->key` buffer is over-written beyond its capacity. This is particularly concerning since the size of `buf.data` and `payload->key` appear to be derived from data copied from `payload->key_len`, which is taken from the `buf.data` itself, potentially providing an exploitable path for an attacker.
+
+This line also assumes that `payload->key` is fully allocated and that the `payload->key_len` aligns with the allocation. However, if `payload->key` is not large enough to contain `payload->key_len` bytes of data, this could lead to an over-write beyond the end of the buffer. This scenario also implies a use of sensitive data, further amplifying the concern.
+
+Furthermore, since `buf.data` and `payload->key` appear to be user-controlled, this could be a pre-cursor to an exploit that may lead to unauthorized data access.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, bounds checking on `payload->key_len` should be performed to ensure it does not exceed the capacity of `payload->key`. A re-check is needed in the code. Here's how it can be done:
+
+```c
+u16 capacity = sizeof(payload->key) / sizeof(payload->key[0]);
+if (payload->key_len > capacity) {
+    // Handle error: payload->key_len is too large
+    return -EOVERFLOW;
+}
+
+memcpy(payload->key, &buf.data[TPM_HEADER_SIZE + 6],
+       min(payload->key_len, capacity));
+```
+
+Additionally, consider using `strncpy` or safer functions to prevent buffer overflows and include error detection and handling as part of a secure development lifecycle.
+
+ORIGINAL CODE:
+/tmp_buf_append_u16(&buf, 4 + TPM_DIGEST_SIZE + payload->key_len);
+
+tpm_buf_append_u16(&buf, TPM_DIGEST_SIZE);
+tpm_buf_append(&buf, options->blobauth, TPM_DIGEST_SIZE);
+tpm_buf_append_u16(&buf, payload->key_len);
+tpm_buf_append(&buf, payload->key, payload->key_len);
+
+/* public */
+tpm_buf_append_u16(&buf, 14);
+
+struct tpm_buf buf;
+int rc;
+
+rc = tpm_buf_init(&buf, TPM2_ST_SESSIONS, TPM2_CC_UNSEAL);
+if (rc)
+    rc = -EPERM;
+
+if (!rc) {
+    payload->key_len = be16_to_cpup(
+        (__be16 *) &buf.data[TPM_HEADER_SIZE + 4]);
+
+    memcpy(payload->key, &buf.data[TPM_HEADER_SIZE + 6],
+           payload->key_len);
+}
+
+tpm_buf_destroy(&buf);
+return rc;

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code snippet is a potential buffer overflow. This can occur because the variable 'path_cleaned' is subject to strlen() which will return a value representing the number of bytes in the string including none for the null terminator. The character sequence is then compared to MAXPATHLEN, potentially allowing a path cleaned field longer or equal to than MAXPATHLEN to exist. There is no visible check to prevent this.
+
+EXPLANATION:
+The vulnerability occurs because MAXPATHLEN is compared directly against path_cleaned_len. Although MAXPATHLEN is used to potentially limit the 'length', 'length' here varies in exactly what it includes, (as was mentioned earlier this has no null terminator included in the character count). Most systems allow paths longer or equal to MAXPATHLEN; as a result, the length check performs no adequate limitation. No checks to make sure that this full path is not beyond MAXPATHLEN is present here.
+
+RECOMMENDATIONS:
+A recommendation for this code would be to make a more adequate measure of what 'length' is here, taking into consideration things such as in fact null terminator. Given 'path_cleaned_len' and the variable it directly comes from exists as an entity consisting of a sequence of characters (the human term being a string) can be input for something vulnerable to buffer overflow. Use null-terminator limited-length or bound-checked calls;  null-terminated string with a total count length is used. An example is as follows with a different function that does limit its input with an extra parameter:
+```c
+size_t path_cleaned_len = strnlen(path_cleaned, MAXPATHLEN);
+```
+Additional example using dynamic memory allocation for extra safety is as follows, using memchr to detect the input string's terminator more safely:
+```c
+size_t path_cleaned_len = MAXPATHLEN;
+char* new_path = strdup(path_cleaned);
+if(NULL != memchr(new_path, '\0', MAXPATHLEN+1)) {
+    // your dynamically allocated buffer is safe
+} else {
+    // path_cleaned did not contain a terminator character
+}
+```
+
+ORIGINAL CODE:
+```c
+	return 0;
+}
+	path_cleaned =  php_zip_make_relative_path(new_state.cwd, new_state.cwd_length);
+	path_cleaned_len = strlen(path_cleaned);
+
+	if (path_cleaned_len >= MAXPATHLEN || zip_stat(za, file, 0, &sb) != 0) {
+		return 0;
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-11
+VULNERABILITY_DESCRIPTION:
+Use of deprecated function GetVersionExW and potential buffer overflow vulnerability.
+
+EXPLANATION:
+The provided code snippet uses the GetVersionExW function, which has been deprecated in Windows 10 (Threshold) and later. Its use is discouraged due to a potential buffer overflow vulnerability. When the buffer OsvEx is too small for the provided dwOSVersionInfoSize, it can result in a buffer overflow. In this case, the code attempts to handle this by resizing the buffer and attempting to call the function again. However, this does not eliminate the possibility of a buffer overflow, especially if the platform version is not win32s and GetVersionExW does not return the expected structure size.
+
+RECOMMENDATIONS:
+To address this vulnerability, we recommend using the more secure and modern function, RtlGetVersion, along with the RTL_OSVERSIONINFOEX structure. This is supported starting from Windows 8.1, so make sure to check for compatibility.
+
+Here is an example of how to use RtlGetVersion:
+```c
+RTL_OSVERSIONINFOEX OsvEx;
+ULONGLONG dwConditionMask = 0;
+NTSTATUS status = RtlGetVersion((PRTL_OSVERSIONINFOEX)&OsvEx);
+```
+Alternatively, for platforms that don't support RtlGetVersion, it's recommended to use the VerifyVersionInfo function, as shown in Microsoft's documentation for GetVersionEx:
+```c
+OSVERSIONINFOW osvi;
+ZeroMemory(&osvi, sizeof(OSVERSIONINFOW));
+osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
+if (!VerifyVersionInfo(&osvi, VER_PLATFORM_WIN32_WINNT, VER_GREATER_THAN_OR_EQUAL, &(OSVERSIONINFOW){.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW), .dwPlatformId = VER_PLATFORM_WIN32_NT}))
+{
+    // handle failure
+}
+```
+
+ORIGINAL CODE:
+
+```c
+memset(&OsvEx, 0, sizeof(OsvEx));
+OsvEx.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4996) /* warning C4996: 'GetVersionExW': was declared deprecated */
+#endif
+if (!GetVersionEx((void *)&OsvEx))
+{
+    memset(&OsvEx, 0, sizeof(OsvEx));
+    OsvEx.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    if (!GetVersionEx((void *)&OsvEx))
+        return WIN_UNKNOWN;
+}
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
+switch(OsvEx.dwPlatformId)
+{
+    case V_PLATFORM_WIN32s:
+```

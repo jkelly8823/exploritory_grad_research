@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: 
+Buffer overflow vulnerability due to unbounded string copy from `clienthp->h_name` to `hostname`.
+
+EXPLANATION:
+The code uses `strcpy` to copy the hostname from `clienthp->h_name` to the `hostname` buffer. However, it does not check the length of the hostname before copying it. If the hostname is longer than `MAX_LEN`, it will overflow the `hostname` buffer. This is because `strcpy` does not perform any boundary checks and will continue copying bytes until it encounters a null terminator.
+
+`gethostbyaddr` returns a pointer to a `hostent` structure, which contains a pointer to the hostname (`h_name`). The length of this hostname is not guaranteed to be less than `MAX_LEN`, and it's possible for an attacker to manipulate the hostname to cause a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use a safer string copying function that checks the boundary of the destination buffer, such as `strncpy` or `snprintf`. However, using `strncpy` alone is not enough, because it does not guarantee null-termination of the destination string.
+
+A better approach would be to use `snprintf`, which allows you to specify the maximum number of bytes to write, ensuring that the destination buffer will not overflow. Here's an example of how to use `snprintf` to fix the vulnerability:
+
+```c
+snprintf(hostname, sizeof(hostname), "%s", clienthp->h_name);
+hostname[sizeof(hostname) - 1] = '\0'; // ensure null-termination
+```
+
+Alternatively, you can use `strcpy_s` from the C11 standard, which is designed to prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+struct hostent *clienthp;char hostname[MAX_LEN];
+// create server socket, bind to server address and listen on socket...
+// accept client connections and process requestsint count = 0;for (count = 0; count < MAX_CONNECTIONS; count++) {
+    
+    int clientlen = sizeof(struct sockaddr_in);int clientsocket = accept(serversocket, (struct sockaddr *)&clientaddr, &clientlen);
+    if (clientsocket >= 0) {
+        clienthp = gethostbyaddr((char*) &clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);strcpy(hostname, clienthp->h_name);logOutput("Accepted client connection from host ", hostname);
+        // process client request...close(clientsocket);
+    }
+}close(serversocket);
+...
+```

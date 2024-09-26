@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-16
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to potential denial-of-service (DoS) due to unbounded iteration in the session cache pruning logic.
+
+EXPLANATION:
+The code enters a while loop that continues to execute as long as the session cache size exceeds the maximum allowed size. However, if the `remove_session_lock` function fails, the loop will continue indefinitely, potentially causing a denial-of-service condition.
+
+Additionally, the use of a while loop without a maximum number of iterations can lead to an excessive amount of iterations, resulting in resource exhaustion. This is a violation of the principle of "Fail Fast", which states that when a system is under attack, it should quickly report an error or terminate rather than trying to continue operating under the assumption that the attack might be successfully mitigated.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, a maximum number of iterations should be imposed on the while loop to prevent an infinite loop. This can be achieved by adding a counter to track the number of iterations and breaking out of the loop when the counter reaches a specified threshold.
+
+Additionally, error handling should be added to handle the case where `remove_session_lock` fails. This could include logging an error or returning an error code to the caller.
+
+```c
+int max_iterations = 1000;
+int iteration_count = 0;
+
+while (SSL_CTX_sess_number(ctx) >= SSL_CTX_sess_get_cache_size(ctx)) {
+    if (iteration_count >= max_iterations) {
+        // log an error or return an error code
+        break;
+    }
+    if (!remove_session_lock(ctx, ctx->session_cache_tail, 0))
+        break;
+    else
+        ssl_tsan_counter(ctx, &ctx->stats.sess_cache_full);
+    iteration_count++;
+}
+```
+
+ORIGINAL CODE:
+```c
+c->time = time(NULL);
+ssl_session_calculate_timeout(c);
+}
+
+if (s == NULL) {
+    /*
+     * new cache entry -- remove old ones if cache has become too large
+     * delete cache entry *before* add, so we don't remove the one we're adding!
+     */
+
+    ret = 1;
+
+    if (SSL_CTX_sess_get_cache_size(ctx) > 0) {
+        while (SSL_CTX_sess_number(ctx) >= SSL_CTX_sess_get_cache_size(ctx)) {
+            if (!remove_session_lock(ctx, ctx->session_cache_tail, 0))
+                break;
+            else
+                ssl_tsan_counter(ctx, &ctx->stats.sess_cache_full);
+        }
+    }
+}
+
+SSL_SESSION_list_add(ctx, c);
+
+if (s != NULL) {
+    /*
+     * existing cache entry -- decrement previously incremented reference
+     * count because it already takes into account the cache
+     */
+
+    SSL_SESSION_free(s);    /* s == c */
+    ret = 0;
+}
+CRYPTO_THREAD_unlock(ctx->lock);
+return ret;
+}
+```

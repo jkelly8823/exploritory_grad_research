@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+A potential use after free vulnerability exists due to the fact that `xdp_prog` is not checked for NULL after being accessed when `gso->gso_type` is checked.
+
+EXPLANATION:
+The code first checks for the existence of `xdp_prog` and then accesses it without rechecking for NULL. If another thread or context were to free `xdp_prog` before the second access, this would result in a use after free. The existing check is insufficient because the code does not hold a lock or other synchronization mechanism that prevents concurrent modification or deletion of `xdp_prog`.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, recheck `xdp_prog` for NULL immediately before its second access:
+
+Original line:
+```c
+if (gso->gso_type) {
+    skb_xdp = true;
+```
+Should be modified to:
+```c
+if (xdp_prog && gso->gso_type) {
+    skb_xdp = true;
+```
+This modification ensures that `xdp_prog` is not accessed after being potentially freed by another context.
+
+ORIGINAL CODE:
+```c
+	bool skb_xdp = false;
+	struct page *page;
+
+	if (unlikely(datasize < ETH_HLEN))
+		return -EINVAL;
+
+	xdp_prog = rcu_dereference(tun->xdp_prog);
+	if (xdp_prog) {
+		if (gso->gso_type) {
+			skb_xdp = true;
+```

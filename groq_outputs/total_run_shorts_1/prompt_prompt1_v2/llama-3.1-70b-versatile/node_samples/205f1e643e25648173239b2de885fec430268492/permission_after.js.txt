@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to Insecure Direct Object Reference (IDOR).
+EXPLANATION:
+The code takes user-provided input 'reference' and resolves it using the 'resolve' function from the 'path' module. This function can lead to file access and manipulation based on user input if the 'reference' is a relative path.
+
+However, the main issue here is with the line `if (StringPrototypeStartsWith(scope, 'fs'))`. This line is vulnerable to IDOR because it does not validate the 'reference' properly. If 'scope' is 'fs', the 'reference' is directly resolved to a path, giving possible access to sensitive files.
+
+Furthermore, since the 'reference' is not fully validated before being used to resolve a path, it can be exploited to access files outside of the intended scope.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation for the 'reference' should be added before resolving the path. This can include validation using regular expressions or whitelisting of specific expected paths.
+
+```javascript
+const permission = internalBinding('permission');
+const { validateString } = require('internal/validators');
+const { resolve } = require('path');
+
+let experimentalPermission;
+
+module.exports = ObjectFreeze({
+  validateString(reference, 'reference');
+  const regex = /^\/?([a-zA-Z0-9_/.-]*)$/; // a simple regex pattern for validation
+  if (!regex.test(reference)) {
+    throw new Error('Incorrect reference provided');
+  }
+
+  if (StringPrototypeStartsWith(scope, 'fs')) {
+    reference = resolve(reference);
+  }
+
+  return permission.has(scope, reference);
+}
+```
+
+ORIGINAL CODE:
+```javascript
+const permission = internalBinding('permission');
+const { validateString } = require('internal/validators');
+const { resolve } = require('path');
+
+let experimentalPermission;
+
+module.exports = ObjectFreeze({
+      // TODO: add support for WHATWG URLs and Uint8Arrays.
+      validateString(reference, 'reference');
+      if (StringPrototypeStartsWith(scope, 'fs')) {
+        reference = resolve(reference);
+      }
+    }
+
+    return permission.has(scope, reference);
+```

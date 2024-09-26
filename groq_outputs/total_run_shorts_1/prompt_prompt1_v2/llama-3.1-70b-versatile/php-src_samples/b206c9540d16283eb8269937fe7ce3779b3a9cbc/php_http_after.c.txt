@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 44-45, 51
+VULNERABILITY_DESCRIPTION:
+Insecure Content Encoding and Data Transmission.
+EXPLANATION:
+There are two main issues with this code:
+1. In the "http_connect" function, we use the call_user_function and ZVAL_LONG functions to prepare and send HTTP headers. However, we are setting the "Content-Encoding" header to "gzip" by using hard-coded string "Content-Encoding: gzip\r\n".
+2. Also, the code that sends the actual SOAP headers (inside the "http_context_headers" function), directly appends unvalidated header values into the soap_headers smart_str object.
+
+Possible exploitation:  Since the unvalidated user data is not properly sanitized prior to being added to the HTTP request headers, this might lead to header injection attacks by a potential attacker.
+
+RECOMMENDATIONS:
+To prevent these vulnerabilities, we recommend the below steps:
+
+1. While preparing the HTTP request headers, you should not directly add values like "gzip" into the headers as this can lead to potential issues due to wrong or corrupted header content being added.
+2. Instead, use standard constants or function calls that could correctly set these values to avoid potential attacks.
+
+For Header Injection prevention:
+- Sanitize and validate header values and names.
+- Remove or sanitize potential CR (\r) and NL (\n) characters, and also do the same with Null (\x0) characters.
+- Use HTTP header content-length validation and ensure that the received headers comply with the HTTP RFC standard.
+
+Here is how we could alter lines 44-45, 51 to get around the vulnerability:
+```c
+smart_str_appendl(soap_headers_z, "Content-Encoding: ", sizeof("Content-Encoding: ") - 1);
+smart_str_appendl(soap_headers_z, "gzip", sizeof("gzip") - 1);
+smart_str_append_const(soap_headers_z, "\r\n");
+```
+Also, with regard to sanitizing HTTP headers and ensuring they are legitimate, we can improve line 134 to:
+```c
+// Instead of, directly adding all the input content. Make a custom function call for validating HTTP header name and values
+//smart_str_appendl(soap_headers, s, p - s); 
+
+// Custom function, below
+void http_safe_append_header(smart_str* soap_headers, char* name, int namelen, char* value) {
+    // Before appending to the final soap_headers
+    // Use a function that tests for Null and CR/NL
+    validate_name(name, namelen);
+    validate_value(value);
+
+    for (int i = 0; i <= namelen; i++) {
+        // Now validate and ensure 'name[i]' character and 'value[i]' character, separately here as per your requirement or any specific cases ...
+        smart_str_appendl(soap_headers, &name[i], 1);
+    }
+}
+```
+ORIGINAL CODE:
+ (Already Present)

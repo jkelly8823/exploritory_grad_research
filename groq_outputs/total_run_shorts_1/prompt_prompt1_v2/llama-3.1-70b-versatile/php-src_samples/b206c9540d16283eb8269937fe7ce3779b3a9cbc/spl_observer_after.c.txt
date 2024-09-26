@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+Unbounded Memory Copy Vulnerability
+
+EXPLANATION:
+The code uses `memcpy` to copy data from the `&zvalue` address to the `hash` pointer. The third argument to `memcpy` is `hash_len`, which is used as a limit for the number of bytes to be copied. However, there is no validation or bounds checking to ensure that the copied data does not exceed the allocated space for `hash`. This could potentially lead to a buffer overflow, allowing an attacker to overwrite adjacent memory locations.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is essential to validate the value of `hash_len` to ensure that it does not exceed the allocated space for `hash`. We can do this by checking if `hash_len` is less than or equal to the size of the allocated memory (`hash_len + 1`). 
+
+```c
+if (hash_len <= hash_len + 1) {
+    memcpy(hash, (char *)&zvalue, hash_len);
+    hash[hash_len] = 0;
+} else {
+    // handle error: hash_len exceeds allocated space
+}
+```
+
+Additionally, consider using safer alternatives like `memcpy_s` or `strcpy_s` which can prevent potential buffer overflows.
+
+ORIGINAL CODE:
+```cpp
+return (char*)&Z_OBJVAL_P(obj);
+#else
+	char *hash = emalloc(hash_len + 1);
+
+	zend_object_value zvalue;
+	memset(&zvalue, 0, sizeof(zend_object_value));
+	zvalue.handle = Z_OBJ_HANDLE_P(obj);
+	zvalue.handlers = Z_OBJ_HT_P(obj);
+
+	memcpy(hash, (char *)&zvalue, hash_len);
+	hash[hash_len] = 0;
+
+	if (hash_len_ptr) {
+		*hash_len_ptr = hash_len;
+```

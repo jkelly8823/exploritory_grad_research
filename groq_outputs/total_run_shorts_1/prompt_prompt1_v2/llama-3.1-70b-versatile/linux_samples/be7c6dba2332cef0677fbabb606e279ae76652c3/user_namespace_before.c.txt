@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+ Privilege Escalation via CAP_SETGID
+
+EXPLANATION:
+The code checks if a user's effective group ID (fsgid) matches the one being set (gid). However, it only checks the fsgid and not the all groups (supplementary groups) belonging to the user. This can be exploited by a local attacker to gain elevated privileges. Specifically, an attacker could create a new group, set the fsgid to this new group, and still manipulate group IDs belonging to the original group. 
+
+A similar check should be performed for supplementary groups (fsgs) to prevent such escalation.
+
+RECOMMENDATIONS:
+The code should also check if the gid is present in file->f_cred->fsgs to prevent elevation of privileges. This can be achieved using in_group_p() function that checks if a specific group ID is present in the user's supplementary groups.
+
+ORIGINAL CODE:
+
+    kuid_t uid = make_kuid(ns->parent, id);
+			if (uid_eq(uid, file->f_cred->fsuid))
+				return true;
+		} else if (cap_setid == CAP_SETGID) {
+			kgid_t gid = make_kgid(ns->parent, id);
+			if (gid_eq(gid, file->f_cred->fsgid))
+				return true;
+		}
+	}
+
+	/* Allow anyone to set a mapping that doesn't require privilege */

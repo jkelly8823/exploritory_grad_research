@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 10-13
+VULNERABILITY_DESCRIPTION:
+The code contains a potential Null Pointer Dereference vulnerability and duplicated code snippet.
+
+EXPLANATION:
+The provided code snippet does not check whether fe_tuner_ops is null before calling get_status. This could result in a null pointer dereference, potentially leading to a program crash or other security risks.
+
+Additionally, there is duplicate code at lines 3-6 and 10-13, where the status of the tuner is obtained and retrieved in the same manner without any significant variations.
+
+RECOMMENDATIONS:
+- To avoid a null pointer dereference, a null check should be added before calling any methods through fe_tuner_ops.
+
+  ```c
+if (fe_tuner_ops && fe_tuner_ops->get_status) {
+    // safe to call get_status now
+}
+```
+
+- The duplicated code should be refactored into a separate function to prevent repetition and improve code maintainability.
+
+  ```c
+u32 get_tuner_status(struct t *t) {
+    u32 tuner_status = 0;
+    if (fe_tuner_ops && fe_tuner_ops->get_status) {
+        fe_tuner_ops->get_status(&t->fe, &tuner_status);
+    }
+    return tuner_status;
+}
+```
+
+- The updated code should look like this:
+
+  ```c
+if (t->mode != V4L2_TUNER_RADIO)
+    return;
+u32 tuner_status = get_tuner_status(t);
+if (tuner_status & TUNER_STATUS_LOCKED)
+    pr_info("Tuner is locked.\n");
+if (vt->type == t->mode) {
+    vt->rxsubchans = V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO;
+    tuner_status = get_tuner_status(t);
+    vt->rxsubchans =
+        (tuner_status & TUNER_STATUS_STEREO) ? 
+  }
+
+```
+ORIGINAL CODE:
+```c
+if (t->mode != V4L2_TUNER_RADIO)
+    return;
+if (fe_tuner_ops->get_status) {
+    u32 tuner_status = 0;
+
+    fe_tuner_ops->get_status(&t->fe, &tuner_status);
+    if (tuner_status & TUNER_STATUS_LOCKED)
+        pr_info("Tuner is locked.\n");
+    if (vt->type == t->mode) {
+        vt->rxsubchans = V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO;
+        if (fe_tuner_ops->get_status) {
+            u32 tuner_status = 0;
+
+            fe_tuner_ops->get_status(&t->fe, &tuner_status);
+            vt->rxsubchans = (tuner_status & TUNER_STATUS_STEREO) ? 
+```

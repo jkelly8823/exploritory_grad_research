@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential denial of service (DoS) through excessive memory consumption or a crash, as there is no validation of the return value of `php_zip_make_relative_path` for a potential null pointer dereference before calling `strlen` on it.
+
+EXPLANATION:
+The `php_zip_make_relative_path` function call may return a null pointer if it encounters an error, which is not checked before the `strlen` function is called on it. If `path_cleaned` is null, `strlen` will dereference a null pointer, leading to a crash or undefined behavior. Additionally, the return value from `php_zip_make_relative_path` is only checked for being `NULL`, but not for other potential failures, such as out-of-memory conditions which could also lead to `NULL` or garbage values.
+
+RECOMMENDATIONS:
+The code should check the return value of `php_zip_make_relative_path` for both `NULL` and any error indicators before attempting to use the result. It should also handle cases where the function fails, for example, by returning an error code to the caller or by terminating the execution in a controlled manner.
+
+ORIGINAL CODE:
+```c
+virtual_file_ex(&new_state, file, NULL, CWD_EXPAND);
+path_cleaned =  php_zip_make_relative_path(new_state.cwd, new_state.cwd_length);
+if(!path_cleaned) {
+    return 0;
+}
+path_cleaned_len = strlen(path_cleaned);
+
+if (path_cleaned_len >= MAXPATHLEN || zip_stat(za, file, 0, &sb) != 0) {
+    return 0;
+}
+```
+
+Recommended sample fix:
+```c
+virtual_file_ex(&new_state, file, NULL, CWD_EXPAND);
+path_cleaned = php_zip_make_relative_path(new_state.cwd, new_state.cwd_length);
+if (path_cleaned == NULL) {
+    // Either return an error code or terminate the execution
+    return -1;
+}
+path_cleaned_len = strlen(path_cleaned);
+
+if (path_cleaned_len >= MAXPATHLEN || zip_stat(za, file, 0, &sb) != 0) {
+    return 0;
+}
+```

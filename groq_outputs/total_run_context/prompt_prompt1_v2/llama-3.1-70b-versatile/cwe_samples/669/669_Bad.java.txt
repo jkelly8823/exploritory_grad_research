@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Path Traversal attack, specifically a Directory Traversal (DT) attack.
+
+EXPLANATION:
+The vulnerability exists because the code directly uses the filename obtained from the HTTP header to construct the path to write the file. An attacker could manipulate the filename to include directory traversal characters (`../`) and potentially write files outside of the intended directory. This could lead to overwriting sensitive files, executing malicious code, or even elevating privileges.
+
+RECOMMENDATIONS:
+1. **Validate the filename**: Before using the filename, validate it to ensure it does not contain directory traversal characters. Consider using a whitelist approach to only allow certain file extensions and characters in the filename.
+2. **Use a secure method to construct the file path**: Instead of concatenating the filename with the upload directory, use a method like `new File(uploadLocation, filename)`. This will help prevent directory traversal attacks by ensuring the filename is properly sanitized.
+3. **Use a temporary file**: Write the uploaded file to a temporary location and then move it to the intended directory. This will prevent an attacker from exploiting any potential vulnerabilities in the file write process.
+4. **Consider using a library or framework**: If possible, use a library or framework that provides a secure file upload mechanism, such as Apache Commons FileUpload.
+
+ORIGINAL CODE:
+```java
+public class FileUploadServlet extends HttpServlet {
+    // ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // ...
+        String pLine = new String();
+        String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); // Constant value
+        // ...
+        try {
+            BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation + filename, true));
+            for (String line; (line = br.readLine()) != null;) {
+                if (line.indexOf(boundary) == -1) {
+                    bw.write(line);
+                    bw.newLine();
+                    bw.flush();
+                }
+            } // end of for loop
+            bw.close();
+
+        } catch (IOException ex) {
+            // ...
+        }
+        // ...
+    }
+}
+```

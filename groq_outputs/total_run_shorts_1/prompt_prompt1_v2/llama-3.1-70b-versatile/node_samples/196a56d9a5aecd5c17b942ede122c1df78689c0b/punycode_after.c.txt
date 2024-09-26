@@ -1,0 +1,104 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 66, 102
+VULNERABILITY_DESCRIPTION: 
+This code is vulnerable to buffer overflow and denial-of-service (DoS) attacks.
+
+EXPLANATION:
+There are multiple issues in the provided code snippet. 
+
+Firstly, at line 5, there's a potential buffer overflow issue in the `memmove` function if `written_out - i` exceeds the allocated size of `pDecoded`. Although we cannot confirm the allocated size of `pDecoded` due to missing code, the possibility still exists.
+
+Secondly, there's another potential buffer overflow at line 66, where the function uses `strncpy` equivalent (`for (i = 0; i < delta + 1; i++) PUSHC(inptr[i]);`) to copy a substring to the `outptr` buffer. However, this issue is mitigated by the `if (size++ < maxsize)` condition in the `PUSHC` macro.
+
+Lastly, at line 102, the function uses `strlen(inptr)` to calculate the size of the input string. However, there's a check for `NULL` termination which prevents the code from overflowing the buffer.
+
+Actually, the most serious issue is at line 102 as well. 
+The `strchr` function is used to search for the first occurrence of '.' in the `inptr` string. However, when `tmpptr` is `NULL`, which means the '.' character is not found in the `inptr` string, the function will then call `strlen(inptr)`. This will lead to a potential buffer overflow issue if `inptr` is not null-terminated. 
+
+However, another more important issue can be identified at line 102. When `tmpptr` is `NULL`, `strlen(inptr)` is used to calculate the length of the remaining string, but it does not handle the case when `inptr` points to a string which is not null-terminated and overflows the maximum allowed size. 
+
+However, following this there is a bug that `delta` is calculated with `(size_t)(tmpptr - inptr)` but code still treats it as a 1 based index ( with `delta + 1` ) such as at the line `for (i = 0; i < delta + 1; i++) PUSHC(inptr[i]);`. This seems to cause an off by one error issue ( may result in index out of bounds issue). This issue results in the 3rd and most major bug.
+
+RECOMMENDATIONS:
+1. To avoid potential buffer overflow, we should ensure that `written_out - i` does not exceed the allocated size of `pDecoded`.
+2. The code should check if the input string `inptr` is null-terminated before calculating its length using `strlen(inptr)`. This is to prevent potential buffer overflow issues. 
+3. We need to ensure the loop at line 66 does not exceed `maxsize`. This is achieved by the code (`if (size++ < maxsize)`) 
+4. We should recalculate the value of `delta` at line 102 ( by using the value `delta - 1`).
+
+Here's a revised version of the problematic lines of code at lines 66 and 102:
+
+```
+// Line 66
+for (i = 0; i < delta; i++) 
+    PUSHC(inptr[i]);
+
+// Alternatively we do `delta - 1` but using `delta` may indicate the intention is a 1 based index, however, this results in off by one indexing error in subsequent uses.
+
+// Line 102
+size_t delta = tmpptr != NULL ? (size_t)(tmpptr - inptr) : strnlen(inptr, maxsize);
+```
+
+
+ORIGINAL CODE:
+ 
+```c
+    char *outptr = out;
+    const char *inptr = in;
+    size_t size = 0, maxsize;
+    int result = 1;
+    unsigned int i, j;
+    unsigned int buf[LABEL_BUF_SIZE];      /* It's a hostname */
+
+    if (out == NULL) {
+        result = 0;
+        maxsize = 0;
+    } else {
+        maxsize = *outlen;
+    }
+
+#define PUSHC(c)                    \
+    do                              \
+        if (size++ < maxsize)       \
+            *outptr++ = c;          \
+        else                        \
+            result = 0;             \
+    while (0)
+
+    while (1) {
+        char *tmpptr = strchr(inptr, '.');
+        size_t delta = tmpptr != NULL ? (size_t)(tmpptr - inptr) : strlen(inptr);
+
+        if (strncmp(inptr, "xn--", 4) != 0) {
+            for (i = 0; i < delta + 1; i++)
+                PUSHC(inptr[i]);
+        } else {
+            unsigned int bufsize = LABEL_BUF_SIZE;
+
+            if (ossl_punycode_decode(inptr + 4, delta - 4, buf, &bufsize) <= 0)
+                return -1;
+
+            for (i = 0; i < bufsize; i++) {
+                unsigned char seed[6];
+                size_t utfsize = codepoint2utf8(seed, buf[i]);
+
+                if (utfsize == 0)
+                    return -1;
+
+                for (j = 0; j < utfsize; j++)
+                    PUSHC(seed[j]);
+            }
+
+            PUSHC(tmpptr != NULL ? '.' : '\0');
+        }
+
+        if (tmpptr == NULL)
+            break;
+
+        inptr = tmpptr + 1;
+    }
+#undef PUSHC
+
+    *outlen = size;
+    return result;
+}
+```

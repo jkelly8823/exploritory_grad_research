@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 9-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Denial-of-Service (DoS) attack caused by a potential null pointer dereference and unhandled string length inspection.
+ 
+EXPLANATION:
+The code is using an Intent to receive a URL and then attempts to retrieve this URL using `getStringExtra("URLToOpen")`. However, if the extra extra does not exist, `getStringExtra` will return null. Subsequently, calling `length()` on this null string would result in a NullPointerException.
+
+Furthermore, even if the URL is not null, the length of the string is not checked before attempting to process it. This could result in an OutOfMemoryError if a URL of excessive length is passed in the intent.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check for null before attempting to use the URL string. It should also validate the length of the string to prevent excessive lengths. This can be achieved by adding a simple null and length check before processing the URL string. 
+
+```java
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if("com.example.URLHandler.openURL".equals(intent.getAction())) {
+            String URL = intent.getStringExtra("URLToOpen");
+            if (URL != null && URL.length() < MAX_URL_LENGTH) { // Define a maximum length to prevent excessive lengths
+                // Process the URL string here
+            } else {
+                // Handle invalid or excessively long URLs
+            }
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+IntentFilter filter = new IntentFilter("com.example.URLHandler.openURL");
+MyReceiver receiver = new MyReceiver();
+registerReceiver(receiver, filter);
+...
+public class UrlHandlerReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if("com.example.URLHandler.openURL".equals(intent.getAction())) {
+            String URL = intent.getStringExtra("URLToOpen");
+            int length = URL.length();
+            //...
+        }
+    }
+}
+```

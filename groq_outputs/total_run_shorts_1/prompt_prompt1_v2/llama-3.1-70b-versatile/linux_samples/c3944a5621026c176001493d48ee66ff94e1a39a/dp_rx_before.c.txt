@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a dangling pointer or use-after-free bug.
+
+EXPLANATION:
+The function `ath11k_peer_rx_tid_cleanup` seems to be a cleanup function, likely called when the peer object `peer` is being destroyed or reset. However, it directly uses `rx_tid` without any initialization or validation, assuming it's a valid pointer. The initialization of `rx_tid` is not shown in this code snippet, but in the function declaration, no validation of its correctness is performed.
+
+However, the initial reason this is shown as vulnerable is the presence of the unconditional call to `__skb_queue_purge` that is presumably called before this function call in an other function, takes `rx_tid` as a pointer. If `rx_tid` pointed to a location in the `peer` object, and that object was destroyed before this function call, the resulting pointer is now dangling. 
+
+RECOMMENDATIONS:
+Validate the `rx_tid` pointer before calling `ath11k_peer_rx_tid_cleanup` to ensure that it's not dangling. This can be done by adding a check that ensures `rx_tid` is not null or points to a valid memory location.
+
+Additionally, when calling `__skb_queue_purge`, a check should be added before the call, to check the location is correctly set.
+
+Lastly consider the consequences of calling `__skb_queue_purge` directly before `ath11k_peer_rx_tid_cleanup` and ensure this is indeed the desired behaviour.
+
+ORIGINAL CODE:
+```c
+	__skb_queue_purge(&rx_tid->rx_frags);
+}
+
+void ath11k_peer_rx_tid_cleanup(struct ath11k *ar, struct ath11k_peer *peer)
+{
+	struct dp_rx_tid *rx_tid;
+	int i;
+```

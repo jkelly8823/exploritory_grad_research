@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to a prototype pollution attack, which can potentially lead to arbitrary code execution.
+
+EXPLANATION:
+The `setValueByPath` function is used to set a value in an object by specifying a path to the property. However, in this case, the path contains the string `__proto__` and `constructor.prototype`, which refers to the object's prototype property. When assigning a value to `__proto__.isAdmin` or `constructor.prototype.isAdmin`, an attacker could potentially pollute the prototype chain of the object, leading to unexpected behavior and potentially allowing arbitrary code execution.
+
+In the first line, `__proto__.isAdmin` can be used to pollute the prototype chain of the object, where `__proto__` refers to the object's prototype property. This could lead to arbitrary code execution if the polluted prototype chain is later used to create new objects or access existing objects.
+
+In the second line, `constructor.prototype.isAdmin` can also be used to pollute the prototype chain, but by accessing the `prototype` property through the `constructor` property of an object. This can be more difficult to detect but still poses a significant threat.
+
+RECOMMENDATIONS:
+To prevent prototype pollution attacks, ensure that the `setValueByPath` function is not used with user-provided input that contains `__proto__` or `constructor.prototype` references. Additionally, consider adding input validation to prevent such paths from being used.
+
+To fix this vulnerability, consider adding a check in the `setValueByPath` function to prevent setting values on the prototype chain:
+
+```javascript
+function setValueByPath(obj, path, value) {
+  const pathParts = path.split('.');
+  const lastPart = pathParts.pop();
+
+  let currentObj = obj;
+
+  for (let part of pathParts) {
+    if (part === '__proto__' || part.includes('constructor.prototype')) {
+      throw new Error('Setting values on the prototype chain is not allowed');
+    }
+    currentObj = currentObj[part];
+  }
+
+  currentObj[lastPart] = value;
+}
+```
+
+ORIGINAL CODE:
+```
+  setValueByPath({}, "__proto__.isAdmin", true)
+  setValueByPath({}, "constructor.prototype.isAdmin", true)
+```

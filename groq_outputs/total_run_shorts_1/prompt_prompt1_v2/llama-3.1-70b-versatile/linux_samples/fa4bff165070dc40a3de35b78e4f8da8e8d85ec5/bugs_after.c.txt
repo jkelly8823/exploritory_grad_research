@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 153
+VULNERABILITY_DESCRIPTION: 
+SMT enabled with MDS bug present, data leak possible.
+
+EXPLANATION:
+The given code is for mitigating the Microarchitectural Data Sampling (MDS) vulnerability on x86 CPUs. The MDS vulnerability allows an attacker to read data from the CPU's internal buffers, potentially exposing sensitive information.
+
+In the function `arch_smt_update()`, it is checked if the MDS mitigation is set to `MDS_MITIGATION_FULL` or `MDS_MITIGATION_VMWERV`, and if SMT (Simultaneous Multithreading) is active. If both conditions are true, and the CPU bug is not only MSBDS, a message is printed to the console warning about the potential data leak.
+
+However, this alone does not constitute a vulnerability, but the print statement is triggered in this scenario. A vulnerability would exist if this mitigation strategy is unsufficient to prevent the MDS attack, which seems not to be the case.
+
+However there is another related case, where we see an information leak. On line 153 a warning message is printed with this information:
+ `pr_warn_once(MDS_MSG_SMT);` its the value of variable MDS_MSG_SMT, the `#define MDS_MSG_SMT` used at the beginning of this file, and says that "MDS CPU bug present and SMT on, data leak possible."
+
+This can be considered an info disclosure vulnerability since an attacker could potentially determine that SMT is enabled and therefore potentially leak data.
+
+RECOMMENDATIONS:
+We recommend to remove the pr_warn_once line to avoid the info disclosure and add more informative messages or more in-depth error handling to avoid potential data leaks.
+
+ORIGINAL CODE:
+(void lines omitted for clarity)
+ ``` 
+ void arch_smt_update(void)
+{
+ /* Enhanced IBRS implies STIBP. No update required. */
+if (spectre_v2_enabled == SPECTRE_V2_IBRS_ENHANCED)
+	break;
+ }
+ switch (mds_mitigation) {
+case MDS_MITIGATION_FULL:
+case MDS_MITIGATION_VMWERV:
+ if (sched_smt_active() && !boot_cpu_has(X86_BUG_MSBDS_ONLY)) 
+(pr_warn_once(MDS_MSG_SMT); to be exact line 153) 
+   pr_warn_once(MDS_MSG_SMT);
+ update_mds_branch_idle();
+ break;
+ case MDS_MITIGATION_OFF:
+  break;
+ }
+
+mutex_unlock(&spec_ctrl_mutex);
+}
+ ```

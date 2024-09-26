@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+ Use After Free Vulnerability
+EXPLANATION:
+In this code snippet, an allocation is not shown, but `buf` appears to be dynamically allocated as evidenced by the call to `kfree(buf)`. The vulnerability arises because there is a control flow path (the error condition `if (ret < 0)` is met) that leads to the freeing of this allocated memory (`kfree(buf);`) before any further uses of `buf`. However, there is no adjustment of the pointer `buf` to indicate that it is no longer pointing to valid memory. This means that if this function or another function is later called and tries to access `buf` thinking it is still pointing to valid memory, this could result in undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, there are two potential solutions:
+
+1. After `kfree(buf);`, add `buf = NULL;` to make sure that the pointer `buf` no longer points to invalid memory.
+
+2. Alternatively, consider creating a custom `free` wrapper function that calls `kfree`, then immediately adjusts the pointer to `NULL` to make sure that, even if the correct practice is accidentally overlooked, a dangling pointer will still be avoided.
+
+ORIGINAL CODE:
+```
+                   le16_to_cpu(endpoint->wMaxPacketSize),
+                   endpoint->bInterval);
+        }
+
+        /* Ignore broken descriptors. */
+        if (usb_endpoint_maxp(endpoint) == 0)
+            continue;
+
+        urbcount = 0;
+
+        pipe_num =
+            ath6kl_usb_get_logical_pipe_num(ar_usb,
+                     req,
+                     USB_DIR_IN | USB_TYPE_VENDOR |
+                     USB_RECIP_DEVICE, value, index, buf,
+                     size, 2000);
+
+        if (ret < 0) {
+            ath6kl_warn("Failed to read usb control message: %d\n", ret);
+            kfree(buf);
+```

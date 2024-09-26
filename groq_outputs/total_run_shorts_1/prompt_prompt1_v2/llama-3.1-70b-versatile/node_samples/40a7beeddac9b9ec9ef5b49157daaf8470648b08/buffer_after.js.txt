@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+ Out-of-bounds memory access due to an incorrect buffer length check.
+
+EXPLANATION:
+ Although the buffer length check `size > 0` is present, it does not guarantee that `buf.length` is equal to `size` when calling `_fill(buf, fill, 0, buf.length, encoding)`. This is because `buf.length` is determined by the `createUnsafeBuffer(size)` function, which may return a buffer with a different length than `size`. This can lead to an out-of-bounds memory access if `buf.length` is greater than `size`.
+
+RECOMMENDATIONS:
+ To fix this issue, ensure that the length passed to `_fill` is correctly validated and bounded. This can be done by replacing `buf.length` with `size` or by verifying that `buf.length` is equal to `size` before calling `_fill`. Here is a revised version of the code:
+
+```
+Buffer.alloc = function alloc(size, fill, encoding) {
+  assertSize(size);
+  if (fill !== undefined && fill !== 0 && size > 0) {
+    const buf = createUnsafeBuffer(size);
+    if (buf.length !== size) {
+      throw new Error('Buffer length mismatch');
+    }
+    return _fill(buf, fill, 0, size, encoding);
+  }
+  return new FastBuffer(size);
+};
+```
+
+ORIGINAL CODE:
+
+```javascript
+Buffer.alloc = function alloc(size, fill, encoding) {
+  assertSize(size);
+  if (fill !== undefined && fill !== 0 && size > 0) {
+    const buf = createUnsafeBuffer(size);
+    return _fill(buf, fill, 0, buf.length, encoding);
+  }
+  return new FastBuffer(size);
+};
+```

@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-19
+VULNERABILITY_DESCRIPTION:
+The code contains a double close vulnerability. This occurs when the same file descriptor is closed multiple times. 
+
+EXPLANATION:
+In this code snippet, the file descriptor 'f' is first checked if it is valid, and if so, it is closed. However, if the first 'fclose' call (line 12) fails or sets an error code (errno) that causes its return value to be -1 or 0 (which is interpreted as a boolean false in the conditional 'if' statement on the following line), it does not prevent the attempt to close 'f' again in the second if statement (lines 17-19). As a result, the application will attempt to close 'f' twice which is undefined and potentially leads to resource leaks or corruptions. 
+
+RECOMMENDATIONS:
+The solution is to make sure that a file descriptor is never closed more than once. A simple fix is to remove the second 'fclose' call at lines 17-19, because it will only execute after the first 'fclose' call has returned 0, hence there is no point in making it conditionally dependent upon the 'f_flg' flag.
+
+Additionally, we should check for any actual failures while attempting to close 'f'. Here is an improved version of these lines:
+
+```
+if (f_flg)
+{
+    int r1 = fclose(f);
+    if (r1 == 0)
+    {
+        f_flg = 0;
+    }
+
+    else
+    {
+        printf("\n-----------------\nfclose failure\n");
+    }
+    printf("\n-----------------\n1 close done '%d'\n", r1);
+}
+```
+
+ORIGINAL CODE:
+
+```c
+char b[2000];
+int f_flg = 0;
+FILE *f = fopen("dbl_cls.c", "r");
+if (f)
+{
+	f_flg = 1;
+	b[0] = 0;
+	fread(b, 1, sizeof(b) - 1, f);
+	printf("%s\n'", b);
+	if (f_flg)
+	{
+		int r1 = fclose(f);
+		f_flg = 0;
+		printf("\n-----------------\n1 close done '%d'\n", r1);
+	}
+	if (f_flg)
+	{
+		int r2 = fclose(f);	// Double close
+		f_flg = 0;
+		printf("2 close done '%d'\n", r2);
+	}
+}
+```

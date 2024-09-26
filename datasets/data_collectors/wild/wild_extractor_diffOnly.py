@@ -195,7 +195,6 @@ def main():
     df = df[df['index'] >= 983]
 
     token = os.getenv('github_key')  # Optional: Replace with your GitHub personal access token if needed
-    # token2 = os.getenv('github_key2')  # Optional: Replace with your GitHub personal access token if needed
 
     # for commit_id in commit_ids:
     count = 0
@@ -212,7 +211,7 @@ def main():
             extract_and_save_changes(row.repo_owner, row.repo_name, commit_data, f'{output_dir}/{row.repo_name}_samples', token)
 
             count += 1
-            if count >= limit and limit != 0:
+            if count >= limit:
                 break
 
     with open(f"{output_dir}/fail_log.txt", 'w+') as file:

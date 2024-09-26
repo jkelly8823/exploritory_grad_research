@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-9
+VULNERABILITY_DESCRIPTION: 
+Visible Data Races and Unsynchronized Access to Shared Variables
+
+EXPLANATION:
+The code snippet is vulnerable due to visible data races and unsynchronized access to shared variables. In the `main()` method, the main thread starts a new thread (`Threader`) and immediately sets the shared static variable `foo` to 1. However, in the `Threader` class, the `run()` method tries to print the value of `foo`, which is shared between the main thread and the new thread.
+
+Since the `foo` variable is not synchronized or made `volatile`, the compiler and JVM may not guarantee that changes made to `foo` in the main thread will be immediately visible to the new thread. This can lead to unpredictable results, potentially causing the `run()` method to print an incorrect value of `foo`.
+
+RECOMMENDATIONS:
+To resolve the vulnerability, you can either declare the `foo` variable as `volatile` or make it `final` since it's only written once. Alternatively, you can synchronize the access to `foo` by using `synchronized` blocks or by using a thread-safe atomic operation.
+
+If the purpose of the code is to ensure that the new thread sees the latest value of `foo`, declaring `foo` as `volatile` is the simplest solution. Here is the corrected code snippet:
+
+```java
+public class Race {
+    private static volatile int foo = 0;
+
+    public static void main() {
+        new Threader().start();
+        foo = 1;
+    }
+
+    public static class Threader extends Thread {
+        @Override
+        public void run() {
+            System.out.println(foo);
+        }
+    }
+}
+```
+
+Alternatively, using an `AtomicInteger` would be a more thread-safe solution:
+
+```java
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class Race {
+    private static AtomicInteger foo = new AtomicInteger(0);
+
+    public static void main() {
+        new Threader().start();
+        foo.set(1);
+    }
+
+    public static class Threader extends Thread {
+        @Override
+        public void run() {
+            System.out.println(foo.get());
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+public class Race {
+    static int foo = 0;
+    public static void main() {
+        new Threader().start();
+        foo = 1;
+    }
+    public static class Threader extends Thread {
+        public void run() {
+            System.out.println(foo);
+        }
+    }
+}
+```

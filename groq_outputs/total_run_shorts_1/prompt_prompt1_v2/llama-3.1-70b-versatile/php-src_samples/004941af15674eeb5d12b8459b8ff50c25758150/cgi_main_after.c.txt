@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 15, 18, 19
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability is identified in the given code snippet.
+
+EXPLANATION:
+In the provided code snippet, a Use After Free vulnerability is identified. The `decoded_query_string` is allocated using `strdup` and then freed after its use in the `if` block. However, the value of `decoded_query_string` is not updated or reset after it's freed. Later, in the `while` loop, the `decoded_query_string` is used again in the `switch` block when `c` is equal to `'c'`. Although, there is no direct use of `decoded_query_string` in the switch block, there is still an issue. The variable ` cgi_sapi_module.php_ini_path_override` is freed regardless of whether it is null or not. 
+
+However, since we do not have the rest of the code for a complete analysis, a free does happen on a value assigned to `cgi_sapi_module.php_ini_path_override` in the `case 'c'`, but it is worth noting `cgi_sapi_module.php_ini_path_override` was not freed elsewhere but assigned again to `strdup` if `"QUERY_STRING"` is set.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that `cgi_sapi_module.php_ini_path_override` is set to `NULL` after it's freed or better, use a copy of the value instead of updating the original value. Consider using a smart pointer if available in your language.
+
+ORIGINAL CODE:
+```c
+#include "php_main.h"
+#include "fopen_wrappers.h"
+#include "ext/standard/php_standard.h"
+#include "ext/standard/url.h"
+
+#ifdef PHP_WIN32
+# include <io.h>
+# include <fcntl.h>
+#ifndef PHP_WIN32
+	int status = 0;
+#endif
+	char *query_string;
+	char *decoded_query_string;
+	int skip_getopt = 0;
+
+#if 0 && defined(PHP_DEBUG)
+	/* IIS is always making things more difficult.  This allows
+	 * us to stop PHP and attach a debugger before much gets started */
+		}
+	}
+
+	if(query_string = getenv("QUERY_STRING")) {
+		decoded_query_string = strdup(query_string);
+		php_url_decode(decoded_query_string, strlen(decoded_query_string));
+		if(*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+			skip_getopt = 1;
+		}
+		free(decoded_query_string);
+	}
+
+	while (!skip_getopt && (c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2)) != -1) {
+		switch (c) {
+			case 'c':
+				if (cgi_sapi_module.php_ini_path_override) {
+					free(cgi_sapi_module.php_ini_path_override); 
+```

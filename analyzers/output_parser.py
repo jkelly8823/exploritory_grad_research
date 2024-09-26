@@ -23,7 +23,7 @@ def main():
                 output = file.read()
 
             # Define the regex pattern to match both cases
-            pattern = r"VULNERABLE.*:.*(YES)|(NO)"
+            pattern = r"VULN.*:.*(YES)|(NO)"
 
             # Search for matches using regex
             matches = re.findall(pattern, output, re.IGNORECASE)
@@ -55,9 +55,9 @@ def main():
             df.loc[len(df)] = new_row
 
     out_filename = os.getenv('parser_dir').replace('\\','_').replace('/','_')
-    df.to_csv(f"analyzers/{out_filename}_parsed_outputs.csv", index=True, index_label='INDEX')
+    df.to_csv(f"analyzers/parsed/{out_filename}_parsed_outputs.csv", index=True, index_label='INDEX')
 
-    with open(f"analyzers/{out_filename}_fail_log.txt", 'w+') as file:
+    with open(f"analyzers/fail_logs/{out_filename}_fail_log.txt", 'w+') as file:
         file.writelines(fail_log)
 
 if __name__ == "__main__":

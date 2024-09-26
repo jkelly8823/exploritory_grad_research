@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-15
+VULNERABILITY_DESCRIPTION:
+Unvalidated Input in Command Execution
+
+EXPLANATION:
+The code snippet is vulnerable to unvalidated input in command execution. The `$nonfips_pub_key` and `$sigfile` variables are used as arguments in the `app(['openssl', 'dgst', ...])` function, which appears to be executing a system command. However, the code does not validate or sanitize the input values of these variables before passing them to the command. This could allow an attacker to inject malicious input, potentially leading to command injection or file inclusion attacks.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should validate and sanitize the input values of `$nonfips_pub_key` and `$sigfile` before passing them to the command. Here are a few recommended fixes:
+
+1. Use `quotemeta` to escape any special characters in the input values:
+```perl
+$nonfips_pub_key = quotemeta($nonfips_pub_key);
+$sigfile = quotemeta($sigfile);
+```
+2. Validate the input values against a whitelist of allowed characters. For example:
+```perl
+if ($nonfips_pub_key =~ /^[a-zA-Z0-9_]+$/ && $sigfile =~ /^[a-zA-Z0-9_\.]+$/) {
+    # continue with command execution
+} else {
+    # handle invalid input
+}
+```
+3. Consider using a safer way to execute system commands, such as using ` Capturex` or ` IPC::Run` modules.
+
+ORIGINAL CODE:
+
+
+}
+
+my $tsignverify_count = 9;
+sub tsignverify {
+    my $prefix = shift;
+    my $fips_key = shift;
+    my $fips_pub_key = shift;
+                 $tbs_data])));
+    $testtext = $prefix.': '.
+        'Verify something with a non-FIPS key'.
+		' in FIPS mode but with a non-FIPS property query';
+    ok(run(app(['openssl', 'dgst',
+				'-provider', 'default',
+				'-propquery', '?fips!=yes',
+				'-sha256',
+                '-verify', $nonfips_pub_key,
+                '-signature', $sigfile,
+                $tbs_data])),
+       $testtext);
+
+    $testtext = $prefix.': '.
+        'Verify a valid signature against the wrong data with a non-FIPS key'.
+        ' (should fail)';
+    ok(!run(app(['openssl', 'dgst', '-sha256',

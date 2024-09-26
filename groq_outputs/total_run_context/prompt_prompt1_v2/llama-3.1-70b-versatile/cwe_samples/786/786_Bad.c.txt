@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7, 10-11
+VULNERABILITY_DESCRIPTION:
+Buffer Overwrite Vulnerability and Memory Leak.
+
+EXPLANATION:
+The provided code has two main issues. 
+
+The first issue is a memory leak caused by allocating memory for `message` twice. The line `char message[length+1];` allocates memory on the stack for `length+1` characters. This memory will be automatically freed when the function returns. However, just before that, the code also has `char *message = malloc(sizeof(char)*(length+1));` which allocates memory on the heap for `length+1` characters. This allocated memory is never freed. However, the code does use it correctly by returning `retMessage` which equals `message`. However the allocated heap memory is never used, only overwritten by stack memory.
+
+The second issue is a buffer overwrite vulnerability in the for loop. The loop iterates over the input string `strMessage` up to the `length` index. However, the function does not check whether the input string's actual length is less than the provided `length` argument. If the string's actual length is less, this will result in buffer overwriting, or else will read from memory that has not been initialized by `strMessage`.
+
+RECOMMENDATIONS:
+
+1. Remove the unnecessary allocation on the heap and use the stack-allocated `message` variable directly. This will fix the memory leak.
+2. Before copying the string, check that the input string's length is at least `length`. This can be done by checking the NULL character position using `strlen()`.
+3. A better way to copy strings in C is to use functions like `strncpy()` or `strcpy()`, ensuring that you handle potential issues like buffer overflows or underflows properly.
+
+Here is a simplified and more secure version of this code:
+
+```c
+#include <string.h>
+#include <ctype.h>
+
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char message[length+1];
+    strncpy(message, strMessage, length);
+    message[length] = '\0';
+        
+    // trim trailing whitespace
+    int len = length-1;
+    while (len >= 0 && isspace(message[len])) {
+        message[len] = '\0';
+        len--;
+    }
+            
+    // trim leading whitespace not addressed in original code
+    int i = 0;
+    while (i < len && isspace(message[i])) {
+        i++;
+    }
+            
+    return strndup(message+i, len+1-i);
+}
+
+//Please note that you should manually free the memory returned from strndup.
+```
+
+However, since you just can work with the given snippet, focus on not using `message` the second time. Instead use `message` from the heap directly.
+
+```c
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *message = malloc(sizeof(char)*(length+1));
+        
+    // copy input string to a temporary string
+    int index;for (index = 0; index < length; index++) {message[index] = strMessage[index];}message[index] = '\0';
+            
+    // trim trailing whitespace
+    int len = index-1;while (isspace(message[len]) && len >= 0) {message[len] = '\0';len--;}
+            
+    // return string without trailing whitespace
+    return message;
+}
+```
+
+ORIGINAL CODE:
+```cpp
+char* trimTrailingWhitespace(char *strMessage, int length) {
+    char *retMessage;char *message = malloc(sizeof(char)*(length+1));
+            
+    // copy input string to a temporary string
+    char message[length+1];int index;for (index = 0; index < length; index++) {message[index] = strMessage[index];}message[index] = '\0';
+            
+    // trim trailing whitespace
+    int len = index-1;while (isspace(message[len])) {message[len] = '\0';len--;}
+            
+    // return string without trailing whitespace
+    retMessage = message;return retMessage;
+}
+```

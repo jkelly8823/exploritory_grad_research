@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+The code does not correctly handle all possible certificate verification errors, allowing potential man-in-the-middle attacks.
+
+EXPLANATION:
+The code checks for specific verification results (X509_V_OK and X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) but does not handle other possible verification errors that may indicate issues with the certificate (e.g., X509_V_ERR_CERT_REVOKED, X509_V_ERR_KEY_USAGE). Even if the verification result is not one of these specific errors, the code will not reject the certificate, potentially allowing an attacker to present a malicious certificate.
+
+RECOMMENDATIONS:
+To properly handle certificate verification errors, check the verification result against all possible error codes and handle them appropriately. Also, consider implementing proper error handling for cases where verification fails. For example:
+
+```c
+if ((cert = SSL_get_peer_certificate(ssl)) && host) {
+    long foo = SSL_get_verify_result(ssl);
+    if (foo != X509_V_OK) {
+        // handle all verification errors, including self-signed certificates
+        // reject the certificate and close the connection
+    } else {
+        // certificate looks good, host can be trusted
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```c
+if ((cert = SSL_get_peer_certificate(ssl)) && host)
+    foo = SSL_get_verify_result(ssl);
+    if ((X509_V_OK == foo) || X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN == foo))
+
+        // certificate looks good, host can be trusted
+```

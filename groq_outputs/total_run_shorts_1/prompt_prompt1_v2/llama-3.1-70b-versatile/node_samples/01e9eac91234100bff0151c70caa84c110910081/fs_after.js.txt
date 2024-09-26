@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15, 24-25
+VULNERABILITY_DESCRIPTION:
+The code contains a potential vulnerability in the form of a TOCTOU (Time-of-Check to Time-of-Use) error in the context of fchown API. This error occurs when the state of the permission model is checked and then the actual operation is performed. In between the check and the use, the permission could be changed by another thread, potentially leading to unexpected behavior or errors.
+
+EXPLANATION:
+The issue arises because the fchown API checks if the permission model is enabled and if so, throws an exception. However, after the check, the actual fchown operation is performed, and before that, other operations like uid and gid validation are performed. This time gap between the permission check and the actual operation is vulnerable to changes in the permission model. In the provided code, the same issue exists in fchownSync function where permission is checked and then fchown operation is performed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the permission model state should be obtained in a way that prevents it from changing between the check and the use. One possible way to achieve this is to first lock the system state and then perform the permission check and the fchown operation as an atomic action. 
+
+Also, please note that `uid` and `gid` are not defined in this context. If they are function parameters, they should be validated before being used in the fchown operation. They are used in the provided code snippet outside their defined scope.
+
+ORIGINAL CODE:
+```
+mode = parseFileMode(mode, 'mode');
+callback = makeCallback(callback);
+
+if (permission.isEnabled()) {
+  callback(new ERR_ACCESS_DENIED('fchmod API is disabled when Permission Model is enabled.'));
+  return;
+}
+
+const req = new FSReqCallback();
+req.oncomplete = callback;
+binding.fchmod(fd, mode, req);
+}
+* @returns {void}
+*/
+function fchmodSync(fd, mode) {
+  if (permission.isEnabled()) {
+    throw new ERR_ACCESS_DENIED('fchmod API is disabled when Permission Model is enabled.');
+  }
+  binding.fchmod(
+    fd,
+    parseFileMode(mode, 'mode'),
+  );
+  validateInteger(uid, 'uid', -1, kMaxUserId);
+  validateInteger(gid, 'gid', -1, kMaxUserId);
+  callback = makeCallback(callback);
+  if (permission.isEnabled()) {
+    callback(new ERR_ACCESS_DENIED('fchown API is disabled when Permission Model is enabled.'));
+    return;
+  }
+
+  const req = new FSReqCallback();
+  req.oncomplete = callback;
+  binding.fchown(fd, uid, gid, req);
+function fchownSync(fd, uid, gid) {
+  validateInteger(uid, 'uid', -1, kMaxUserId);
+  validateInteger(gid, 'gid', -1, kMaxUserId);
+  if (permission.isEnabled()) {
+    throw new ERR_ACCESS_DENIED('fchown API is disabled when Permission Model is enabled.');
+  }
+
+  binding.fchown(fd, uid, gid);
+}
+```

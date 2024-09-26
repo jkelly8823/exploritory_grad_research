@@ -1,0 +1,38 @@
+ 
+
+```c
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/kvm.h>
+#include <linux/kvm_host.h>
+#include <linux/kvm_vcpu.h>
+
+struct kvm_vcpu *vcpu;
+
+int kvm_vcpu_ioctl_get_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs __user *msrs)
+{
+    struct kvm_msr_entry *entry;
+    int i;
+
+    if (vcpu->arch.msr_shadow_valid)
+        return -EOPNOTSUPP;
+
+    if (copy_from_user(&entry, msrs, sizeof(*entry)))
+        return -EFAULT;
+
+    if (entry->index >= KVM_MAX_MSR_ENTRIES)
+        return -EINVAL;
+
+    for (i = 0; i < entry->count; i++) {
+        struct kvm_msr_entry *msr = &entry->msrs[i];
+
+        if (msr->index >= KVM_MAX_MSR_ENTRIES)
+            return -EINVAL;
+
+        if (msr->index == MSR_KVM_SYSTEM_TIME)
+            return -EOPNOTSUPP;
+
+        if (msr->index == MSR_IA32_TSC)
+            return -EOPNOTSUPP;
+
+        if (msr->index

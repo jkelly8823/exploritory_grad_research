@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 13
+VULNERABILITY_DESCRIPTION:
+Insecure memory expansion and null pointer dereference.
+
+EXPLANATION:
+The given code snippet uses the `bn_wexpand()` function to expand the memory of `k`, `lambda`, `s->X`, and `s->Y` bn objects. However, if the expansion fails, the function returns `NULL` and the error is not properly handled. This may lead to a null pointer dereference when trying to access the memory of these objects later on.
+
+In line 13, the code does not check if `s->X` or `s->Y` is `NULL` before calling `bn_wexpand()` on them. This can lead to a null pointer dereference if the memory expansion fails.
+
+Additionally, the code does not verify that the memory expansion does not overflow the allocated memory space. If the expansion exceeds the available memory, this may lead to a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should:
+
+- Check the return value of all `bn_wexpand()` calls for `NULL`. If the expansion fails, it should handle the error properly and avoid using the resulting null pointer.
+
+- Verify that the memory expansion does not overflow the allocated memory space.
+
+- Implement a check for null pointers before using any of the bn objects that could have been affected by a failed memory expansion.
+
+- Consider using exception handling or error checking to handle these potential issues.
+
+ORIGINAL CODE:
+```c
+    cardinality_bits = BN_num_bits(cardinality);
+    group_top = bn_get_top(cardinality);
+    if ((bn_wexpand(k, group_top + 1) == NULL)
+        || (bn_wexpand(lambda, group_top + 1) == NULL))
+        goto err;
+
+    if (!BN_copy(k, scalar))
+        goto err;
+     * k := scalar + 2*cardinality
+     */
+    kbit = BN_is_bit_set(lambda, cardinality_bits);
+    BN_consttime_swap(kbit, k, lambda, group_top + 1);
+
+    group_top = bn_get_top(group->field);
+    if ((bn_wexpand(s->X, group_top) == NULL)
+        || (bn_wexpand(s->Y, group_top) == NULL)
+```

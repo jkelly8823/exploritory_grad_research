@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Potential Information Leak due to Integer Overflow
+EXPLANATION:
+In the given code snippet, there is a potential for an integer overflow in the line `if (macoff + snaplen > po->rx_ring.frame_size)`. This happens when `macoff` and `snaplen` are both large numbers and their sum exceeds the maximum value that can be stored in an `unsigned short` data type (which is the data type of `macoff`). This can lead to an integer overflow and wrap around, potentially causing the comparison to return an incorrect result. A skilled attacker could exploit this to leak sensitive information.
+Additionally, even if there is no integer overflow, there is a possibility that `macoff + snaplen` can be equal to `po->rx_ring.frame_size`, but still exceed the actual capacity due to header padding or other metadata. This can also lead to buffer overflow when reading or writing into the buffer.
+
+However, since `snaplen` and `macoff` are `unsigned int` and `unsigned short` respectively, the resultant sum will be `unsigned int` in C. C does not prevent or flag arithmetic overflows like other languages. Instead, C requires manual checking of overflows.
+
+As a side note, even if potential integer overflows do not pertain to overflows inherent from mathematical operations, when comparing values of `unsigned short` to `po->rx_ring.frame_size` which is of larger or equal size. But we should be careful how large amounts can affect comparisons.
+
+RECOMMENDATIONS:
+We recommend checking for the potential integer overflows before making this comparison. One way to do it is to compare `macoff` and `snaplen` separately against `po->rx_ring.frame_size` and checking for their overall sum.
+
+Also, it would be best practice to cast both operands (including the size variable) into `unsigned long` to explicitly allow values up to the length (here, `rx_ring.frame_size`) because signed/unsigned values of those are potentially very common during ring copy.
+
+To accomplish this effectively and in full generality of numeric promotions, code redesign is required.
+
+ORIGINAL CODE:
+```c
+int skb_len = skb->len;
+unsigned int snaplen, res;
+unsigned long status = TP_STATUS_USER;
+unsigned short macoff, netoff, hdrlen;
+struct sk_buff *copy_skb = NULL;
+struct timespec64 ts;
+__u32 ts_status;
+bool is_drop_n_account = false;
+	}
+	macoff = netoff - maclen;
+}
+if (po->tp_version <= TPACKET_V2) {
+	if (macoff + snaplen > po->rx_ring.frame_size) {
+		if (po->copy_thresh &&
+		    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf) {
+```

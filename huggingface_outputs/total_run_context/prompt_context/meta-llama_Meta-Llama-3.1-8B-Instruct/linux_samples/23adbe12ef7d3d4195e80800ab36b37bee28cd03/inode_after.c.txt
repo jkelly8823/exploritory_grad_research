@@ -1,0 +1,25 @@
+ 
+
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+EXPLANATION:
+The code is vulnerable to the CVE-2014-4014 vulnerability. This is because the capabilities implementation in the Linux kernel does not properly consider that namespaces are inapplicable to inodes. The code checks if the current task has CAP_FOWNER in a namespace with the inode owner uid mapped, which allows a local user to bypass intended chmod restrictions by first creating a user namespace.
+RECOMMENDATIONS:
+1. Update the Linux kernel to version 3.14.8 or later to fix the vulnerability.
+2. Implement additional checks to ensure that namespaces are not used to bypass chmod restrictions.
+3. Consider using a more secure approach, such as using a different mechanism to determine file ownership.  ```c
+bool inode_owner_or_capable(const struct inode *inode)
+{
+	struct user_namespace *ns;
+
+	if (uid_eq(current_fsuid(), inode->i_uid))
+		return true;
+
+	ns = current_user_ns();
+	if (ns_capable(ns, CAP_FOWNER) && kuid_has_mapping(ns, inode->i_uid))
+		return true;
+	return false;
+}
+``` 
+```c
+bool inode_owner_or_capable(const struct inode *inode

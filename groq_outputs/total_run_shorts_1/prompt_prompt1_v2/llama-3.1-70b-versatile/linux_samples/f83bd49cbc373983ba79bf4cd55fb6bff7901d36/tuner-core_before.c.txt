@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 10
+VULNERABILITY_DESCRIPTION:
+The vulnerability detected in this code snippet is a Potential Uninitialized Use of a Variable, and Duplicated Code.
+
+EXPLANATION:
+The variable 'vt' is used on lines 9 and 11 without any initialization or verification of existence in the provided code snippet. If 'vt' is not initialized before being used, it could lead to unintended behavior or crashes.
+
+Additionally, the same code block is duplicated on lines 3 and 10: 'if (fe_tuner_ops->get_status)'. This redundant code can be refactored to improve code maintainability and readability.
+
+RECOMMENDATIONS:
+First, ensure that 'vt' is properly initialized and checked for null before being used. 
+
+Second, extract the duplicated code into a separate function to eliminate redundancy and improve maintainability.
+
+Here's an example of how you could refactor the code:
+
+```c
+if (vt && t->mode != V4L2_TUNER_RADIO) {
+    //...
+}
+
+// extracted function
+static inline void get_tuner_status(struct tuner *t) {
+    if (fe_tuner_ops->get_status) {
+        u32 tuner_status;
+        fe_tuner_ops->get_status(&t->fe, &tuner_status);
+        //...
+    }
+}
+
+// Usage
+static inline void some_function(struct tuner *t, struct vt *vt) {
+    if (t->mode != V4L2_TUNER_RADIO)
+        return;
+    get_tuner_status(t);
+    if (vt->type == t->mode) {
+        vt->rxsubchans = V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO;
+        get_tuner_status(t);
+        //...
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+if (t->mode != V4L2_TUNER_RADIO)
+	return;
+if (fe_tuner_ops->get_status) {
+	u32 tuner_status;
+
+	fe_tuner_ops->get_status(&t->fe, &tuner_status);
+	if (tuner_status & TUNER_STATUS_LOCKED)
+		pr_info("Tuner is locked.\n");
+if (vt->type == t->mode) {
+	vt->rxsubchans = V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO;
+	if (fe_tuner_ops->get_status) {
+		u32 tuner_status;
+
+		fe_tuner_ops->get_status(&t->fe, &tuner_status);
+		vt->rxsubchans =
+			(tuner_status & TUNER_STATUS_STEREO) ?
+```

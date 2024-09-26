@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6,7
+VULNERABILITY_DESCRIPTION:
+Insecure handling of SSL connection establishment.
+EXPLANATION:
+The code does not check the return value of the `SSL_connect()` function, which can return an error on failure. This function can fail for various reasons, including but not limited to: handshake failure, resource exhaustion, protocol mismatch, etc. In absence of error handling, this can lead to continued execution with an invalid SSL connection handle, allowing an attacker to execute arbitrary code or steal sensitive information.
+
+Additionally, relying solely on the `is_client` flag to determine whether to call `SSL_connect()` or not, may be a good practice, however, proper error handling should always be implemented to handle possible errors or exceptions.
+
+The function `SSL_connect()` may also be vulnerable to man-in-the-middle attacks if the certificate verification is not performed.
+
+RECOMMENDATIONS:
+Proper error handling should be implemented to handle the return value of `SSL_connect()`. The `SSL_connect()` function returns 1 on success and <= 0 on failure. To improve security, proper checks should be in place to verify that the connection is established successfully and the certificate presented by the peer is valid for the given host.
+
+Here is a possible example of how the code can be modified:
+```c
+do {
+    struct timeval	cur_time,
+                    elapsed_time = {0};
+    
+    int ssl_error;
+    if (sslsock->is_client) {
+        n = SSL_connect(sslsock->ssl_handle);
+        if (n <= 0) {
+            ssl_error = SSL_get_error(sslsock->ssl_handle, n);
+            if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
+                // handle ssl_connect error
+                // For example:
+                // fprintf(stderr, "SSL connect error: %s\n", ERR_error_string(ERR_get_error(), NULL));
+            }
+        }
+    } 
+    // Rest of the code here
+```
+ORIGINAL CODE:
+```c
+do {
+    struct timeval	cur_time,
+                    elapsed_time = {0};
+    
+    if (sslsock->is_client) {
+        n = SSL_connect(sslsock->ssl_handle);
+    } else {
+```

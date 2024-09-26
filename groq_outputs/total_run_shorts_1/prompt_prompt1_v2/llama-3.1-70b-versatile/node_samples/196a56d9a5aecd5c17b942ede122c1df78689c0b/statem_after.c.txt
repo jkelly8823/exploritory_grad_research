@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION: Potential Resource Leak or Use After Free.
+EXPLANATION:
+In the provided code snippet, the `WPACKET_cleanup(&pkt)` function is called regardless of the outcome of `ssl_close_construct_packet(s, &pkt, mt)` and `WPACKET_finish(&pkt)`. However, in the event of an error during these two function calls, the resources allocated by `pkt` might not have been properly cleaned up. Additionally, there's a possibility that the `pkt` is used after being cleaned up, which would result in a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+To prevent the potential resource leak or use-after-free vulnerability, ensure that the `pkt` is properly cleaned up after its resources have been used and freed. It's essential to guarantee that `WPACKET_finish(&pkt)` is called before `WPACKET_cleanup(&pkt)` to ensure proper resource release.
+
+If the `WPACKET_cleanup(&pkt)` call is also intended to free the resources even in case of failure, then it's recommended to add an additional check to verify that `pkt` is not being used after `WPACKET_cleanup(&pkt)` is called.
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 2015-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+                SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+                return SUB_STATE_ERROR;
+            }
+            if (confunc != NULL) {
+                int tmpret;
+
+                tmpret = confunc(s, &pkt);
+                if (tmpret <= 0) {
+                    WPACKET_cleanup(&pkt);
+                    check_fatal(s);
+                    return SUB_STATE_ERROR;
+                } else if (tmpret == 2) {
+                    /*
+                     * The construction function decided not to construct the
+                     * message after all and continue. Skip sending.
+                     */
+                    WPACKET_cleanup(&pkt);
+                    st->write_state = WRITE_STATE_POST_WORK;
+                    st->write_state_work = WORK_MORE_A;
+                    break;
+                } /* else success */
+            }
+            if (!ssl_close_construct_packet(s, &pkt, mt)
+                    || !WPACKET_finish(&pkt)) {
+                WPACKET_cleanup(&pkt);
+```
+
+Example of fixed code:
+```c
+// ...
+
+if (ssl_close_construct_packet(s, &pkt, mt)) {
+    WPACKET_finish(&pkt);
+    // pkt is now finished and its resources are freed by WPACKET_finish()
+} else {
+    // error occurred during ssl_close_construct_packet
+    WPACKET_cleanup(&pkt);  // ensure pkt's resources are cleaned up
+}
+
+// never use pkt again after WPACKET_cleanup()
+```

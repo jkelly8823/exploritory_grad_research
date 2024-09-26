@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 86, 87
+VULNERABILITY_DESCRIPTION:
+RSA Key Exposure Vulnerability due to inadequate error handling and potential use of a malloc'd ASN1_OCTET_STRING without necessary memory safety checks.
+
+EXPLANATION:
+This vulnerability emerges from the lack of proper error checking and exception handling when handling sensitive data structures like X.509 certificates and RSA encryption keys. 
+
+Line 86 has a goto statement without properly handling the error before the jump, leaving memory freed later to have been already deallocated. Later, the ASN1_OCTET_STRING_set gets called which does not have an accompanying check whether new was a null pointer at the point of use.
+
+If the allocation in ASN1_OCTET_STRING_new failed, but somehow X509_digest succeeds (through some path that wasn't fully hit), and also, md was set, "md_used" would be left uninitalized and "err" didn't happen.  Then, returning NULL while also leaking a bit of "new" through memory is also problematic as well as how free() would be on an uninitalized variable md which does not get initialized. This will often trigger heap-abort errors. 
+
+RECOMMENDATIONS:
+It is recommended that proper error checking and handling be implemented to avoid potential memory access and use-after-free issues. For instance:
+
+Instead of goto statements, clear alternatives should be chosen and memory management done correctly. Moreover, assignment of successful memory claims should only be made if and only if 'success' has come from a call that first guarantees safe return before a jump. Therefore, before using it, 'md_used' should have a checked 'whether failure got caught already' as md will now use this and after the prior.
+
+The code needs more proper validation to prevent and/or limit exposures in error scenarios, due to unknown values with functions sensitive to whether use conditions have been initialized prior.
+
+ORIGINAL CODE:
+(We are cutting the original code as you provided a way too long file)
+
+```c
+int X509_pubkey_digest(const X509 *data, const EVP_MD *type,
+                       unsigned char *md, unsigned int *len)
+{
+    ASN1_BIT_STRING *key = X509_get0_pubkey_bitstr(data);
+
+    if (key == NULL)
+        return 0;
+    return EVP_Digest(key->data, key->length, md, len, type, NULL);
+}
+
+... // 87 lines into X509_digest (which was part of code from example stack).
+
+                || !ossl_rsa_pss_get_param_unverified(pss, &mmd, &mgf1md,
+                                                      &saltlen,
+                                                      &trailerfield)
+                || mmd == NULL) {
+                RSA_PSS_PARAMS_free(pss);
+                ERR_raise(ERR_LIB_X509, X509_R_UNSUPPORTED_ALGORITHM);
+                return NULL;
+            }
+    if (!X509_digest(cert, md, hash, &len)
+            || (new = ASN1_OCTET_STRING_new()) == NULL)
+        goto err;
+    if (ASN1_OCTET_STRING_set(new, hash, len)) {
+        if (md_used != NULL)
+            *md_used = md;
+        else
+            EVP_MD_free(md);
+```

@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-21
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability and Lack of Input Validation
+
+EXPLANATION:
+The code is vulnerable to a path traversal attack and does not properly validate the uploaded filename. When the filename is extracted from the HTTP header using `pLine.lastIndexOf("\\")` and `pLine.lastIndexOf("\"")`, it does not account for differences in file path notation between operating systems. An attacker can inject malicious directory traversal characters in the filename, potentially allowing them to write arbitrary data to any location on the server.
+
+Moreover, the `UPLOAD_DIRECTORY_STRING` constant is not validated for its correctness or safety. If it is not properly defined, the code might not be able to write the uploaded file to the expected directory, and might end up writing to an unintended location.
+
+Furthermore, writing the uploaded file to disk using `BufferedWriter` without any validation of its contents might lead to potential security risks, especially if the file is executable.
+
+RECOMMENDATIONS:
+1. Validate the filename to ensure it does not contain directory traversal characters. Use a regular expression or a library to sanitize the filename and prevent path traversal attacks.
+2. Validate the `UPLOAD_DIRECTORY_STRING` constant to ensure it is a safe and correct location for writing the uploaded file.
+3. Validate the contents of the uploaded file to prevent potential security risks, especially if the file is executable.
+4. Use a secure method for writing the uploaded file to disk, such as using a temporary file or storing the file in a secure, isolated storage location.
+
+ORIGINAL CODE:
+```java
+public class FileUploadServlet extends HttpServlet {
+    ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        ...
+        String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));
+        try {
+            BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));
+            ...
+            bw.write(line);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException ex) {...}
+    }
+    ...
+}
+```

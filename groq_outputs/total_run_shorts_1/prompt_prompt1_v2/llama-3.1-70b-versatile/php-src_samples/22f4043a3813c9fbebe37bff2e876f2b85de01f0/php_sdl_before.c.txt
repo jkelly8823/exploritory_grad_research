@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 13-14, 21
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential buffer overflows and null pointer dereferences.
+
+EXPLANATION:
+The code uses several functions that can potentially lead to buffer overflows or null pointer dereferences. On lines 3-4, `strlen(uri)` can cause a buffer overflow if `uri` is not null-terminated. Additionally, `VCWD_REALPATH(uri, fn)` can return a null pointer if the real path resolution fails, and `strchr(uri, ':')` can return a null pointer if the ':' character is not found.
+
+On lines 13-14, `php_stream_context_get_option(context, "http", "protocol_version", &tmp)` can cause a null pointer dereference if `context` or `tmp` is a null pointer. 
+
+On line 21, `smart_str_0(&headers)` can cause a null pointer dereference if `headers` is a null pointer.
+
+Furthermore, the code uses `MAKE_STD_ZVAL(str_headers)` but does not check for allocation failures, which can lead to null pointer dereferences.
+
+RECOMMENDATIONS:
+1. Add null checks for `uri` before calling `strlen(uri)` or `strchr(uri, ':')`.
+2. Check the return value of `VCWD_REALPATH(uri, fn)` and handle the error case properly.
+3. Add null checks for `context` and `tmp` before calling `php_stream_context_get_option`.
+4. Check the return value of `smart_str_0(&headers)` and handle the error case properly.
+5. Add a check for allocation failures after calling `MAKE_STD_ZVAL(str_headers)`.
+
+ORIGINAL CODE:
+
+```c
+smart_str headers = {0};
+char* key = NULL;
+time_t t = time(0);
+
+if (strchr(uri,':') != NULL || IS_ABSOLUTE_PATH(uri, uri_len)) {
+	uri_len = strlen(uri);
+} else if (VCWD_REALPATH(uri, fn) == NULL) {
+	zval_ptr_dtor(&str_proxy);
+}
+
+proxy_authentication(this_ptr, &headers TSRMLS_CC);
+
+basic_authentication(this_ptr, &headers TSRMLS_CC);
+
+/* Use HTTP/1.1 with "Connection: close" by default */
+if (php_stream_context_get_option(context, "http", "protocol_version", &tmp) == FAILURE) {
+	zval *http_version;
+	ZVAL_DOUBLE(http_version, 1.1);
+	php_stream_context_set_option(context, "http", "protocol_version", http_version);
+	zval_ptr_dtor(&http_version);
+	smart_str_appendl(&headers, "Connection: close", sizeof("Connection: close")-1);
+}
+
+if (headers.len > 0) {
+	zval *str_headers;
+
+	if (!context) {
+		context = php_stream_context_alloc(TSRMLS_C);
+	}
+
+	smart_str_0(&headers);
+	MAKE_STD_ZVAL(str_headers);
+}
+```

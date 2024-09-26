@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-29 (EVP_DecryptUpdate, OPENSSL_free)
+VULNERABILITY_DESCRIPTION: 
+Potential Use-After-Free Vulnerability and Memory Leak.
+
+EXPLANATION:
+The code uses `sdec` pointer which is allocated using `OPENSSL_malloc`. However, the `OPENSSL_free` call that deals with the allocated memory is only executed when `sdec` is not null and the `EVP_DecryptUpdate` function returns an error. 
+
+In the case where `EVP_DecryptUpdate` returns an error and `sdec` is null, the program does not deallocate the memory that was previously allocated to `sdec` prior to the failure, leading to a potential memory leak.
+
+Moreover, prior to `sdec` being checked for null, `EVP_DecryptUpdate` may have written some data to `sdec` memory location, even though the allocation failed. 
+
+However, it's worth noting that in this specific context, the code seems to assume that the allocation failure is a rare occurrence, and the subsequent checks will prevent the use-after-free in practice.
+
+RECOMMENDATIONS:
+1. The check for allocation failure should be done before using `sdec`. 
+2. In case of allocation failure, handle the error or propagate it. 
+3. Always free the allocated memory when not in use to prevent memory leaks.
+Here's how you could rewrite the part of the code:
+
+    sdec = OPENSSL_malloc(eticklen);
+    if (sdec == NULL) {
+        // handle allocation error, propagate error, etc.
+        return; // or some other way to exit the function
+    }
+    if (EVP_DecryptUpdate(ctx, sdec, &slen, p, (int)eticklen) <= 0) {
+        // handle decryption error
+        OPENSSL_free(sdec); // move this here to free only if allocation was successful
+    }
+
+ORIGINAL CODE:
+    SSL_SESSION *sess = NULL;
+    unsigned char *sdec;
+    const unsigned char *p;
+    int slen, renew_ticket = 0, declen;
+    SSL_TICKET_STATUS ret = SSL_TICKET_FATAL_ERR_OTHER;
+    size_t mlen;
+    unsigned char tick_hmac[EVP_MAX_MD_SIZE];
+    SSL_HMAC *hctx = NULL;
+    goto end;
+}
+
+/* Sanity check ticket length: must exceed keyname + IV + HMAC */
+if (eticklen <=
+    TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_get_iv_length(ctx) + mlen) {
+    ret = SSL_TICKET_NO_DECRYPT;
+    goto end;
+}
+eticklen -= mlen;
+}
+/* Attempt to decrypt session data */
+/* Move p after IV to start of encrypted ticket, update length */
+p = etick + TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_get_iv_length(ctx);
+eticklen -= TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_get_iv_length(ctx);
+sdec = OPENSSL_malloc(eticklen);
+if (sdec == NULL || EVP_DecryptUpdate(ctx, sdec, &slen, p,
+    (int)eticklen) <= 0) {
+    OPENSSL_free(sdec);

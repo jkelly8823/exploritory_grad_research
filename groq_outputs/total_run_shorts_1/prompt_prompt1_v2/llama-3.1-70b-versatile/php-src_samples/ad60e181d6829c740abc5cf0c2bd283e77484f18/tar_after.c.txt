@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11, 14-15, 17-20
+VULNERABILITY_DESCRIPTION:
+OS Command Injection (partial), Data Exposure, Improper Error Handling
+EXPLANATION:
+I've identified several potential security vulnerabilities within this code snippet. 
+The variable 'entry.filename' and 'fname' appear to hold filenames that may originate from user input and could possibly contain malicious data. 
+On line 17-20, there's a concatenation operation that might be vulnerable to injection attacks if 'fname' isn't properly sanitized before being passed to spprintf.
+Additionally, error messages are constructed directly from external data, which may reveal critical internal information about the system.
+
+Another issue arises from lines 6-11. In this case, data is directly read into the 'metadata' and 'buf' variables without being verified or validated. If this data comes from a potentially malicious source and contains invalid information, it may cause unexpected program behavior or errors.
+
+Additionally, for both error and non-error paths that perform pointer deallocation with 'efree', pointers aren't verified for 'NULL' prior to their deallocation. This can sometimes cause a segmentation fault if a null pointer has been freed previously.
+
+Lastly, the behavior of spprintf() can be very difficult to review because formats may not properly limit the number of characters read and written to the buffer.
+
+RECOMMENDATIONS:
+Use parameterized interfaces that help prevent malicious data from becoming part of the OS command.
+Sanitize 'entry.filename' and 'fname' before including it in the logged message.
+Use string-safe functions like snprintf to prevent buffer overflows in the log messages.
+Always check for 'NULL' before using a variable and always check for memory allocation errors.
+Opt for safer functions such as 'sprintf' instead of 'spprintf'.
+Limit string max lengths when utilizing 'spprintf'.
+Verify and validate data read from the stream to prevent data corruption and information disclosure.
+
+ORIGINAL CODE:
+/* }}} */
+
+/* adapted from format_octal() in libarchive
+ *
+ * Copyright (c) 2003-2009 Tim Kientzle
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+	size_t save = php_stream_tell(fp), read;
+	phar_entry_info *mentry;
+
+	metadata = (char *) safe_emalloc(1, entry->uncompressed_filesize, 1);
+
+	read = php_stream_read(fp, metadata, entry->uncompressed_filesize);
+	if (read != entry->uncompressed_filesize) {
+		efree(metadata);
+			}
+
+			read = php_stream_read(fp, buf, sizeof(buf));
+
+			if (read != sizeof(buf)) {
+				efree(entry.filename);
+				if (error) {
+					spprintf(error, 4096, "phar error: \"%s\" is a corrupted tar file (truncated)", fname);

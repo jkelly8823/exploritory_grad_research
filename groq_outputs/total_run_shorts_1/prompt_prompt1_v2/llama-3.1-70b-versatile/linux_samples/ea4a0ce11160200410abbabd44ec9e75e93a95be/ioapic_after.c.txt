@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-10
+VULNERABILITY_DESCRIPTION:
+The code performs an out-of-bounds index access in the ioapic->redirtbl array.
+
+EXPLANATION:
+This code checks if `redir_index` is less than `IOAPIC_NUM_PINS` before accessing the `ioapic->redirtbl` array. However, it does not check if `redir_index` is in the correct type range for the array. If `IOAPIC_NUM_PINS` is a smaller type than `u32` (e.g., `u8`), and `redir_index` is greater than or equal to the maximum value that can fit in that type, accessing `ioapic->redirtbl[redir_index]` will be considered out-of-bounds for that array. This is because `redir_index` will be cast to the smaller type but its original value is out of that type's range.
+
+Furthermore, the assignment to `redir_content` when `redir_index` is 32 or greater (`~0ULL`) poses a risk. This variable is later used in a bit shifting operation where it could potentially exceed the bounds of the `u64` type, leading to unexpected behavior.
+
+RECOMMENDATIONS:
+1. Ensure `IOAPIC_NUM_PINS` is at least as large as the type of `redir_index` (i.e., `u32`).
+2. Before using `redir_index`, ensure it does not exceed the bounds of the array by checking against the maximum valid index of `ioapic->redirtbl`.
+3. Validate user input, if any, to prevent unexpected values for `redir_index`.
+4. Consider using bounds checking libraries or functions to prevent such issues in the future.
+5. Use address sanitizer tools to help identify potential issues related to pointer and array out-of-bounds.
+
+ORIGINAL CODE:
+u32 redir_index = (ioapic->ioregsel - 0x10) >> 1;
+u64 redir_content;
+
+if (redir_index < IOAPIC_NUM_PINS)
+    redir_content =
+        ioapic->redirtbl[redir_index].bits;
+else
+    redir_content = ~0ULL;
+
+result = (ioapic->ioregsel & 0x1) ?
+    (redir_content >> 32) & 0xffffffff :
+    redir_content & 0xffffffff;
+break;

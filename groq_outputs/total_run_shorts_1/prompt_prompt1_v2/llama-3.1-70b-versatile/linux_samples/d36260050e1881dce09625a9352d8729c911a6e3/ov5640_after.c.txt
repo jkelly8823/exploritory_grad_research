@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 39, 41
+VULNERABILITY_DESCRIPTION: 
+Potential out-of-bounds access in the ov5640_format member array.
+
+EXPLANATION:
+This vulnerability is identified in the ov5640_power function where the variable 'i' is used as an index to access the elements of the 'ov5640_formats' array. However, the variable 'i' is only reset to 0 if it exceeds the size of the array, but there is no check to prevent 'i' from becoming negative or exceeding the array size in a wraparound scenario. This could lead to an out-of-bounds access and result in undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, add a check to ensure that the index 'i' is within the bounds of the 'ov5640_formats' array. This can be achieved by using the modulo operator to ensure 'i' wraps around within the array bounds:
+
+```
+i = i % ARRAY_SIZE(ov5640_formats);
+if (i < 0) {
+    i += ARRAY_SIZE(ov5640_formats);
+}
+```
+
+Alternatively, consider using a safer data structure such as a linked list or a pointer that is incremented within the array bounds.
+
+ORIGINAL CODE:
+```c
+static void ov5640_power(struct ov5640_dev *sensor, bool enable)
+{
+    if (ov5640_formats[i].code == fmt->code)
+        break;
+    if (i >= ARRAY_SIZE(ov5640_formats))
+        i = 0;
+
+    fmt->code = ov5640_formats[i].code;
+    fmt->colorspace = ov5640_formats[i].colorspace;
+    fmt->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(fmt->colorspace);
+    fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
+    fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(fmt->colorspace);
+
+    return 0;
+}
+```

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 63, 71, 85, 95
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow in `snprintf` and `sprintf` Functions
+EXPLANATION:
+The code uses `snprintf` and `sprintf` functions to store strings in buffers. However, there is no explicit check to prevent buffer overflow when the length of the input string exceeds the buffer size. This can lead to a buffer overflow, potentially allowing an attacker to execute arbitrary code.
+
+In lines 63, 71, and 95, the code uses `snprintf` and `sprintf` to store strings in buffers. However, the buffer sizes are fixed and hardcoded (e.g., `buf[16]`). If the length of the input string exceeds the buffer size, a buffer overflow will occur.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use safe string functions like `snprintf` with a third argument that specifies the maximum number of characters to write, and check the return value to ensure that the buffer was not truncated. Also, consider using dynamic buffer allocation or safer alternatives to `sprintf` like `asprintf`.
+
+Here is an example of how to fix the code:
+
+```c
+size_t len;
+char *content_type;
+len = spprintf(&content_type, 0, "Content-Type:%.*s; charset=%.*s", mimetype_len ? mimetype_len : (int) strlen(mimetype), mimetype, (int)(p - ICONVG(output_encoding)), ICONVG(output_encoding));
+if (len < 0) {
+    // Handle error
+}
+```
+
+Note that `spprintf` is not a standard C function, but it's a safer alternative to `sprintf` that returns the length of the string.
+
+In line 85, a similar issue exists:
+
+```c
+cd1 = iconv_open(GENERIC_SUPERSET_NAME, enc);
+```
+
+The `iconv_open` function does not perform any bounds checking on the input strings. However, this is not a straightforward buffer overflow vulnerability, as `iconv_open` will simply return an error if the input strings are too long.
+
+ORIGINAL CODE:
+
+```c
+#define PHP_ICONV_MIME_DECODE_STRICT            (1<<0)
+#define PHP_ICONV_MIME_DECODE_CONTINUE_ON_ERROR (1<<1)
+//...
+static char buf[16];
+snprintf(buf, sizeof(buf), "%d.%d", ((_libiconv_version >> 8) & 0x0f), (_libiconv_version & 0x0f));
+//...
+len = spprintf(&content_type, 0, "Content-Type:%.*s; charset=%.*s", mimetype_len ? mimetype_len : (int) strlen(mimetype), mimetype, (int)(p - ICONVG(output_encoding)), ICONVG(output_encoding));
+//...
+cd1 = iconv_open(GENERIC_SUPERSET_NAME, enc);
+```

@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-29, but more specifically, lines 13-18 and 24-29
+VULNERABILITY_DESCRIPTION: 
+Memory Safety Vulnerability: Missing Error Handling for Uninitialized Memory
+
+EXPLANATION:
+The code has been identified as vulnerable due to missing error handling for uninitialized memory. The EVP_PKEY_print_params() function is used to print parameters of the public key, but it is used before the EVP_PKEY_CTX is initiated or after a potential error occurs. Additionally, there is inconsistent error handling within the EVP_PKEY_CTX_new_from_pkey and EVP_PKEY_CTX_new_from_name calls, sometimes returning with an error if these fail, and not others. 
+
+Furthermore, in the EVP_PKEY_fromdata_init and EVP_PKEY_fromdata calls, if either fail, then an error is printed but execution is allowed to continue, potentially leaving the pkey in an uninitialised state. In subsequent operations, this can lead to use of uninitialized memory or unpredictable behavior.
+
+RECOMMENDATIONS:
+1. Ensure proper error propagation and handling throughout the code. Return with an error or handle potential threats immediately when a failure is identified, rather than sometimes continuing execution.
+2. Add null checks for the EVP_PKEY pointer to prevent use of uninitialized memory or avoid null pointer dereferences.
+3. In consecutive EVP_PKEY_CTX_new calls, add comprehensive error handling. 
+4. If EVP_PKEY_fromdata_init or EVP_PKEY_fromdata returns failure, handle the failure and return. Do not allow execution to continue with an invalid state.
+5. In EVP_PKEY_print_params, ensure EVP_PKEY_CTX is properly initialized and valid before the print.
+
+ORIGINAL CODE:
+```
+BIO_printf(bio_err, "Warning, input file %s ignored\n", infile);
+}
+
+ctx = EVP_PKEY_CTX_new_from_name(NULL, alg, NULL);
+if (ctx == NULL) {
+    BIO_printf(bio_err,
+                "Error, %s param generation context allocation failed\n",
+                alg);
+EVP_PKEY_print_params(out, pkey, 4, NULL);
+
+if (check) {
+    ctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
+    if (ctx == NULL) {
+        BIO_printf(bio_err, "Error, failed to check DH parameters\n");
+        goto end;
+    }
+    goto err;
+}
+
+ctx = EVP_PKEY_CTX_new_from_name(NULL, "DHX", NULL);
+if (ctx == NULL
+        || EVP_PKEY_fromdata_init(ctx) <= 0
+        || EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_KEY_PARAMETERS, params) <= 0) {
+    BIO_printf(bio_err, "Error, failed to set DH parameters\n");
+```

@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 17
+VULNERABILITY_DESCRIPTION:
+ The vulnerability is a potential memory leak in the _php_pgsql_strndup function. The memmove function is used to copy len bytes from the source string s to the newly allocated memory block new, but the return value of memmove is an overlapping source and destination memory block which is incorrect.
+
+EXPLANATION:
+ In the provided code snippet, the function _php_pgsql_strndup uses the memmove function to copy the source string s to a newly allocated memory block new. However, the return value of memmove is stored in the variable that holds the allocated memory block (new in this case), which causes the allocated memory block address to be lost. If this memory block is not freed later, it will lead to a memory leak in the program.
+
+RECOMMENDATIONS:
+ To fix the vulnerability, the line should be changed to:
+
+ `memmove(new, s, len); return new;`
+
+ This change will correctly copy the source string s to the newly allocated memory block new and return the correct address of the allocated memory block. 
+
+ The suggested code change should be:
+
+```c
+static char *_php_pgsql_strndup(const char *s, size_t len)
+{
+	char *new;
+
+	if (NULL == s) {
+		return (char *)NULL;
+	}
+
+	new = (char *) malloc(len + 1);
+
+	if (NULL == new) {
+		return (char *)NULL;
+	}
+
+	new[len] = '\0';
+
+	memmove(new, s, len);
+	return new;
+}
+```
+
+ORIGINAL CODE:
+```c
+static char *_php_pgsql_strndup(const char *s, size_t len)
+{
+	char *new;
+
+	if (NULL == s) {
+		return (char *)NULL;
+	}
+
+	new = (char *) malloc(len + 1);
+
+	if (NULL == new) {
+		return (char *)NULL;
+	}
+
+	new[len] = '\0';
+
+	return memmove(new, s, len);
+}
+```

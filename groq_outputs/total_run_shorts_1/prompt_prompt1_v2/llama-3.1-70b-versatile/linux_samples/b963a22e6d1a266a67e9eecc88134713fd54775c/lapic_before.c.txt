@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Integer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability lies in the comparison of the result of `ktime_to_ns(remaining)` with a negative value. `ktime_to_ns()` converts the time from the `ktime_t` type to nanoseconds. However, if the result of this conversion is a negative value, it indicates an overflow, because `ktime_t` is an unsigned type. If `ktime_to_ns(remaining)` returns a negative value due to an overflow, the comparison with a negative value will be true, leading to unexpected behavior.
+
+Moreover, this function `ktime_to_ns()` performs a subtraction to calculate the elapsed time. If the provided time is overdue, the subtraction can cause an underflow, also leading to undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, check for potential overflow before the comparison:
+
+*   Check the range of `remaining` before passing it to `ktime_to_ns()`. If `remaining` is a very large value, this could cause an overflow.
+*   Compare the `remaining` value with the expected range of times directly, rather than converting to nanoseconds. This might help avoid potential overflows.
+*   Ensure that the clock used by `hrtimer_get_remaining()` is monotonic and not subject to discontinuities.
+
+ORIGINAL CODE:
+```c
+ASSERT(apic != NULL);
+
+/* if initial count is 0, current count should also be 0 */
+if (kvm_apic_get_reg(apic, APIC_TMICT) == 0)
+    return 0;
+
+remaining = hrtimer_get_remaining(&apic->lapic_timer.timer);
+if (ktime_to_ns(remaining) < 0)
+```

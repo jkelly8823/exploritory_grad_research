@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-16, 17-20
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) and potential Command Injection vulnerability.
+
+EXPLANATION:
+The vulnerability is due to the fact that user-controlled input is being passed directly to the `test` and `run` functions without proper sanitization or validation. Specifically, the variables `$conf`, `$provider`, and `$output_file` are being passed to these functions from an external source, potentially allowing an attacker to manipulate the execution flow or inject malicious code.
+
+In the `if` statement, the `$provider` variable is being directly compared to the string "fips" without any input validation, which could lead to an IDOR vulnerability. Furthermore, the `run` function is being called with a dynamically constructed command string that includes user-controlled input, which could lead to a command injection vulnerability.
+
+RECOMMENDATIONS:
+To address this vulnerability, it is recommended to:
+
+1. Validate the input variables `$conf`, `$provider`, and `$output_file` to ensure they conform to expected formats and values.
+2. Use a whitelist approach to restrict the possible values for `$provider` instead of a direct comparison.
+3. Use a secure way to construct the command string for the `run` function, such as by using a template engine or by whitelisting allowed commands.
+4. Consider using a more secure way to execute external commands, such as by using a secured subprocess module or by using a completely different approach that does not involve executing user-controlled input.
+
+ORIGINAL CODE:
+```perl
+#! /usr/bin/env perl
+# Copyright 2015-2022 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the Apache License 2.0 (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
+# For manually running these tests, set specific environment variables like this:
+# CTLOG_FILE=test/ct/log_list.cnf
+# TEST_CERTS_DIR=test/certs
+# For details on the environment variables needed, see test/README.ssltest.md
+
+use strict;
+use warnings;
+
+      skip "No tests available; skipping tests", 1 if $skip;
+      skip "Stale sources; skipping tests", 1 if !$run_test;
+
+      my $msg = "running CTLOG_FILE=test/ct/log_list.cnf". # $ENV{CTLOG_FILE}.
+          " TEST_CERTS_DIR=test/certs". # $ENV{TEST_CERTS_DIR}.
+          " test/ssl_test test/ssl-tests/$conf $provider";
+      if ($provider eq "fips") {
+          ok(run(test(["ssl_test", $output_file, $provider,
+                       srctop_file("test", "fips-and-base.cnf")])), $msg);
+      } else {
+          ok(run(test(["ssl_test", $output_file, $provider])), $msg);
+      }
+    }
+}
+```

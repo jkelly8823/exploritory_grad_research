@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential integer overflow when calculating the source field (lr_desc.source) in the vgic_v3_get_lr function.
+
+EXPLANATION:
+The value of lr_desc.source is set to 0 without considering the potential for integer overflow when calculating the physical CPU ID or other values that may depend on this field. This could result in incorrect or unexpected behavior. Additionally, the CPU ID is shifted 10 bits to the left and ANDed with GICH_LR_PHYSID, but this calculation is not present in this code snippet. There's a possibility that this calculation is performed elsewhere, but without further code context, this appears to be a potential vulnerability.
+
+RECOMMENDATIONS:
+To address this potential vulnerability, the code should include calculations for the source field (physical CPU ID) when it retrieves the value from vcpu. It would also be beneficial to validate the results of the integer operations to ensure that they are within the expected range. This can be achieved by checking the results of the bitwise AND operations to ensure that they do not exceed the expected value range.
+
+```cpp
+// Assuming lr_desc.source is supposed to be a physical CPU ID and the definition
+// of GICH_LR_PHYSID bits are as per the rest of the codebase
+lr_desc.source = (val >> GICH_LR_PHYSID_CPUID_SHIFT) & GICH_LR_PHYSID_CPUID;
+```
+
+Additionally, validate the integer values to prevent any potential integer overflows.
+
+ORIGINAL CODE:
+```c
+#include <asm/kvm_asm.h>
+#include <asm/kvm_mmu.h>
+
+/* These are for GICv2 emulation only */
+#define GICH_LR_VIRTUALID		(0x3ffUL << 0)
+#define GICH_LR_PHYSID_CPUID_SHIFT	(10)
+#define GICH_LR_PHYSID_CPUID		(7UL << GICH_LR_PHYSID_CPUID_SHIFT)
+#define ICH_LR_VIRTUALID_MASK		(BIT_ULL(32) - 1)
+
+static u32 ich_vtr_el2;
+
+static struct vgic_lr vgic_v3_get_lr(const struct kvm_vcpu *vcpu, int lr)
+{
+	u64 val = vcpu->arch.vgic_cpu.vgic_v3.vgic_lr[lr];
+
+	if (vcpu->kvm->arch.vgic.vgic_model == KVM_DEV_TYPE_ARM_VGIC_V3)
+		lr_desc.irq = val & ICH_LR_VIRTUALID_MASK;
+	else
+		lr_desc.irq = val & GICH_LR_VIRTUALID;
+
+	lr_desc.source = 0;
+}
+```

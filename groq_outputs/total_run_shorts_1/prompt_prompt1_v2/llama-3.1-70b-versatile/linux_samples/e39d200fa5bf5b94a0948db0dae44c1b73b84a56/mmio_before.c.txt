@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17
+VULNERABILITY_DESCRIPTION:
+The vulnerability identified is a possible integer overflow in the kvm_io_bus_write function. 
+This occurs when variable 'len' is passed as an unsigned integer but the possible values it may be able to hold is not checked before being used.
+
+EXPLANATION:
+In C, when an unsigned integer exceeds its maximum value, it overflows and wraps around. 
+In this case, the 'len' variable used in kvm_io_bus_write function is unsigned, hence can cause integer overflow vulnerability. 
+If len is set to an extremely high value it could allow an attacker to write beyond the allocated data buffer.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider adding bounds checking to the 'len' variable before passing it to the kvm_io_bus_write function. 
+Here's an example:
+
+```c
+if (len > maxlen) {
+    // Handle or raise an error
+    ret = -EINVAL;
+    return;
+} else {
+    ret = kvm_io_bus_write(vcpu, KVM_MMIO_BUS, fault_ipa, len, data_buf);
+}
+```
+
+It would also be beneficial to set a reasonable maximum value for the 'len' variable. 
+Another potential fix would be to increase the capacity of the data buffer.
+
+ORIGINAL CODE:
+```
+}
+    trace_kvm_mmio(KVM_TRACE_MMIO_READ, len, run->mmio.phys_addr,
+               data);
+    data = vcpu_data_host_to_guest(vcpu, data, len);
+    vcpu_set_reg(vcpu, vcpu->arch.mmio_decode.rt, data);
+}
+
+    data = vcpu_data_guest_to_host(vcpu, vcpu_get_reg(vcpu, rt),
+                   len);
+
+    trace_kvm_mmio(KVM_TRACE_MMIO_WRITE, len, fault_ipa, data);
+    kvm_mmio_write_buf(data_buf, len, data);
+
+    ret = kvm_io_bus_write(vcpu, KVM_MMIO_BUS, fault_ipa, len,
+            data_buf);
+} else {
+    trace_kvm_mmio(KVM_TRACE_MMIO_READ_UNSATISFIED, len,
+           fault_ipa, 0);
+
+    ret = kvm_io_bus_read(vcpu, KVM_MMIO_BUS, fault_ipa, len,
+        data_buf);
+}
+```

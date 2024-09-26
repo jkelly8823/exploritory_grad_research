@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION:
+Environment variable injection vulnerability
+EXPLANATION:
+The given code snippet is vulnerable to environment variable injection. The line where this vulnerability is present is where the $ENV{OPENSSL_CONF} is being assigned the value of $defaultconf. Although this might seem harmless, if an attacker could influence the contents of $defaultconf, potentially by providing a malicious value through user input elsewhere in the code, they could indirectly control the value of OPENSSL_CONF. This can have potentially significant implications depending on how OpenSSL is being used in the application.
+
+Additionally, the more concerning issue here is that even if we are unable to influence the value of $ENV{OPENSSL_CONF}, we still are giving an attacker control over the potentially sensitive information regarding the OPENSSL_CONF configuration by allowing it to be set to user-influenced data.
+
+It is essential to verify that $defaultconf does not contain tainted input from external user sources, as modifications made by this input could be inserted into the OpenSSL configuration environment variable and thus cause security issues.
+
+RECOMMENDATIONS:
+The security of this snippet heavily depends on where $defaultconf comes from. Assuming that this variable does not come from potentially malicious input sources, a mitigation might be to simply verify its structure and its contents before passing it to the environment variable. Here are the steps you might take to mitigate this vulnerability:
+
+- Validate that $defaultconf points to an existing file which holds the correct configuration values.
+- Ensure that $defaultconf cannot be indirectly controlled or modified by a malicious third party.
+
+If the code snippet above does indeed involve malicious input for $defaultconf, always validate this input through stringent validation using secure coding practices to eliminate possibilities for environmental variable injection. Here's how you could potentially mitigate the vulnerability:
+
+* If external untrusted input to set OPENSSL_CONF needs to be supported: ensure that these inputs pass through rigorous whitelisting checks for allowed configuration settings, so that untrusted third parties can't get potentially maliciously-influencing information to set OPENSSL_CONF.
+
+In practice this, this can involve:
+
+```perl
+if ($defaultconf =~ m!^/usr/local/openssl[/.][0-9a-zA-Z_\-]+\.cnf$! && -r $defaultconf) {
+    $ENV{OPENSSL_CONF} = $defaultconf;
+}
+```
+This way we ensure that the OPENSSL_CONF is only written with trusted known parameters.
+
+ORIGINAL CODE:
+
+```perl
+subtest "Check loading of fips and non-fips params" => sub {
+    plan skip_all => "FIPS is disabled"
+        if $no_fips;
+    plan tests => 3;
+
+    my $fipsconf = srctop_file("test", "fips-and-base.cnf");
+    my $defaultconf = srctop_file("test", "default.cnf");
+
+                '-check'])),
+       "Fail loading named non-fips curve");
+
+    $ENV{OPENSSL_CONF} = $defaultconf;
+};
+```

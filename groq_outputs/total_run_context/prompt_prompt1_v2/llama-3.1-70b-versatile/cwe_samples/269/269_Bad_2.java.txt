@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+Insecure Direct Object Reference (IDOR) vulnerability.
+
+EXPLANATION:
+In this code snippet, we have a function `resetPassword` that checks the role of the requesting user. However, there is no validation to ensure that the user being targeted by the password reset (`user`) is not someone other than the requesting user. This allows for the possibility of an unauthorized password reset through IDOR. A malicious `requestingUser` with a high enough role could exploit this by simply passing in another user as the target for password reset. This vulnerability could be considered severe if attackers can reset passwords for unauthorized users, especially for high-privilege users.
+
+Additionally, there is an authorization bypass vulnerability in this code. The `requestingUser` check seems to be relying solely on the result of a method named `isAuthenticated`, without actually verifying the requesting user's permissions or entitlements for the operation. 
+
+RECOMMENDATIONS:
+To address the IDOR and authorization bypass vulnerabilities in this code, the following recommendations are proposed:
+
+1.  Add a permission check to verify the requesting user has the necessary permissions to perform the password reset on another user. This may involve checking an additional permissions list or evaluating the requesting user's role against a set of predefined roles that are authorized to execute this operation on other users.
+
+2.  Validate that the `user` being passed in for a password reset is indeed the user who is `requestingUser` or is within the same organizational unit. For example, if the users have a department attribute, this attribute could be checked to ensure the same department.
+
+3.  Modify the logic for the `default` condition in the `switch` statement. Instead of calling `setPassword` immediately, perform additional validation and permission checks to ensure the requesting user has the necessary rights.
+
+ORIGINAL CODE:
+
+                    public enum Roles {ADMIN,OPERATOR,USER,GUEST}
+                     public void resetPassword(User requestingUser, User user, String password ){
+                        if(isAuthenticated(requestingUser)){
+                              switch(requestingUser.role){
+                                    case GUEST:System.out.println("You are not authorized to perform this command");break;
+                                       case USER:System.out.println("You are not authorized to perform this command");break;
+                                       default:setPassword(user,password);break;}
+                                 }
+                           
+                           else{System.out.println("You must be logged in to perform this command");}
+                     }

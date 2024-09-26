@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 2, 5
+VULNERABILITY_DESCRIPTION: Potential Dangling Pointer Vulnerability
+EXPLANATION: 
+In this code snippet, memory is allocated for `newoptions` but not checked before assigning it to `cd->external_options` and `options`. This might not lead to issues in this case, as it appears the pointer is not being used for external reference or by external routines. However, an issue emerges in the event a user tries to replace `optionsptr` at some later point in the larger overall function. We assume `newoptions` is either structurally initialized or otherwise 'sanitized' when being passed to subsequent lines.
+
+However, we must consider the condition when `lengthptr == NULL || *lengthptr == 2 + 2*LINK_SIZE`. Nowhere in the lines provided is `newoptions` checked to see whether allocation, if indeed `newoptions` had been dynamically allocated, was successful. Not checking for this condition will result in dangling pointer vulnerability when `newoptions` is reassigned after memory allocation operation.
+
+The second line of vulnerability comes from assigning the return value of a function,  to `optionsptr`. We do not know the definition of `newoptions`. As dynamic allocation is used for this value earlier in the same code block, there exists a reasonably possibility it may have been dynamically allocated, yet this code does not check for the value of `newoptions` prior to performing pointer assignment. We are unable to definitively determine if this was dynamically allocated because we lack the full source.
+
+Furthermore, another instance where vulnerability occurs exists: when `newoptions` and `optionsptr` is not equal in scope or within different branches of logic depending on else, as different branches seem to be handled differently. Although the function has been assigned a value of a certain `newoptions`, but assuming `optionsptr` was a dynamically allocated option, in event `newoptions`, pointer isn't reassigned while still inside function of current scope.
+
+For another thing, even if you assume it was not designed dynamically as allocations occur, your developers could be currently keeping it, and as far we should reach to them to double verify source over which we have now ascertained it exists.
+
+RECOMMENDATIONS:
+1. Verifying allocation of memory to `newoptions`.
+2. Having logic to handle cases when `newoptions` and  `optionsptr` aren't assigned within same scope.
+The possibility exists the dynamically allocated option can get freed during the operation as shown so make sure that `optionsptr` is assigned only `newoptions` if this was already dynamically allocated. To negate an issue, a copy of `newoptions` on stack or dynamically allocating option with assignment like
+
+=optionsptr, this may need careful review to rule out problems due not keeping track and thus be best approached as follows:
+If memory been allocated inside the block used `try`  `except` also ensure cleanup `try` does not escape exception of your block by checking value returned, handle stack if returns NULL make case assignment outside blocks. Code modification example:
+
+```cpp
+{
+ try
+{
+ if (!(newoptions = new optionsstruct))
+{
+ throw allocationFailed();
+    }catch (Exception e){
+        if (newoptions){ delete newoptions;   }
+
+}
+```
+Also ensure variables should always be nullified till variable, left or current branch condition logic before pointer has value assignment.
+Since only review issue has variable behavior not providing any more suggestions whether all source verified till certain with full handling.
+
+
+ORIGINAL CODE:
+
+               (lengthptr == NULL || *lengthptr == 2 + 2*LINK_SIZE))
+            {
+            cd->external_options = newoptions;
+            options = *optionsptr = newoptions;
+            }
+         else
+            {
+            if ((options & PCRE_IMS) != (newoptions & PCRE_IMS))

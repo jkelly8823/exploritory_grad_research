@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Missing error check for pthread_mutex_unlock
+EXPLANATION:
+The code snippet provided demonstrates the locking and unlocking of a mutex in a multithreaded environment. However, the return value of pthread_mutex_unlock is directly returned by the function without being checked for errors. This can result in the function returning an error value from pthread_mutex_unlock even if the lock was successfully acquired earlier. Furthermore, it's also possible that the critical section ("access shared resource") returned an error that should be propagated to the caller, but this error is lost in favor of the error status from the mutex unlock.
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to store the return value of pthread_mutex_unlock in a separate variable and only return it if the lock was successfully acquired earlier. Additionally, if the critical section returned an error, this error should be propagated to the caller. Here is an example of how to implement this:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    int unlock_result;
+
+    result = pthread_mutex_lock(mutex);
+    if (0 != result) {
+        return result;
+    }
+
+    /* access shared resource */
+
+    if (/* critical section returned an error */) {
+        pthread_mutex_unlock(mutex);
+        return /* error value */;
+    }
+
+    unlock_result = pthread_mutex_unlock(mutex);
+    if (0 != unlock_result) {
+        return unlock_result;
+    }
+
+    return /* success value */;
+}
+```
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+
+    /* access shared resource */
+
+    return pthread_mutex_unlock(mutex);
+}
+```

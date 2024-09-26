@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an integer overflow vulnerability when calculating the length of the path_translated string.
+EXPLANATION:
+The code calculates the length of the path_translated string by adding ptlen and the length of env_path_info. However, this calculation is potentially vulnerable to an integer overflow attack if the sum of ptlen and the length of env_path_info exceeds the maximum value that can be stored in an integer variable. If an overflow occurs, the result will be incorrect and may lead to a buffer overflow when the string is copied into the path_translated buffer.
+ 
+Additionally, if path_translated_len + 1 is large enough to exceed the maximum value of an `char*` allocation, this would cause undefined behavior.
+
+Moreover, even if an overflow does not occur, the line of code that follows may be vulnerable to a buffer overflow if path_translated is not null terminated, as the commenter has already identified the need for allocation to store the null byte.
+
+This line of code is also using `strcpy,` however, `strcpy` isn't used here and instead `memcpy`, but since `memcpy` isn't checking the target buffer is null terminated, in order to avoid the buffer overflow, and the subsequent `memcpy`'d contents do not include a null byte. 
+RECOMMENDATIONS:
+To prevent an integer overflow vulnerability, the length of path_translated should be explicitly checked before allocation to ensure that it does not exceed the maximum value. The check should avoid integer overflow and allocate failure.
+
+```
+if (path_translated_len <= 0 || (path_translated_len == (SIZE_MAX - 1)) ) {
+    goto fail_allocation;
+}
+```
+
+Additionally, to prevent buffer overflow vulnerability on the path_translated, ensure null termination.
+
+```
+if(path_translated != NULL) {
+    path_translated[path_translated_len] = '\0';
+}
+```
+
+You might want to allocate `path_translated_len + 1` as we're doing here and prevent buffer overflow by checking bounds.
+
+```
+if ( (char*)-1 == emalloc(path_translated_len + 1)) {
+    // unable to allocate path_translated_len + 1 space
+}
+```
+
+Finally, `emalloc,` is deprecated and you should try to avoid using it, instead use `malloc` or a more portable allocation function.
+
+```
+char *path_translated = malloc(((sizeof(char)) * (path_translated_len + 1) ));
+if(NULL == path_translated) {
+    // unable to allocate space for path_translated
+}
+```
+
+ORIGINAL CODE:
+
+                        ) {
+                            /* PATH_TRANSLATED = PATH_TRANSLATED - SCRIPT_NAME + PATH_INFO */
+                            int ptlen = strlen(pt) - strlen(env_script_name);
+                            int path_translated_len = ptlen + env_path_info ? strlen(env_path_info) : 0;
+                            char *path_translated = NULL;
+
+                            path_translated = (char *) emalloc(path_translated_len + 1);
+                            memcpy(path_translated, pt, ptlen);

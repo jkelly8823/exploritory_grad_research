@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 19, 20, 21
+VULNERABILITY_DESCRIPTION:
+Null pointer dereferences and unhandled potential failure to allocate memory.
+
+EXPLANATION:
+The given code snippet includes two functions, `put_value` and `WPACKET_put_bytes__`. In the `put_value` function, there is an early return if the `data` pointer is null. However, the `put_value` function does not actually check the validity of the data pointer in relation to the provided length `len` before using it. This might lead to a null pointer dereference or a buffer overflow if a null pointer is passed with a length greater than zero. Additionally, the function only checks if the `data` pointer is null but does not handle the case where the memory allocation in `WPACKET_allocate_bytes` fails. In `WPACKET_put_bytes__`, the function calls `WPACKET_allocate_bytes` which appears to allocate memory. However, the allocation function's return value is not being checked properly for potential failure. Furthermore, in case any of these allocations fail, the function will return 0 without freeing the previously allocated memory.
+
+RECOMMENDATIONS:
+To fix the potential vulnerability, consider adding checks for the validity of the `data` pointer and its length before using it in `put_value`. Additionally, the allocation result of `WPACKET_allocate_bytes` should be checked, and if the allocation fails, the previously allocated memory should be freed to prevent a memory leak. 
+
+To improve code readability and prevent future mistakes, usage of smart pointers is recommended if possible.
+
+Here is a recommended fix for `WPACKET_allocate_bytes` allocation in `WPACKET_put_bytes__`:
+```
+int WPACKET_put_bytes__(WPACKET *pkt, unsigned int val, size_t size)
+{
+    unsigned char *data;
+
+    /* Internal API, so should not fail */
+    if (!ossl_assert(size <= sizeof(unsigned int))) {
+        return 0;
+    }
+
+    if (WPACKET_allocate_bytes(pkt, size, &data)) {
+        if (!put_value(data, val, size)) {
+            WPACKET_free(pkt, data); // Assuming WPACKET_free is the way to free the memory in this specific library.
+            return 0;
+        }
+        return 1;
+    } else {
+        // handle allocation failure here.
+        return 0;
+    }
+}
+```
+
+The fix for `put_value` would involve similar sanity checks for the `data` pointer and its length, taking into consideration the specifics of the given code snippet:
+
+```
+static int put_value(unsigned char *data, size_t value, size_t len)
+{
+    if (data == NULL || len == 0) {
+        return 1;
+    }
+
+    return WPACKET_start_sub_packet_len__(pkt, 0);
+}
+```
+
+ORIGINAL CODE:
+```
+/*
+ * Copyright 2015-2021 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+}
+
+/* Store the |value| of length |len| at location |data| */
+static int put_value(unsigned char *data, size_t value, size_t len)
+{
+    if (data == NULL)
+        return 1;
+
+    return WPACKET_start_sub_packet_len__(pkt, 0);
+}
+
+int WPACKET_put_bytes__(WPACKET *pkt, unsigned int val, size_t size)
+{
+    unsigned char *data;
+
+    /* Internal API, so should not fail */
+    if (!ossl_assert(size <= sizeof(unsigned int))
+            || !WPACKET_allocate_bytes(pkt, size, &data)
+            || !put_value(data, val, size))
+        return 0;
+```

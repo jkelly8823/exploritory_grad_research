@@ -1,0 +1,49 @@
+VULNERABLE: NO/conditional
+VULNERABLE_LINES: 6-9/None
+VULNERABILITY_DESCRIPTION:
+Potential information disclosure due to incomplete bounds checking, allowing an attacker to access potentially sensitive data on the stack.
+
+EXPLANATION:
+A potential vulnerability exists on lines 6-9. The function ext4_iget_extra_inode does not properly validate the size of the data being accessed from the raw_inode. This could lead to an information disclosure vulnerability if raw_inode points to a location on the stack that contains sensitive data.
+
+However, further examination shows that there is a check in place, EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <= EXT4_INODE_SIZE(inode->i_sb), which appears to limit the access to within a valid range.
+
+If this check is inadequate (for example, if EXT4_INODE_SIZE does not accurately reflect the maximum valid range), a vulnerability could be present.
+
+Given the incomplete context and lack of further information about EXT4_INODE_SIZE, I will not flag this as definitively vulnerable.
+
+RECOMMENDATIONS:
+1. Verify that the calculation EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <= EXT4_INODE_SIZE(inode->i_sb) accurately checks against the maximum valid range of data that raw_inode may point to.
+2. Consider further validation on raw_inode to ensure it does not point to a location on the stack that contains sensitive data.
+
+ORIGINAL CODE:
+```c
+}
+}
+
+static inline void ext4_iget_extra_inode(struct inode *inode,
+					 struct ext4_inode *raw_inode,
+					 struct ext4_inode_info *ei)
+{
+	__le32 *magic = (void *)raw_inode +
+			EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize;
+	if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize + sizeof(__le32) <=
+	    EXT4_INODE_SIZE(inode->i_sb) &&
+	    *magic == cpu_to_le32(EXT4_XATTR_MAGIC)) {
+		ext4_set_inode_state(inode, EXT4_STATE_XATTR);
+		ext4_find_inline_data_nolock(inode);
+	} else
+		EXT4_I(inode)->i_inline_off = 0;
+}
+
+int ext4_get_projid(struct inode *inode, kprojid_t *projid)
+{
+			ei->i_extra_isize = sizeof(struct ext4_inode) -
+					    EXT4_GOOD_OLD_INODE_SIZE;
+		} else {
+			ext4_iget_extra_inode(inode, raw_inode, ei);
+		}
+	}
+
+	EXT4_INODE_GET_XTIME(i_ctime, inode, raw_inode);
+```

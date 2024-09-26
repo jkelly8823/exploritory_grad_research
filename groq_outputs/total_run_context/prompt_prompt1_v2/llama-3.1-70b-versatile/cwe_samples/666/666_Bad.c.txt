@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 7
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable to a double-free vulnerability.
+
+EXPLANATION:
+The code allocates memory using the `malloc` function and stores the pointer in the `ptr` variable. However, it then frees the same memory in two places: within the `if (abrt)` block and again outside of the `if` statement. This results in an attempt to free the same memory location twice. The `free` function is called on a pointer that has already been freed, which can lead to undefined behavior, memory corruption, or a segmentation fault.
+
+RECOMMENDATIONS:
+To fix this vulnerability, remove the second call to `free(ptr)`, outside the `if` statement. The second `free` is unnecessary because the memory has already been freed within the `if` statement. However, this fix assumes that the intent was to free the memory only once. If the intent was to free the memory in both the `if` and `else` branches, the code should be rewritten to only free the memory once, for example:
+
+```c
+char* ptr = (char*)malloc (SIZE);
+...
+if (abrt) {
+    free(ptr);
+} else {
+    // use ptr here
+    free(ptr);
+}
+```
+Alternatively, set `ptr` to `NULL` after freeing it to prevent accidental double-free:
+
+```c
+char* ptr = (char*)malloc (SIZE);
+...
+if (abrt) {
+    free(ptr);
+    ptr = NULL;
+}
+...
+// use ptr here
+free(ptr);
+```
+This fix assumes that the `else` branch uses the `ptr` and should free it as well. Note that this is just a hypothetical fix as the actual use of `ptr` in the `else` branch is unknown.
+
+ORIGINAL CODE:
+
+```c
+char* ptr = (char*)malloc (SIZE);
+...
+if (abrt) {
+    free(ptr);
+}
+...
+free(ptr);
+```

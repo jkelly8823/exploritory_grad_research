@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to the use of an insecure method to parse an XML document. The `DocumentBuilderFactory.newInstance()` and `DocumentBuilder.parse()` methods are vulnerable to XML External Entity (XXE) attacks.
+
+EXPLANATION:
+The `DocumentBuilderFactory.newInstance()` method returns a new instance of a `DocumentBuilderFactory` class, which can be configured with features that prevent XXE attacks. However, in this case, no such checks are performed. The lack of explicit configuration can lead to a situation where an attacker can inject malicious XML data, potentially causing the disclosure of sensitive information or allowing the execution of arbitrary system commands.
+
+The `DocumentBuilder.parse()` method is also vulnerable to XXE attacks if not configured properly. If the XML file contains external entities that reference sensitive data or system resources, the parser may attempt to access these resources, potentially allowing an attacker to gain unauthorized access to the system.
+
+RECOMMENDATIONS:
+1. Set the `ACCESS_EXTERNAL_DTD` and `ACCESS_EXTERNAL_SCHEMA` features to `false` on the `DocumentBuilderFactory` instance to prevent external entities from being referenced.
+2. Set the `http://javax.xml.XMLConstants/feature/secure-processing` feature to `true` on the `DocumentBuilderFactory` instance to enable secure processing.
+3. Use a whitelisting approach to restrict the types of XML files that can be parsed.
+4. Validate the input XML data before parsing it.
+
+Here is the corrected code:
+```java
+DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+dbf.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);
+dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+dbf.setXIncludeAware(false);
+dbf.setExpandEntityReferences(false);
+DocumentBuilder db = dbf.newDocumentBuilder();
+interestRateXMLDocument = db.parse(interestRateFile);
+```
+ORIGINAL CODE:
+                  @Stateless
+public class InterestRateBean implements InterestRateRemote {
+                     
+private Document interestRateXMLDocument = null;
+private File interestRateFile = null;
+public InterestRateBean() {
+try {
+            
+/* get XML document from the local filesystem */
+interestRateFile = new File(Constants.INTEREST_RATE_FILE);
+if (interestRateFile.exists()){
+DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+DocumentBuilder db = dbf.newDocumentBuilder();
+interestRateXMLDocument = db.parse(interestRateFile);}
+} catch (IOException ex) {...}
+}
+public BigDecimal getInterestRate(Integer points) {return getInterestRateFromXML(points);}
+/* member function to retrieve interest rate from XML document on the local file system */
+private BigDecimal getInterestRateFromXML(Integer points) {...}

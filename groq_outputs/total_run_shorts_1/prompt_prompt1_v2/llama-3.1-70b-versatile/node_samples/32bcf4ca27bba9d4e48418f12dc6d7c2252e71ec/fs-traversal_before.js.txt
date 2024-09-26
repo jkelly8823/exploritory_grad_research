@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 11, 17
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the way the code handles file paths. The `traversalPath` and `traversalFolderPath` variables are constructed by concatenating the `allowedFolder` path with '../file.md' and '../folder' respectively. This allows an attacker to potentially access files outside the intended directory by manipulating the `ALLOWEDFOLDER` environment variable. 
+
+The weakness is introduced by using the `path.resolve()` function, which can normalize the path and prevent some attacks, but in this case, it's used after the relative path has been concatenated. If the attacker sets the `ALLOWEDFOLDER` environment variable to a path that is not well-secured or is too permissive, this vulnerability could be exploited to access sensitive files or directories.
+
+RECOMMENDATIONS:
+1. Sanitize and validate all inputs that affect file paths, including environment variables. Ensure that the `ALLOWEDFOLDER` value is properly sanitized and validated.
+2. Instead of using string concatenation to build file paths, use the `path.join()` function, which is designed to handle path construction safely.
+3. Use a secure mechanism to restrict the scope of the `ALLOWEDFOLDER` variable to prevent it from being used to access sensitive areas.
+4. Validate the constructed path before passing it to `path.resolve()` to ensure that it does not point to an unintended location.
+5. Consider using a whitelist of allowed directories or files to further restrict the scope of allowed access.
+
+ORIGINAL CODE:
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+const blockedFolder = process.env.BLOCKEDFOLDER;
+const allowedFolder = process.env.ALLOWEDFOLDER;
+const traversalPath = allowedFolder + '../file.md';
+const traversalFolderPath = allowedFolder + '../folder';
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: path.toNamespacedPath(path.resolve(traversalPath)),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: path.toNamespacedPath(path.resolve(traversalPath)),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: path.resolve(traversalFolderPath + 'XXXXXX'),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemWrite',
+    resource: path.resolve(traversalFolderPath + 'XXXXXX'),
+  }));
+}
+
+{
+  }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: path.resolve(traversalPath),
+  }));
+}
+```

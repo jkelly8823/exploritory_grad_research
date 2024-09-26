@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5, 11-14
+VULNERABILITY_DESCRIPTION:
+Time-of-check to time-of-use (TOCTOU) vulnerability, duplicated code, and usage of a global variable (&tmp_scm) that can lead to race conditions and shared resource issues.
+
+EXPLANATION:
+The code seems to be handling socket communication with a Unix domain socket. However, there are two instances of nearly identical code. The variable `tmp_scm` is not defined in the provided code snippet but assuming it's a global variable or a static array shared between functions, it can lead to shared resource issues and race conditions in multi-threaded or concurrent environments. If `tmp_scm` is modified while being used by another thread or function, unpredictable behavior can occur. 
+
+Even without multi-threading issues, the check and assignment of `siocb->scm` may not serve the intended purpose as it might still be NULL after assignment, especially if `wait_for_unix_gc()` has its own internal delays or fails.
+
+The duplicated code is less efficient, takes up more space and, if modified in only one location, introduces a possibility of inconsistent behavior.
+
+RECOMMENDATIONS:
+Avoid using shared resources (`tmp_scm`), make the variables local or exclusive per thread/function. Move the duplicated code into its own function or eliminate the duplicate altogether. Incorporate thread-safe coding practices if multiple threads are involved.
+
+Consider rewriting to avoid TOCTOU and adding additional error handling when waiting for `unix_gc`:
+
+```c
+if (NULL == siocb->scm){
+    siocb->scm = scm_allocate(); // instead of sharing a static resource
+    if (NULL == siocb->scm) return -ENOMEM;
+}
+scm_lock(); // locking mechanism if applicable
+wait_for_unix_gc();
+err = scm_send(sock, msg, siocb->scm);
+scm_unlock(); // if locked previously
+if (err < 0){
+    scm_free(siocb->scm);
+    return err;
+}
+```
+ORIGINAL CODE:
+```c
+if (NULL == siocb->scm)
+    siocb->scm = &tmp_scm;
+wait_for_unix_gc();
+err = scm_send(sock, msg, siocb->scm);
+if (err < 0)
+    return err;
+
+err = -EOPNOTSUPP;
+if (NULL == siocb->scm)
+    siocb->scm = &tmp_scm;
+wait_for_unix_gc();
+err = scm_send(sock, msg, siocb->scm);
+if (err < 0)
+    return err;
+
+err = -EOPNOTSUPP;
+```

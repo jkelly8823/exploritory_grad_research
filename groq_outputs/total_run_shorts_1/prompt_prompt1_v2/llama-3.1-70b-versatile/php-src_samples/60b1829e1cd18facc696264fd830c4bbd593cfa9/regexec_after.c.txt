@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 7
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Pointer Arithmetic and Missing Bounds Check
+
+EXPLANATION:
+The code snippet provided appears to be a part of a string comparison algorithm, likely for regular expressions. The issue arises in the `case OP_EXACT1` and `case OP_EXACT1_IC` blocks. While not all lines of code are shown, there are two potential issues: 
+Firstly, when checking the equality `*p != *s`, there's no check whether `p` and `s` are within valid bounds of their respective strings. This might result in a buffer over-read or under-read. 
+Secondly, if `*p != *s`, the code will execute a `goto fail;` statement, potentially skipping cleanup or unwinding, which could result in undefined behavior. Also, if `*p == *s`, `p` and `s` are incremented without considering their validity or bounds again.
+
+RECOMMENDATIONS:
+Before incrementing `p` and `s`, ensure they are within the valid bounds of their respective strings. Here's a revised version of the code:
+```c
+case OP_EXACT1:  MOP_IN(OP_EXACT1);
+    DATA_ENSURE(1);
+    if (s + 1 < end_of_string && p + 1 < end_of_buffer) {
+        if (*p != *s) goto fail;
+        p++; s++;
+    } else {
+        // Handle out-of-bounds error or invalid state
+    }
+    MOP_OUT;
+    break;
+```
+ORIGINAL CODE:
+```c
+break;
+
+case OP_EXACT1:  MOP_IN(OP_EXACT1);
+    DATA_ENSURE(1);
+    if (*p != *s) goto fail;
+    p++; s++;
+    MOP_OUT;
+    break;
+
+case OP_EXACT1_IC:  MOP_IN(OP_EXACT1_IC);
+```

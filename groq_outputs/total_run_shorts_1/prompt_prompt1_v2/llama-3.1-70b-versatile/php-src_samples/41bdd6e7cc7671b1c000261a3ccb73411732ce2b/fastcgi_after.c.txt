@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13
+VULNERABILITY_DESCRIPTION:
+This code segment contains a potential vulnerability related to the handling of DNS name lookups using the `gethostbyname` function and its associated structures.
+
+EXPLANATION:
+The vulnerability in this code snippet is that it uses the `gethostbyname` function, which is deprecated due to several security issues and has been replaced by `getaddrinfo`. Furthermore, the code does not check the return value of `gethostbyname` properly. The function can return `NULL` if the lookup fails, but the error code in `h_errno` should be checked for more information about the failure.
+
+Another potential issue with this code is that it assumes the first address returned by `gethostbyname` is a valid IPv4 address (`AF_INET`), but this assumption may not be valid in all cases. Additionally, the code checks if `hep->h_addr_list[0]` and `hep->h_addr_list[1]` are `NULL` without checking the bounds of the `h_addr_list` array.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, consider the following recommendations:
+
+1.  Replace `gethostbyname` with the recommended replacement `getaddrinfo` to get the host details. This function provides more robust and secure way of getting host information.
+2.  Check the return value of `getaddrinfo` properly and handle errors accordingly. The `gai_strerror` function can be used to get a string describing the error.
+3.  Verify the type of address returned by `getaddrinfo` and handle different types of addresses properly.
+4.  Validate the bounds of the `ai_addrlen` and `ai_canonname` before using them.
+
+ORIGINAL CODE:
+
+```c
+if (sa.sa_inet.sin_addr.s_addr == INADDR_NONE) {
+    struct hostent *hep;
+
+    if(strlen(host) > MAXHOSTNAMELEN) {
+        hep = NULL;
+    } else {
+        hep = gethostbyname(host);
+    }
+    if (!hep || hep->h_addrtype != AF_INET || !hep->h_addr_list[0]) {
+        fprintf(stderr, "Cannot resolve host name '%s'!\n", host);
+        return -1;
+    } else if (hep->h_addr_list[1]) {
+```

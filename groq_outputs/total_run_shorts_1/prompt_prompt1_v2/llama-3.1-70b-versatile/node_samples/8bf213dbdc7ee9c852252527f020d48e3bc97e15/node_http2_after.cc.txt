@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+Dangling pointer vulnerability
+
+EXPLANATION:
+The bug arises in the `RemoveStream` method. Before removing the stream from the `streams_` map, it does not set the corresponding `Http2Stream` object's `session_` pointer to `nullptr`. However, the `Http2Session::~Http2Session` destructor sets all stream objects' `session_` pointers to `nullptr`. If a stream is added to the session, then the session is destroyed, and then `RemoveStream` is called on that stream, the resulting pointer will be dangling (points to an already destroyed session). Further usage of this dangling pointer can lead to undefined behavior.
+
+RECOMMENDATIONS:
+To fix the vulnerability, before removing the stream from the `streams_` map in `Http2Session::RemoveStream`, you should set the corresponding `Http2Stream` object's `session_` pointer to `nullptr`. However, the better approach would be to check whether the session has already been destroyed before calling `RemoveStream`. Here is how you can modify the `RemoveStream` function:
+
+```cpp
+inline void Http2Session::RemoveStream(Http2Stream* stream) {
+  if (streams_.empty() || stream == nullptr)
+    return;  // Nothing to remove, item was never added?
+  
+  // Check if the session has already been destroyed.
+  if(session_ == nullptr) {
+    // Handle the error, or ignore the request
+    return;
+  }
+  
+  streams_.erase(stream->id());
+  DecrementCurrentSessionMemory(stream->self_size());
+}
+```
+
+Alternatively, a better design could be to have the `Http2Stream` class be aware of whether its corresponding session has been destroyed. This way, it can prevent its methods from being called on a destroyed session.
+
+ORIGINAL CODE:
+```cpp
+Http2Session::~Http2Session() {
+  CHECK_EQ(flags_ & SESSION_STATE_HAS_SCOPE, 0);
+  Debug(this, "freeing nghttp2 session");
+  for (const auto& iter : streams_)
+    iter.second->session_ = nullptr;
+  nghttp2_session_del(session_);
+}
+
+std::string Http2Session::diagnostic_name() const {
+  
+inline void Http2Session::RemoveStream(Http2Stream* stream) {
+  if (streams_.empty() || stream == nullptr)
+    return;  // Nothing to remove, item was never added?
+  streams_.erase(stream->id());
+  DecrementCurrentSessionMemory(stream->self_size());
+}
+```

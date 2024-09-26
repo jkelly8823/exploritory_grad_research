@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+  Inconsistent Return Statements After Locking a Mutex
+EXPLANATION:
+  The given code snippet contains a problematic return statement after acquiring a mutex lock. When the function reaches the return statement (return pthread_mutex_unlock(mutex);), it unlocks the mutex and returns its result. However, if an exception occurs between locking the mutex and unlocking it, the mutex will remain locked, causing a potential deadlock. Although exceptions are not directly applicable here since this is C, early exits from the function (e.g., due to a call to exit() or a thrown exception via a third-party library) could still cause issues.
+
+  In addition, the return statement is inside the locked area if an error occurred during locking. This may lead to confusion and unexpected behavior.
+
+RECOMMENDATIONS:
+  To fix this issue, the mutex should be unlocked before returning from the function. This ensures that the mutex is always released, even in the presence of early exits. Also, to avoid confusion, error handling and normal operation should be separated into different paths. Here is a revised version of the given code:
+
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (result != 0) {
+        // Handle the lock error
+        return result;
+    }
+
+    /* access shared resource */
+
+    // Unlock the mutex before returning
+    result = pthread_mutex_unlock(mutex);
+    return result;
+}
+```
+
+  By following this revised code structure, potential vulnerabilities due to incorrect handling of mutex locking and unlocking are mitigated.
+
+ORIGINAL CODE:
+```c
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+    /* access shared resource */
+    return pthread_mutex_unlock(mutex);
+}
+```

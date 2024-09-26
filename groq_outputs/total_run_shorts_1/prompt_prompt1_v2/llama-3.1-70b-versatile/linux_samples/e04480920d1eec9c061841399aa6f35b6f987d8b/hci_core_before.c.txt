@@ -1,0 +1,50 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION: No apparent vulnerabilities found.
+EXPLANATION:
+The provided code snippet appears to be a part of a larger system, specifically dealing with HCI (Host Controller Interface) device management. The functions presented handle the unregistration and suspension of HCI devices. 
+
+The code uses locking mechanisms to ensure thread safety during the removal of a device from a list. The use of `write_lock` and `write_unlock` suggests that the list is being modified, and the lock is being used to prevent concurrent access. 
+
+Additionally, the code uses `kfree_const` to deallocate memory, which is a memory-safe practice.
+
+There are no apparent vulnerabilities in this code snippet, but it is essential to note that this evaluation is limited to the provided code and may not be representative of the entire system.
+
+RECOMMENDATIONS:
+No recommendations are provided as no vulnerabilities were found.
+
+ORIGINAL CODE:
+/* Unregister HCI device */
+void hci_unregister_dev(struct hci_dev *hdev)
+{
+	int id;
+
+	BT_DBG("%p name %s bus %d", hdev, hdev->name, hdev->bus);
+
+	hci_dev_set_flag(hdev, HCI_UNREGISTER);
+
+	id = hdev->id;
+
+	write_lock(&hci_dev_list_lock);
+	list_del(&hdev->list);
+	write_unlock(&hci_dev_list_lock);
+
+	}
+
+	device_del(&hdev->dev);
+
+	debugfs_remove_recursive(hdev->debugfs);
+	kfree_const(hdev->hw_info);
+	kfree_const(hdev->fw_info);
+
+	hci_blocked_keys_clear(hdev);
+	hci_dev_unlock(hdev);
+
+	hci_dev_put(hdev);
+
+	ida_simple_remove(&hci_index_ida, id);
+}
+EXPORT_SYMBOL(hci_unregister_dev);
+
+/* Suspend HCI device */
+int hci_suspend_dev(struct hci_dev *hdev)

@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-15
+VULNERABILITY_DESCRIPTION:
+Potential Memory Leak via Uninitialized Pointer
+EXPLANATION:
+The `method_name_out` pointer is used without being checked for NULL before it's used in `zval_dtor` and other assignments. This may lead to a memory leak if `method_name_out` was previously freed or not initialized.
+
+Additionally, `XMLRPC_RequestGetMethodName(response)` returns a string, which is then used to allocate a new string with `estrdup`. However, there is no check to see if this allocation was successful.
+
+RECOMMENDATIONS:
+It is recommended to add a NULL check before using `method_name_out`. Additionally, the result of `estrdup` should be checked for NULL to prevent a memory leak.
+
+* Before using `method_name_out`, check if it's NULL and allocate it if necessary.
+* Check the result of `estrdup` and handle any failures.
+
+```c
+if (method_name_out) {
+    // existing code here...
+} else {
+    // allocate and initialize method_name_out
+}
+
+// ...
+
+char* methodName = XMLRPC_RequestGetMethodName(response);
+if (!methodName) {
+    // handle error
+}
+
+// ...
+
+Z_STRVAL_P(method_name_out) = estrdup(methodName);
+if (!Z_STRVAL_P(method_name_out)) {
+    // handle error
+}
+```
+
+ORIGINAL CODE:
+```c
+zval* retval = NULL;
+XMLRPC_REQUEST response;
+STRUCT_XMLRPC_REQUEST_INPUT_OPTIONS opts = {{0}};
+opts.xml_elem_opts.encoding = encoding_in ? utf8_get_encoding_id_from_string(encoding_in) : ENCODING_DEFAULT;
+
+/* generate XMLRPC_REQUEST from raw xml */
+response = XMLRPC_REQUEST_FromXML(xml_in, xml_in_len, &opts);
+
+if (XMLRPC_RequestGetRequestType(response) == xmlrpc_request_call) {
+    if (method_name_out) {
+        zval_dtor(method_name_out);
+        Z_TYPE_P(method_name_out) = IS_STRING;
+        Z_STRVAL_P(method_name_out) = estrdup(XMLRPC_RequestGetMethodName(response));
+        Z_STRLEN_P(method_name_out) = strlen(Z_STRVAL_P(method_name_out));
+    }
+}
+
+/* dust, sweep, and mop */
+```

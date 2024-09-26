@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 13, 18
+VULNERABILITY_DESCRIPTION:
+A double-free vulnerability is present in this code snippet. This occurs when the `zend_string_init` function is called multiple times with the same memory location for the `token` and `token_pos` parameters.
+
+EXPLANATION:
+The code snippet appears to be part of a parsing function that handles a formatted string. The vulnerability is present in the repeated calls to `zend_string_init` with the `token` and `token_pos` parameters, without freeing the memory allocated by the previous calls. This can lead to a double-free vulnerability, where the same memory location is freed multiple times, potentially causing a crash or allowing an attacker to execute arbitrary code.
+
+In the `state == 0 || state == 1` block, `zend_string_init` is called with `token` and `token_pos` to initialize `fld_name`. Later, in the `state == 3` block, `zend_string_init` is called again with the same `token` and `token_pos` to initialize `fld_val`. This repeated initialization with the same memory location can cause a double-free vulnerability when the memory is freed.
+
+RECOMMENDATIONS:
+To fix the vulnerability, free the memory allocated by `zend_string_init` before reusing the same memory location. This can be achieved by calling `zend_string_free` or `zend_string_release` before calling `zend_string_init` again with the same memory location.
+
+Additionally, consider using a different approach for parsing the string, such as using a single call to `zend_string_init` and then manipulating the resulting string, or using a parser that does not require repeated calls to `zend_string_init`.
+
+ORIGINAL CODE:
+```c
+	int state = 0;
+	int crlf_state = -1;
+	char *token = NULL;
+	size_t token_pos;
+	zend_string *fld_name, *fld_val;
+
+	ps = str;
+	icnt = str_len;
+				}
+
+				if (state == 0 || state == 1) {
+					if(token) {
+						fld_name = zend_string_init(token, token_pos, 0);
+					}
+					state = 2;
+				} else {
+
+					case 3:
+						if (crlf_state == -1) {
+							if(token) {
+								fld_val = zend_string_init(token, token_pos, 0);
+							}
+
+							if (fld_name != NULL && fld_val != NULL) {
+		state = 3;
+	}
+	if (state == 3) {
+		if(token) {
+			fld_val = zend_string_init(token, token_pos, 0);
+		}
+		if (fld_name != NULL && fld_val != NULL) {
+			zval val;
+```

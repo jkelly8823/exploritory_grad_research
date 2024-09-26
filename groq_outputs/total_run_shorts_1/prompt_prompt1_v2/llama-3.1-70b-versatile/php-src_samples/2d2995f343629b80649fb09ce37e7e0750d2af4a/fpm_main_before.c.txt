@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-6
+VULNERABILITY_DESCRIPTION:
+Unvalidated variable registration vulnerability
+
+EXPLANATION:
+The provided code snippet appears to be part of a CGI request handling function. It registers environment variables from the request into the PHP runtime. The vulnerability is introduced by the call to `php_register_variable_safe(var, *val, new_val_len, array_ptr TSRMLS_CC)`, which registers the variable without properly sanitizing the input names (`var`). This allows an attacker to manipulate PHP's superglobal variables or overwrite internal variables.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should ensure that the input variable names are properly sanitized before registration. One way to achieve this is by using `zend_filter_var` or a similar function to verify the variable names match expected patterns. Additionally, the code should be updated to properly handle cases where the input variables contain null bytes or other special characters.
+
+It is also worth noting that `php_register_variable_safe` is generally intended to protect against some of these types of vulnerabilities, however, the security of this function relies heavily on the definition of "safe" within the specific PHP and Zend runtime context being called. Additional consideration should be given to the fact that internal CGI protocols still often allow these types of potential attacks.
+
+ORIGINAL CODE:
+```c
+filter_arg = (array_ptr == PG(http_globals)[TRACK_VARS_ENV])?PARSE_ENV:PARSE_SERVER;
+
+/* turn off magic_quotes while importing environment variables */
+if (PG(magic_quotes_gpc)) {
+    zend_alter_ini_entry_ex("magic_quotes_gpc", sizeof("magic_quotes_gpc"), "0", 1, ZEND_INI_SYSTEM, ZEND_INI_STAGE_ACTIVATE, 1 TSRMLS_CC);
+}
+for (zend_hash_internal_pointer_reset_ex(request->env, &pos);
+     zend_hash_get_current_key_ex(request->env, &var, &var_len, &idx, 0, &pos) == HASH_KEY_IS_STRING &&
+         php_register_variable_safe(var, *val, new_val_len, array_ptr TSRMLS_CC);
+     }
+}
+PG(magic_quotes_gpc) = magic_quotes_gpc;
+}
+
+static void sapi_cgi_register_variables(zval *track_vars_array TSRMLS_DC)
+```

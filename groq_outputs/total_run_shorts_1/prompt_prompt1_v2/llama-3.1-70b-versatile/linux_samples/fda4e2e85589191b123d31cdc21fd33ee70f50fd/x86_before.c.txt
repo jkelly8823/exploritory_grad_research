@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 27-28
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an information disclosure due to an incorrect handling of a locked resource. The `srcu_read_lock` is used to acquire a read lock, but there's an instance where the lock is not released. Additionally, the function `vapic_exit` does not check if `vapic_page` is NULL before calling `kvm_release_page_dirty` and `mark_page_dirty` on it.
+
+EXPLANATION:
+In the `update_cr8_intercept` function, if `vapic_enter(vcpu)` is successful, then a lock is acquired by `srcu_read_lock`. However, if `vapic_exit` fails for any reason (for example, encountering an error in some internal function), then `srcu_read_unlock` will not be called. This means the lock remains held, which can lead to a situation where other parts of the system that rely on these locks will hang.
+
+Moreover, the function `vapic_exit` itself does not handle `vapic_page` properly. It does not check if `vapic_page` is NULL before releasing and marking it dirty. This can lead to a segmentation fault or other undefined behavior if `vapic_page` is NULL because `vapic_enter` failed or for some other reason was not successful.
+
+RECOMMENDATIONS:
+- Always handle every path of code within a function, including error handling. Ensure that any held resources are released upon encountering an error, and that this is implemented consistently.
+- Ensure that both the normal program flow and the error-handling code paths correctly handle their locking to prevent hangs in other parts of the system.
+- Function `vapic_exit` should check `vapic_page` for NULL before working with it.
+
+ORIGINAL CODE:
+(only relevant code shown)
+```c
+static void update_cr8_intercept(struct kvm_vcpu *vcpu)
+{
+    ...
+    r = vapic_enter(vcpu);
+    if (r) {
+        srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+        return r;
+    }
+    ...
+    srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+    vapic_exit(vcpu);
+    ...
+}
+
+static void vapic_exit(struct kvm_vcpu *vcpu)
+{
+    ...
+    kvm_release_page_dirty(apic->vapic_page);
+    mark_page_dirty(vcpu->kvm, apic->vapic_addr >> PAGE_SHIFT);
+    ...
+}
+```

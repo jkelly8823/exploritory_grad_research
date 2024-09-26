@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 38
+VULNERABILITY_DESCRIPTION: 
+Possible integer overflow vulnerability in parsing of time string.
+
+EXPLANATION: 
+The vulnerability arises in the lines where `thetxtm_sec` is assigned using `atoi`. The `atoi` function does not perform any error checking, and if the parsed string is too large or too small, `thetxtm_sec` may be assigned an incorrect or out-of-bounds value, potentially leading to undefined behavior. This is especially concerning because `thetxtm_sec` is assigned a value directly from a string that is obtained from externally-controlled data (`ASN1_STRING_data(timestr)`). This means an attacker who can control the input data may be able to trigger an integer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it would be more secure to use `strtol` or a similar function that performs error checking when parsing integers. You should also validate the parsed integer to ensure that it falls within a reasonable range for seconds.
+
+Additionally, you could add checks to handle overflows, using code like the following:
+
+```c
+long sec = strtol(thestr, NULL, 10);
+if (sec < 0 || sec > 60) {
+    // handle error
+} else {
+    thetime.tm_sec = sec;
+}
+```
+
+ORIGINAL CODE:
+```
+char * thestr;
+long gmadjust = 0;
+
+if (ASN1_STRING_type(timestr) != V_ASN1_UTCTIME) {
+	php_error_docref(NULL TSRMLS_CC, E_WARNING, "illegal ASN1 data type for timestamp");
+	return (time_t)-1;
+}
+
+if (ASN1_STRING_length(timestr) != strlen(ASN1_STRING_data(timestr))) {
+	php_error_docref(NULL TSRMLS_CC, E_WARNING, "illegal length in timestamp");
+	return (time_t)-1;
+}
+
+if (ASN1_STRING_length(timestr) < 13) {
+	php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to parse time string %s correctly", timestr->data);
+	return (time_t)-1;
+}
+
+strbuf = estrdup((char *)ASN1_STRING_data(timestr));
+
+memset(&thetime, 0, sizeof(thetime));
+
+/* we work backwards so that we can use atoi more easily */
+
+thestr = strbuf + ASN1_STRING_length(timestr) - 3;
+
+thetime.tm_sec = atoi(thestr);
+*thestr = '\0';
+thestr -= 2;
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Inadequate Handling of EVP_CIPHER_CTX_get_iv_length() Error Code
+
+EXPLANATION:
+The code calls EVP_CIPHER_CTX_get_iv_length() and checks for a negative return value. However, the returned length is also checked against the value 1 and if it's less than or equal to 1, the length is set to 0. This indicates a potential issue with handling IV lengths in an insecure way.
+
+In particular, some ciphers may have a valid IV length of 1 or less (for example, ChaCha20 uses a 0-byte IV for the stream cipher), and setting the IV length to 0 in these cases may result in insecure or incorrect behavior.
+
+Furthermore, this code does not actually handle GCM mode explicitly, despite the comment. It only checks if the mode is CBC and sets the IV length to 0 if it is short. For GCM mode, explicit part of IV is needed.
+
+RECOMMENDATIONS:
+When dealing with IV lengths, you should follow these recommendations:
+
+- Ensure that you handle all return codes from EVP_CIPHER_CTX_get_iv_length() in an expected way.
+- Validate the IV length against the specifications of the used cipher.
+- Handle short IV lengths securely, and consider explicit checks for specific ciphers like GCM.
+
+ORIGINAL CODE:
+```
+int mode = EVP_CIPHER_CTX_get_mode(s->enc_write_ctx);
+if (mode == EVP_CIPH_CBC_MODE) {
+    eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+    if (eivlen < 0) {
+        SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG);
+        return -1;
+    }
+    if (eivlen <= 1)
+        eivlen = 0;
+}
+/* Need explicit part of IV for GCM mode */
+```

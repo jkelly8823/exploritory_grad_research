@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential thread interruption issue.
+
+EXPLANATION:
+The code catches an InterruptedException and immediately calls Thread.currentThread().interrupt() without properly handling the InterruptedException. This can lead to a situation where the thread's interrupted status is cleared, but the underlying condition that triggered the exception is not addressed. As a result, the thread may continue to execute even though it was interrupted, potentially causing inconsistent state or undefined behavior.
+
+Furthermore, in the inner class Runnable's run method, the InterruptedException is caught but not re-thrown or propagated, which means the thread's interrupted status is cleared, but the interruption is not properly handled. 
+
+This can lead to difficult-to-debug issues and potentially hazardous behavior, especially in systems that rely on timely interruption and cleanup of threads.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should properly handle the InterruptedException by providing a meaningful action when a thread is interrupted. If the InterruptedException is caught, you should either re-throw it, propagate it up the call stack, or take some meaningful action to handle the interruption.
+
+Here's an example of how to properly handle the InterruptedException:
+
+```java
+public void execute(Runnable r) {
+    try {
+        // ...
+    } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt(); // preserve the interrupted status
+        // handle the interruption here, e.g.:
+        // throw ie;
+        // or: return;
+        // or: take some meaningful action to handle the interruption
+    }
+}
+```
+
+In the inner class Runnable's run method, you should also handle the InterruptedException properly:
+
+```java
+public void run() {
+    try {
+        for (;;) {
+            Runnable r = ...; r.run();
+        }
+    } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt(); // preserve the interrupted status
+        // handle the interruption here, e.g.:
+        // throw ie;
+        // or: return;
+        // or: take some meaningful action to handle the interruption
+    }
+}
+```
+
+ORIGINAL CODE:
+```java
+class Worker implements Executor {
+    ...public void execute(Runnable r) {
+        try {
+            ...
+        } catch (InterruptedException ie) {
+            // postpone response
+            Thread.currentThread().interrupt();
+        }
+    }
+    public Worker(Channel ch, int nworkers) {...}
+    protected void activate() {
+        Runnable loop = new Runnable() {
+            public void run() {
+                try {for (;;) {Runnable r = ...;r.run();}} catch (InterruptedException ie) {...}
+            }
+        }; new Thread(loop).start();
+    }
+}
+```

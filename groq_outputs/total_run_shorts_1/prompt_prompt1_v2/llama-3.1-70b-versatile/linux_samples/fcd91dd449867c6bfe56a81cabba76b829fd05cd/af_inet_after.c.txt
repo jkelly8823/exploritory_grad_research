@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability.
+
+EXPLANATION:
+The variable `skb` is passed to `call_gro_receive`, but it's unclear what `call_gro_receive` does with this pointer. If `call_gro_receive` consumes the skb by passing it to the gro_receive callback, which in turn frees the skb, then this skb cannot be safely used afterwards. However, in this snippet, we see that the skb is still being used after the call to `call_gro_receive` in the out_unlock path if the function does not take an alternate path before this code. Specifically, the `skb_gro_offset(skb)` and the `rcu_read_unlock()` could potentially be called after the skb has been freed by `call_gro_receive`. 
+
+Without the source code of `call_gro_receive` and `gro_receive`, it cannot be positively confirmed whether this vulnerability exists. However, this code pattern suggests it may. Assuming `call_gro_receive` can consume the skb, this could potentially lead to a use-after-free vulnerability.
+
+RECOMMENDATIONS:
+1. Check the source code of `call_gro_receive` and ensure that it doesn't consume the skb.
+2. If it does, return immediately after calling `call_gro_receive` to avoid using the skb afterwards.
+3. If you cannot return due to necessary work needed after the call, refactor your code to not call `call_gro_receive` in a path that leads to out_unlock.
+
+ORIGINAL CODE:
+```
+	skb_gro_pull(skb, sizeof(*iph));
+	skb_set_transport_header(skb, skb_gro_offset(skb));
+
+	pp = call_gro_receive(ops->callbacks.gro_receive, head, skb);
+
+out_unlock:
+	rcu_read_unlock();
+```

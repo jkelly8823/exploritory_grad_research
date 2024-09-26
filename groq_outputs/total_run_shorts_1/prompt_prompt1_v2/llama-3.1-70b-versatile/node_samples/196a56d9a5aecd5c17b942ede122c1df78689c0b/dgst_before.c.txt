@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow due to the use of strcpy's related function, strlen, in a call to EVP_PKEY_new_raw_private_key without validating the input string.
+
+EXPLANATION:
+The hmac_key is used as an argument to EVP_PKEY_new_raw_private_key without any check on its validity or whether it's null-terminated. This can lead to unexpected behavior or crashes. If hmac_key is not a valid null-terminated string, strlen may read past the end of the buffer, resulting in undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that hmac_key is a valid null-terminated string before passing it to EVP_PKEY_new_raw_private_key. This can be done by verifying the null-termination and buffer boundaries manually.
+
+```c
+int keylen = strlen(hmac_key);
+if (hmac_key[keylen] != '\0') {
+    // handle invalid input or buffer error
+}
+```
+
+It is also recommended to use safer string handling functions such as strncpy, strnlen, or snprintf instead of strcpy and strlen.
+
+```c
+#define MAX_KEY_LENGTH 256
+int keylen = strnlen(hmac_key, MAX_KEY_LENGTH);
+if (keylen == MAX_KEY_LENGTH) {
+    // handle truncation or buffer overflow error
+}
+```
+
+Additionally, always validate the return value of EVP_PKEY_new_raw_private_key and handle any potential errors.
+
+```c
+sigkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, impl,
+                                      (unsigned char *)hmac_key,
+                                      keylen);
+if (sigkey == NULL) {
+    // handle error
+}
+```
+
+ORIGINAL CODE:
+```c
+if (hmac_key != NULL) {
+    if (md == NULL)
+        md = (EVP_MD *)EVP_sha256();
+    sigkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, impl,
+                                          (unsigned char *)hmac_key,
+                                          strlen(hmac_key));
+    if (sigkey == NULL)
+        goto end;
+}
+```

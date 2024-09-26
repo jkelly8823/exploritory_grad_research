@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 26-27
+VULNERABILITY_DESCRIPTION:
+Uncontrolled or Insufficient Control of Dynamic Memory Allocation
+
+EXPLANATION:
+The vulnerability exists in the missing validation of user input for memory allocation. In the given code, `size` is set to `debug.len` without any validation. This value is obtained from user space by copying from the `debug` struct, which may lead to uncontrolled or insufficient memory allocation. This could cause the program to perform arbitrary memory allocations, potentially resulting in a denial-of-service or even a code execution vulnerability.
+
+Additionally, `copy_from_user` can return an error without nullifying the input buffer. Therefore, using the data from `debug` after a failed `copy_from_user` call can also lead to vulnerabilities.
+
+Note that the `n` variable is set to `ret` in the assignment `unsigned long n; int ret, size;` but then the `n` is never used and went to dead store state.
+
+However, more critical vulnerability I could find at a copy of `debug` from user and without actual validation is like a first problem.
+
+RECOMMENDATIONS:
+1. Validate user-provided input for memory allocation: 
+   - Add checks to ensure `debug.len` is a positive value and within acceptable limits before allocating memory.
+   - Implement additional validation based on the specific requirements of your application.
+
+2. Wrap the memory allocations in a try-catch block to handle memory exceptions.
+3. Do not use the data from `debug` if the `copy_from_user` call returns an error.
+
+4. Perform additional input validation for other variables that are obtained from the `debug` struct.
+
+ORIGINAL CODE:
+
+```c
+return ret;
+}
+
+static int get_num_contig_pages(int idx, struct page **inpages,
+				unsigned long npages)
+{
+	unsigned long paddr, next_paddr;
+	int i = idx + 1, pages = 1;
+
+	/* find the number of contiguous pages starting from idx */
+	paddr = __sme_page_pa(inpages[idx]);
+	while (i < npages) {
+
+static int sev_launch_update_data(struct kvm *kvm, struct kvm_sev_cmd *argp)
+{
+	unsigned long vaddr, vaddr_end, next_vaddr, npages, size;
+	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
+	struct kvm_sev_launch_update_data params;
+	struct sev_data_launch_update_data *data;
+	struct page **inpages;
+	int i, ret, pages;
+
+	if (!sev_guest(kvm))
+		return -ENOTTY;
+
+	struct page **src_p, **dst_p;
+	struct kvm_sev_dbg debug;
+	unsigned long n;
+	int ret, size;
+
+	if (!sev_guest(kvm))
+		return -ENOTTY;
+
+	if (copy_from_user(&debug, (void __user *)(uintptr_t)argp->data, sizeof(debug)))
+		return -EFAULT;
+
+	vaddr = debug.src_uaddr;
+	size = debug.len;
+	vaddr_end = vaddr + size;
+	dst_vaddr = debug.dst_uaddr;
+						     dst_vaddr,
+						     len, &argp->error);
+
+		sev_unpin_memory(kvm, src_p, 1);
+		sev_unpin_memory(kvm, dst_p, 1);
+
+		if (ret)
+			goto err;
+```

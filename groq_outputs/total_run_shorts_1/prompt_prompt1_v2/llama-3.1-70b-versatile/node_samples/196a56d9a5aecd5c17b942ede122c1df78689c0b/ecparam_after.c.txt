@@ -1,0 +1,77 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17, 20-23
+VULNERABILITY_DESCRIPTION:
+In the provided code snippet, potential memory leaks and buffer errors are identified due to a lack of explicit error handling and memory deallocation. 
+
+EXPLANATION:
+In the given code, `EVP_PKEY_CTX_new_from_name` and `EVP_PKEY_CTX_new_from_pkey` are used multiple times to create `EVP_PKEY_CTX` objects. However, if an error occurs afterwards, the error handling code only checks for the failure of those functions and jumps to `end` without freeing any previously allocated objects. This can lead to memory leaks.
+
+Furthermore, if an error occurs while generating the key with `EVP_PKEY_keygen`, the partially generated key is not properly cleaned up. This could lead to buffer errors and insecure memory handling.
+
+RECOMMENDATIONS:
+It is essential to check for and handle errors properly throughout the code. This includes explicitly freeing any allocated objects when an error occurs.
+
+Here's an example of how the error handling can be improved:
+
+```c
+EVP_PKEY_CTX *gctx_params = EVP_PKEY_CTX_new_from_name(app_get0_libctx(), "sm2", app_get0_propq());
+if (gctx_params == NULL) {
+    BIO_printf(bio_err, "EVP_PKEY_CTX_new_from_name failed\n");
+    goto end;
+}
+// ...
+
+EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_pkey(app_get0_libctx(), params_key, app_get0_propq());
+if (pctx == NULL) {
+    EVP_PKEY_CTX_free(gctx_params);
+    BIO_printf(bio_err, "EVP_PKEY_CTX_new_from_pkey failed\n");
+    goto end;
+}
+// ...
+
+int ret = EVP_PKEY_keygen(gctx_key, &key);
+if (ret <= 0) {
+    EVP_PKEY_CTX_free(gctx_params);
+    EVP_PKEY_CTX_free(pctx);
+    EVP_PKEY_CTX_free(gctx_key);
+    BIO_printf(bio_err, "EVP_PKEY_keygen failed\n");
+    goto end;
+}
+```
+
+Moreover, freeing all `EVP_PKEY_CTX` objects at the end of the function (even if no errors occur) and checking for their existence before freeing them is a good practice.
+
+ORIGINAL CODE:
+
+```c
+*p = OSSL_PARAM_construct_end();
+
+if (OPENSSL_strcasecmp(curve_name, "SM2") == 0)
+    gctx_params = EVP_PKEY_CTX_new_from_name(app_get0_libctx(), "sm2",
+                                             app_get0_propq());
+else
+    gctx_params = EVP_PKEY_CTX_new_from_name(app_get0_libctx(), "ec",
+                                             app_get0_propq());
+if (gctx_params == NULL
+    || EVP_PKEY_keygen_init(gctx_params) <= 0
+    || EVP_PKEY_CTX_set_params(gctx_params, params) <= 0
+    || EVP_PKEY_keygen(gctx_params, &params_key) <= 0) {
+        BIO_printf(bio_err, "unable to set check_type\n");
+        goto end;
+}
+pctx = EVP_PKEY_CTX_new_from_pkey(app_get0_libctx(), params_key,
+                                  app_get0_propq());
+if (pctx == NULL || EVP_PKEY_param_check(pctx) <= 0) {
+    BIO_printf(bio_err, "failed\n");
+    goto end;
+}
+    EVP_PKEY_CTX_set_group_name(gctx, curvename);
+    EVP_PKEY_keygen(gctx, &key) <= 0)
+ */
+gctx_key = EVP_PKEY_CTX_new_from_pkey(app_get0_libctx(), params_key,
+                                      app_get0_propq());
+if (EVP_PKEY_keygen_init(gctx_key) <= 0
+    || EVP_PKEY_keygen(gctx_key, &key) <= 0) {
+    BIO_printf(bio_err, "unable to generate key\n");
+    goto end;
+```

@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Untrusted User Input Used as Signature in SHA-256 or Other Cryptographic Operations
+
+EXPLANATION:
+This piece of code presents a potential vulnerability because the `uefi_blacklist_hash` function call, located on line 3, directly uses untrusted user input without any validation or sanitization. The `source` variable is being passed to `uefi_blacklist_hash`, and it can potentially contain malicious data. In this case, it seems to be used to extract a specific subset ("bin:", 4) from the input data. This lack of validation on the input may lead to potential attacks such as a TOCTOU (Time-of-Check-To-Time-of-Use) bug.
+
+However, given the given limitations of code context and snippet sizes, this assessment can't provide complete or exhaustive feedback. Another issue appears to be using `const void *data, size_t len` and directly passing it to `add_key_to_revocation_list` which could contain malicious data if not validated previously, although the direct call and input usage may be implemented elsewhere, the snippet seems quite sensible as `uefi_revocation_list_x509` input source is expected to hold validity which can't be deduced within this snippet.
+
+Given so, despite a snippet, potential risk analysis doesn't provide 100% issue report so single issue of passing user data to cryptographic operation directly  can't be deemed crucial using given partial implementation.
+
+RECOMMENDATIONS:
+Before handing data to a cryptographic operation like in `uefi_blacklist_hash` function, verify whether this data passes all the necessary validation checks.
+
+Before calling `add_key_to_revocation_list` in `uefi_revocation_list_x509` ensure that received data meets the specified format through function calls, and no additional 'malicious' tampering occurred in it, given within this context you did declare such function as non-export and set const char pointers.
+
+Generally, given full validation elsewhere, for defensive programming, add basic validation on this snippet level.
+
+
+ORIGINAL CODE:
+```c
+uefi_blacklist_hash(source, data, len, "bin:", 4);
+}
+
+/*
+ * Add an X509 cert to the revocation list.
+ */
+static __init void uefi_revocation_list_x509(const char *source,
+					     const void *data, size_t len)
+{
+	add_key_to_revocation_list(data, len);
+}
+
+/*
+ * Return the appropriate handler for particular signature list types found in
+ * the UEFI db and MokListRT tables.
+ */
+		return uefi_blacklist_x509_tbs;
+	if (efi_guidcmp(*sig_type, efi_cert_sha256_guid) == 0)
+		return uefi_blacklist_binary;
+	if (efi_guidcmp(*sig_type, efi_cert_x509_guid) == 0)
+		return uefi_revocation_list_x509;
+	return 0;
+}
+```

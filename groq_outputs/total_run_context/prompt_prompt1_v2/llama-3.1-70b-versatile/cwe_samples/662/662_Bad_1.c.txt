@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-8
+VULNERABILITY_DESCRIPTION: 
+This code is vulnerable to a denial-of-service (DoS) attack via null pointer dereference and it also has unprotected fork() calls which can cause a range of potential issues including resource leaks and child zombie apocalypse.
+
+EXPLANATION:
+In the 'print' function, it dereferences the 'word' pointer without checking for null. If the provided 'string' pointer is null, this will result in a segmentation fault. Furthermore, within the same function, the counter variable is used without initialization and with assignment directly in the for loop condition. This is not the main issue with the function, however.
+
+The issue arises from its attempt to force a delay between outputs by calling sleep(1) after each character is printed. If an attacker knows the timing window is very large (due to sleeps), a fast, brute-force exploitation attempt can occur because the interval provides an idea of the state through time. This will allow guessing/finding next state faster. This is worsened by having unprotected fork calls; while here fork calls work fine, in C, fork fails only when it absolutely cannot start the process. Unprotected fork calls can leave zombie or background sleeping processes eating machine overhead.
+
+RECOMMENDATIONS:
+1. Fix null pointer dereference vulnerability: Always validate the input pointer 'string' for null before using it.
+
+```c
+if (string == NULL) {
+    // handle null string error
+}
+```
+
+2. Correct the counter initialization:
+```c
+int counter = 0;
+```
+
+3. Put the 'fork' call in an error handling structure:
+
+```c
+pid_t pid = fork();
+if (pid < 0) {
+    // handle fork error
+} else if (pid == 0) {
+    print("child\n");
+} else {
+    print("PARENT\n");
+}
+```
+
+4. Protect children, as child zombie or sleep-hung state will build resource overhead.
+
+```c
+pid_t pid = fork();
+if (pid < 0) {
+    // handle fork error
+} else if (pid == 0) {
+    print("child\n");
+    _exit(0); // Properly exit child process
+} else {
+    // Parent may want to reap its child.
+    print("PARENT\n");
+    //...
+}
+```
+
+5. Fix time-based exploit vulnerabilities: Avoid relying on sleep() calls to control the rate at which outputs are printed. This can be due to various factors including system resource availability (speed/ load).
+However, proper synchronization/ parallelism should be added with synchronization primitives ([Lock/condition](https://en.cppreference.com/w/c/thread)) enabling asynchronous process task assignment for performance and thread responsiveness purposes.
+
+ORIGINAL CODE:
+
+```c
+static void print (char * string) {
+    char * word;int counter;for (word = string; counter = *word++; ) {
+        putc(counter, stdout);fflush(stdout);
+        /* Make timing window a little larger... */
+        sleep(1);
+    }
+}
+
+int main(void) {
+    pid_t pid;
+    pid = fork();if (pid == -1) {exit(-2);}else if (pid == 0) {print("child\n");}else {print("PARENT\n");}exit(0);
+}
+```

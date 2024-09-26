@@ -1,0 +1,111 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 46-73, 82-109
+VULNERABILITY_DESCRIPTION:
+Integer overflow and potential out-of-bounds access vulnerability in integer type casting.
+
+EXPLANATION:
+The code uses `uint16_t` to store values that are cast from `size_t` or `const size_t *` pointers. This can lead to integer overflow and potential out-of-bounds access when the value of `size_t` is larger than `uint16_t`. Additionally, the code uses `*(const size_t *)val` and `*(size_t *)val` which can also lead to integer overflow if the type of `val` does not match the type of the pointer.
+
+The magic_setparam and magic_getparam functions are responsible for setting and getting parameters in the magic_set struct. The parameters are expected to be of type size_t, but they are cast to uint16_t. This can cause integer overflow when the value of size_t is larger than uint16_t. This is a potential vulnerability as it can lead to incorrect behavior or even crashes.
+
+RECOMMENDATIONS:
+1. Use the correct data type for storing the values. If the range of the values is expected to be larger than uint16_t, consider using a larger data type such as uint32_t or uint64_t.
+2. Validate the input values to prevent integer overflow. This can be done by checking if the value of size_t is within the range of the target data type before casting it.
+3. Avoid casting pointers to different types as this can lead to undefined behavior. If the type of val needs to be different from the type of the pointer, consider using a different function or variable to handle the conversion.
+
+ORIGINAL CODE:
+```c
+#include "file.h"
+
+#ifndef	lint
+FILE_RCSID("@(#)$File: magic.c,v 1.91 2014/12/16 23:18:40 christos Exp $")
+#endif	/* lint */
+
+#include "magic.h"
+
+			tmppath = NULL; \
+		} \
+	} while (/*CONSTCOND*/0)
+				
+	if (default_magic) {
+		free(default_magic);
+		default_magic = NULL;
+	}
+private int
+unreadable_info(struct magic_set *ms, mode_t md, const char *file)
+{
+	if (file) {
+		/* We cannot open it, but we were able to stat it. */
+		if (access(file, W_OK) == 0)
+			if (file_printf(ms, "writable, ") == -1)
+				return -1;
+		if (access(file, X_OK) == 0)
+			if (file_printf(ms, "executable, ") == -1)
+				return -1;
+	}
+	if (S_ISREG(md))
+		if (file_printf(ms, "regular file, ") == -1)
+			return -1;
+	if (file_printf(ms, "no read permission") == -1)
+		return NULL;
+	/*
+	 * The main work is done here!
+	 * We have the file name and/or the data buffer to be identified. 
+	 */
+	if (file_buffer(ms, NULL, NULL, buf, nb) == -1) {
+		return NULL;
+	}
+{
+	return MAGIC_VERSION;
+}
+
+public int
+magic_setparam(struct magic_set *ms, int param, const void *val)
+{
+	switch (param) {
+	case MAGIC_PARAM_INDIR_MAX:
+		ms->indir_max = (uint16_t)*(const size_t *)val;
+		return 0;
+	case MAGIC_PARAM_NAME_MAX:
+		ms->name_max = (uint16_t)*(const size_t *)val;
+		return 0;
+	case MAGIC_PARAM_ELF_PHNUM_MAX:
+		ms->elf_phnum_max = (uint16_t)*(const size_t *)val;
+		return 0;
+	case MAGIC_PARAM_ELF_SHNUM_MAX:
+		ms->elf_shnum_max = (uint16_t)*(const size_t *)val;
+		return 0;
+	case MAGIC_PARAM_ELF_NOTES_MAX:
+		ms->elf_notes_max = (uint16_t)*(const size_t *)val;
+		return 0;
+	default:
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+public int
+magic_getparam(struct magic_set *ms, int param, void *val)
+{
+	switch (param) {
+	case MAGIC_PARAM_INDIR_MAX:
+		*(size_t *)val = ms->indir_max;
+		return 0;
+	case MAGIC_PARAM_NAME_MAX:
+		*(size_t *)val = ms->name_max;
+		return 0;
+	case MAGIC_PARAM_ELF_PHNUM_MAX:
+		*(size_t *)val = ms->elf_phnum_max;
+		return 0;
+	case MAGIC_PARAM_ELF_SHNUM_MAX:
+		*(size_t *)val = ms->elf_shnum_max;
+		return 0;
+	case MAGIC_PARAM_ELF_NOTES_MAX:
+		*(size_t *)val = ms->elf_notes_max;
+		return 0;
+	default:
+		errno = EINVAL;
+		return -1;
+	}
+}
+```

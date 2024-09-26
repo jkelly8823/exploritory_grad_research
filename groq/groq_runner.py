@@ -32,6 +32,7 @@ def call_groq(msg_content, model_name):
     use_client3 = False
     client3_failed = False
 
+    file_cnt = 0
     for i in msg_content:
         output_file_path = f'groq_outputs/{os.getenv("test_dir")}/prompt_{i[3]}/{model_name}/{i[0]}/{i[1]}.txt'
         if os.path.exists(output_file_path):
@@ -63,7 +64,7 @@ def call_groq(msg_content, model_name):
                 error_message = str(e).lower()
                 if ('rate limit' in error_message or '429' in error_message) or ('service unavailable' in error_message or '503' in error_message):
                     print("Rate limit exceeded:", e)
-                    if (client1_failed) and (client2_failed) and (client3_failed):
+                    if (client1_failed) and (client2_failed) and (client3_failed) and (use_client1):
                         print("All clients hit rate limit or server failure. Returning False.")
                         print(f"Failed file: {output_file_path}")
                         return False
@@ -89,6 +90,8 @@ def call_groq(msg_content, model_name):
                     print("An error occurred:", e)
                     print(f'Exception on file: {i[0]}/{i[1]}')
                     return False
+        file_cnt += 1
+        print("Files Groq'd %6d" % file_cnt, end='\r')
 
     return True
 
@@ -105,7 +108,7 @@ def get_prompts(dir):
 
 def main():
     # Prompt
-    msgs = get_prompts(os.getenv('prompt_dir'))
+    msgs = get_prompts(os.getenv('prompt_dir_groq'))
 
     # Limit the number of before/after file pairs to evaluate
     limit = int(os.getenv('groq_limit'))

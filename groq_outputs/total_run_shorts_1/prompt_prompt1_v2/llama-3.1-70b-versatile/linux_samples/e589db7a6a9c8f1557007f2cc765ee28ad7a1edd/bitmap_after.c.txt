@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9, 19
+VULNERABILITY_DESCRIPTION:
+ Integer Overflow Vulnerability
+EXPLANATION:
+The provided code snippet has a potential integer overflow vulnerability in the `sz` variable calculation. The variables `EXT4_CLUSTERS_PER_GROUP(sb)` and `8` are divided to assign a value to `sz`. However, this calculation does not check if the result exceeds the maximum value that `sz` can hold. If `EXT4_CLUSTERS_PER_GROUP(sb)` is a large number, the resulting value could overflow the bounds of `sz`, leading to undefined behavior.
+
+In the given code snippet, there are two instances of this vulnerability - one in the `ext4_block_bitmap_csum_verify` function (line 8) and another in the `ext4_block_bitmap_csum_set` function (line 19).
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should perform a bounds check after the division to ensure the result does not overflow the maximum value of `sz`. This can be achieved by casting the division to a larger type that can handle larger numbers and checking the result before casting it back to `int`. Alternatively, you can use a library function that safely checks for overflow, such as `div_u64` in Linux kernel.
+
+Here's an example of how you can fix the issue:
+
+```c
+int sz;
+if (EXT4_CLUSTERS_PER_GROUP(sb) > UINT_MAX / 8)
+{
+    // Handle overflow
+}
+sz = (int) (EXT4_CLUSTERS_PER_GROUP(sb) / 8);
+```
+
+ORIGINAL CODE:
+```c
+int ext4_block_bitmap_csum_verify(struct super_block *sb, ext4_group_t group,
+				  struct ext4_group_desc *gdp,
+				  struct buffer_head *bh)
+{
+	__u32 hi;
+	__u32 provided, calculated;
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+	int sz = EXT4_CLUSTERS_PER_GROUP(sb) / 8;
+
+	if (!EXT4_HAS_RO_COMPAT_FEATURE(sb,
+					EXT4_FEATURE_RO_COMPAT_METADATA_CSUM))
+		return 1;
+
+void ext4_block_bitmap_csum_set(struct super_block *sb, ext4_group_t group,
+				struct ext4_group_desc *gdp,
+				struct buffer_head *bh)
+{
+	int sz = EXT4_CLUSTERS_PER_GROUP(sb) / 8;
+	__u32 csum;
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+
+	if (!EXT4_HAS_RO_COMPAT_FEATURE(sb,
+```

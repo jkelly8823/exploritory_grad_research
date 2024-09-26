@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-16
+VULNERABILITY_DESCRIPTION:
+Integer Overflow and/or Buffer Overflow Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the code snippet because it checks `crop->x`, `crop->y`, `src->sx` and `src->sy` for potential out-of-bounds conditions but it does not prevent integer overflows that can occur during the creation of the `gdImagePtr` `dst` or when dealing with pixel locations within the image.
+
+However, the main concern within the given snippet stems from lines 13-16. Without knowing the buffer protection mechanisms of `gdImageCreateTrueColor` or `gdImageCreate`, `crop->width` and `crop->height` could potentially be used in the creation of an allocation of a struct, and be used as an input to determine buffer size. While `crop->width` and `crop->height` are used as parameters to the creation functions for images with true color and with a palette respectively, no checks appear to occur for these values that could lead to buffer overflows. For correct functionality and proper protection against potential attacks, both `crop->width` and `crop->height` must not only be checked for out-of-bounds values, but also that neither `crop->width` nor `crop->height` can lead to buffer overflows due to integer overflow conditions.
+
+
+
+RECOMMENDATIONS:
+Before using `crop->width` and `crop->height` in the `gdImageCreateTrueColor` and `gdImageCreate` functions, ensure to perform checks that `crop->width * crop->height` does not exceed the maximum integer value or cause an overflow.
+
+```c
+if (crop->width > 0 && crop->height > 0 && ((crop->width * crop->height) <= (size_t) INT_MAX)) {
+    // values are ok to proceed
+    if (src->trueColor) {
+        dst = gdImageCreateTrueColor(crop->width, crop->height);
+        // ...
+    } else {
+        dst = gdImageCreate(crop->width, crop->height);
+        // ...
+    }
+    // ...
+} else {
+    // prevent integer overflow, return or throw error
+    return NULL;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+gdImagePtr dst;
+int y;
+
+/* allocate the requested size (could be only partially filled) */
+if (src->trueColor) {
+    dst = gdImageCreateTrueColor(crop->width, crop->height);
+    if (dst == NULL) {
+        return NULL;
+    }
+    gdImageSaveAlpha(dst, 1);
+} else {
+    dst = gdImageCreate(crop->width, crop->height);
+    if (dst == NULL) {
+        return NULL;
+    }
+    gdImagePaletteCopy(dst, src);
+}
+dst->transparent = src->transparent;
+
+/* check position in the src image */
+if (crop->x < 0 || crop->x>=src->sx || crop->y<0 || crop->y>=src->sy) {
+```

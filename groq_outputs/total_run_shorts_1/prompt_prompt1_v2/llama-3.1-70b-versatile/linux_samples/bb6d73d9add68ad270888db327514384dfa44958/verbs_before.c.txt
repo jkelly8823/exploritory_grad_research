@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15
+VULNERABILITY_DESCRIPTION:
+Possible null pointer dereference vulnerability. This vulnerability occurs when the code tries to access memory through a pointer that hasn't been properly initialized or has a null value. In this case, it's the `iwdev` and `iwpbl` pointers.
+
+EXPLANATION:
+The `iwdev` and `iwpbl` pointers are used to access members of the corresponding structures, but there is no check to ensure that these pointers are not null before accessing their members. If `iwdev` or `iwpbl` is null, this will result in a null pointer dereference, leading to unpredictable behavior and potentially a program crash. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add null checks for `iwdev` and `iwpbl` before accessing their members. Here's an example of how you can do this:
+
+```c
+if (iwdev == NULL || iwpbl == NULL) {
+    // handle error condition, e.g., return an error code or print an error message
+    // ...
+}
+```
+
+Additionally, you should ensure that `iwdev` and `iwpbl` are properly initialized before this code is reached. It's also a good practice to check for null pointers before using them.
+
+ORIGINAL CODE:
+```c
+struct irdma_mr *iwmr)
+{
+    struct irdma_allocate_stag_info *info;
+    struct irdma_pd *iwpd = to_iwpd(iwmr->ibmr.pd);
+    int status;
+    struct irdma_cqp_request *cqp_request;
+    struct cqp_cmds_info *cqp_info;
+
+    info->stag_idx = iwmr->stag >> IRDMA_CQPSQ_STAG_IDX_S;
+    info->pd_id = iwpd->sc_pd.pd_id;
+    info->total_len = iwmr->len;
+    info->remote_access = true;
+    cqp_info->cqp_cmd = IRDMA_OP_ALLOC_STAG;
+    cqp_info->post_sq = 1;
+    cqp_info->in.u.alloc_stag.dev = &iwdev->rf->sc_dev;
+    iwmr->type = IRDMA_MEMREG_TYPE_MEM;
+    palloc = &iwpbl->pble_alloc;
+    iwmr->page_cnt = max_num_sg;
+    err_code = irdma_get_pble(iwdev->rf->pble_rsrc, palloc, iwmr->page_cnt,
+                              false);
+    if (err_code)
+        goto err_get_pble;
+{
+    struct irdma_pbl *iwpbl = &iwmr->iwpbl;
+    struct irdma_reg_ns_stag_info *stag_info;
+    struct irdma_pd *iwpd = to_iwpd(iwmr->ibmr.pd);
+    struct irdma_pble_alloc *palloc = &iwpbl->pble_alloc;
+    struct irdma_cqp_request *cqp_request;
+    struct cqp_cmds_info *cqp_info;
+    int ret;
+    stag_info->total_len = iwmr->len;
+    stag_info->access_rights = irdma_get_mr_access(access);
+    stag_info->pd_id = iwpd->sc_pd.pd_id;
+    if (stag_info->access_rights & IRDMA_ACCESS_FLAGS_ZERO_BASED)
+        stag_info->addr_type = IRDMA_ADDR_TYPE_ZERO_BASED;
+    else
+        stag_info->addr_type = IRDMA_ADDR_TYPE_VA_BASED;
+```

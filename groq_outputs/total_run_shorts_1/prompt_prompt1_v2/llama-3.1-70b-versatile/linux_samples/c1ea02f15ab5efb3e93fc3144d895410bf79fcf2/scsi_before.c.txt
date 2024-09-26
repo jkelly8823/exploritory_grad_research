@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17
+VULNERABILITY_DESCRIPTION:
+Unintended infinite loop and potential resource leak due to incorrect loop termination.
+
+EXPLANATION:
+In the provided code snippet, there appears to be an incorrect loop termination. The loop is intended to continue indefinitely until `vhost_scsi_get_desc` returns an error or `ret == -EIO`. However, the `else if (ret == -EIO)` statement seems to be incorrectly indented, causing the loop to break prematurely when `ret == -EIO` occurs. This can lead to unintended behavior and potential resource leaks.
+
+Furthermore, the `else if (ret == -EIO)` statement can potentially cause the loop to exit prematurely, even if the `ret` value indicates an error other than `-EIO`. This can lead to unknown behavior or potential resource leaks.
+
+It is unclear from the provided snippet whether this is an actual bug or an oversight in the snippet. Assuming the snippet accurately represents the code's intent, this analysis is made.
+
+RECOMMENDATIONS:
+To resolve this issue, the code should be modified to correctly handle the loop termination. The corrected loop structure should continue running indefinitely until `vhost_scsi_get_desc` returns an error or until a specific termination condition is met.
+
+```c
+for (;;) {
+    ret = vhost_scsi_get_desc(vs, vq, &vc);
+    if (ret) {
+        if (ret == -EIO) {
+            vhost_scsi_send_bad_target(vs, vq, vc.head, vc.out);
+        }
+        break; // exit the loop when any error occurs
+    }
+    // continue processing if ret is 0
+}
+```
+
+ORIGINAL CODE:
+```
+	struct iov_iter in_iter, prot_iter, data_iter;
+	u64 tag;
+	u32 exp_data_len, data_direction;
+	int ret, prot_bytes;
+	u16 lun;
+	u8 task_attr;
+	bool t10_pi = vhost_has_feature(vq, VIRTIO_SCSI_F_T10_PI);
+	void *cdb;
+
+	vhost_disable_notify(&vs->dev, vq);
+
+	for (;;) {
+		ret = vhost_scsi_get_desc(vs, vq, &vc);
+		if (ret)
+			goto err;
+
+			break;
+		else if (ret == -EIO)
+			vhost_scsi_send_bad_target(vs, vq, vc.head, vc.out);
+	}
+out:
+	mutex_unlock(&vq->mutex);
+}
+
+	} v_req;
+	struct vhost_scsi_ctx vc;
+	size_t typ_size;
+	int ret;
+
+	mutex_lock(&vq->mutex);
+	/*
+	 * We can handle the vq only after the endpoint is setup by calling the
+
+	vhost_disable_notify(&vs->dev, vq);
+
+	for (;;) {
+		ret = vhost_scsi_get_desc(vs, vq, &vc);
+		if (ret)
+			goto err;
+
+			break;
+		else if (ret == -EIO)
+			vhost_scsi_send_bad_target(vs, vq, vc.head, vc.out);
+	}
+out:
+	mutex_unlock(&vq->mutex);
+}
+```

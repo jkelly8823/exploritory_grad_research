@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11, 19-20
+VULNERABILITY_DESCRIPTION:
+Double-free vulnerability in XML parser deallocation.
+EXPLANATION:
+The provided code snippets demonstrate the creation and deallocation of an XML parser structure and its associated memory allocations. However, an issue arises when deallocation is performed incorrectly, specifically in the `XML_ParserFree` function. When `parser->use_namespace` is true and `parser->_ns_seperator` is non-NULL, `parser->_ns_seperator` is freed using `xmlFree`. However, `parser->_ns_seperator` was previously allocated using `xmlStrdup` in two instances. In case of memory exhaustion during the second `xmlStrdup` call (line 11), `parser->_ns_seperator` will remain NULL, leading to a double-free when `parser->_ns_seperator` is assigned a new value and then freed again later. Similarly, `parser->parser` is freed using `efree` in case of an error but then used to free `parser->parser->myDoc` in the `XML_ParserFree` function. Both of these free `parser->parser` which may lead to a double-free.
+RECOMMENDATIONS:
+- To avoid the double-free vulnerability when using `xmlStrdup` to assign a new value to `parser->_ns_seperator`, you should check if the old value is non-NULL before assigning and free it before reassigning.
+- Add a null check for `parser->parser` before freeing it in the `XML_ParserFree` function.
+- Before using `parser->parser` to free `parser->parser->myDoc`, first set `parser->parser` to NULL after freeing it to prevent any further double-free issues.
+
+ORIGINAL CODE:
+```
+if (URI) {
+    /* Use libxml functions otherwise its memory deallocation is screwed up */
+    *qualified = xmlStrdup(URI);
+    *qualified = xmlStrncat(*qualified, parser->_ns_seperator, 1);
+    *qualified = xmlStrncat(*qualified, name, xmlStrlen(name));
+} else {
+    *qualified = xmlStrdup(name);
+}
+parser = (XML_Parser) emalloc(sizeof(struct _XML_Parser));
+memset(parser, 0, sizeof(struct _XML_Parser));
+parser->use_namespace = 0;
+parser->_ns_seperator = NULL;
+
+parser->parser = xmlCreatePushParserCtxt((xmlSAXHandlerPtr) &php_xml_compat_handlers, (void *) parser, NULL, 0, NULL);
+if (parser->parser == NULL) {
+    efree(parser);
+if (sep != NULL) {
+    parser->use_namespace = 1;
+    parser->parser->sax2 = 1;
+    parser->_ns_seperator = xmlStrdup(sep);
+} else {
+    /* Reset flag as XML_SAX2_MAGIC is needed for xmlCreatePushParserCtxt 
+    so must be set in the handlers */
+    parser->parser->sax->initialized = 1;
+XML_ParserFree(XML_Parser parser)
+{
+    if (parser->use_namespace) {
+        if (parser->_ns_seperator) {
+            xmlFree(parser->_ns_seperator);
+        }
+    }
+    if (parser->parser->myDoc) {
+        xmlFreeDoc(parser->parser->myDoc);
+```

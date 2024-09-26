@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-19, 20-29
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Out-of-Bounds Write Vulnerabilities in lbs_rates array and rates_eid array.
+
+EXPLANATION:
+The given code snippet appears to be a part of a wireless driver implementation. There are two potential vulnerabilities present in this code. Firstly, in the for loop that iterates over the lbs_rates array, it does not check if the index (hw) is within the bounds of the lbs_rates array before accessing its elements. This may lead to a buffer overflow if the lbs_rates array is accessed beyond its size. Additionally, the code also writes to the cmd.bss.rates array without proper array bounds checking.
+
+Secondly, there is an array indices vulnerability in the rates_eid array. The loop iterates over the rates_max variable, which is obtained from rates_eid[1]. However, there is no check if the index (i+2) is within the bounds of the rates_eid array before accessing its elements (rates_eid[i+2]). This may lead to a buffer overflow or out-of-bounds write if the rates_eid array is accessed beyond its size.
+
+RECOMMENDATIONS:
+- Perform array bounds checking before accessing the elements of lbs_rates and rates_eid arrays.
+- Ensure that the variables rates_max is within the bounds of the rates_eid array.
+- Validate the values of rates_eid[i+2] before performing bitwise operations and comparisons.
+
+ORIGINAL CODE:
+
+```c
+int hw, ap, ap_max = ie[1];
+u8 hw_rate;
+
+/* Advance past IE header */
+ie += 2;
+
+lbs_deb_hex(LBS_DEB_ASSOC, "AP IE Rates", (u8 *) ie, ap_max);
+struct cmd_ds_802_11_ad_hoc_join cmd;
+u8 preamble = RADIO_PREAMBLE_SHORT;
+int ret = 0;
+
+/* TODO: set preamble based on scan result */
+ret = lbs_set_radio(priv, preamble, 1);
+if (ret)
+if (!rates_eid) {
+	lbs_add_rates(cmd.bss.rates);
+} else {
+	int hw, i;
+	u8 rates_max = rates_eid[1];
+	u8 *rates = cmd.bss.rates;
+	for (hw = 0; hw < ARRAY_SIZE(lbs_rates); hw++) {
+		u8 hw_rate = lbs_rates[hw].bitrate / 5;
+		for (i = 0; i < rates_max; i++) {
+			if (hw_rate == (rates_eid[i+2] & 0x7f)) {
+```

@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19-25, 31-32
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a resource leak and potential null pointer dereference. 
+
+EXPLANATION:
+The code creates a zval pointer `str_headers` using `MAKE_STD_ZVAL` but does not check if the allocation was successful. If the allocation fails, `str_headers` will be NULL. The code then assigns a string using `http_context_headers` and `smart_str_0`, but these functions do not handle null pointers safely. 
+
+Additionally, if the allocation is successful, the code does not check if `smart_str_0` and `http_context_headers` return any errors. If these functions fail, they may free the memory allocated for `str_headers` or `headers`, but the pointers are still being used. This can lead to a resource leak and potential null pointer dereference.
+
+RECOMMENDATIONS:
+Check the return value of `MAKE_STD_ZVAL` to ensure that the memory allocation was successful. 
+
+Additionally, check the return values of `smart_str_0` and `http_context_headers` to handle any potential errors. Here is an example of how to improve the code:
+
+```
+if (MAKE_STD_ZVAL(str_headers)) {
+    // Use str_headers
+} else {
+    emalloc_failed = On;
+    return;
+}
+
+if (http_context_headers(context, has_authorization, has_proxy_authorization, 0, &headers TSRMLS_CC) == FAILURE) {
+    zval_ptr_dtor(&str_headers);
+    return; // Or handle the error
+}
+```
+
+ORIGINAL CODE:
+
+	smart_str headers = {0};
+	char* key = NULL;
+	time_t t = time(0);
+	zend_bool has_proxy_authorization = 0;
+	zend_bool has_authorization = 0;
+
+	if (strchr(uri,':') != NULL || IS_ABSOLUTE_PATH(uri, uri_len)) {
+		uri_len = strlen(uri);
+	} else if (VCWD_REALPATH(uri, fn) == NULL) {
+			zval_ptr_dtor(&str_proxy);
+		}
+
+		has_proxy_authorization = proxy_authentication(this_ptr, &headers TSRMLS_CC);
+	}
+
+	has_authorization = basic_authentication(this_ptr, &headers TSRMLS_CC);
+
+	/* Use HTTP/1.1 with "Connection: close" by default */
+	if (php_stream_context_get_option(context, "http", "protocol_version", &tmp) == FAILURE) {
+    	zval *http_version;
+		ZVAL_DOUBLE(http_version, 1.1);
+		php_stream_context_set_option(context, "http", "protocol_version", http_version);
+		zval_ptr_dtor(&http_version);
+		smart_str_appendl(&headers, "Connection: close\r\n", sizeof("Connection: close\r\n")-1);
+	}
+
+	if (headers.len > 0) {
+		zval *str_headers;
+
+		if (!context) {
+			context = php_stream_context_alloc(TSRMLS_C);
+		} else {
+			http_context_headers(context, has_authorization, has_proxy_authorization, 0, &headers TSRMLS_CC);
+		}
+
+		smart_str_0(&headers);
+		MAKE_STD_ZVAL(str_headers);
+	}

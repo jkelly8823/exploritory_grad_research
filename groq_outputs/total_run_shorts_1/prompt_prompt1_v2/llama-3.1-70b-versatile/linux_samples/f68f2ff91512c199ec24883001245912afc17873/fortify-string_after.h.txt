@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 115-116
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a dynamic overflow attack because it does not perform proper bounds checking on the `size` argument in the `strcpy` function. 
+
+EXPLANATION:
+In the `strcpy` function, it checks if the `size` of the destination buffer (`p`) is less than the size of the data being copied (`strlen(q) + 1`). However, it does not check if the size of the source buffer (`q`) is valid or not. This can lead to a situation where the `strcpy` function tries to copy more data than the destination buffer can hold, resulting in a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the `strcpy` function should also check if the size of the source buffer (`q`) is valid. This can be done by adding a check for `q_size < size` before copying the data. If `q_size` is less than `size`, it means that the source buffer does not have enough data to fill the destination buffer, and the function should handle this situation accordingly. Here is an example of how the `strcpy` function can be modified to include this check:
+
+```c
+__FORTIFY_INLINE char *strcpy(char *p, const char *q)
+{
+    size_t p_size = __builtin_object_size(p, 1);
+    size_t q_size = __builtin_object_size(q, 1);
+    size_t size;
+
+    /* If neither buffer size is known, immediately give up. */
+    if (p_size == (size_t)-1 && q_size == (size_t)-1)
+        return __underlying_strcpy(p, q);
+    size = strlen(q) + 1;
+    /* Compile-time check for const size overflow. */
+    /* Run-time check for dynamic size overflow. */
+    if (p_size < size || q_size < size)
+        fortify_panic(__func__);
+    __underlying_memcpy(p, q, size);
+    return p;
+}
+```
+
+ORIGINAL CODE:
+```c
+__FORTIFY_INLINE char *strcpy(char *p, const char *q)
+{
+    size_t p_size = __builtin_object_size(p, 1);
+    size_t q_size = __builtin_object_size(q, 1);
+    size_t size;
+
+    /* If neither buffer size is known, immediately give up. */
+    if (p_size == (size_t)-1 && q_size == (size_t)-1)
+        return __underlying_strcpy(p, q);
+    size = strlen(q) + 1;
+    /* Compile-time check for const size overflow. */
+    /* Run-time check for dynamic size overflow. */
+    if (p_size < size)
+        fortify_panic(__func__);
+    __underlying_memcpy(p, q, size);
+    return p;
+}
+```

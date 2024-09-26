@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-6
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability.
+
+EXPLANATION:
+The given code snippet fills a buffer `keybuf` with data. However, there is no explicit check to prevent overwriting past the end of this buffer if `sizeof(keybuf)` is not initially set to a length adequate for holding the output of this loop. 
+
+The while loop condition `q - (u_char *) keybuf < sizeof(keybuf)` attempts to set a limit but this value can be too large if not explicitly defined, potentially leading to an over-index on the buffer.
+
+Furthermore, the amount of data that is copied into `keybuf` is determined by the data contained in `key`, which suggests data is not being checked for limits. This is a common way that buffer overflow vulnerabilities can occur.
+
+Additionally, the function `des_setkey` is called with `keybuf` as a parameter. If `des_setkey` also uses the `keybuf` without performing its own validation, any potential overflown data could be further propagated.
+
+RECOMMENDATIONS:
+Ensure that `keybuf` has a sensible and validated limit. If not already the case, a fixed-size array or a dynamically allocated array is needed.
+
+It's advisable to modify the code as follows:
+
+```c
+size_t keybuf_len = sizeof(keybuf);
+q = keybuf;
+
+for (size_t i = 0; i < keybuf_len; i++) {
+    if (key)
+        q[i] = *key << 1;
+    else
+        break;
+
+    if (*key)
+        key++;
+    if (!key)
+        break;
+}
+
+if (des_setkey(keybuf, data))
+    return NULL;
+```
+
+This version includes explicit validation of array length and limit checks, avoiding any buffer overflow that could cause undefined behavior or permit an attacker to execute arbitrary code.
+
+ORIGINAL CODE:
+
+    */
+    q = (u_char *) keybuf;
+    while (q - (u_char *) keybuf < sizeof(keybuf)) {
+        *q++ = *key << 1;
+        if (*key)
+            key++;
+    }
+    if (des_setkey((u_char *) keybuf, data))
+        return(NULL);

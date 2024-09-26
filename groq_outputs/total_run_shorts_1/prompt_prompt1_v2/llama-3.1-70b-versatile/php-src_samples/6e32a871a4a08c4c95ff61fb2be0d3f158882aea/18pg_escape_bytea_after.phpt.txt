@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 7, 8
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+EXPLANATION:
+The variables `$table_name` and `$conn_str` are not defined within the provided code snippet, suggesting that they may be user-controlled or defined elsewhere. However, assuming these variables can be controlled by the user, the code is vulnerable to SQL injection attacks. The `$table_name` variable is directly concatenated into the SQL query without proper sanitization or parameterization, allowing an attacker to inject malicious SQL code. Additionally, the `$conn_str` variable, which is presumably used to establish a connection to the database, may also be vulnerable to injection attacks if it is not properly sanitized.
+
+The use of `pg_escape_bytea` on the `$image` variable is not a vulnerability in itself, but it is worth noting that it does not protect against SQL injection attacks. It only protects against corrupting the binary data stored in the database.
+
+The line `pg_query($db, 'SELECT * FROM '.$table_name.' WHERE num = 9876');` also uses the `$table_name` variable unsafely.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should use prepared statements with parameterized queries to prevent SQL injection attacks. Unfortunately, since the provided code is using the older `pg_query` function, we need to use the newer PDO library or `pg_prepare` and `pg_execute` functions for more secure query execution.
+
+Here's an example using the `pg_prepare` and `pg_execute` functions:
+
+```php
+$table_name = 'your_table_name';
+$num = 9876;
+$image = file_get_contents(dirname(__FILE__) . '/php.gif');
+$esc_image = pg_escape_bytea($image);
+
+$result = pg_prepare($db, 'insert_image', "INSERT INTO $table_name (num, bin) VALUES ($1, $2)");
+$result = pg_execute($db, 'insert_image', array($num, $esc_image));
+
+$result = pg_prepare($db, 'select_image', "SELECT * FROM $table_name WHERE num = $1");
+$result = pg_execute($db, 'select_image', array($num));
+$rows = pg_fetch_all($result);
+$unesc_image = pg_unescape_bytea($rows[0]['bin']);
+```
+
+Note that even with parameterized queries, using user-controlled input for table or column names is not recommended and can still lead to security vulnerabilities. 
+
+ORIGINAL CODE:
+```php
+include('config.inc');
+
+$db = pg_connect($conn_str);
+
+$image = file_get_contents(dirname(__FILE__) . '/php.gif');
+$esc_image = pg_escape_bytea($image);
+
+pg_query($db, 'INSERT INTO '.$table_name.' (num, bin) VALUES (9876, \''.$esc_image.'\');');
+$result = pg_query($db, 'SELECT * FROM '.$table_name.' WHERE num = 9876');
+$rows = pg_fetch_all($result);
+$unesc_image = pg_unescape_bytea($rows[0]['bin']);
+```

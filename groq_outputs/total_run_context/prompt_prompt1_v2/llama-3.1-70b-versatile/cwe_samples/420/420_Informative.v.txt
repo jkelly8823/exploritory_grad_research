@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Potential Unauthorized Access Vulnerability
+EXPLANATION:
+The code snippet appears to be implementing a permission-based access control mechanism. However, there is a potential vulnerability in the way the `acl_oh_allowlist` and `write_auth` signals are used to control access. Specifically, the line `always @* acl_oh_allowlist <= 32'h8312;` sets the `acl_oh_allowlist` to a fixed value `32'h8312` on every simulation event. This means that the `acl_oh_allowlist` is not actually being updated or modified in any way, and the `write_auth` signal is solely dependent on the fixed value of `acl_oh_allowlist`. This could potentially allow unauthorized access if an attacker can manipulate the `incoming_id` signal to match the fixed value of `acl_oh_allowlist`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to dynamically update the `acl_oh_allowlist` variable based on some secure input or authentication mechanism. This would prevent an attacker from easily guessing or manipulating the `acl_oh_allowlist` value. Additionally, the `write_auth` signal should be re-evaluated to ensure that it is not solely dependent on the fixed value of `acl_oh_allowlist`. One possible fix could be to use a secure storage mechanism to store the `acl_oh_allowlist` value and update it dynamically based on secure input.
+
+ORIGINAL CODE:
+
+
+               module foo_bar(data_out, data_in, incoming_id, address, clk, rst_n);
+               output [31:0] data_out;
+               input [31:0] data_in, incoming_id, address;
+               input clk, rst_n;
+               wire write_auth, addr_auth;
+               reg [31:0] data_out, acl_oh_allowlist, q;
+               assign write_auth = | (incoming_id & acl_oh_allowlist) ? 1 : 0; 
+               always @*
+               
+                 acl_oh_allowlist <= 32'h8312; 
+               
+               assign addr_auth = (address == 32'hF00) ? 1: 0;
+               always @ (posedge clk or negedge rst_n)
+               
+                 if (!rst_n)
+                 
+                   begin
+                   
+                     q <= 32'h0;
+                     data_out <= 32'h0;
+                   
+                   end
+                 
+                 else
+                 
+                   begin
+                   
+                     q <= (addr_auth & write_auth) ? data_in: q;
+                     data_out <= q;
+                   
+                   end
+                 
+                 end
+               
+               endmodule

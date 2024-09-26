@@ -1,0 +1,76 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Possible double-free vulnerability when OBJ_length(asn1obj) returns 0.
+
+EXPLANATION:
+When OBJ_length(asn1obj) returns 0, the ASN1_OBJECT_free(asn1obj) function is called immediately, which is not necessarily an issue by itself. However, later on, another call to ASN1_OBJECT_free(pval) is made in the 'err' segment if ptype == V_ASN1_OBJECT. 
+
+Here, if pval is equal to asn1obj (which would occur when OBJ_nid2obj(nid) returns an object whose length is 0), the same ASN1_OBJECT could be freed twice. This is because in the 'err' segment, ASN1_OBJECT_free(pval) could be an invocation of ASN1_OBJECT_free(asn1obj) on the object that has already been freed at line 6.
+
+This could lead to memory corruption and undefined behavior.
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, make sure that pval is not freed at two different places when it is equal to asn1obj. This could be achieved by adding a check in the 'err' block to see if pval is NULL before attempting to free it. Here is an example of how the code could be modified:
+
+```c
+err:
+    if (ptype == V_ASN1_OBJECT && pval != NULL)
+        ASN1_OBJECT_free(pval);
+    else if (ptype != V_ASN1_OBJECT && pval != NULL)
+        ASN1_STRING_free(pval);
+    OPENSSL_free(penc);
+    return 0;
+```
+
+Also, set asn1obj to NULL after it is freed to prevent it from being freed again if the same object is used at a different point in the code.
+
+```c
+if (asn1obj == NULL || OBJ_length(asn1obj) == 0) {
+    ASN1_OBJECT_free(asn1obj);
+    asn1obj = NULL;  // Add this line
+    ERR_raise(ERR_LIB_EC, EC_R_MISSING_OID);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```c
+ASN1_OBJECT *asn1obj = OBJ_nid2obj(nid);
+
+if (asn1obj == NULL || OBJ_length(asn1obj) == 0) {
+    ASN1_OBJECT_free(asn1obj);
+    ERR_raise(ERR_LIB_EC, EC_R_MISSING_OID);
+    return 0;
+}
+*ppval = asn1obj;
+ptype, pval, penc, penclen))
+return 1;
+err:
+if (ptype == V_ASN1_OBJECT)
+    ASN1_OBJECT_free(pval);
+else
+    ASN1_STRING_free(pval);
+OPENSSL_free(penc);
+return 0;
+}
+eplen = i2d_ECPrivateKey(&ec_key, &ep);
+if (eplen <= 0) {
+    ERR_raise(ERR_LIB_EC, ERR_R_EC_LIB);
+    ASN1_STRING_free(pval);
+    return 0;
+}
+
+if (!PKCS8_pkey_set0(p8, OBJ_nid2obj(NID_X9_62_id_ecPublicKey), 0,
+                     ptype, pval, ep, eplen)) {
+    ERR_raise(ERR_LIB_EC, ERR_R_EC_LIB);
+    ASN1_STRING_free(pval);
+    OPENSSL_clear_free(ep, eplen);
+    return 0;
+}
+
+return 1;
+}
+
+static int int_ec_size(const EVP_PKEY *pkey)
+{```

@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+Double-checked locking vulnerability.
+
+EXPLANATION:
+The provided code snippet is attempting to implement the double-checked locking idiom, which is intended to ensure thread-safe lazy initialization of a singleton object. However, this idiom is known to be broken under Java's memory model prior to Java 5. It has been broken due to possible memory visibility issues due the optimizer and processors being able to reorder instructions for performance.
+
+Even if this is used in an environment that supports Java 5 or later, the instance creation `new Helper()` isn't qualified to be thread-safe. A constructor in Java might perform initialization that isn't thread-safe. Even a simple assignment might be problematic if it isn't properly synchronized with other threads.
+
+If you're working in a multithreaded environment, there are alternate, thread-safe ways to implement lazy initialization.
+
+RECOMMENDATIONS:
+To fix the vulnerability, use the proper, thread-safe method to implement lazy initialization in a singleton. This approach eliminates the need for the double-checked locking idiom. We strongly suggest the initialization on demand holder idiom for lazy initialization. However, since the variable `helper` is not declared as `volatile` as of in Java versions prior to version 5, it has some potential issues.
+
+Here is the Initialization on Demand Holder idiom:
+
+```java
+private Helper getHelper() {
+  return HelperHolder.helper;
+}
+
+private static class HelperHolder {
+  private static final Helper helper = new Helper();
+}
+```
+
+It is also possible to utilize atomic variables or even final fields with lazy initialization or synchronization in modern environments.
+This solution does effectively require much more significant code blocks, but they are robust solutions.
+
+ORIGINAL CODE:
+```java
+if (helper == null) {
+    synchronized (this) {
+        if (helper == null) {
+            helper = new Helper();
+        }
+    }
+} 
+return helper;
+```

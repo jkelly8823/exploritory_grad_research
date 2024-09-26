@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+The vulnerability is related to pointer nullability in error reporting. It is possible for the function to throw an error with null parameters, potentially causing a null dereference when reporting the error.
+
+EXPLANATION:
+The code initializes multiple pointers to NULL, but does not check these pointers for validity before dereferencing them when reporting potential errors. Since `priv_key`, `pub_key`, and `params` are not used anywhere in the snippet, it is unclear if they should be checked before calling `ERR_raise`. However, `ERR_raise` can modify the error queue, which might use the null pointer arguments, potentially causing undefined behavior.
+
+RECOMMENDATIONS:
+It is recommended to either drop usage of `ERR_raise` with `NULL` pointer arguments or to ensure all `NULL` pointer arguments are checked before calling `ERR_raise`. Here's an example of how to apply these recommendations:
+
+    const BIGNUM *priv_key = NULL, *pub_key = NULL;
+    const FFC_PARAMS *params = NULL;
+    const BIGNUM *p = NULL;
+
+    if (out == NULL || dh == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER);
+        // Assuming this should not return, this function does not continue execution. If this function does continue execution you should:
+        // if (ERR.raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER) != NULL)
+        // {
+        //   return 0;
+        // }
+        return 0;
+    if (params != NULL
+        && !ffc_params_to_text(out, params))
+        return 0;
+
+    return 1;
+}
+In an actual implementation it's worth considering storing a statically valid string as the error description for the case when one of the pointer parameters is `NULL`.
+
+ORIGINAL CODE:
+
+    const BIGNUM *priv_key = NULL, *pub_key = NULL;
+    const FFC_PARAMS *params = NULL;
+    const BIGNUM *p = NULL;
+
+    if (out == NULL || dh == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    if (params != NULL
+        && !ffc_params_to_text(out, params))
+        return 0;
+
+    return 1;
+}

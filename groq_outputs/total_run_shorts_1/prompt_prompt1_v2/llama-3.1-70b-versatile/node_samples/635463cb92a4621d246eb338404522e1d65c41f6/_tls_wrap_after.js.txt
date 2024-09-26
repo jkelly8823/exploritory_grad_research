@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5, 11
+VULNERABILITY_DESCRIPTION:
+ The code contains two potential vulnerabilities. The first one relates to the handling of the 'options.rejectUnauthorized' property. If this property is explicitly set to 'undefined' or any falsy value, it will be set to 'true', potentially causing the 'rejectUnauthorized' check to fail. The second vulnerability is related to the updating of the 'rejectUnauthorized' property. In this case, even though the intention is to ensure the property is correctly set to 'false' if 'options.rejectUnauthorized' is 'false', there's an alternate way to consider handling 'options.rejectUnauthorized' being set to 'true'. However, it has only one condition,  so it seems there is a possibility where the code set it to 'false', in which case later updates to the configuration gets ignored for options.rejectUnauthorized.
+EXPLANATION:
+The issue with the 'rejectUnauthorized' property lies in its implicit type casting to boolean. The condition 'options.rejectUnauthorized !== false' will evaluate to 'true' if 'options.rejectUnauthorized' is any falsy value other than 'false', including 'undefined', 'null', '0', etc. However, when this 'true' value is assigned back to 'options.rejectUnauthorized', the resulting behavior can cause issues if the check for 'false' relies solely on this assignment for later settings. 
+
+RECOMMENDATIONS:
+One potential fix is to explicitly set 'options.rejectUnauthorized' to 'true' or 'false' based on the actual value, considering 'false' and ignoring any changes which set this configuration option true for options.rejectUnauthorized.
+```javascript
+if (options.rejectUnauthorized === false || options.rejectUnauthorized === undefined) {
+  options.rejectUnauthorized = false;
+} else {
+  options.rejectUnauthorized = true;
+}
+```
+By explicitly setting 'options.rejectUnauthorized' to 'true' or 'false' based on the actual value of 'options.rejectUnauthorized', we can avoid any potential issues.
+
+ORIGINAL CODE:
+```javascript
+this.authorized = false;
+this.authorizationError = verifyError.code || verifyError.message;
+
+// rejectUnauthorized property can be explicitly defined as `undefined`
+// causing the assignment to default value (`true`) fail. Before assigning
+// it to the tlssock connection options, explicitly check if it is false
+// and update rejectUnauthorized property. The property gets used by
+// TLSSocket connection handler to allow or reject connection if
+// unauthorized.
+// This check is potentially redundant, however it is better to keep it
+// in case the option object gets modified somewhere.
+if (options.rejectUnauthorized !== false) {
+  this.destroy(verifyError);
+  return;
+}
+debug('client emit secureConnect. rejectUnauthorized: %s, ' +
+signal: options.signal,
+});
+
+// rejectUnauthorized property can be explicitly defined as `undefined`
+// causing the assignment to default value (`true`) fail. Before assigning
+// it to the tlssock connection options, explicitly check if it is false
+// and update rejectUnauthorized property. The property gets used by TLSSocket
+// connection handler to allow or reject connection if unauthorized
+options.rejectUnauthorized = options.rejectUnauthorized !== false;
+
+tlssock[kConnectOptions] = options;
+
+if (cb)
+  tlssock.once('secureConnect', cb);
+```

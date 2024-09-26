@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11, 12-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack due to the use of `strcpy` and `strcat` functions (not directly visible but `php_url_decode` may include them) with attacker-controlled data. Additionally, there is a potential vulnerability in the use of `atoi` function without proper error checking.
+
+EXPLANATION:
+The code uses the `php_url_decode` function to decode the query string and then uses `strdup` to create a copy of it. However, it does not check the length of the decoded string, which could lead to a buffer overflow if the attacker provides a long query string. Furthermore, the use of `strchr` to check for the presence of '=' in the query string can also lead to a buffer overflow if the query string is very large.
+
+Additionally, the code uses `atoi` to convert the optarg to an integer, but it does not check if the conversion is successful. If the optarg is not a valid integer, `atoi` will return 0, which can lead to unexpected behavior. This is a potential vulnerability if the repeats value is not validated properly.
+
+RECOMMENDATIONS:
+1. Use safer functions like `strncpy` or `strlcpy` instead of `strdup` to prevent buffer overflows. Also, ensure that the destination buffer is null-terminated.
+2. Validate the length of the query string before passing it to `php_url_decode`.
+3. Use `strtod` or `strtol` instead of `atoi` to convert optarg to an integer, and check the return value to ensure successful conversion.
+4. Validate the value of `repeats` to ensure it is within a valid range.
+
+ORIGINAL CODE:
+
+}
+}
+
+if((query_string = getenv("QUERY_STRING")) != NULL && strchr(query_string, '=') == NULL) {
+/* we've got query string that has no = - apache CGI will pass it to command line */
+unsigned char *p;
+decoded_query_string = strdup(query_string);
+php_url_decode(decoded_query_string, strlen(decoded_query_string));
+for (p = decoded_query_string; *p &&  *p <= ' '; p++) {
+/* skip all leading spaces */
+}
+if(*p == '-') {
+skip_getopt = 1;
+}
+free(decoded_query_string);
+}
+}
+
+zend_first_try {
+while (!skip_getopt && (c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 1, 2)) != -1) {
+switch (c) {
+case 'T':
+benchmark = 1;
+repeats = atoi(php_optarg);

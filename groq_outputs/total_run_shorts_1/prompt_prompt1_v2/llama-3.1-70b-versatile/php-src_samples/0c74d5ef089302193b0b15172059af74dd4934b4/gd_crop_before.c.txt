@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 20-21
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to an integer overflow issue when allocating memory for the image.
+
+EXPLANATION:
+In the code, the allocation of memory for the image is performed without checks for integer overflow when calculating the image size. This can occur if the values of `crop->width` and `crop->height` are large, causing the product of `crop->width * crop->height` to exceed the maximum value that can be held by an integer, resulting in a signed integer overflow. This can lead to allocation of a small buffer, potentially causing a buffer overflow when data is written to it.
+
+However, in this snippet, there is no direct assignment or combination of `crop->width` and `crop->height` as separate entities. It is passed to `gdImageCreate` and `gdImageCreateTrueColor` which suggests that the library performs internal checks. Yet, this does not account for when the pointer returned from `gdImageCreate` or `gdImageCreateTrueColor` is null. This could potentially lead to null pointer dereferences at `dst->transparent` assuming the object handles no null pointer. This is the reason for marking the code as vulnerable.
+
+RECOMMENDATIONS:
+1. Ensure that `gdImageCreate` and `gdImageCreateTrueColor` are correctly handling potential integer overflows.
+2. Perform explicit null checks for the returned pointer before dereferencing it. This could potentially help to avoid null pointer dereferences.
+3. Validate the input values `crop->width` and `crop->height` before passing them to `gdImageCreate` or `gdImageCreateTrueColor` to prevent any unexpected behavior.
+
+ORIGINAL CODE:
+```c
+gdImagePtr dst;
+int y;
+
+/* check size */
+if (crop->width<=0 || crop->height<=0) {
+	return NULL;
+}
+
+/* allocate the requested size (could be only partially filled) */
+if (src->trueColor) {
+	dst = gdImageCreateTrueColor(crop->width, crop->height);
+	gdImageSaveAlpha(dst, 1);
+} else {
+	dst = gdImageCreate(crop->width, crop->height);
+	gdImagePaletteCopy(dst, src);
+}
+if (dst == NULL) {
+	return NULL;
+}
+dst->transparent = src->transparent;
+
+/* check position in the src image */
+if (crop->x < 0 || crop->x>=src->sx || crop->y<0 || crop->y>=src->sy) {
+```

@@ -1,0 +1,87 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 36-40, 46-48 (specifically in DNS_T_TXT case)
+VULNERABILITY_DESCRIPTION:
+The vulnerability is a potential buffer overflow in the DNS TXT record handling. The code does not properly check the length of the TXT record data before copying it into a buffer.
+
+EXPLANATION:
+In the `DNS_T_TXT` case, the code uses `memcpy` to copy the TXT record data into a buffer `tp->val`. However, it does not properly check the length of the data before copying. This can lead to a buffer overflow if the length of the data exceeds the size of the buffer.
+
+Furthermore, the code uses `n = *cp & 0xFF` to get the length of the data, but it does not check if `n` is within the bounds of the buffer. This can also lead to a buffer overflow.
+
+The code also uses `add_next_index_stringl` to add the data to an array, but it does not check if the length of the data is within the bounds of the buffer.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should properly check the length of the data before copying it into a buffer. The code should use bounds checking to ensure that the length of the data does not exceed the size of the buffer.
+
+Here is an example of how the code can be fixed:
+```c
+case DNS_T_TXT:
+    add_assoc_string(subarray, "type", "TXT");
+    array_init(&entries);
+
+    while (l1 < dlen) {
+        n = cp[l1];
+        if ((l1 + n + 1) > dlen) {
+            // Invalid chunk length, truncate
+            n = dlen - l1 - 1;
+        }
+
+        if (n > 0) {
+            if (l2 + n > sizeof(tp->val) - 1) {
+                // Buffer overflow, truncate
+                n = sizeof(tp->val) - 1 - l2;
+            }
+
+            memcpy(tp->val + l2, cp + l1 + 1, n);
+            add_next_index_stringl(&entries, cp + l1 + 1, n);
+        }
+
+        l1 = l1 + n + 1;
+        l2 = l2 + n;
+
+        if (l2 >= sizeof(tp->val) - 1) {
+            // Buffer full, stop
+            break;
+        }
+    }
+
+    tp->val[l2] = '\0';
+    tp->len = l2;
+    cp += dlen;
+
+    add_assoc_str(subarray, "txt", tp);
+    add_assoc_zval(subarray, "entries", &entries);
+```
+ORIGINAL CODE:
+```c
+case DNS_T_TXT:
+    {
+        int l1 = 0, l2 = 0;
+        zval entries;
+        zend_string *tp;
+
+        add_assoc_string(subarray, "type", "TXT");
+        
+        array_init(&entries);
+        
+        while (l1 < dlen) {
+            n = cp[l1];
+            if ((l1 + n) >= dlen) {
+                // Invalid chunk length, truncate
+                n = dlen - (l1 + 1);
+            }
+            if (n) {
+                memcpy(tp->val + l2, cp + l1 + 1, n);
+                add_next_index_stringl(&entries, cp + l1 + 1, n);
+            }
+            l1 = l1 + n + 1;
+            l2 = l2 + n;
+        }
+        tp->val[l2] = '\0';
+        tp->len = l2;
+        cp += dlen;
+
+        add_assoc_str(subarray, "txt", tp);
+        add_assoc_zval(subarray, "entries", &entries);
+```
+Note that this is just an example, and the actual fix may require more changes to the code.

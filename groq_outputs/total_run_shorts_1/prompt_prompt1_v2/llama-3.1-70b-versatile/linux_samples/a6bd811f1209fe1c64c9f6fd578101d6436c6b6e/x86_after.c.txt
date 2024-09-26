@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-15
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Descriptor Index Wrapping
+
+EXPLANATION:
+This code snippet does not properly validate data before performing operations based on its value. On line 3, it checks if `st->version & 1`, and if true, increments `st->version` by 1. However, `st->version` is not validated or sanitized beforehand, which could lead to unintended behavior.
+
+Moreover, on lines 7-9, the code checks if `data & KVM_STEAL_RESERVED_MASK` and then sets `vcpu->arch.st.msr_val` to `data`. However, `data` is also not validated beforehand, which could lead to buffer overflow or out-of-bounds access.
+
+Additionally, on line 21, the code dereferences `st`, which is calculated based on `vcpu->arch.st.msr_val`. This value is also not validated or sanitized, which could lead to buffer overflow or out-of-bounds access.
+
+RECOMMENDATIONS:
+
+1. Validate and sanitize `st->version` and `data` values before performing operations based on them.
+2. Ensure proper bounds checking when accessing arrays or structures based on `data` or `st->version` values.
+3. Add error handling for cases where `data` or `st->version` is invalid or outside expected ranges.
+
+ORIGINAL CODE:
+```
+    if (xchg(&st->preempted, 0) & KVM_VCPU_FLUSH_TLB)
+		kvm_vcpu_flush_tlb(vcpu, false);
+
+	vcpu->arch.st.preempted = 0;
+
+	if (st->version & 1)
+		st->version += 1;  /* first time write, random junk */
+
+		if (data & KVM_STEAL_RESERVED_MASK)
+			return 1;
+
+		vcpu->arch.st.msr_val = data;
+
+		if (!(data & KVM_MSR_ENABLED))
+			break;
+	if (!(vcpu->arch.st.msr_val & KVM_MSR_ENABLED))
+		return;
+
+	if (vcpu->arch.st.preempted)
+		return;
+
+	if (kvm_map_gfn(vcpu, vcpu->arch.st.msr_val >> PAGE_SHIFT, &map,
+			&vcpu->arch.st.cache, true))
+	st = map.hva +
+		offset_in_page(vcpu->arch.st.msr_val & KVM_STEAL_VALID_BITS);
+
+	st->preempted = vcpu->arch.st.preempted = KVM_VCPU_PREEMPTED;
+
+	kvm_unmap_gfn(vcpu, &map, &vcpu->arch.st.cache, true, true);
+}

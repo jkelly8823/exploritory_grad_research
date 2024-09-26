@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19
+VULNERABILITY_DESCRIPTION:
+Command Injection Vulnerability
+
+EXPLANATION:
+The vulnerability is present in the `snprintf` function, which is used to construct the `search_path`. The `search_dir` variable is derived from the `PATH` environment variable, which can be controlled by an attacker. This can lead to a command injection vulnerability, where an attacker can inject malicious commands into the `search_path` and potentially execute them.
+
+In this case, the vulnerability is exacerbated by the fact that the `search_path` is used as an argument to the `VCWD_REALPATH` function, which can potentially execute system commands. If an attacker can inject malicious data into the `search_path`, they may be able to execute arbitrary system commands.
+
+RECOMMENDATIONS:
+1. Sanitize and validate the `PATH` environment variable before using it to construct the `search_path`.
+2. Use a safe string construction function, such as `snprintf` with a format string that is not vulnerable to format string attacks.
+3. Avoid using `snprintf` to construct path names, and instead use a safe path concatenation function.
+4. Consider using a whitelisting approach to validate the `search_path` before using it.
+
+ORIGINAL CODE:
+#endif
+/* }}} */
+
+#ifndef S_ISREG
+#define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
+#endif
+
+PHPAPI int (*php_register_internal_extensions_func)(TSRMLS_D) = php_register_internal_extensions;
+
+#ifndef ZTS
+php_core_globals core_globals;
+			if ((envpath = getenv("PATH")) != NULL) {
+				char *search_dir, search_path[MAXPATHLEN];
+				char *last = NULL;
+				struct stat s;
+
+				path = estrdup(envpath);
+				search_dir = php_strtok_r(path, ":", &last);
+
+				while (search_dir) {
+					snprintf(search_path, MAXPATHLEN, "%s/%s", search_dir, sapi_module.executable_location);
+					if (VCWD_REALPATH(search_path, binary_location) && !VCWD_ACCESS(binary_location, X_OK) && VCWD_STAT(binary_location, &s) == 0 && S_ISREG(s.st_mode)) {
+						found = 1;
+						break;
+					}
+					search_dir = php_strtok_r(NULL, ":", &last);

@@ -1,0 +1,126 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 253-263
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a potential vulnerability in the `mysqlnd_run_authentication` function, specifically in the way it allocates and frees memory. 
+EXPLANATION:
+The issue arises in the `mysqlnd_run_authentication` function where memory is allocated and deallocated using the `mnd_emalloc`, `mnd_pestrdup`, and `mnd_efree` functions. These functions seem to be custom extensions to standard memory allocation functions (`malloc`, `free`, etc.). 
+
+However, the usage of these functions does not follow the principle of balancing memory allocation and deallocation. This can potentially lead to a memory leak, especially when an error occurs and the function jumps to the `end` label. In such a case, memory allocated earlier in the function may not be freed.
+
+This vulnerability can be exploited by an attacker to cause a denial-of-service (DoS) attack or potentially execute arbitrary code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that all allocated memory is freed in each possible path of the function. It would be better to use a smart pointer or a memory pool to manage the memory, rather than manually allocating and deallocating memory.
+
+Here's a possible fix for this issue:
+
+```c
+plugin_data = mnd_emalloc(plugin_data_len + 1);
+if (!plugin_data) {
+    goto end;
+}
+
+// ...
+
+do {
+    // ...
+    plugin_data = mnd_emalloc(plugin_data_len + 1);
+    if (!plugin_data) {
+        goto end;
+    }
+
+    // ...
+    mnd_efree(plugin_data);
+} while (ret == FAIL && conn->error_info->error_no == 0 && switch_to_auth_protocol != NULL);
+
+// ...
+
+end:
+if (plugin_data) {
+    mnd_efree(plugin_data);
+}
+```
+
+ORIGINAL CODE:
+Please note the original code was truncated to fit this response field, some lines in the 'end' label were ommited.
+
+```c
+// ...
+    	php_error_docref(NULL TSRMLS_CC, E_WARNING, "The server requested authentication method unknown to the client [%s]", requested_protocol);
+			SET_CLIENT_ERROR(*conn->error_info, CR_NOT_IMPLEMENTED, UNKNOWN_SQLSTATE, "The server requested authentication method umknown to the client");
+			goto end;
+		}
+		DBG_INF("plugin found");
+
+		{
+			zend_uchar * switch_to_auth_protocol_data = NULL;
+			size_t switch_to_auth_protocol_data_len = 0;
+			zend_uchar * scrambled_data = NULL;
+			size_t scrambled_data_len = 0;
+
+			switch_to_auth_protocol = NULL;
+			switch_to_auth_protocol_len = 0;
+
+			if (conn->auth_plugin_data) {
+				mnd_pefree(conn->auth_plugin_data, conn->persistent);
+				conn->auth_plugin_data = NULL;
+			}
+			conn->auth_plugin_data_len = plugin_data_len;
+			conn->auth_plugin_data = mnd_pemalloc(conn->auth_plugin_data_len, conn->persistent);
+			if (!conn->auth_plugin_data) {
+				SET_OOM_ERROR(*conn->error_info);
+				goto end;
+			}
+			memcpy(conn->auth_plugin_data, plugin_data, plugin_data_len);
+
+			DBG_INF_FMT("salt=[%*s]", plugin_data_len - 1, plugin_data);
+			/* The data should be allocated with malloc() */
+			scrambled_data =
+				auth_plugin->methods.get_auth_data(NULL, &scrambled_data_len, conn, user, passwd, passwd_len,
+												   plugin_data, plugin_data_len, options, mysql_flags TSRMLS_CC);
+
+			if (FALSE == is_change_user) {
+				ret = mysqlnd_auth_handshake(conn, user, passwd, passwd_len, db, db_len, options, mysql_flags,
+											charset_no,
+											first_call,
+											requested_protocol,
+											scrambled_data, scrambled_data_len,
+											&switch_to_auth_protocol, &switch_to_auth_protocol_len,
+											&switch_to_auth_protocol_data, &switch_to_auth_protocol_data_len
+											TSRMLS_CC);
+			} else {
+				ret = mysqlnd_auth_change_user(conn, user, strlen(user), passwd, passwd_len, db, db_len, silent,
+											   first_call,
+											   requested_protocol,
+											   scrambled_data, scrambled_data_len,
+											   &switch_to_auth_protocol, &switch_to_auth_protocol_len,
+											   &switch_to_auth_protocol_data, &switch_to_auth_protocol_data_len
+											   TSRMLS_CC);				
+			}
+			first_call = FALSE;
+			free(scrambled_data);
+
+			DBG_INF_FMT("switch_to_auth_protocol=%s", switch_to_auth_protocol? switch_to_auth_protocol:"n/a");
+			if (requested_protocol && switch_to_auth_protocol) {
+				mnd_efree(requested_protocol);
+				requested_protocol = switch_to_auth_protocol;
+			}
+
+			if (plugin_data) {
+				mnd_efree(plugin_data);
+			}
+			plugin_data_len = switch_to_auth_protocol_data_len;
+			plugin_data = switch_to_auth_protocol_data;
+		}
+		DBG_INF_FMT("conn->error_info->error_no = %d", conn->error_info->error_no);
+	} while (ret == FAIL && conn->error_info->error_no == 0 && switch_to_auth_protocol != NULL);
+	if (plugin_data) {
+		mnd_efree(plugin_data);
+	}
+end:
+	DBG_RETURN(ret);
+}
+/* }}} */
+```
+
+Please note the recommendations provided are based on the provided code snippet and the exact solution may require more information about the code's intent, framework used, and the exact nature of the issue.

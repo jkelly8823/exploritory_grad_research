@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to path traversal attacks, which can be exploited by a malicious user to access unintended directories.
+
+EXPLANATION:
+The vulnerability arises from the fact that the `pathModule.resolve` function does not prevent path traversal. If a user provides a path like `../../../../etc/passwd`, the code will resolve it to an absolute path, potentially allowing access to sensitive system files. This is especially concerning when considered in conjunction with the fact that this function appears to be related to file system permissions. 
+
+Additionally, when handling a buffer as input, the code calls `path.toString()` on it. If this buffer contains malicious data, the `toString()` method may not be sufficient to prevent path traversal attacks, since it may include path separator characters.
+
+The vulnerability is exacerbated by the fact that `pathModule.resolve` is called directly on user-provided input without proper validation or sanitization.
+
+RECOMMENDATIONS:
+To fix this vulnerability, consider using a more secure alternative to `pathModule.resolve`, such as `pathModule.normalize` or `pathModule.posix.normalize`, which is less susceptible to path traversal attacks.
+
+Before calling `pathModule.resolve`, sanitize the input path using a library such as `sanitize-filename` to prevent path traversal.
+
+If the input path is a buffer, validate that it only contains valid path characters before converting it to a string with `toString()`.
+
+ORIGINAL CODE:
+```javascript
+// TODO(rafaelgss): implement the path.resolve on C++ side
+// See: https://github.com/nodejs/node/pull/44004#discussion_r930958420
+// The permission model needs the absolute path for the fs_permission
+function possiblyTransformPath(path) {
+  if (permission.isEnabled()) {
+    if (typeof path === 'string') {
+      return pathModule.resolve(path);
+    } else if (Buffer.isBuffer(path)) {
+      return Buffer.from(pathModule.resolve(path.toString()));
+    }
+  }
+  return path;
+}
+```

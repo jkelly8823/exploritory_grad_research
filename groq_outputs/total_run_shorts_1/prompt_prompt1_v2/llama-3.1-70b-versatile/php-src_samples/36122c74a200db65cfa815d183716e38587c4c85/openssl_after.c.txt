@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 35-37
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow and Uncontrolled Memory Allocation, and Potential Information Leak Vulnerability
+EXPLANATION:
+The provided code snippet has three potential vulnerabilities. 
+
+The first is the potential for a buffer overflow when the data type of the ASN1_STRING is not V_ASN1_UTF8STRING. The function ASN1_STRING_to_UTF8() is called, which can potentially result in a buffer overflow if the to_add_len exceeds the buffer size of to_add. However, without seeing the definition of to_add, it is unclear if this is an actual vulnerability. It may be mitigated if to_add is dynamically sized.
+
+The second vulnerability is the allocation and deallocation of memory for the zval **subentries. In several places, subentries is allocated or reallocated using MAKE_STD_ZVAL and array_init; however, the corresponding zval_dtor call is only made for the variable return_value, but not subentries, potentially leading to memory leaks.
+
+The third vulnerability is found when nid equals NID_subject_alt_name. The memory allocated by BIO_get_mem_ptr is written to directly using the returned pointer bio_buf, and if there is any error between the BIO_get_mem_ptr call and its use, the buffer may contain uninitialized memory. However, this is not further examined as it involves understanding how the function BIO_get_mem_ptr and BIO_new work.
+
+RECOMMENDATIONS:
+Use bounds checking when calling ASN1_STRING_to_UTF8 to prevent a buffer overflow. Verify that the return value of ASN1_STRING_type does not result in unexpected behavior.
+
+Check and free subentries in all paths of execution to prevent memory leaks. Ensure that subentries is properly cleaned up in case of an error.
+
+Add error checking when using BIO_get_mem_ptr and verify the returned pointer's contents to ensure they are as expected.
+
+ORIGINAL CODE:
+static void add_assoc_name_entry(zval * val, char * key, X509_NAME * name, int shortname TSRMLS_DC) /* {{{ */
+{
+  zval **data;
+  zval *subitem, *subentries;
+  int i;
+  char *sname;
+  int nid;
+  X509_NAME_ENTRY * ne;
+  ASN1_STRING * str = NULL;
+  ne  = X509_NAME_get_entry(name, i);
+  obj = X509_NAME_ENTRY_get_object(ne);
+  nid = OBJ_obj2nid(obj);
+
+  if (shortname) {
+    sname = (char *) OBJ_nid2sn(nid);
+  } else {
+    sname = (char *) OBJ_nid2ln(nid);
+  }
+
+  str = X509_NAME_ENTRY_get_data(ne);
+  if (ASN1_STRING_type(str) != V_ASN1_UTF8STRING) {
+    to_add_len = ASN1_STRING_to_UTF8(&to_add, str);
+  } else {
+    to_add = ASN1_STRING_data(str);
+    to_add_len = ASN1_STRING_length(str);
+  }
+
+  if (to_add_len != -1) {
+    if (zend_hash_find(Z_ARRVAL_P(subitem), sname, strlen(sname)+1, (void**)&data) == SUCCESS) {
+      if (Z_TYPE_PP(data) == IS_ARRAY) {
+        subentries = *data;
+        add_next_index_stringl(subentries, (char *)to_add, to_add_len, 1);
+      } else if (Z_TYPE_PP(data) == IS_STRING) {
+        MAKE_STD_ZVAL(subentries);
+        array_init(subentries);
+        add_next_index_stringl(subentries, Z_STRVAL_PP(data), Z_STRLEN_PP(data), 1);
+        add_next_index_stringl(subentries, (char *)to_add, to_add_len, 1);
+        zend_hash_update(Z_ARRVAL_P(subitem), sname, strlen(sname)+1, &subentries, sizeof(zval*), NULL);
+      }
+    } else {
+      add_assoc_stringl(subitem, sname, (char *)to_add, to_add_len, 1);
+    }
+  }
+}
+  bio_out = BIO_new(BIO_s_mem());
+  if (nid == NID_subject_alt_name) {
+    if (openssl_x509v3_subjectAltName(bio_out, extension) == 0) {
+      BIO_get_mem_ptr(bio_out, &bio_buf);
+      add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+    } else {
+      zval_dtor(return_value);
+      if (certresource == -1 && cert) {

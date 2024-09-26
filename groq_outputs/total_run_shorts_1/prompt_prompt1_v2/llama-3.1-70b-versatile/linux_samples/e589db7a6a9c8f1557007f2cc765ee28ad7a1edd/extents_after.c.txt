@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 85-87, 58
+VULNERABILITY_DESCRIPTION: 
+Resource leaks and Null pointer dereferences due to missing error handling for functions returning dynamically allocated memory.
+
+EXPLANATION:
+In the provided code, the functions "ext4_ext_drop_refs(path)" and "ext4_ext_find_extent(inode, map->m_lblk, path)" return dynamically allocated memory, or an error value if the function fails. However, there are a few places where the error values for these functions are not handled. 
+
+In particular, on lines 85-87 and 58, if the "ext4_ext_drop_refs(path)" or "ext4_ext_find_extent(inode, map->m_lblk, path)" functions fail, the error code will not be handled and could potentially lead to a resource leak or null pointer dereferences.
+
+Additionally, there is also an error in return type. For example, line 58 assigns an error value of type 'int' to a variable of type 'struct ext4_ext_path'. 
+
+RECOMMENDATIONS:
+- Handle all error values returned by dynamically allocating functions. To do so, we recommend explicitly checking whether the return value is an error, and handling it accordingly.
+- Fix return type errors
+- In all places where functions like "ext4_ext_drop_refs(path)" and "ext4_ext_find_extent(inode, map->m_lblk, path)" are called, ensure that their return values are handled. 
+
+Here is an example for line 58:
+```c
+path = ext4_ext_find_extent(inode, map->m_lblk, path);
+if (IS_ERR(path)) {
+    err = PTR_ERR(path);
+    goto out;
+}
+```
+Should be:
+```c
+path = ext4_ext_find_extent(inode, map->m_lblk, path);
+if (IS_ERR_OR_NULL(path)) {
+    err = PTR_ERR_OR_ZERO(path);
+    goto out;
+}
+```
+Also ensure to free any dynamically allocated memory during error handling to prevent resource leaks.
+
+ORIGINAL CODE:
+As given

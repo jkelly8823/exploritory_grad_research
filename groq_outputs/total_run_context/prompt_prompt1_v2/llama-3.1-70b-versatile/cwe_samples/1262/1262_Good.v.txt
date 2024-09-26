@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-11
+VULNERABILITY_DESCRIPTION: Inconsistent Exception Handling
+EXPLANATION:
+This vulnerability occurs when two separate conditional statements assign the same exception cause (`riscv::ILLEGAL_INSTR`) but do not reset any previously set exception causes. This may result in exception cause masking, where the original exception cause is overwritten by a new exception.
+
+The first condition checks if the current privilege level matches the privilege level required by the CSR being accessed. If they do not match, it sets the `csr_exception_o.cause` to `riscv::ILLEGAL_INSTR`.
+
+The second condition checks if the CSR being accessed is a debug mode CSR and if debug mode is not enabled. If both conditions are true, it also sets `csr_exception_o.cause` to `riscv::ILLEGAL_INSTR`.
+
+However, there is no check to ensure that `csr_exception_o.valid` or `csr_exception_o.cause` is reset when the second condition is met but the first is not. This may lead to the wrong exception cause being reported to the user.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should be modified to ensure that only one condition sets the exception cause. Alternatively, if there are situations where multiple exceptions can occur, the code should be designed to handle multiple exceptions.
+
+Here are the possible fixes:
+
+- Remove the assignment to `csr_exception_o.cause` and `csr_exception_o.valid` from the second conditional statement.
+
+- Add a check before the second conditional statement to ensure that `csr_exception_o.valid` is reset if the first condition is not met.
+
+- Introduce an intermediate variable to store the potential exception cause, and then assign it to `csr_exception_o.cause` and `csr_exception_o.valid` only when both conditions have been checked.
+
+ORIGINAL CODE:
+
+```
+	if (csr_we || csr_read) begin
+		// check privilege level
+		if ((riscv::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)) begin
+		
+			csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+			csr_exception_o.valid = 1'b1;
+		
+		end
+		// check access to debug mode only CSRs
+		if (csr_addr_i[11:4] == 8'h7b && !debug_mode_q) begin
+		
+			csr_exception_o.cause = riscv::ILLEGAL_INSTR;
+			csr_exception_o.valid = 1'b1;
+		
+		end
+	end
+```

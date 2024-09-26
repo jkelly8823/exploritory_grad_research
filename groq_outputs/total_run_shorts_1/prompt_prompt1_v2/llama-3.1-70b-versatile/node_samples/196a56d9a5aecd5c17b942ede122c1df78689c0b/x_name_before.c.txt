@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16
+VULNERABILITY_DESCRIPTION:
+This code uses `X509_NAME_oneline` with a fixed buffer, but then dynamically allocates memory to `b` which could lead to an uncontrolled buffer overflow if not properly checked against allocation size. However in this particular snippet that is not the case as there is a subsequent check. A potential buffer overflow could be caused by the subsequent operations as the variable `l`, controlling the loop and string operations is user-controlled via the `obase` parameter.
+
+EXPLANATION:
+Although there isn't an obvious and direct uncontrolled buffer overflow shown in the code snippet, the potential vulnerability still exists. This issue may not seem very critical from the presented snippet but it may be triggered from the outer scope where `obase` value is set. The lack of proper bounds checking on the variable `l` (as shown when it is decremented after certain operations) can result in the value falling into invalid range. It should also be noted that, not all the outer scope code operations have been reviewed here.
+
+Additionally, potential errors are suppressed at the error line, where `goto err` might be located at the end for error handling but isn't here shown.
+
+RECOMMENDATIONS:
+To prevent any potential buffer overflows:
+- Ensure `l` does not enter invalid range, including checking the provided value `obase` in a suitable manner, i.e., to properly limit it between 2 and 80.
+- Allowing memory deallocation could potentially simplify fixing the above issues, but that relies on understanding the higher level context.
+
+ORIGINAL CODE:
+/*
+ * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+int X509_NAME_print(BIO *bp, const X509_NAME *name, int obase)
+{
+    char *s, *c, *b;
+    int l, i;
+
+    l = 80 - 2 - obase;
+
+    b = X509_NAME_oneline(name, NULL, 0);
+    if (b == NULL)
+        return 0;
+                if (BIO_write(bp, ", ", 2) != 2)
+                    goto err;
+            }
+            l--;
+        }
+        if (*s == '\0')
+            break;
+        s++;
+        l--;
+    }
+
+    OPENSSL_free(b);
+    return 1;

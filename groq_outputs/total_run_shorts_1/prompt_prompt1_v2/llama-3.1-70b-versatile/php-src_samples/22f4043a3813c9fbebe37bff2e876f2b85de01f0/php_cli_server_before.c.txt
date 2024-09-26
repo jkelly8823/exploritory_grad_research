@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11, 12
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in handling HTTP request content.
+
+EXPLANATION:
+The given code snippet appears to be handling HTTP request content in memory. The function uses `memmove` to copy data into the `client->request.content` buffer. However, it doesn't check if the destination buffer has enough space to hold the data before copying it. If `client->request.content_len + length` exceeds the allocated size of `client->request.content`, it will cause a buffer overflow.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, the code should check if the destination buffer has enough space before copying the data. This can be achieved by checking the allocated size of `client->request.content` before calling `memmove`. The recommended fix is to add a bounds check before the `memmove` operation. Ideally, the buffer should also be dynamically resized if necessary.
+
+```c
+if (client->request.content_len + length <= client->request.content_capacity) {
+    memmove(client->request.content + client->request.content_len, at, length);
+    client->request.content_len += length;
+} else {
+    // Handle the error, resize the buffer, or return with an error.
+    // For example:
+    // client->request.content = prepare_request_content_resize(client->request.content, client->request.content_len + length);
+}
+```
+Note: The `client->request.content_capacity` variable is assumed to exist and represent the capacity of the `client->request.content` buffer.
+
+ORIGINAL CODE:
+
+```c
+size_t prev_patch_len;
+int  is_static_file = 0;
+
+memmove(p, document_root, document_root_len);
+p += document_root_len;
+vpath = p;
+if (request->vpath_len > 0 && request->vpath[0] != '/') {
+php_cli_server_client *client = parser->data;
+if (!client->request.content) {
+    client->request.content = pemalloc(parser->content_length, 1);
+    client->request.content_len = 0;
+}
+memmove(client->request.content + client->request.content_len, at, length);
+client->request.content_len += length;
+}
+if (client->current_header_name) {
+    char *header_name = safe_pemalloc(client->current_header_name_len, 1, 1, 1);
+    memmove(header_name, client->current_header_name, client->current_header_name_len);
+    client->current_header_name = header_name;
+    client->current_header_name_allocated = 1;
+}
+```

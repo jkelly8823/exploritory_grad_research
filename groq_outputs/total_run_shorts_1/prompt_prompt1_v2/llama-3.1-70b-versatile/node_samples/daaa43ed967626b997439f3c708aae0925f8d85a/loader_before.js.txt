@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-2
+VULNERABILITY_DESCRIPTION: Potential for DOM Clobbering through lack of property validation in `setOwnProperty`.
+EXPLANATION:
+In this code snippet, there are two instances of `setOwnProperty` being used with user-controlled input (`redirects` and `process.mainModule`). DOM Clobbering is a vulnerability where user can create or modify properties on the global object (in this case, `this` and `module.require`) through some unpected or uncontrolled means, potentially creating arbitrary functions and allowing for Remote Code Execution.
+
+In the first instance, `setOwnProperty` is called with `this` and `'require'` as its first two arguments. However, there is no validation on `this` ensuring whether it's an object created by our code. 
+
+Similarly, in the second instance, `setOwnProperty` is called with `module.require` as its first argument. Again, there's no validation present to check whether `module.require` is actually a prototype-controlled object.
+
+RECOMMENDATIONS:
+Perform validation checks on `this` and `module.require` to ensure they are objects created by our code. This must validate that they are prototypes and that they have `null` as their prototype property. 
+
+Using `Object.prototype.hasOwnProperty.call()` can be used for validation to check for property existence.
+
+Always follow secure prototyping practices by ensuring a new object is cloned from a sealed prototype to avoid tampering, particularly in modules that reside in different contexts (other modules/files).
+
+Also consider a deep-freeze on our created objects and prototypes to block potential assignments.
+
+It would be safer to ensure user input does not get mapped onto our objects (module dependancy).
+
+Additionally validate data thoroughly before passing it to such dynamic functions.
+
+Further use-case should be tested in full context but this snippet clearly demands additional validation to prevent potential code injection vulns.
+
+ORIGINAL CODE:
+```javascript
+    redirects = manifest.getDependencyMapper(moduleURL);
+    // TODO(rafaelgss): remove the necessity of this branch
+    setOwnProperty(this, 'require', makeRequireFunction(this, redirects));
+  }
+  this[require_private_symbol] = internalRequire;
+}
+
+  const module = cachedModule || new Module(filename, parent);
+
+  if (isMain) {
+    process.mainModule = module;
+    setOwnProperty(module.require, 'main', process.mainModule);
+    module.id = '.';
+  }
+```

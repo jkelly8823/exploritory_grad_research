@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-13
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a potential denial of service (DoS) vulnerability due to the way it handles HTTP header overflows.
+
+EXPLANATION:
+The code snippet appears to be part of an HTTP server implementation, handling various error cases. However, the way it handles header overflows (`'HPE_HEADER_OVERFLOW'` and `'HPE_CHUNK_EXTENSIONS_OVERFLOW'`) only sets a response variable, but does not actually terminate the connection or take any other action to prevent the malicious request from continuing to consume resources.
+
+An attacker could exploit this by sending a large number of requests with overflowing headers, potentially causing the server to exhaust its resources and become unavailable.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the server should immediately terminate the connection when a header overflow is detected, without allowing the request to continue. Here is an updated version of the vulnerable code:
+```javascript
+case 'HPE_HEADER_OVERFLOW':
+  response = requestHeaderFieldsTooLargeResponse;
+  this.destroy(); // Terminate the connection
+  break;
+case 'HPE_CHUNK_EXTENSIONS_OVERFLOW':
+  response = requestChunkExtensionsTooLargeResponse;
+  this.destroy(); // Terminate the connection
+  break;
+```
+ORIGINAL CODE:
+
+```javascript
+'Connection: close\r\n\r\n', 'ascii',
+);
+
+const requestChunkExtensionsTooLargeResponse = Buffer.from(
+  `HTTP/1.1 413 ${STATUS_CODES[413]}\r\n` +
+  'Connection: close\r\n\r\n', 'ascii',
+);
+
+function socketOnError(e) {
+  // Ignore further errors
+  this.removeListener('error', socketOnError);
+
+        case 'HPE_HEADER_OVERFLOW':
+          response = requestHeaderFieldsTooLargeResponse;
+          break;
+        case 'HPE_CHUNK_EXTENSIONS_OVERFLOW':
+          response = requestChunkExtensionsTooLargeResponse;
+          break;
+        case 'ERR_HTTP_REQUEST_TIMEOUT':
+          response = requestTimeoutResponse;
+          break;
+        default:
+```

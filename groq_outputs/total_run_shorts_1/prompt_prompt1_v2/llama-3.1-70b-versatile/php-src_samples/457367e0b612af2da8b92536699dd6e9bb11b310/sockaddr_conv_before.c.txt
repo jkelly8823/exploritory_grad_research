@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 10
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a NULL pointer dereference and potential buffer overflow due to the unsanitized use of user-input data.
+EXPLANATION:
+The `inet_aton` function is used to convert an IP address string to a binary address. However, the `gethostbyname` function returns a pointer to a `struct hostent`, which can be NULL if the host lookup fails. The code does not check if `host_entry` is NULL before using it to access other functions. Furthermore, the `string` variable is used directly without any input validation, which can lead to a buffer overflow attack. Additionally, the `WSAGetLastError()` function is used under the `PHP_WIN32` directive without any error checking, which can also lead to a NULL pointer dereference.
+RECOMMENDATIONS:
+To fix this vulnerability, you should:
+1. Validate the user input in the `string` variable to ensure it is a valid IP address or hostname.
+2. Check if the `host_entry` variable is NULL before using it to access other functions.
+3. Use a more secure function like `getaddrinfo` instead of `gethostbyname` to perform host lookups.
+4. Use error checking with `WSAGetLastError()` to prevent NULL pointer dereferences.
+5. Use memset to zero out the `tmp` structure before using it to prevent any potential buffer overflow.
+ORIGINAL CODE:
+```
+#include <arpa/inet.h>
+#endif
+
+extern int php_string_to_if_index(const char *val, unsigned *out);
+
+#if HAVE_IPV6
+/* Sets addr by hostname, or by ip in string form (AF_INET6) */
+	if (inet_aton(string, &tmp)) {
+		sin->sin_addr.s_addr = tmp.s_addr;
+	} else {
+		if (! (host_entry = gethostbyname(string))) {
+			/* Note: < -10000 indicates a host lookup error */
+#ifdef PHP_WIN32
+			PHP_SOCKET_ERROR(php_sock, "Host lookup failed", WSAGetLastError());
+#else
+```

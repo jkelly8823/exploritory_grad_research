@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION:
+The `zend_parse_method_parameters` function does not check for buffer overflow or NULL pointer dereferences for the source and source_len variables.
+
+EXPLANATION:
+The `zend_parse_method_parameters` function is used to parse method parameters. However, in this code snippet, the source and source_len variables are not checked for NULL pointer dereferences or buffer overflow before they are used in the function. This could lead to arbitrary code execution or denial-of-service (DoS) attacks if the source buffer is large enough to overflow or if the pointer is not properly validated.
+
+Additionally, it is also not clear if the variable source is initialized properly before being used in the `zend_parse_method_parameters` function.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to:
+
+* Always validate user input and the provided source string before passing it to the `zend_parse_method_parameters` function. 
+* Use proper error handling and validation for the source and source_len variables.
+* Check for NULL pointer dereferences and buffer overflows for the source variable.
+* Ensure that the variable source is properly initialized before being used in the `zend_parse_method_parameters` function.
+
+ORIGINAL CODE:
+	xmlDoc *docp;
+	dom_object *intern;
+	char *source = NULL, *valid_file = NULL;
+	int source_len = 0;
+	xmlSchemaParserCtxtPtr  parser;
+	xmlSchemaPtr            sptr;
+	xmlSchemaValidCtxtPtr   vptr;
+	int                     is_valid;
+	char resolved_path[MAXPATHLEN + 1];
+
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Op", &id, dom_document_class_entry, &source, &source_len) == FAILURE) {
+		return;
+	}
+
+	if (source_len == 0) {
+		RETURN_FALSE;
+	}
+
+	xmlSchemaSetValidErrors(vptr, php_libxml_error_handler, php_libxml_error_handler, vptr);
+	is_valid = xmlSchemaValidateDoc(vptr, docp);
+	xmlSchemaFree(sptr);
+	xmlSchemaFreeValidCtxt(vptr);
+}
+/* }}} */
+
+/* {{{ proto boolean dom_document_schema_validate_file(string filename); */
+PHP_FUNCTION(dom_document_schema_validate_file)
+{
+	_dom_document_schema_validate(INTERNAL_FUNCTION_PARAM_PASSTHRU, DOM_LOAD_FILE);
+}
+/* }}} end dom_document_schema_validate_file */
+
+/* {{{ proto boolean dom_document_schema_validate(string source); */
+PHP_FUNCTION(dom_document_schema_validate_xml)
+{
+	_dom_document_schema_validate(INTERNAL_FUNCTION_PARAM_PASSTHRU, DOM_LOAD_STRING);
+}

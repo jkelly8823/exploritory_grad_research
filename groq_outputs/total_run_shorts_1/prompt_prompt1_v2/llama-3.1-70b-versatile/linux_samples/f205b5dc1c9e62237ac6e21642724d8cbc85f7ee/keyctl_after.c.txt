@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Path Traversal Vulnerability
+
+EXPLANATION:
+A potential path traversal vulnerability exists in the keyctl_join_session_keyring function. The code checks if the first character of the input `name` is a dot (.), but it does not check if the input contains any other path traversal characters (e.g., '..', '//'). This allows an attacker to potentially traverse the directory tree by injecting specially crafted input.
+
+The code snippet also seems to be handling memory allocation and deallocation for the input `name`. However, the error handling path seems to correctly free the allocated memory, which prevents potential memory leaks or use-after-free vulnerabilities.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to properly sanitize and validate the input `name`. This can be achieved by:
+
+1. Using a function that checks for path traversal characters and normalizes the input `name`.
+2. Checking the input `name` against a whitelist of allowed characters to prevent any unexpected input.
+3. Using a more robust method to handle keyring creation and joining, such as using a fixed set of allowed keyring names.
+
+Here's a sample of how the sanitized code could look:
+```c
+if (contains_traversal_characters(name)) {
+    ret = -EINVAL;
+    goto error;
+}
+```
+In this example, `contains_traversal_characters` is a hypothetical function that checks if the input `name` contains any path traversal characters.
+
+ORIGINAL CODE:
+```c
+long keyctl_join_session_keyring(const char __user *_name)
+    ret = PTR_ERR(name);
+    goto error;
+}
+
+ret = -EPERM;
+if (name[0] == '.')
+    goto error_name;
+}
+
+/* join the session */
+ret = join_session_keyring(name);
+error_name:
+kfree(name);
+error:
+return ret;
+}
+
+long keyctl_set_reqkey_keyring(int reqkey_defl)
+{
+struct cred *new;
+
+case KEY_REQKEY_DEFL_PROCESS_KEYRING:
+ret = install_process_keyring_to_cred(new);
+if (ret < 0)
+    goto error;
+    goto set;
+
+case KEY_REQKEY_DEFL_DEFAULT:
+case KEY_REQKEY_DEFL_SESSION_KEYRING:
+```

@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13
+VULNERABILITY_DESCRIPTION:
+Insecure Error Handling
+
+EXPLANATION:
+The code uses a "goto" statement after installing the process keyring to credential. In case of an unsuccessful installation due to the keyring not existing (ret != -EEXIST), it explicitly jumps to the "error" label. However, when the keyring already exists (-EEXIST), the function ignores the error and continues by jumping to the "set" label with the value of "ret" still being "-EEXIST". This potentially indicates that an error occurred, but the function is supposed to reset "ret" in such a case or clear its value to indicate success. This could cause unexpected behavior depending on how the "ret" value is handled later in the function. A mistake in error handling can have serious consequences for the robustness and reliability of the overall system.
+
+Moreover, when the function continues after the installation failed, it ignores any other potential keyring errors if the function keyctl_set_reqkey_keyring() maintains a consistent state in its course of execution.
+
+RECOMMENDATIONS:
+- Update the code to properly reset "ret" when the installation fails due to the keyring already existing. 
+- Ensure that any other potential keyring errors are also considered and treated accordingly when the installation of the process keyring fails.
+- Consider introducing explicit code blocks to handle every case instead of relying on the "goto" structure to enhance code readability.
+
+ORIGINAL CODE:
+```c
+ * Read or set the default keyring in which request_key() will cache keys and
+ * return the old setting.
+ *
+ * If a process keyring is specified then this will be created if it doesn't
+ * yet exist.  The old setting will be returned if successful.
+ */
+long keyctl_set_reqkey_keyring(int reqkey_defl)
+{
+	struct cred *new;
+
+	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
+		ret = install_process_keyring_to_cred(new);
+		if (ret < 0) {
+			if (ret != -EEXIST)
+				goto error;
+			ret = 0;
+		}
+		goto set;
+
+	case KEY_REQKEY_DEFL_DEFAULT:
+	case KEY_REQKEY_DEFL_SESSION_KEYRING:
+```

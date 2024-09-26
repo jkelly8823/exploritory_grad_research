@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9, 11
+VULNERABILITY_DESCRIPTION: 
+The code contains a potential out-of-bounds memory access vulnerability.
+
+EXPLANATION:
+The issue is in the lines where `h_addr_list` is accessed without checking if it contains at least one element. The variable `hp->h_addr_list` is an array of `in_addr` pointers. In the event that `h_addr_list` only has one element and it is a NULL pointer, using it directly (e.g., when calling `RETVAL_STRING`) may result in a segmentation fault.
+
+Furthermore, the line `if (hp == NULL || hp->h_addr_list == NULL)` checks if `h_addr_list` is `NULL`, but the subsequent checks do not account for the scenario in which `h_addr_list` contains only `NULL` pointers. Also, `RETVAL_STRING(addr, 0)` and lines `hp = gethostbyname(hostname)` implies `h_addr_list` is returned and evaluated without bounds checking.
+
+Moreover, there are security risks associated with directly using the results of `gethostbyname`. In order to secure network operations, consider using and verifying a specific length.
+
+RECOMMENDATIONS:
+Implement checks to make sure that there is at least one valid IP address in `h_addr_list`. Be aware of memory overflow potential and use null safety and pointer checks. Use prefered replacement APIs like `getaddrinfo`. Consider the need for certificate validation to address server authenticity.
+
+Example: 
+
+```c
+hp = gethostbyname(hostname);
+if (hp == NULL || hp->h_addr_list == NULL || hp->h_addr_list[0] == NULL) {
+    RETURN_FALSE;
+}
+```
+ 
+ORIGINAL CODE:
+
+		return;
+	}
+
+	addr = php_gethostbyname(hostname);
+
+	RETVAL_STRING(addr, 0);
+}
+		return;
+	}
+
+	hp = gethostbyname(hostname);
+	if (hp == NULL || hp->h_addr_list == NULL) {
+		RETURN_FALSE;
+	}

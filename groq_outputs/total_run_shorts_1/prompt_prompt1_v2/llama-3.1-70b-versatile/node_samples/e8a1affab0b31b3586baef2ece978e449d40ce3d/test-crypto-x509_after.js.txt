@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-12
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a Certificate Validation issue where it maliciously parses an X509 Certificate that contains a structurally sound TBSCertificate structure, but its SPKI field does not contain a valid public key. While this does not immediately cause a problem, if this logic is used elsewhere to verify certificates without proper checks, it may be vulnerable to Man-In-The-Middle attacks.
+
+EXPLANATION:
+This code is used to test cases in the publicKey method of X509Certificate, which handles cases where an OpenSSL certificate may not have a valid public key. However, it is done so in a way that it manually sets up an incorrect certificate, which can mislead developers who follow this logic in their own code. Moreover, if used in server communication without proper validation of publicKey, these types of certificates would usually indicate a certificate issues and could cause code to reject them as otherwise invalid certificates.
+
+RECOMMENDATIONS:
+To avoid Certificate Validation vulnerabilities, we recommend that developers, at a minimum, add checks in their own code for when public key parsing is attempted, reject the certificate. Further checks in the format of code to manually inspect returned public key for obvious parsing errors are highly recommended if code does not manage parsing of 'publicKey'.
+
+In Example:
+```javascript
+  // Before we use this public key we want to make sure that it 
+  // did not fail the decode as being invalid. Only use if
+  // cert.publicKey has non-null values and is in correct / general 
+  // certificate format otherwise this can exploit problems relating to security  
+    try {
+      if  (cert.publicKey && cert.publicKey.type == 'RSA' 
+          && cert.publicKey.modulus != null 
+          &&  cert.publicKey.exponent != null && cert.publicKey.size != null ){
+        // rest of logic here only if key has passed above test checks which if passing means potentially safe to decrypt
+      } else {    
+        throw new Error('publicKey error during initialization : does not have type / cert keys modulus or exponent');
+     }
+  }  catch (e) {
+    console.error('Error : in Cert Testing');
+    throw new Error('certPublicKey Error does not conform to safety standards');
+  }
+```
+
+ORIGINAL CODE:
+```javascript
+  legacyObject.serialNumber,
+  legacyObjectCheck.serialNumber);
+}
+
+{
+  // This X.509 Certificate can be parsed by OpenSSL because it contains a
+  // structurally sound TBSCertificate structure. However, the SPKI field of the
+  // TBSCertificate contains the subjectPublicKey as a BIT STRING, and this bit
+  // sequence is not a valid public key. Ensure that X509Certificate.publicKey
+  // does not abort in this case.
+
+  const certPem = `-----BEGIN CERTIFICATE-----
+MIIDpDCCAw0CFEc1OZ8g17q+PZnna3iQ/gfoZ7f3MA0GCSqGSIb3DQEBBQUAMIHX
+MRMwEQYLKwYBBAGCNzwCAQMTAkdJMR0wGwYDVQQPExRQcml2YXRlIE9yZ2FuaXph
+dGlvbjEOMAwGA1UEBRMFOTkxOTExCzAJBgNVBAYTAkdJMRIwEAYDVQQIFAlHaWJy
+YWx0YXIxEjAQBgNVBAcUCUdpYnJhbHRhcjEgMB4GA1UEChQXV0hHIChJbnRlcm5h
+dGlvbmFsKSBMdGQxHDAaBgNVBAsUE0ludGVyYWN0aXZlIEJldHRpbmcxHDAaBgNV
+BAMUE3d3dy53aWxsaWFtaGlsbC5jb20wIhgPMjAxNDAyMDcwMDAwMDBaGA8yMDE1
+MDIyMTIzNTk1OVowgbAxCzAJBgNVBAYTAklUMQ0wCwYDVQQIEwRSb21lMRAwDgYD
+VQQHEwdQb21lemlhMRYwFAYDVQQKEw1UZWxlY29taXRhbGlhMRIwEAYDVQQrEwlB
+RE0uQVAuUE0xHTAbBgNVBAMTFHd3dy50ZWxlY29taXRhbGlhLml0MTUwMwYJKoZI
+hvcNAQkBFiZ2YXNlc2VyY2l6aW9wb3J0YWxpY29AdGVsZWNvbWl0YWxpYS5pdDCB
+nzANBgkqhkiG9w0BAQEFAAOBjQA4gYkCgYEA5m/Vf7PevH+inMfUJOc8GeR7WVhM
+CQwcMM5k46MSZo7kCk7VZuaq5G2JHGAGnLPaPUkeXlrf5qLpTxXXxHNtz+WrDlFt
+boAdnTcqpX3+72uBGOaT6Wi/9YRKuCs5D5/cAxAc3XjHfpRXMoXObj9Vy7mLndfV
+/wsnTfU9QVeBkgsCAwEAAaOBkjCBjzAdBgNVHQ4EFgQUfLjAjEiC83A+NupGrx5+
+Qe6nhRMwbgYIKwYBBQUHAQwEYjBgoV6gXDBaMFgwVhYJaW1hZ2UvZ2lmMCEwHzAH
+BgUrDgMCGgQUS2u5KJYGDLvQUjibKaxLB4shBRgwJhYkaHR0cDovL2xvZ28udmVy
+aXNpZ24uY29tL3ZzbG9nbzEuZ2lmMA0GCSqGSIb3DQEBBQUAA4GBALLiAMX0cIMp
++V/JgMRhMEUKbrt5lYKfv9dil/f22ezZaFafb070jGMMPVy9O3/PavDOkHtTv3vd
+tAt3hIKFD1bJt6c6WtMH2Su3syosWxmdmGk5ihslB00lvLpfj/wed8i3bkcB1doq
+UcXd/5qu2GhokrKU2cPttU+XAN2Om6a0
+-----END CERTIFICATE-----`;
+
+  const cert = new X509Certificate(certPem);
+  assert.throws(() => cert.publicKey, {
+    message: common.hasOpenSSL3 ? /decode error/ : /wrong tag/,
+    name: 'Error'
+  });
+
+  assert.strictEqual(cert.checkIssued(cert), false);
+```

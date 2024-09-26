@@ -1,0 +1,25 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 6
+VULNERABILITY_DESCRIPTION:
+The code snippet appears to contain a data leakage vulnerability. Specifically, it does not initialize or clear all registers in a manner that prevents data from being leaked between processes with different uid or privileges.
+
+EXPLANATION:
+The code clears registers in the event of an unlikely condition (line 6), indicating that it is aware of the need to prevent leaking sensitive information between processes. However, this clearing of registers only occurs under the specified condition, which might not be sufficient to ensure that all registers are properly cleared in every scenario. 
+
+Typically, registers that will be used for temporary or scratch values should be initialized before being used to prevent information from being inadvertently shared across processes.
+
+RECOMMENDATIONS:
+Consider clearing all used registers with secure initialization or zeroing them before they are used for scratch purposes. Specifically, `regs->r8` and `regs->r12` should be properly initialized to prevent them from leaking sensitive information associated with a previous process.
+
+Additionally, it is essential to assess all other registers used within the module or function to ensure none of them are vulnerable to information leakage.
+
+ORIGINAL CODE:
+
+	regs->loadrs = 0;									\
+	regs->r8 = get_dumpable(current->mm);	/* set "don't zap registers" flag */		\
+	regs->r12 = new_sp - 16;	/* allocate 16 byte scratch area */			\
+	if (unlikely(!get_dumpable(current->mm))) {							\
+		/*										\
+		 * Zap scratch regs to avoid leaking bits between processes with different	\
+		 * uid/privileges.								\
+		 */										\

@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The code does not validate the provided "path" and "object" parameters, which could potentially lead to a Prototype Pollution vulnerability. This could be exploited by an attacker to inject malicious data into the prototype of the object, affecting all other objects of the same type.
+
+EXPLANATION:
+Upon examining the provided code, I observed that the "setValueByPath" function splits the "path" parameter into an array and iterates over it to set an attribute on the "object". However, the code does not check if the "attr" is a reserved property name or if it can be overridden by an attacker. If an attacker can control the "path" parameter and inject malicious data, they can potentially pollute the prototype of the object.
+
+RECOMMENDATIONS:
+To address this vulnerability, I recommend adding input validation and sanitization to ensure that the provided "path" and "object" parameters are valid and clean. Here are the suggested changes:
+1. Validate that the "path" parameter is a string and does not contain any reserved property names.
+2. Check if the "object" parameter is an object and not a function or a primitive value.
+3. Use a secure method to iterate over the path array, such as using Object.create(null) to avoid potential prototype pollution.
+
+```javascript
+function setValueByPath (object, path, value) {
+    if (typeof path !== 'string') {
+        throw new Error('Path must be a string');
+    }
+    if (typeof object !== 'object' || Array.isArray(object) || object === null) {
+        throw new Error('Object must be a non-null object');
+    }
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = Object.create(null);
+    for (const attr of pathArray) {
+        if (attr in objectToModify) {
+            throw new Error('Reserved property name detected');
+        }
+        if (!(attr in objectToModify)) {
+            objectToModify[attr] = {};
+        }
+        objectToModify = objectToModify[attr];
+    }
+    if (attributeToSet in objectToModify) {
+        throw new Error('Reserved property name detected');
+    }
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```
+
+ORIGINAL CODE:
+```javascript
+function setValueByPath (object, path, value) {
+    const pathArray = path.split(".");
+    const attributeToSet = pathArray.pop();
+    let objectToModify = object;
+    for (const attr of pathArray) {
+        if (typeof objectToModify[attr] !== 'object') {
+            objectToModify[attr] = {};
+        }
+        objectToModify = objectToModify[attr];
+    }
+    objectToModify[attributeToSet] = value;
+    return object;
+}
+```

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 10-15, 19-20
+VULNERABILITY_DESCRIPTION:
+The code snippet contains multiple potential vulnerabilities, including insecure use of RSA_PKCS1_PADDING with private key decryption and the use of `EVP_get_digestbyname` which can be vulnerable to spoofing attacks. Additionally, the control statement in line 10 to set `rsa_pkcs1_implicit_rejection` might fail and return an error, potentially causing the code to continue executing with the default behavior.
+
+EXPLANATION:
+The use of RSA_PKCS1_PADDING with private key decryption is considered insecure and has been deprecated due to vulnerabilities such as Bleichenbacher's attack. This padding scheme should be replaced with a more secure alternative like OAEP.
+
+Furthermore, the use of `EVP_get_digestbyname` function can be vulnerable to spoofing attacks. The `EVP_get_digestbyname` function does not perform any validation on the input, which can be exploited by an attacker to cause the program to use a different digest algorithm than intended.
+
+Additionally, the `EVP_PKEY_CTX_ctrl_str` function used to set `rsa_pkcs1_implicit_rejection` might return an error, but the error is not properly handled. This can cause the code to continue executing with the default behavior, potentially leading to a security vulnerability.
+
+The problem lies in how `rsa_pkcs1_implicit_rejection` is set and checked afterwards.
+
+Similarly, we have another issue with the fact that there is no proper check for the content of the variable digest fetched from `EVP_get_digestbyname`. If this variable remains null after assignment then an error will not be thrown but will rather hit another error and panic another area.
+
+RECOMMENDATIONS:
+The recommended fix is to replace the use of RSA_PKCS1_PADDING with a more secure padding scheme like OAEP. Also, consider using `EVP_get_digestbynid` instead of `EVP_get_digestbyname` to avoid spoofing attacks. Additionally, the error returned by `EVP_PKEY_CTX_ctrl_str` should be properly handled to prevent the code from continuing to execute with the default behavior.
+
+In the case that EPA_digetsnames contains invalid information then this could result in EVP_get_digestbyname returning null. It would be better to check this after having retrieved the value so that the full set of information that caused this error can be reported.
+
+ORIGINAL CODE:
+```c
+uint32_t padding;
+if (!args[offset + 1]->Uint32Value(env->context()).To(&padding)) return;
+
+if (EVP_PKEY_cipher == EVP_PKEY_decrypt &&
+    operation == PublicKeyCipher::kPrivate && padding == RSA_PKCS1_PADDING) {
+  EVPKeyCtxPointer ctx(EVP_PKEY_CTX_new(pkey.get(), nullptr));
+  CHECK(ctx);
+
+  if (EVP_PKEY_decrypt_init(ctx.get()) <= 0) {
+    return ThrowCryptoError(env, ERR_get_error());
+  }
+
+  int rsa_pkcs1_implicit_rejection =
+      EVP_PKEY_CTX_ctrl_str(ctx.get(), "rsa_pkcs1_implicit_rejection", "1");
+  // From the doc -2 means that the option is not supported.
+  // The default for the option is enabled and if it has been
+  // specifically disabled we want to respect that so we will
+  // not throw an error if the option is supported regardless
+  // of how it is set. The call to set the value
+  // will not affect what is used since a different context is
+  // used in the call if the option is supported
+  if (rsa_pkcs1_implicit_rejection <= 0) {
+    return THROW_ERR_INVALID_ARG_VALUE(
+        env,
+        "RSA_PKCS1_PADDING is no longer supported for private decryption,"
+        " this can be reverted with --security-revert=CVE-2024-PEND");
+  }
+}
+
+const EVP_MD* digest = nullptr;
+if (args[offset + 2]->IsString()) {
+  const Utf8Value oaep_str(env->isolate(), args[offset + 2]);
+  digest = EVP_get_digestbyname(*oaep_str);
+```

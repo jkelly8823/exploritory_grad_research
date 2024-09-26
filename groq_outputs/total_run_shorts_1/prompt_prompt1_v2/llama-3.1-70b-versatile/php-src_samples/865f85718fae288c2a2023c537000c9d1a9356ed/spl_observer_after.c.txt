@@ -1,0 +1,73 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 20, 22, 28, 32
+VULNERABILITY_DESCRIPTION:
+Insecure Unserialization of Data.
+
+EXPLANATION:
+The provided code snippet demonstrates an insecure unserialization of data from an unknown source. It appears that the code is using `php_var_unserialize()` function, which is used to deserialize a string into a PHP object. The issue arises because this function is consuming data directly from the `$p` variable without proper validation or sanitization. Furthermore, the code does not perform any check on the source or the structure of the serialized data. 
+
+The insecure unserialization of data can lead to code injection or other attacks, especially if an attacker has control over the data being deserialized. This allows an attacker to inject malicious code and execute it on the server.
+
+Additionally, the code does not check the value of `count` before the while loop begins. If `count` is set to a high value, or if it is negative, this can cause a loop to be executed that far exceeds the physical limits of the memory. This can crash the program or cause a Denial of Service.
+
+The calls to `zval_ptr_dtor()` can potentially free the memory while it is being accessed in the loop. However in this specific code, the variables `pentry` and `pinf` are checked before they are accessed and destroyed.
+
+RECOMMENDATIONS:
+1.  Sanity check the input for potential overflow or underflow issues.
+2.  Ensure proper validation and sanitization of the unserialized data.
+3.  Implement checks for certain types or specific values to limit the scope of data that can be unserialized.
+4.  Check the value of the data pointer to ensure that `p` does not exceed the buffer limits.
+
+ORIGINAL CODE:
+```c
+zval_ptr_dtor(&element->inf);
+} /* }}} */
+
+
+spl_SplObjectStorageElement* spl_object_storage_get(spl_SplObjectStorage *intern, zval *obj TSRMLS_DC) /* {{{ */
+{
+	spl_SplObjectStorageElement *element;
+	zend_object_value *pzvalue;	
+	zval_ptr_dtor(&pcount);
+		
+	while(count-- > 0) {
+		spl_SplObjectStorageElement *pelement;
+		
+		if (*p != ';') {
+			goto outexcept;
+		}
+		++p;
+		if(*p != 'O' && *p != 'C' && *p != 'r') {
+			goto outexcept;
+		}
+		ALLOC_INIT_ZVAL(pentry);
+		if (!php_var_unserialize(&pentry, &p, s + buf_len, &var_hash TSRMLS_CC)) {
+			zval_ptr_dtor(&pentry);
+			goto outexcept;
+		}
+		if(Z_TYPE_P(pentry) != IS_OBJECT) {
+			zval_ptr_dtor(&pentry);
+			goto outexcept;
+		}
+		ALLOC_INIT_ZVAL(pinf);
+		if (*p == ',') { /* new version has inf */
+			++p;
+			if (!php_var_unserialize(&pinf, &p, s + buf_len, &var_hash TSRMLS_CC)) {
+				goto outexcept;
+			}
+		}
+		
+		pelement = spl_object_storage_get(intern, pentry TSRMLS_CC);
+		if(pelement) {
+			if(pelement->inf) {
+				var_push_dtor(&var_hash, &pelement->inf);
+			}
+			if(pelement->obj) {
+				var_push_dtor(&var_hash, &pelement->obj);
+			}
+		} 
+		spl_object_storage_attach(intern, pentry, pinf TSRMLS_CC);
+		zval_ptr_dtor(&pentry);
+		zval_ptr_dtor(&pinf);
+	}
+```

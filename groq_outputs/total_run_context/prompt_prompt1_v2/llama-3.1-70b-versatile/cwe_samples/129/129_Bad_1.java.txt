@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+Buffer overflow through untrusted input.
+
+EXPLANATION:
+The function `buildList` is passed an untrusted integer `untrustedListSize`. Although the function checks for a negative value, it does not check for excessively large values. In Java, arrays cannot be dynamically resized after creation. Therefore, when larger than expected values are passed, this may lead to performance problems or issues from wasting system resources. However, more critical concerns are at play. Using Integer.MAX_VALUE circumvents some validation attempts, as it represents the maximum value the variable's data type can represent, and the check '0 > untrustedListSize' may behave unexpectedly. Hence potentially causing an 'ArrayIndexOutOfBoundsException' as soon as any array is attempted to be created with that huge Integer. Therefore, an attacker could supply a value that would lead to out-of-bounds array creation attempts.
+
+Furthermore, when dealing with untrusted inputs it's vital to consider edge cases like very large positive integers, specially because their impact can be equally critical. For example, even though our check is fulfilled with extremely high positive integers close to MAX limit we might get an 'OutOfMemoryError' due to not enough memory to provide that large of an object. When dealing with something so potentially impactful using untrusted variables, extreme measurements like forcing manual input evaluations are to be undertaken for its potential danger against memory hacking attacks.
+
+
+RECOMMENDATIONS:
+Always validate the size and capacity parameters passed to any dynamically-sized array. Never directly supply them with a value taken from any kind of code utilizing potentially untrusted quantities. Protect your arrays from big integers like Integer.MAX_VALUE because array creation calls will consume an impractically huge amount of heap space; it will predictably cause 'OutOfMemoryError' as there is none.
+
+
+Create an array after properly evaluating inputs and range checking. 
+
+Something more along the lines of the below adjustments should be taken into account - the critical aspect would probably require using try/catch, validation parameters validation and input detection of malicious untrusted variables sizes.
+If checking just this then the simple check should at least prevent size Integer.MAX at any time getting to allow array creation:
+
+```java
+private void buildList (int untrustedListSize){
+    if (untrustedListSize < 0 || untrustedListSize > 10000) { 
+    // Or other sensible array size limit you deem correct replace 10000 according to need - with proper untrusted variable exception control ie try block control.  
+        die("Invalid value supplied for list size, possible attempt.");
+    }
+
+    try {
+        Widget[] list = new Widget [ untrustedListSize ];
+        list[0] = new Widget();
+    } catch (OutOfMemoryError e) {
+        die("Out of Memory Error: list size too big for memory.");
+    } catch (Exception e) {
+        die("Failed in buildList with reason: " + e.getMessage());
+    }   
+}
+```
+
+ORIGINAL CODE:
+```java
+private void buildList ( int untrustedListSize ){
+    if ( 0 > untrustedListSize ){
+        die("Negative value supplied for list size, die evil hacker!");
+    }
+    Widget[] list = new Widget [ untrustedListSize ];
+    list[0] = new Widget();
+}
+```

@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+Uninitialized pointer dereference and potential use-after-free.
+
+EXPLANATION:
+The given code snippet appears to be a part of a larger function, but it demonstrates an issue with pointer handling. The `OSSL_METHOD_CONSTRUCT_METHOD` struct `mcm` is initialized, but there is no check if `prov` is `NULL` before dereferencing it as a part of the larger `get_decoder_from_store` function. This could lead to a segmentation fault.
+
+Furthermore, there's no guarantee that the methods like `get_tmp_decoder_store` within `mcm` struct will always return valid pointers, which might cause problems.
+
+If `method` is invalid and `ossl_method_store_cache_get` fails, then 'put_decoder_in_store' and 'destruct_decoder' will likely be called on `NULL`. In that case, calling `put_decoder_in_store` might not necessarily pose an issue, but passing a `NULL` argument to `destruct_decoder` could potentially cause issues if it performs any operations on the pointer before checking for its validity.
+
+RECOMMENDATIONS:
+Firstly, validate and ensure that `prov` is not `NULL` before passing it through in `get_decoder_from_store` to avoid a potential null pointer dereference.
+
+```c
+if (!prov) {
+    // handle this case, for example:
+    // return NULL or return a specific error to indicate failure.
+}
+```
+
+Then include sanity checks for all other methods as well before using them:
+
+```c
+if (mcm.get_tmp_decoder_store(...)) {
+    // handle this case
+    return NULL or return a specific error to indicate failure.
+}
+
+if (mcm.destruct_decoder(...)) {
+    // handle this case
+    return NULL or return a specific error to indicate failure.
+}
+```
+
+ORIGINAL CODE:
+```c
+&decoder_store_method);
+}
+
+/* Get decoder methods from a store, or put one in */
+static void *get_decoder_from_store(void *store, const OSSL_PROVIDER **prov,
+                                    void *data)
+{
+        || !ossl_method_store_cache_get(store, NULL, id, propq, &method)) {
+        OSSL_METHOD_CONSTRUCT_METHOD mcm = {
+            get_tmp_decoder_store,
+            get_decoder_from_store,
+            put_decoder_in_store,
+            construct_decoder,
+            destruct_decoder
+```

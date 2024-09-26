@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 48, 49
+VULNERABILITY_DESCRIPTION:
+Uncontrolled recursion in the update_db_bp_intercept function.
+
+EXPLANATION:
+The update_db_bp_intercept function is designed to update the debug breakpoint intercepts for a specific virtual CPU. However, there are two potential instances where this function calls itself recursively. This occurs at lines 48 and 49 within the function body. Uncontrolled recursion can lead to a stack overflow, which is a type of buffer overflow vulnerability. A malicious actor may be able to cause this stack overflow, resulting in a denial-of-service attack.
+
+RECOMMENDATIONS:
+1. To address the potential issue with uncontrolled recursion in the update_db_bp_intercept function, you should ensure that the recursion is properly controlled by validating input parameters. This could be done by properly validating if 'svm->vcpu.guest_debug' contains any of the bits 'KVM_GUESTDBG_SINGLESTEP | KVM_GUESTDBG_USE_HW_BP'. If this flag is already set, no further recursion is needed.
+2. Add code to prevent recursion or ensure that the recursion base case is clearly defined.
+
+ORIGINAL CODE:
+```c
+	set_exception_intercept(svm, UD_VECTOR);
+	set_exception_intercept(svm, MC_VECTOR);
+	set_exception_intercept(svm, AC_VECTOR);
+
+	set_intercept(svm, INTERCEPT_INTR);
+	set_intercept(svm, INTERCEPT_NMI);
+	set_intercept(svm, INTERCEPT_SMI);
+	mark_dirty(svm->vmcb, VMCB_SEG);
+}
+
+static void update_db_bp_intercept(struct kvm_vcpu *vcpu)
+{
+	struct vcpu_svm *svm = to_svm(vcpu);
+
+	clr_exception_intercept(svm, DB_VECTOR);
+	clr_exception_intercept(svm, BP_VECTOR);
+
+	if (svm->nmi_singlestep)
+		set_exception_intercept(svm, DB_VECTOR);
+
+	if (vcpu->guest_debug & KVM_GUESTDBG_ENABLE) {
+		if (vcpu->guest_debug &
+		    (KVM_GUESTDBG_SINGLESTEP | KVM_GUESTDBG_USE_HW_BP))
+			set_exception_intercept(svm, DB_VECTOR);
+		if (vcpu->guest_debug & KVM_GUESTDBG_USE_SW_BP)
+			set_exception_intercept(svm, BP_VECTOR);
+	} else
+		vcpu->guest_debug = 0;
+		if (!(svm->vcpu.guest_debug & KVM_GUESTDBG_SINGLESTEP))
+			svm->vmcb->save.rflags &=
+				~(X86_EFLAGS_TF | X86_EFLAGS_RF);
+		update_db_bp_intercept(&svm->vcpu);
+	}
+
+	if (svm->vcpu.guest_debug &
+	    (KVM_GUESTDBG_SINGLESTEP | KVM_GUESTDBG_USE_HW_BP)) {
+	 */
+	svm->nmi_singlestep = true;
+	svm->vmcb->save.rflags |= (X86_EFLAGS_TF | X86_EFLAGS_RF);
+	update_db_bp_intercept(vcpu);
+}
+
+static int svm_set_tss_addr(struct kvm *kvm, unsigned int addr)
+{
+	.vcpu_load = svm_vcpu_load,
+	.vcpu_put = svm_vcpu_put,
+
+	.update_db_bp_intercept = update_db_bp_intercept,
+	.get_msr = svm_get_msr,
+	.set_msr = svm_set_msr,
+	.get_segment_base = svm_get_segment_base,
+	.get_segment = svm_get_segment,
+```

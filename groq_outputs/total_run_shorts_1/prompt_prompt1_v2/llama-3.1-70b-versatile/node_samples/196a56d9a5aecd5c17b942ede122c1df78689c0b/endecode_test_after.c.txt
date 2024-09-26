@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16
+VULNERABILITY_DESCRIPTION:
+Use of unchecked dynamic memory allocation.
+
+EXPLANATION:
+In lines 15-16 of the provided code snippet, `OSSL_LIB_CTX_new()` and `OSSL_PROVIDER_load(keyctx, "default")` are used to allocate memory dynamically. However, there is no validation or error checking to ensure that these allocations were successful if they fail silently, a malicious attacker could exploit this to execute arbitrary code or launch a denial of service attack. Moreover, no validation or error checking is performed to ensure that the allocated memory is being properly freed to prevent memory leaks.
+
+RECOMMENDATIONS:
+1. Validate and check the return values of `OSSL_LIB_CTX_new()` and `OSSL_PROVIDER_load(keyctx, "default")`. If the allocations fail, then the application should terminate or throw an exception to prevent undefined behavior.
+2. Implement memory leak prevention measures to ensure that dynamically allocated memory is being properly freed.
+3. Consider using smart pointers to manage memory allocation and deallocation.
+
+ORIGINAL CODE:
+```c
+static int default_libctx = 1;
+static int is_fips = 0;
+static int is_fips_3_0_0 = 0;
+
+static OSSL_LIB_CTX *testctx = NULL;
+static OSSL_LIB_CTX *keyctx = NULL;
+static char *testpropq = NULL;
+                             output_type, output_structure, pass, pcipher)))
+        goto end;
+
+    if ((flags & FLAG_FAIL_IF_FIPS) != 0 && is_fips && !is_fips_3_0_0) {
+        if (TEST_false(decode_cb(file, line, (void **)&pkey2, encoded,
+                                  encoded_len, output_type, output_structure,
+                                  (flags & FLAG_DECODE_WITH_TYPE ? type : NULL),
+                                  selection, pass)))
+            return 0;
+    }
+
+    /* FIPS(3.0.0): provider imports explicit params but they won't work #17998 */
+    is_fips_3_0_0 = fips_provider_version_eq(testctx, 3, 0, 0);
+    if (is_fips_3_0_0 < 0)
+        return 0;
+
+    /* Separate provider/ctx for generating the test data */
+    if (!TEST_ptr(keyctx = OSSL_LIB_CTX_new()))
+        return 0;
+    if (!TEST_ptr(keyprov = OSSL_PROVIDER_load(keyctx, "default"))
+```

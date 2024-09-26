@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The code does not properly validate the input to the `pr_emerg` function call, which can lead to a format string vulnerability.
+
+EXPLANATION:
+The `pr_emerg` function is used to print an emergency message to the kernel log. However, it uses a non-constant format string, which is derived from the `name` parameter passed to the `fortify_panic` function. This allows an attacker to inject format specifiers into the log message, potentially leading to a buffer overflow or information leak.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the format string passed to `pr_emerg` should be made constant to prevent format string injection. One way to do this is to use a string that does not include any format specifiers. Here's an updated version of the code:
+```c
+void fortify_panic(const char *name)
+{
+    char msg[256];
+    snprintf(msg, sizeof(msg), "detected buffer overflow in %s\n", name);
+    pr_emerg("%s", msg);
+    BUG();
+}
+```
+Alternatively, you can also use a format string that only includes format specifiers for the literal `%s` and nothing else:
+```c
+void fortify_panic(const char *name)
+{
+    pr_emerg("detected buffer overflow in '%s'\n", name);
+    BUG();
+}
+```
+Both of these changes prevent the `name` variable from controlling the format string, mitigating the format string vulnerability.
+
+ORIGINAL CODE:
+```c
+EXPORT_SYMBOL(memcpy_and_pad);
+
+#ifdef CONFIG_FORTIFY_SOURCE
+void fortify_panic(const char *name)
+{
+    pr_emerg("detected buffer overflow in %s\n", name);
+    BUG();
+```

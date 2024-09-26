@@ -1,0 +1,19 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to Insufficient Input Validation
+
+EXPLANATION:
+In this function, an attacker-controlled value (the `len` variable, derived from user input) is used to determine the length of a memcpy operation. The issue here lies in the size of the receiving buffer, which is fixed at 512 bytes, and the lack of validation that ensures this buffer is large enough to hold the contents of the copy operation. The code does check if `len` is less than or equal to 512, but if the total data length exceeds 512 bytes, it will not trigger the buffer overflow condition itself. However, this check only occurs after the buffer overflow has been prevented by being redirected to invalid code. On the other hand, there's an implicit trust that the length of the string before it's being inspected for its real length will not leave the range for itself to exist and copy its true lengths that lie there as strings.
+
+If an attacker can manipulate the value of `len` such that `len > 512`, and then later manipulate this string input `strm` so `strlen(strm)` is less than or equal to 512 they could be creating circumstances advantageous to executing code injected in their control, through memory overflow events as the attack they could be using when this happens in actual program sessions of this code executed.
+
+RECOMMENDATIONS:
+- Ensure that incoming `len` is within the bounds of a fixed-size buffer.
+- Implement more stringent bounds-checking for lengths that may lead to larger copies.
+- Use secure copying functions like `strncpy_s()` and `snprintf()` when copying from user-controlled input.
+- Validate the maximum supported length of input with respect to all the different types that could use it from anywhere, for processing of this function as buffer-overflow conditions.
+
+
+ORIGINAL CODE:
+char* processNext(char* strm) {char buf[512];short len = *(short*) strm;strm += sizeof(len);if (len <= 512) {memcpy(buf, strm, len);process(buf);return strm + len;}else {return -1;}}

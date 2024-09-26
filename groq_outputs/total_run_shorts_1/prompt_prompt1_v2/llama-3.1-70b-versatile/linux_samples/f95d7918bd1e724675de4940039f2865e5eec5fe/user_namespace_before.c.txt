@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 8
+VULNERABILITY_DESCRIPTION:
+The provided code snippet appears to be vulnerable to a privilege escalation via user namespace mapping. It insufficiently checks for certain conditions before granting capabilities.
+
+EXPLANATION:
+The function allows a user namespace mapping to be established if the mapping is not "unprivileged" and if it would not grant any additional privileges than what is already held by the calling process. However, there are potential flaws in this logic.
+
+The code insufficiently checks for certain conditions. It only checks if there is only one extent mapping, and if that extent has a count of 1. This means if an attacker could craft a user namespace mapping with more than one extent, or more than one id within a single extent, the function might not properly prevent escalation of privileges.
+
+Additionally, the code trusts the provided 'cap_setid' and 'new_map->extent[0].lower_first' without sanitizing or validating these values before being used. The use of an unsanitized 'id' variable may allow an attacker to potentially exploit this weakness and perform unintended actions.
+
+RECOMMENDATIONS:
+- Validate the 'cap_setid' and 'new_map->extent[0].lower_first' values before using them to prevent potential unauthorized actions.
+- Perform additional checks on 'new_map' for more than one extent, and for more than one id within each extent, to further ensure the mapping is truly unprivileged.
+- Include checks to verify the identity of the calling process before granting any capabilities.
+- Implement error checking on the creation of 'uid' to handle potential errors.
+
+ORIGINAL CODE:
+```
+struct user_namespace *ns, int cap_setid,
+struct uid_gid_map *new_map)
+{
+	/* Don't allow mappings that would allow anything that wouldn't
+	 * be allowed without the establishment of unprivileged mappings.
+	 */
+	if ((new_map->nr_extents == 1) && (new_map->extent[0].count == 1)) {
+		u32 id = new_map->extent[0].lower_first;
+		if (cap_setid == CAP_SETUID) {
+			kuid_t uid = make_kuid(ns->parent, id);
+			if (uid_eq(uid, file->f_cred->euid))
+				return true;
+		}
+	}
+```

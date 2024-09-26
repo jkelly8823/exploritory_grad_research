@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-18
+VULNERABILITY_DESCRIPTION:
+Potential use-after-free vulnerability in hci_unregister_dev() function.
+
+EXPLANATION:
+The issue lies in the order of operations within the hci_unregister_dev() function. Specifically, the call to device_del(&hdev->dev) and hci_dev_put(hdev) occur after the device has been removed from the hci_dev_list. This can lead to a situation where the device is being referenced after it has been deallocated, potentially causing a use-after-free error.
+
+RECOMMENDATIONS:
+Consider moving the call to hci_dev_put(hdev) to after the critical section where the list operation occurs. However, be aware that this might introduce additional complexity due to the need to handle cases where the list operation fails. Furthermore, if the device is being referenced elsewhere, ensure that all references are properly cleaned up before calling device_del and hci_dev_put.
+
+It would also be beneficial to assess the importance of removing the device from the list within the hci_unregister_dev function. Can this be done outside of the function, or perhaps within a separate, delayed cleanup function? Ensure that the delayed cleanup function is only called after the device has been fully removed from the list to avoid race conditions.
+
+ORIGINAL CODE:
+```c
+/* Unregister HCI device */
+void hci_unregister_dev(struct hci_dev *hdev)
+{
+    BT_DBG("%p name %s bus %d", hdev, hdev->name, hdev->bus);
+
+    hci_dev_set_flag(hdev, HCI_UNREGISTER);
+
+    write_lock(&hci_dev_list_lock);
+    list_del(&hdev->list);
+    write_unlock(&hci_dev_list_lock);
+
+    }
+
+    device_del(&hdev->dev);
+    /* Actual cleanup is deferred until hci_cleanup_dev(). */
+    hci_dev_put(hdev);
+}
+EXPORT_SYMBOL(hci_unregister_dev);
+
+/* Cleanup HCI device */
+void hci_cleanup_dev(struct hci_dev *hdev)
+{
+    debugfs_remove_recursive(hdev->debugfs);
+    kfree_const(hdev->hw_info);
+    kfree_const(hdev->fw_info);
+
+    hci_blocked_keys_clear(hdev);
+    hci_dev_unlock(hdev);
+
+    ida_simple_remove(&hci_index_ida, hdev->id);
+}
+
+/* Suspend HCI device */
+int hci_suspend_dev(struct hci_dev *hdev)
+{
+```

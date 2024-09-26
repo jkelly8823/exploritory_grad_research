@@ -1,0 +1,80 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-14
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) through Failure to Handle Connection Attemps Limits, and lack of Sleep/Pause Between Connection Attempts.
+EXPLANATION:
+The provided code snippet demonstrates a DoS vulnerability through an infinite loop of connection attempts to the server without any delay/pause or proper handling of the attempts counter. Although a `MAX_ATTEMPTS` constant is defined to limit the number of attempts, it is still vulnerable to prolonged DoS attempts. Moreover, the connection attempts are made in a rapid succession which may cause a high CPU utilization and potential service disruption.
+RECOMMENDATIONS:
+To prevent this vulnerability, implement the following changes:
+- Implement a delay/pause between connection attempts using the `sleep()` or `usleep()` function, which will prevent high CPU utilization and slow down the attempts.
+- Perform proper error handling and analysis for the connection attempt results. Currently, the code only checks if the connection was successful or not, but it does not handle other potential errors.
+- Consider implementing a backoff strategy for the delay between connection attempts, which increases the delay time after each failure.
+
+ORIGINAL CODE:
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...
+    // initialize number of attempts counter
+    int count = 0;
+    do {
+        
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        
+        // increment counter
+        count++;
+        
+        // if connected then read and process messages from server
+        if (connected > -1) {
+            
+            // read and process messages
+            ...
+        }
+    
+    // keep trying to establish connection to the server
+    
+    // up to a maximum number of attempts
+    } while (connected < 0 && count < MAX_ATTEMPTS);
+    
+    // close socket and return success or failure
+    ...
+}
+```
+
+New (updated) Code:
+```c
+int processMessagesFromServer(char *hostaddr, int port) {
+    ...
+    // initialize number of attempts counter
+    int count = 0;
+    int delay = DELAY_BETWEEN_ATTEMPTS; // Define DELAY_BETWEEN_ATTEMPTS
+    do {
+        
+        // establish connection to server
+        connected = connect(servsock, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        
+        // increment counter
+        count++;
+        
+        // if connected then read and process messages from server
+        if (connected > -1) {
+            
+            // read and process messages
+            ...
+        } else {
+            // sleep for a certain amount of time before trying again
+            usleep(delay);
+            delay = delay * 2; // implement backoff strategy
+        }
+    
+    // keep trying to establish connection to the server
+    
+    // up to a maximum number of attempts
+    } while (connected < 0 && count < MAX_ATTEMPTS);
+    
+    // close socket and return success or failure
+    ...
+}
+```
+
+Remember that you would also need to include necessary header files and handle any potential errors that might occur while using `usleep()` function.

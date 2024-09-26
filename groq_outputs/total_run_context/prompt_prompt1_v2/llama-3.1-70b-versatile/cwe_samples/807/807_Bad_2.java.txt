@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-3
+VULNERABILITY_DESCRIPTION:
+Unvalidated Input Used for Hostname Lookup
+
+EXPLANATION:
+The code snippet provided is vulnerable to potential DNS spoofing and cache poisoning attacks. The `InetAddress.getByName(ip)` call performs a DNS lookup using the IP address obtained from the `request.getRemoteAddr()` method. However, this IP address is obtained directly from the request and not validated before performing the DNS lookup. This could allow an attacker to manipulate the IP address in the request and direct the DNS lookup to a malicious hostname.
+
+Moreover, the `addr.getCanonicalHostName()` call is then used to obtain the canonical hostname for the resolved IP address, which is then checked for an expected domain suffix ("trustme.com"). This introduces two issues:
+
+1. DNS spoofing: If an attacker can manipulate the DNS response to match the expected domain suffix, they may be able to impersonate the legitimate "trustme.com" domain.
+2. DNS cache poisoning: If an attacker can spoof a DNS response with the expected domain suffix, they may be able to cache poison the DNS server, enabling further attacks.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the IP address obtained from `request.getRemoteAddr()` to prevent DNS spoofing attacks. This may involve verifying the IP address against a known set of authorized IP addresses or using an external IP address validation service.
+2. Consider performing additional checks beyond just the canonical hostname, such as verifying the SSL/TLS certificate of the remote host or performing additional authentication checks.
+3. Implement rate limiting or IP blocking to prevent DNS cache poisoning attacks by limiting the frequency of DNS lookups or blocking known malicious IP addresses.
+
+ORIGINAL CODE:
+```
+String ip = request.getRemoteAddr();
+InetAddress addr = InetAddress.getByName(ip);
+if (addr.getCanonicalHostName().endsWith("trustme.com")) {
+    trusted = true;
+}
+```

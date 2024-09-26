@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-26
+VULNERABILITY_DESCRIPTION:
+Path Traversal and Insecure Temporary File Vulnerability
+
+EXPLANATION:
+In the given segment of code, a vulnerability exists where a temporary path (tmppath) is not properly sanitized or validated. However, the code provided does not show how tmppath is used. A more concerning vulnerability exists where the 'access' function is used in the 'unreadable_info' function. This function can be vulnerable to TOCTOU (Time-of-Check-to-Time-of-Use) attacks. In this case, the code checks if a file is writeable or executable using 'access', and then performs actions based on this information. However, between the time the 'access' function is called and when the actions are performed, an attacker could potentially modify the file's permissions, leading to unauthorized actions.
+
+Furthermore, the 'file_buffer' function's usage seems suspicious as it does not seem to be checking its file name for validity. If an attacker can control the 'buf' and 'nb' parameters, they may be able to cause the application to read arbitrary data from a file, leading to a potential path traversal vulnerability.
+
+RECOMMENDATIONS:
+Use the 'fstat' function instead of 'access' to verify the file's permissions. 'fstat' checks the permissions of the file descriptor directly, making it immune to TOCTOU attacks.
+
+Consider using a secure temporary file creation function like 'mkstemp'.
+
+Sanitize and validate all input file names before passing them to functions like 'file_buffer'.
+
+Additionally, validate the 'buf' and 'nb' parameters before using them in the 'file_buffer' function.
+
+ORIGINAL CODE:
+#include "file.h"
+
+#ifndef	lint
+FILE_RCSID("@(#)$File: magic.c,v 1.81 2013/11/29 15:42:51 christos Exp $")
+#endif	/* lint */
+
+#include "magic.h"
+
+			tmppath = NULL; \
+		} \
+	} while (/*CONSTCOND*/0)
+
+	if (default_magic) {
+		free(default_magic);
+		default_magic = NULL;
+	}
+private int
+unreadable_info(struct magic_set *ms, mode_t md, const char *file)
+{
+	/* We cannot open it, but we were able to stat it. */
+	if (access(file, W_OK) == 0)
+		if (file_printf(ms, "writable, ") == -1)
+			return -1;
+	if (access(file, X_OK) == 0)
+		if (file_printf(ms, "executable, ") == -1)
+			return -1;
+	if (S_ISREG(md))
+		if (file_printf(ms, "regular file, ") == -1)
+			return -1;
+	if (file_printf(ms, "no read permission") == -1)
+		return NULL;
+	/*
+	 * The main work is done here!
+	 * We have the file name and/or the data buffer to be identified.
+	 */
+	if (file_buffer(ms, NULL, NULL, buf, nb) == -1) {
+		return NULL;
+	}
+{
+	return MAGIC_VERSION;
+}

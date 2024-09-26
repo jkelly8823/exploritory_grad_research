@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential memory leaks and incorrect error handling.
+
+EXPLANATION:
+The code assigns `ret` with the value from `SMIME_crlf_copy(data, cmsbio, flags)` but does not check for potential errors. It then calls `BIO_flush(cmsbio)` and `CMS_dataFinal(cms, cmsbio)`, which may also fail and trigger error handling. However, the code only checks for errors in the `CMS_dataFinal` function, but not in the `SMIME_crlf_copy` and `BIO_flush` functions.
+
+Moreover, the code calls `do_free_upto(cmsbio, dcont)` in the `err` label, which implies that some memory is being freed. However, the function does not free all the allocated memory in case of an error. Specifically, it does not check if `CMS_dataFinal` has already been called and if `cmsbio` has been flushed, which might prevent the function from freeing the memory correctly.
+
+RECOMMENDATIONS:
+To address these problems, the code should check for errors in all the function calls that may return an error. The function calls that may return an error should be checked for their return values, and error handling should be performed accordingly. The code should also ensure that it frees all the allocated memory before returning in case of an error.
+
+Additionally, the code should consider using a more robust way of error handling, such as using a combination of `ERR_get_error()` and `ERR_clear_error()` to handle errors instead of only relying on `ERR_raise()`.
+
+ORIGINAL CODE:
+
+```
+* Don't use SMIME_TEXT for verify: it adds headers and we want to
+* remove them.
+*/
+SMIME_crlf_copy(dcont, cmsbio, flags & ~SMIME_TEXT);
+
+if (flags & CMS_TEXT) {
+    if (!SMIME_text(tmpout, out)) {
+        ERR_raise(ERR_LIB_CMS, CMS_R_SMIME_TEXT_ERROR);
+        return 0;
+}
+
+ret = SMIME_crlf_copy(data, cmsbio, flags);
+
+(void)BIO_flush(cmsbio);
+
+if (!CMS_dataFinal(cms, cmsbio)) {
+    ERR_raise(ERR_LIB_CMS, CMS_R_CMS_DATAFINAL_ERROR);
+    goto err;
+}
+err:
+do_free_upto(cmsbio, dcont);
+
+return ret;
+```
+
+Recommended changes to the code (with possible implementation):
+```
+SMIME_crlf_copy(dcont, cmsbio, flags & ~SMIME_TEXT);
+
+if (flags & CMS_TEXT) {
+    if (!SMIME_text(tmpout, out)) {
+        ERR_raise(ERR_LIB_CMS, CMS_R_SMIME_TEXT_ERROR);
+        goto err;
+}
+
+if ((ret = SMIME_crlf_copy(data, cmsbio, flags)) <= 0) {
+    ERR_raise(ERR_LIB_CMS, CMS_R_SMIME_COPY_ERROR);
+    goto err;
+}
+
+if (!BIO_flush(cmsbio)) {
+    ERR_raise(ERR_LIB_BIO, BIO_R_FLUSH_ERROR);
+    goto err;
+}
+
+if (!CMS_dataFinal(cms, cmsbio)) {
+    ERR_raise(ERR_LIB_CMS, CMS_R_CMS_DATAFINAL_ERROR);
+    goto err;
+}
+
+return ret;
+
+err:
+ERR_print_errors_fp(stderr);
+do_free_upto(cmsbio, dcont);
+return 0;
+```

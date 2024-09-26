@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8, 11-12
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Command Injection attack. The vulnerability arises when the 'openssl' and 'genpkey' commands are run using the 'run(app(...))' function. The 'app(...)' function likely calls a Perl function that generates the command to be run, potentially allowing an attacker to inject additional commands.
+
+EXPLANATION:
+The vulnerability is present in the 'run(app(...))' function calls. These functions run external commands, combining them with the arguments passed to the 'app(...)' function. If one of these arguments is not properly sanitized or comes from an untrusted source, an attacker could potentially inject malicious commands to be run. For example, an attacker could manipulate the '@prov' variable to run malicious code.
+
+Moreover, even though the vulnerability also seems present in line 6-8 as 'openssl', 'genpkey' etc. is not sanitized but not having the full code snippet it's hard to verify if the data provided to the 'app' function is properly sanitized or not.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is essential to ensure that all arguments passed to the 'app(...)' function are properly sanitized and validated. Any untrusted or external data should be checked and validated before being used in the 'run(app(...))' function calls.
+
+ * Always validate and sanitize any untrusted input used in command execution functions like 'run(app(...))'.
+ * Consider using prepared statements or other input escaping techniques to prevent command injection attacks.
+ * Avoid using the 'run' function directly; instead, use higher-level APIs or abstractions that provide better input escaping and validation.
+
+ORIGINAL CODE:
+```perl
+my $no_fips = disabled('fips') || ($ENV{NO_FIPS} // 0);
+
+plan tests =>
+    ($no_fips ? 0 : 3)          # Extra FIPS related tests
+    + 15;
+
+# We want to know that an absurdly small number of bits isn't support
+is(run(app([ 'openssl', 'genpkey', '-out', 'genrsatest.pem',
+                '-out', 'genrsatest3072.pem'])),
+       "Generating RSA key with 3072 bits");
+
+    # We want to know that an absurdly large number of bits fails the RNG check
+    is(run(app([ 'openssl', 'genpkey',
+                 @prov,
+                 '-algorithm', 'RSA',
+```

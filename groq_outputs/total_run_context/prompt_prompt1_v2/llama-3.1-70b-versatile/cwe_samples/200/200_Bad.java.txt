@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+SQL Injection Vulnerability
+EXPLANATION:
+The code is vulnerable to SQL injection attacks because it directly embeds user input (`username` and `accountNumber`) into the SQL query string. This allows an attacker to inject malicious SQL code, potentially leading to unauthorized data access, modification, or even database compromise. The query uses string concatenation to build the SQL query, which makes it vulnerable to injection attacks.
+RECOMMENDATIONS:
+To fix this vulnerability, use a prepared statement with parameterized queries instead of string concatenation. This approach ensures that user input is treated as data, not as part of the SQL code. Here's an example of how to modify the code:
+
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    try {
+        if (isAuthorizedUser(username)) {
+            String query = "SELECT * FROM accounts WHERE owner = ? AND accountID = ?";
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            PreparedStatement pstmt = conn.prepareStatement(query);
+            pstmt.setString(1, username);
+            pstmt.setString(2, accountNumber);
+            ResultSet queryResult = pstmt.executeQuery();
+            // Process the query result...
+        } else {
+            // Handle unauthorized user case...
+        }
+    } catch (SQLException ex) {
+        // Handle exception...
+    }
+    return userAccount;
+}
+```
+
+Additionally, consider using an ORM (Object-Relational Mapping) library or a JDBC wrapper that provides better protection against SQL injection attacks.
+
+ORIGINAL CODE:
+```java
+public BankAccount getUserBankAccount(String username, String accountNumber) {
+    BankAccount userAccount = null;
+    String query = null;
+    try {
+        if (isAuthorizedUser(username)) {
+            query = "SELECT * FROM accounts WHERE owner = " + username + " AND accountID = " + accountNumber;
+            DatabaseManager dbManager = new DatabaseManager();
+            Connection conn = dbManager.getConnection();
+            Statement stmt = conn.createStatement();
+            ResultSet queryResult = stmt.executeQuery(query);
+            userAccount = (BankAccount) queryResult.getObject(accountNumber);
+        }
+    } catch (SQLException ex) {
+        String logMessage = "Unable to retrieve account information from database,\nquery: " + query;
+        Logger.getLogger(BankManager.class.getName()).log(Level.SEVERE, logMessage, ex);
+    }
+    return userAccount;
+}
+```

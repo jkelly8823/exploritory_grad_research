@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-21
+VULNERABILITY_DESCRIPTION:
+ Duplicate Code Execution vulnerability
+EXPLANATION:
+A segment of code within the 'if (!engine)' block appears to be duplicated from lines 9-14. This duplicated code block introduces unnecessary complexity and can lead to potential bugs as changes to one block of code might not be reflected in the duplicate. However, there is no clear defined behavior for what should happen when loading an engine by ID fails the second time, suggesting that it may lead to unexpected behavior or errors that are not handled properly.
+
+The duplicated code does not pose a direct security threat but can make the codebase harder to maintain and understand.
+
+RECOMMENDATIONS:
+To address this issue, consider extracting the duplicated code into a separate function. This approach will improve code readability and decrease the chance of introducing bugs due to duplicated logic. Ensure that the function is designed to handle all possible errors that can occur during engine loading and handles the 'UNLIKELy' cases securely.
+
+Here's a sample refactored code snippet:
+
+```cpp
+void LoadAndVerifyEngine(io::SecurityContext* sc, Local<FunctionTemplate> receiver,
+    const FunctionCallbackInfo<Value>& args, Environment* env,
+    Local<FunctionTemplate> callback) {
+  if (UNLIKELY(env->permission()->enabled())) {
+    return THROW_ERR_CRYPTO_CUSTOM_ENGINE_NOT_SUPPORTED(
+        env,
+        "Programmatic selection of OpenSSL engines is unsupported while the "
+        "experimental permission model is enabled");
+  }
+
+  CryptoErrorStore errors;
+  const Utf8Value engine_id(env->isolate(), args[0]);
+  EnginePointer engine = LoadEngineById(*engine_id, &errors);
+  if (!engine) {
+    // handle error and return
+  }
+```
+
+ORIGINAL CODE:
+
+```cpp
+CHECK_EQ(args.Length(), 2);
+
+if (UNLIKELY(env->permission()->enabled())) {
+  return THROW_ERR_CRYPTO_CUSTOM_ENGINE_NOT_SUPPORTED(
+      env,
+      "Programmatic selection of OpenSSL engines is unsupported while the "
+      "experimental permission model is enabled");
+}
+
+CryptoErrorStore errors;
+Utf8Value engine_id(env->isolate(), args[1]);
+EnginePointer engine = LoadEngineById(*engine_id, &errors);
+if (!engine) {
+// support multiple calls to SetClientCertEngine.
+
+if (UNLIKELY(env->permission()->enabled())) {
+  return THROW_ERR_CRYPTO_CUSTOM_ENGINE_NOT_SUPPORTED(
+      env,
+      "Programmatic selection of OpenSSL engines is unsupported while the "
+      "experimental permission model is enabled");
+}
+
+CryptoErrorStore errors;
+const Utf8Value engine_id(env->isolate(), args[0]);
+EnginePointer engine = LoadEngineById(*engine_id, &errors);
+if (!engine) {
+```

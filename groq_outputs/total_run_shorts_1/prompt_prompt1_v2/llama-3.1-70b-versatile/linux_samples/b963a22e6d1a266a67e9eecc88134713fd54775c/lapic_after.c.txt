@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code snippet appears to contain an unsigned underflow vulnerability. 
+
+EXPLANATION:
+The line `if (ktime_to_ns(remaining) < 0)` checks if the result of `ktime_to_ns(remaining)` is less than 0, which could potentially occur if `ktime_to_ns(remaining)` overflows or underflows. However, since `ktime_to_ns` returns an unsigned value and `ktime_t` is a signed type, this comparison will be performed on a signed value; the result of the comparison could potentially be true if `ktime_to_ns(remaining)` overflows. However, the other possibility is that it underflows: this would occur if `remaining` is an extremely large value (near the maximum of its type), which could theoretically occur in some obscure use case.
+
+However, under normal use, I highly suspect this check to instead prevent underflows (which are very very unlikely) and guard against `ktime_to_ns(remaining)` producing `0` and also to represent an error, indicating either 
+- a spurious wake-up,
+- or leftover time if `remaining` happens to be a static or a global var. In this case though, since `remaining` isn't defined before, it's hard to discern with any certainty. 
+
+Furthermore, when dealing with timing and time deltas, checks like this can be necessary for ensuring correctness in certain scenarios. A different issue possible here though, is since the code block returns `0` after the conditional evaluating `(kvm_apic_get_reg(apic, APIC_TMICT) == 0 || apic->lapic_timer.period == 0)` possibly this return in error conditions could lead to information asynchrony if other unrelated methods aren't guarded with timeouts as the method could have started operating regardless in a context where more meaningful diagnostics could have been propagated.
+
+In order to eliminate doubts that the code isn't doing something suspicious that should indeed be alerted about, it is therefore advised, to at least record this check with the concerned code authors themselves to see whether any further changes can be made.
+
+RECOMMENDATIONS:
+- Consider validating the `remaining` before calling `ktime_to_ns(remaining)`. 
+- Additionally, implementing a bounds check for potential overflow/underflow errors in `ktime_to_ns(remaining)` can help catch such issues earlier and also make the intent clearer, even though in practice the signed promotion would prevent the underflow.
+
+ORIGINAL CODE:
+
+	ASSERT(apic != NULL);
+
+	/* if initial count is 0, current count should also be 0 */
+	if (kvm_apic_get_reg(apic, APIC_TMICT) == 0 ||
+		apic->lapic_timer.period == 0)
+		return 0;
+
+	remaining = hrtimer_get_remaining(&apic->lapic_timer.timer);
+	if (ktime_to_ns(remaining) < 0)

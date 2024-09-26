@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+  Potential memory leak due to inconsistent error handling.
+
+EXPLANATION:
+  In this code snippet, an error is checked for `ret` and if it's nonzero, the `end_write_bio()` function is called with `ret` as its argument. However, there is no corresponding protection against memory leaks in the case where `ret` is zero. This could potentially lead to memory not being released if an error occurs later in the function. Furthermore, the function seems to return early without cleaning up potential allocated memory.
+ 
+  There's also another issue: if `flush_write_bio()` fails (indicated by a non-zero return value), `end_write_bio()` is called within a conditional that does not handle this case. It should be handled for both calls to ensure data integrity and clean up in the event of an error.
+
+RECOMMENDATIONS:
+  To avoid this potential vulnerability, you should also clean up remaining allocated memory in the case where `ret` is zero.
+  ```c
+    int ret = 0;
+    int done = 0;
+    int nr_to_write_done = 0;
+    struct pagevec pvec;
+
+    ret = flush_write_bio(&epd);
+    if (ret != 0) {
+        end_write_bio(&epd, ret);
+    }
+    return ret;
+```
+
+  If `end_write_bio()` is intended for additional cleanup other than memory release (it is currently unclear), you may still need to ensure that it is also called in the case of a nonzero `ret` in `flush_write_bio()` to prevent other resources being leaked.
+
+  Additionally, it may be worth reviewing how the `return ret` statements affect any external calls, to ensure they propagate error codes appropriately.
+
+ORIGINAL CODE:
+```c
+    .extent_locked = 0,
+    .sync_io = wbc->sync_mode == WB_SYNC_ALL,
+    };
+    int ret = 0;
+    int done = 0;
+    int nr_to_write_done = 0;
+    struct pagevec pvec;
+    end_write_bio(&epd, ret);
+    return ret;
+}
+    ret = flush_write_bio(&epd);
+    return ret;
+}
+```

@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8, 12-13
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to DNS Security issues due to the usage of `getaddrinfo` and `resolver._handle[bindingName]` with user-controlled input (`hostname`). 
+
+Additionally, it has the potential for denial-of-service (DoS) attacks if malicious or specially crafted input (`hostname`) causes the DNS resolver to throw an error, which may allow attackers to disrupt service.
+
+The provided code also uses `reject(dnsException(err, 'getaddrinfo', hostname))` and `reject(dnsException(err, bindingName, hostname))`, which includes the user-controlled input `hostname` in an error message. This allows an attacker to inject information into error messages.
+
+EXPLANATION:
+`getaddrinfo` and `resolver._handle[bindingName]` may allow DNS spoofing attacks and DoS attacks when handling malicious input. Potential issues also arise due to including user input in error messages. 
+
+The DNS resolver may also be forced to query for remote resources, consuming resources and potentially disrupting services if there's excessive use.
+
+Furthermore, rejecting with a `dnsException` including the user input might allow information injection attacks and potentially lead to information leaks.
+
+RECOMMENDATIONS:
+Validate and sanitize the `hostname` input to mitigate DNS spoofing and Information leaks risks.
+
+```javascript
+const safeHostname = toASCII(hostname).replace(/[^a-zA-Z0-9.-]/g, '');
+```
+
+Add input validation before calling `getaddrinfo` and `resolver._handle[bindingName]`:
+
+```javascript
+if (isIP(safeHostname) || isIPv4(safeHostname) || isLegalPort(safeHostname)) {
+    // handle valid inputs only
+} else {
+    // handle the invalid input and prevent further actions
+}
+```
+
+Handle potential DNS exceptions nicely without revealing potential internal system information. 
+
+```javascript
+if (err) {
+  reject({ 
+    message: 'Failed to resolve the hostname', 
+    // do not include `hostname` here
+    code: 'ECONNRESET'
+   });
+}
+```
+ ORIGINAL CODE:
+  emitInvalidHostnameWarning,
+} = require('internal/dns/utils');
+const { codes, dnsException } = require('internal/errors');
+const { toASCII } = require('internal/idna');
+const { isIP, isIPv4, isIPv6, isLegalPort } = require('internal/net');
+const {
+  getaddrinfo,
+  getnameinfo,
+    req.resolve = resolve;
+    req.reject = reject;
+
+    const err = getaddrinfo(req, toASCII(hostname), family, hints, verbatim);
+
+    if (err) {
+      reject(dnsException(err, 'getaddrinfo', hostname));
+    }
+    req.reject = reject;
+    req.ttl = ttl;
+
+    const err = resolver._handle[bindingName](req, toASCII(hostname));
+
+    if (err)
+      reject(dnsException(err, bindingName, hostname));
+  });

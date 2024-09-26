@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23
+VULNERABILITY_DESCRIPTION: Unbounded Allocation
+EXPLANATION:
+The vulnerability exists in the line where `len = BIO_gets(bp, linebuf, LINESIZE);` is called. The problem with this code is that it does not prevent the allocation of a potentially unbounded amount of memory when reading a line of input. If an attacker supplies a line that exceeds the buffer size (LINESIZE), `BIO_gets` will allocate memory to store the entire line, potentially consuming all available memory and causing the application to crash.
+
+RECOMMENDATIONS:
+To prevent unbounded memory allocation, consider using a bounded version of `BIO_gets`, which truncates the input line at a maximum size instead of allocating more memory. Here's an example using `BIO_gets` with a bounded buffer size:
+
+```c
+size_t len = BIO_gets(bp, linebuf, LINESIZE);
+if (len < 0 || (size_t)len >= LINESIZE) {
+    // handle error: line too long or BIO_gets failure
+    // either truncate the line or raise an error
+    // to prevent buffer overflow
+}
+```
+
+However, since this approach still poses a risk of truncation, a safer way is to read the file line by line using `BIO_read`:
+
+```c
+size_t len = 0;
+char c;
+while ((len < LINESIZE - 1) && (BIO_read(bp, &c, 1) > 0)) {
+    linebuf[len++] = c;
+    if (c == '\n') {
+        break;  // EOL encountered
+    }
+}
+linebuf[len] = '\0';
+```
+This code reads the file line by line and also ensures that no EOL is left without terminating the string.
+
+ORIGINAL CODE:
+```c
+(BIO_write(bp, "-----\n", 6) != 6))
+goto err;
+
+i = strlen(header);
+if (i > 0) {
+    if ((BIO_write(bp, header, i) != i) || (BIO_write(bp, "\n", 1) != 1))
+        goto err;
+}
+{
+BIO *tmp = *header;
+char *linebuf, *p;
+int len, line, ret = 0, end = 0, prev_partial_line_read = 0, partial_line_read = 0;
+/* 0 if not seen (yet), 1 if reading header, 2 if finished header */
+enum header_status got_header = MAYBE_HEADER;
+unsigned int flags_mask;
+size_t namelen;
+    return 0;
+}
+
+for (line = 0; ; line++) {
+    flags_mask = ~0u;
+    len = BIO_gets(bp, linebuf, LINESIZE);
+    if (len <= 0) {
+        ERR_raise(ERR_LIB_PEM, PEM_R_BAD_END_LINE);
+```

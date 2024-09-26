@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 30-31
+VULNERABILITY_DESCRIPTION:
+Potential Path Traversal Vulnerability
+EXPLANATION:
+The function `is_executed_by_cmd` uses the function `strrchr` to find the last occurrence of the directory separator in the `prog_name` string. However, this function returns a pointer to the first occurrence of the separator from the right, which can be anywhere in the string. When using this pointer to find the last dot in the filename, there is a risk of path traversal if the input `prog_name` is not properly validated.
+
+Specifically, if the input `prog_name` contains multiple directory separators, the function `strrchr` will correctly find the last one. However, if the last separator is not followed by a dot and then the file extension ".bat" or ".cmd", but instead followed by more directory separators, the function may still find a dot and then check if the rest of the string matches ".bat" or ".cmd", effectively ignoring the non-matching directory separators.
+
+This vulnerability might be exploited if the input `prog_name` comes from an untrusted source and is not properly sanitized.
+
+RECOMMENDATIONS:
+1. Validate the input `prog_name` to ensure it does not contain path traversal characters or sequences.
+2. Consider using a safer way to find the last directory separator, such as using `PathFindFileName` on Windows or `basename` on Unix-like systems.
+
+ORIGINAL CODE:
+```c
+static bool is_executed_by_cmd(const char *prog_name)
+{
+    /* If program name is cmd.exe, then return true. */
+    if (_stricmp("cmd.exe", prog_name) == 0 || _stricmp("cmd", prog_name) == 0
+            || stricmp_end("\\cmd.exe", prog_name) == 0 || stricmp_end("\\cmd", prog_name) == 0) {
+        return true;
+    }
+
+    /* Find the last occurrence of the directory separator (backslash or forward slash). */
+    char *last_separator = strrchr(prog_name, '\\');
+    char *last_separator_fwd = strrchr(prog_name, '/');
+    if (last_separator_fwd && (!last_separator || last_separator < last_separator_fwd)) {
+        last_separator = last_separator_fwd;
+    }
+
+    /* Find the last dot in the filename after the last directory separator. */
+    char *extension = NULL;
+    if (last_separator != NULL) {
+        extension = strrchr(last_separator, '.');
+    } else {
+        extension = strrchr(prog_name, '.');
+    }
+
+    if (extension == NULL || extension == prog_name) {
+        /* No file extension found, it is not batch file. */
+        return false;
+    }
+
+    /* Check if the file extension is ".bat" or ".cmd" which is always executed by cmd.exe. */
+    return _stricmp(extension, ".bat") == 0 || _stricmp(extension, ".cmd") == 0;
+}
+```

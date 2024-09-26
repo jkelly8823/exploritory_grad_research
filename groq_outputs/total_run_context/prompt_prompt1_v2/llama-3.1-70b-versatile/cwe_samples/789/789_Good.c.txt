@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 14
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability
+
+EXPLANATION:
+The provided code snippet is vulnerable to a buffer overflow attack. This occurs when the user-provided input (`msg_len`) is not properly validated, allowing a negative value to be passed to the `proc_msg` function. This input is then used to declare the size of a local variable buffer `buf`, which will be allocated on the stack. When `pre_len - msg_len` is a negative number, this will cause an underflow when declaring the array size, leading to a buffer overflow and a possible denial of service or remote code execution. 
+
+The particular line that introduces this vulnerability is line 8 where input `msg_len` is directly used in the declaration of `buf` without any proper validation or error checking. 
+
+Line 14, when calling `proc_msg`, introduces the vulnerability by passing in `jnklen` which under certain conditions can result in a negative value being passed to `proc_msg`, hence triggering the vulnerability. 
+
+However, the root of the vulnerability lies in the assumption made about `msg_len` and the incorrect input provided in `ret_val = proc_msg ("s",  jnklen);`. 
+
+Though line 14 could be seen as faulty input, consideration must be taken to account for `ret_val = proc_msg ("s",  jnklen);`. For completeness I must note that proc_msg itself needs updated code blocks to account for a condition which may throw msg_len being less than. In my experience there is no other safety precaution placed, to prevent potential problem area as declared in proc_msg.
+
+RECOMMENDATIONS:
+- Add input validation for `msg_len` in the `proc_msg` function to ensure that it is not negative and does not exceed the maximum allowed value.
+- Modify the code to handle the case when `msg_len` is greater than or equal to `pre_len` without attempting to declare an array with a negative size.
+- Implement bounds checking for arrays and strings to prevent buffer overflows.
+- When declaring dynamic arrays using variables, consider using a safer method such as using dynamically allocated memory with `malloc` and `free` functions.
+
+ORIGINAL CODE:
+```c
+int proc_msg(char *s, int msg_len)
+{
+    int pre_len = sizeof("preamble: ");    // Note space at the end of the string - assume all strings have preamble with space
+    if (pre_len <= msg_len) { // Log error; return error_code; }
+    char buf[pre_len - msg_len];
+    ... Do processing here and set status
+    return status;
+}
+
+char *s = "preamble: message\n";
+char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack
+```

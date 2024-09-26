@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+The given code snippet is vulnerable to a command injection vulnerability.
+
+EXPLANATION:
+The code uses the sprintf function to create a string with the 'ls -l' command and a part of the string is sourced from user-defined constants (in this case, DIR). The problem arises when the length of the DIR constant is greater than 480 characters. In this case, the sprintf function does not prevent the buffer from overflowing, leading to undefined behavior. Moreover, even if the length of DIR is less than or equal to 480 characters, the DIR string is directly inserted into the command. An attacker who has control over the contents of the DIR string could craft it to inject arbitrary commands. 
+
+However, a more specific concern with this code snippet is that the DIR constant is used as an argument to the command 'ls -l', but with incorrect assumptions about its contents. Since DIR is "/restricted/directory" in this context, the ls -l command is using it directly without adequate input validation and sanitization. Thus, although this does not allow for malicious input, the incorrect assumption about what the constant contains still weakens its overall security.
+
+RECOMMENDATIONS:
+1. Define a more restrictive format string that prevents arbitrary characters from entering the command. You could replace %480s with a more restrictive width as to prevent buffer overflows.
+
+2. Validate and sanitize ALL user-provided input. Use a specialized function or class library if possible to mitigate any potential security vulnerabilities.
+
+3. Avoid using sprintf for string construction where user-defined input is involved.
+
+4. Consider using system calls that avoid spawning new shell processes if possible. Here, we could avoid this by directly using calls such as readdir, stat or scandir, that are guaranteed to not cause shell access.
+
+Here's a more restrictive version of the format string :
+
+```c
+#define DIR "/restricted/directory"
+char cmd[500];sprintf(cmd, "ls -l \"%480s\"",DIR);
+```
+
+However, a more complete solution would make sure to safely handle any user input. Always be sure to check your assumptions regarding the format of your inputs.
+
+ORIGINAL CODE:
+```c
+#define DIR "/restricted/directory"
+char cmd[500];sprintf(cmd, "ls -l %480s", DIR);
+/* Raise privileges to those needed for accessing DIR. */
+RaisePrivileges(...);system(cmd);DropPrivileges(...);...
+```

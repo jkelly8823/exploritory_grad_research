@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 14
+VULNERABILITY_DESCRIPTION:
+The code has a use-after-free vulnerability.
+
+EXPLANATION:
+The vulnerability lies in the `contains_char` function, where the `str` pointer is incremented and dereferenced after it has been freed. This occurs when the character match is found at the last position in the string. When the last character is matched, the `str` pointer is incremented before the function returns, but this incremented value is not used again because the function immediately returns. However, this leaves a potential dangling pointer in case this function is modified in the future.
+
+The other issue arises because the loop continues until `*str` equals `NULL`. This will actually never be true because `stra` terminated with a null byte. However, in C, the null byte is different than the NULL pointer value used as an assignment. On Unix-like systems, where a null byte is an 8-bit integer holding a value of zero, it will be treated as a false value, and a null pointer will be true, albeit only on these platforms, and an exact behavior can differ. The problematic line is on the "we did not match the char in the string, free mem and return failure" comment.
+
+However, more pressing is on line 14, this line triggers another "use after free", because after we've checked the entire file and we return a failure the result is freeing memory we've attempted to use to just before. In general, on all Unix like systems, if the result of your malloc returns an error such that no memory is allocated using a null pointer will cause undefined behavior.
+
+RECOMMENDATIONS:
+- Change the while loop condition to: while( *str != '\0' ) and replace the str increment operation from str = str + 1 to str++ so that you can keep it simple.
+- Avoid changing the pointer after freeing its memory. A simple fix is to check if we are about to access an index in the array after we've  finished accessing its elements. Once this is found we should break from the loop.
+
+Here is an example of how you could go about implementing it:
+```c
+while( *str != '\0' ) {
+    if( *str == c ){
+       free(str);
+       return SUCCESS;
+    }
+    str++;
+}
+free(str);
+return FAILURE;
+```
+
+ORIGINAL CODE:
+```c
+#define SUCCESS (1)
+#define FAILURE (0)
+
+int contains_char(char c){
+    char *str;
+    str = (char*)malloc(20*sizeof(char));
+    strcpy(str, "Search Me!");
+    while( *str != NULL){
+        if( *str == c ){
+            /* matched char, free string and return success */
+            free(str);
+            return SUCCESS;
+        }
+        /* didn't match yet, increment pointer and try next char */
+        str = str + 1;
+    }
+    /* we did not match the char in the string, free mem and return failure */
+    free(str);
+    return FAILURE;
+}
+```

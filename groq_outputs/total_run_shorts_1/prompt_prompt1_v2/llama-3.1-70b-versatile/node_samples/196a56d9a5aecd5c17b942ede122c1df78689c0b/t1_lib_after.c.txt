@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-25
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a use-after-free bug in OpenSSL, which could potentially be exploited by an attacker to execute arbitrary code.
+
+EXPLANATION:
+The bug arises from the handling of the `sdec` pointer, which is allocated using `OPENSSL_malloc`. However, if `EVP_DecryptUpdate` fails and returns a value less than or equal to 0, the code attempts to free `sdec` but does not check the return value of `OPENSSL_free`. This is not inherently problematic, but the code immediately after the allocation and potential free of `sdec` may potentially use `sdec` regardless of whether it was freed or not. This could be leveraged by an attacker to corrupt memory or execute arbitrary code.
+
+This is not an issue if `OPENSSL_free` is guaranteed to free the memory and an error occurs, but this is an uncommon use pattern and further inspection is warranted.
+
+RECOMMENDATIONS:
+To fix this bug, you should check the return value of `OPENSSL_free` to ensure that the memory was successfully freed before reusing the `sdec` pointer. Additionally, consider reinitializing or resetting the `sdec` pointer to `NULL` after freeing to avoid potential use-after-free issues. 
+
+Here is an example of how to handle the `sdec` pointer after freeing it:
+
+```c
+if (sdec == NULL || EVP_DecryptUpdate(ctx, sdec, &slen, p, (int)eticklen) <= 0) {
+    if (sdec != NULL) {
+        OPENSSL_free(sdec);
+        sdec = NULL; // Set sdec to NULL to avoid use-after-free
+    }
+    // handle error
+}
+```
+
+ORIGINAL CODE:
+```c
+    SSL_SESSION *sess = NULL;
+    unsigned char *sdec;
+    const unsigned char *p;
+    int slen, ivlen, renew_ticket = 0, declen;
+    SSL_TICKET_STATUS ret = SSL_TICKET_FATAL_ERR_OTHER;
+    size_t mlen;
+    unsigned char tick_hmac[EVP_MAX_MD_SIZE];
+    SSL_HMAC *hctx = NULL;
+        goto end;
+    }
+
+    ivlen = EVP_CIPHER_CTX_get_iv_length(ctx);
+    if (ivlen < 0) {
+        ret = SSL_TICKET_FATAL_ERR_OTHER;
+        goto end;
+    }
+
+    /* Sanity check ticket length: must exceed keyname + IV + HMAC */
+    if (eticklen <= TLSEXT_KEYNAME_LENGTH + ivlen + mlen) {
+        ret = SSL_TICKET_NO_DECRYPT;
+        goto end;
+    }
+    eticklen -= mlen;
+    }
+    /* Attempt to decrypt session data */
+    /* Move p after IV to start of encrypted ticket, update length */
+    p = etick + TLSEXT_KEYNAME_LENGTH + ivlen;
+    eticklen -= TLSEXT_KEYNAME_LENGTH + ivlen;
+    sdec = OPENSSL_malloc(eticklen);
+    if (sdec == NULL || EVP_DecryptUpdate(ctx, sdec, &slen, p,
+                                          (int)eticklen) <= 0) {
+        OPENSSL_free(sdec);
+```

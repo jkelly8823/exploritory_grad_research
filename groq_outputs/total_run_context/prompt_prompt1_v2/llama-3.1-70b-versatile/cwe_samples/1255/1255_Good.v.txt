@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-14, 16-17
+VULNERABILITY_DESCRIPTION:
+The given Verilog code contains an asynchronous reset signal with a positive edge sensitivity. However, the corresponding logic statements have multiple bit lengths assigned to the variable q which does not have constant bit length. Also the module has multiple drivers assigned to variable q.
+
+EXPLANATION:
+The asynchronous reset signal with a positive edge sensitivity is an unusual design choice in this context and might indicate a flaw. A common weakness here is driving the output signal q from multiple sources. In this code snippet, there is logic assigned to q during reset as well as during the normal operation. Multiple sources of q result in simulation issues.
+
+The assignment `q<4'b0000;` and `q<a;` has different bit lengths assigned to the variable q. This issue occurs because multiple bit lengths assigned to the variable q interferes with one another, producing inconsistent outputs.
+
+RECOMMENDATIONS:
+Change the sensitivity list of the always block to change on either the positive edge of the clock or the positive edge of reset, depending on your desired design functionality.
+
+Avoid using non-blocking assignments in asynchronous reset conditions. This can often result in incorrect logic implementations and should be thoroughly reviewed for potential issues. Replacing this logic with blocking assignments can correct this error.
+
+Remove multiple source issue for variable q.
+
+Use constant bit length for variable q in all assignments.
+
+Here's how the corrected code could look:
+
+```Verilog
+module pipo(clk,rst,a,q);
+  // Port List
+  input clk,rst;
+  input[3:0]a;
+  output reg[3:0]q;
+  // Assign reg before declaration
+  
+  always@(posedge clk or posedge rst)
+  begin
+    if (rst==1'b1)
+      q = 4'b0000;   // < replaced <= to =
+    else
+      q <= a;
+  end
+  
+endmodule
+```
+ORIGINAL CODE:
+```verilog
+module pipo(clk,rst,a,q);
+  
+  input clk,rst;
+  input[3:0]a;
+  output[3:0]q;
+  reg[3:0]q;
+  
+  always@(posedge clk,posedge rst)
+  begin
+    //reset condition
+    if (rst==1'b1)
+      //4 bit reset
+      q<4'b0000;
+    else
+      q<a;
+  end  
+    
+endmodule
+```

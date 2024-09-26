@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+This function is vulnerable to a buffer overflow attack due to the use of the `strcpy` function, which does not perform any bounds checking on the destination buffer.
+
+EXPLANATION:
+The `strcpy` function is used to copy the result of `hp->h_name` into the `hostname` buffer. However, there is no guarantee that `hp->h_name` will be null-terminated and fit within the 64-byte `hostname` buffer. This can result in a buffer overflow, allowing an attacker to potentially execute arbitrary code or cause a denial of service.
+
+Additionally, the `inet_addr` function is used without checking its return value. If `inet_addr` fails to convert the address, it will return `INADDR_NONE`, which may not be handled correctly by the code.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to replace `strcpy` with `strncpy`, which allows you to specify the maximum number of characters to copy. Additionally, you should check the return value of `inet_addr` to handle invalid addresses.
+
+Example:
+```c
+void host_lookup(char *user_supplied_addr){
+    // ...
+    addr = inet_addr(user_supplied_addr);
+    if (addr != INADDR_NONE) {
+        hp = gethostbyaddr(addr, sizeof(struct in_addr), AF_INET);
+        if (hp != NULL) {
+            strncpy(hostname, hp->h_name, sizeof(hostname));
+            hostname[sizeof(hostname) - 1] = '\0'; // Ensure null-termination
+        } else {
+            // Handle error
+        }
+    } else {
+        // Handle error
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+void host_lookup(char *user_supplied_addr){
+    struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+    /*routine that ensures user_supplied_addr is in the right format for conversion */
+    validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+}
+```

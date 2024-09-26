@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 155-156, 176-177, 181-182
+VULNERABILITY_DESCRIPTION:
+Unvalidated user control of data in memcpy calls.
+
+EXPLANATION:
+The `memcpy` calls at lines 155-156, 176-177, and 181-182 use unvalidated user-controlled data as the length argument. This can lead to a potential buffer overflow if the length is larger than the destination buffer's size. The `pskb_expand_head` function call at line 66 can return an error, but it does not validate if the expanded space is enough for the subsequent `skb_copy_from_linear_data` call. Additionally, the `skb_copy_from_linear_data` function call at line 75 uses the `skb->len` value, which is not validated before the memcpy operation.
+
+RECOMMENDATIONS:
+1. Validate the length arguments of the memcpy calls by checking if they are within the valid range of the destination buffer's size.
+2. Check the return value of the `pskb_expand_head` function call to ensure that the expansion was successful and that the expanded space is enough for the subsequent memcpy operation.
+
+ORIGINAL CODE:
+```c
+/* ... */
+
+/* Walk list again, copying contents into msdu_head */
+while ((skb = __skb_dequeue(amsdu))) {
+    skb_copy_from_linear_data(skb, skb_put(first, skb->len),
+                              skb->len);  /* Vulnerable line 155-156 */
+    dev_kfree_skb_irq(skb);
+}
+
+/* ... */
+
+memcpy(IEEE80211_SKB_RXCB(skb), &status, sizeof(status));  /* Vulnerable line 176-177 */
+skb_put(skb, bd->pdu.mpdu_data_off + bd->pdu.mpdu_len);
+skb_pull(skb, bd->pdu.mpdu_data_off);
+
+/* ... */
+
+memcpy(IEEE80211_SKB_RXCB(skb), &status, sizeof(status));  /* Vulnerable line 181-182 */
+skb_put(skb, bd->pdu.mpdu_data_off + bd->pdu.mpdu_len);
+skb_pull(skb, bd->pdu.mpdu_data_off);
+```

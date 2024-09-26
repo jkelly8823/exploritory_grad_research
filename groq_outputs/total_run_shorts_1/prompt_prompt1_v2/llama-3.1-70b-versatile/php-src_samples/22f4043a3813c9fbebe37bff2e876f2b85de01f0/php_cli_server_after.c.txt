@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1, 3, 9, 16
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in memory allocation and copying.
+EXPLANATION:
+The code has several instances of memory allocation and copying without proper bounds checking. 
+In lines 1 and 3, the function 'pemalloc' is used to dynamically allocate memory without checking if the allocation was successful, which could lead to a null pointer dereference.
+In line 9, the 'memmove' function is used to copy data into 'client->request.content' without checking if the destination buffer is large enough to hold the data.
+In line 16, the 'memmove' function is used to copy data into 'header_name' without checking if the destination buffer is large enough to hold the data.
+This lack of bounds checking could lead to a buffer overflow, allowing an attacker to potentially execute arbitrary code.
+
+RECOMMENDATIONS:
+- Always check the return value of 'pemalloc' to ensure the memory allocation was successful.
+- Use 'realloc' instead of 'pemalloc' and 'memmove' to resize the buffer and prevent overflow.
+- Ensure that the destination buffer is large enough to hold the data before copying it.
+- Consider using safer functions like 'strcpy_s' or 'strncpy' instead of 'memmove' for string operations.
+
+ORIGINAL CODE:
+```c
+size_t prev_patch_len;
+int  is_static_file = 0;
+
+if (!buf) {
+	return;
+}
+
+memmove(p, document_root, document_root_len);
+p += document_root_len;
+vpath = p;
+if (request->vpath_len > 0 && request->vpath[0] != '/') {
+php_cli_server_client *client = parser->data;
+if (!client->request.content) {
+	client->request.content = pemalloc(parser->content_length, 1);
+	if (!client->request.content) {
+		return -1;
+	}
+	client->request.content_len = 0;
+}
+memmove(client->request.content + client->request.content_len, at, length);
+client->request.content_len += length;
+}
+if (client->current_header_name) {
+	char *header_name = safe_pemalloc(client->current_header_name_len, 1, 1, 1);
+	if (!header_name) {
+		return -1;
+	}
+	memmove(header_name, client->current_header_name, client->current_header_name_len);
+	client->current_header_name = header_name;
+	client->current_header_name_allocated = 1;
+}
+```

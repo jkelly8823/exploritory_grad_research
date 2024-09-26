@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Out-of-bounds access on strncpy function and potential buffer overflow on tHost buffer copy.
+ 
+EXPLANATION:
+The issue is on this line: `if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost)))`
+
+The `sizeof(tHost)` returns the size of the char pointer tHost, not the length of the string it points to. This means that the `strncmp` function may go out of bounds of the string. Also, the line assumes that `hp->h_name` is at least as long as `tHost` which is not always true. This could result in `strncmp` reading past the end of `hp->h_name`.
+
+A related issue is the copy operation of `tHost` to the buffer. In the absence of seeing the definition of `tHost`, it cannot be assumed to match the buffer size or contain null-terminated strings. There is also a potential for buffer overflow if the `tHost` buffer does not match the buffer size of the `hp->h_name`.
+
+RECOMMENDATIONS:
+To address the out-of-bounds access issue, use the length of the string pointed to by tHost instead of the size of tHost. The correct way to do this is `strlen(tHost)`.
+
+To ensure that `hp->h_name` is not read past its end, `strlen(hp->h_name)` should also be used to ensure the correct length.
+
+However, since the function used is strncmp which needs a maximum character count as the third argument, you should compare the minimum of the lengths of `hp->h_name` and `tHost` instead.
+
+Here is a corrected example:
+
+```c
+struct hostent *hp; 
+struct in_addr myaddr; 
+char* tHost = "trustme.example.com"; 
+myaddr.s_addr=inet_addr(ip_addr_string);
+hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);
+if (hp) {
+    size_t minLength = strlen(hp->h_name) < strlen(tHost) ? strlen(hp->h_name) : strlen(tHost);
+    if (!strncmp(hp->h_name, tHost, minLength)) {
+        trusted = true;
+    } else {
+        trusted = false;
+    }
+}
+
+ORIGINAL CODE:
+            struct hostent *hp;struct in_addr myaddr;char* tHost = "trustme.example.com";myaddr.s_addr=inet_addr(ip_addr_string);
+                     hp = gethostbyaddr((char *) &myaddr, sizeof(struct in_addr), AF_INET);if (hp && !strncmp(hp->h_name, tHost, sizeof(tHost))) {trusted = true;} else {trusted = false;}
+```

@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6
+VULNERABILITY_DESCRIPTION: 
+Insecure Exception Handling (logging sensitive exception information) and potential for Partial Success Attack due to the continue execution of the method even after catching exception that leaves the object in an  inconsistent state.
+
+EXPLANATION:
+The code catches two exceptions that could be thrown when initializing the Cipher object, however it simply logs the error message and continues execution by returning the initialized Cipher object (which could be null in the case that an exception was thrown). 
+
+Logging sensitive exception information can potentially provide valuable data for an attacker in the case of an error.
+
+Moreover, if the exceptions were thrown during key initialization or data encryption/decryption operations, and the application proceeds to use the Cipher object after an exception was caught, it could result in a partial success attack - a vulnerability where an attacker successfully triggers an invalid/inconsistent/desynchronized state in the program's internal computations/data.
+
+RECOMMENDATIONS:
+It's recommended to throw the caught exceptions or at least handle them properly rather than continuing execution of the method and logging the errors. Consider properly re-throwing the exceptions and handling them in the calling methods.
+
+Here's an example of how the function could be modified to re-throw the exceptions:
+
+```java
+public Cipher getRSACipher() {
+  try {
+    return javax.crypto.Cipher.getInstance("RSA/NONE/NoPadding");
+  } catch (Exception e) {
+    log("Exception getting RSA Cipher instance", e);
+    throw new RuntimeException("Failed to get RSA Cipher instance", e);
+  }
+}
+```
+Alternatively, you could also handle the exception and choose to return null or throw a custom checked exception based on your application requirements. The point is to handle these potential exceptions in a consistent manner that results in a well-defined state.
+
+ORIGINAL CODE:
+```
+public Cipher getRSACipher() {Cipher rsa = null;try {rsa = javax.crypto.Cipher.getInstance("RSA/NONE/NoPadding");}catch (java.security.NoSuchAlgorithmException e) {log("this should never happen", e);}catch (javax.crypto.NoSuchPaddingException e) {log("this should never happen", e);}return rsa;}
+```

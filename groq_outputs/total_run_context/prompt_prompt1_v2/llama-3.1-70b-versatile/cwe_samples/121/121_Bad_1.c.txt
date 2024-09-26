@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow Vulnerability due to Uncontrolled strcpy() Function
+
+EXPLANATION:
+The function host_lookup() takes a user-supplied string in the variable user_supplied_addr. However, no bounds checking is performed on the string length before passing it to the inet_addr() and strcpy() functions. The strcpy() function, in particular, copies the contents of hp->h_name into the local buffer hostname without any length validation. This is a critical vulnerability as an attacker can manipulate the user_supplied_addr variable to overflow the hostname buffer with arbitrary data, potentially leading to code execution.
+
+Furthermore, the gethostbyaddr() function may return NULL, and dereferencing such a pointer without a NULL check in strcpy(hp->h_name, ...) introduces a potential segmentation fault. Additionally, even though validate_addr_form() seems to validate user_supplied_addr, without seeing its implementation, it's unsure if this function is sufficient in preventing malicious input.
+
+RECOMMENDATIONS:
+- Use strncpy() or strcpy_s() instead of strcpy() and enforce the maximum buffer size, or
+- Use a safer alternative like memcpy() or std::string if C++ is an option
+- Verify that hp is not NULL before using it
+- Validate the length of hp->h_name before copying it into hostname
+- Implement proper error handling for validate_addr_form() and gethostbyaddr()
+
+ORIGINAL CODE:
+
+                  void host_lookup(char *user_supplied_addr){
+                        struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+                           
+                           /*routine that ensures user_supplied_addr is in the right format for conversion */
+                           
+                           validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+                     }

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 121-125, 146-150
+VULNERABILITY_DESCRIPTION:
+Insecure usage of `memcpy` and missing input validation in `verify_cookie_cb`.
+
+EXPLANATION:
+In the code, `memcpy` is used to copy the cookie from the `dummy_cookie` array to the `cookie` buffer. However, the function `verify_cookie_cb` does not validate the length of the `cookie` and `dummy_cookie` arrays before passing them to `TEST_mem_eq`. This can lead to a buffer overflow if the `cookie` or `dummy_cookie` arrays are not properly null-terminated or if an incorrect length is passed to `TEST_mem_eq`.
+
+Additionally, `memcpy` is generally not recommended for copying strings as it does not handle null-termination. Instead, `strcpy` or `strncpy` should be used to ensure that the destination buffer is properly null-terminated.
+
+RECOMMENDATIONS:
+1. Use `strncpy` instead of `memcpy` to copy the cookie from `dummy_cookie` to `cookie`.
+2. Validate the length of the `cookie` and `dummy_cookie` arrays before passing them to `TEST_mem_eq`.
+3. Use `strcmp` instead of `TEST_mem_eq` to compare the `cookie` and `dummy_cookie` strings.
+
+ORIGINAL CODE:
+
+```c
+static int generate_cookie_cb(SSL *ssl, unsigned char *cookie,
+                              unsigned int *cookie_len)
+{
+    memcpy(cookie, dummy_cookie, sizeof(dummy_cookie));
+    *cookie_len = sizeof(dummy_cookie);
+    return 1;
+}
+
+static int verify_cookie_cb(SSL *ssl, const unsigned char *cookie,
+                            unsigned int cookie_len)
+{
+    return TEST_mem_eq(cookie, cookie_len, dummy_cookie, sizeof(dummy_cookie));
+}
+```
+
+Changed to:
+
+```c
+static int generate_cookie_cb(SSL *ssl, unsigned char *cookie,
+                              unsigned int *cookie_len)
+{
+    strncpy((char *)cookie, dummy_cookie, sizeof(dummy_cookie));
+    *cookie_len = strlen((char *)dummy_cookie);
+    return 1;
+}
+
+static int verify_cookie_cb(SSL *ssl, const unsigned char *cookie,
+                            unsigned int cookie_len)
+{
+    return strncmp((char *)cookie, dummy_cookie, MAX(cookie_len, (unsigned int)strlen((char *)dummy_cookie))) == 0;
+}
+```
+Note: Also consider validating user input and performing error handling to prevent other types of vulnerabilities.

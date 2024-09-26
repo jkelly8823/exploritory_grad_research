@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Unintended behavior due to missing constraints in write operation logic.
+
+EXPLANATION:
+The provided code snippet appears to be a register file module written in SystemVerilog, specifically handling write operations to CSR (Control and Status Registers) registers. Upon examining the logic for handling write operations to the CSR_SIE (Supervisor Interrupt Enable) register, a potential issue arises. The mie_d calculation is performed directly using the csr_wdata without verifying if the target interrupt enable is delegate-able (controlled by mideleg_q). However, the supplied information from the comment indicates that "the mideleg makes sure only delegate-able register are written." 
+
+This raises concerns about mask configuration applied before writing to the mie_q register. According to the RISC-V specification, both the mideleg register and the mie_q registers should both be bit-level to manage which interrupts should delegate. Not accurately identifying that relationship in mideleg_q presents an opportunity for unintended values in either machine mode or supervisor mode, given this condition isn't put into check across the all parts of CSR module. An incorrect configuration of mie_q and mstatus_q can contribute to faulty protection.
+
+
+Even though we ignore missing variable declarations, the relationship should appear safe from mishaps to either M-mode or S-mode interrupt configurations given all other context.
+
+
+RECOMMENDATIONS:
+Recommend validating prior to compute values at both:
+`mideleg_q` and for the corresponding M-mode and S-mode registers at line:
+-9 (with interrupts of individual values).
+or even define a formal model using SMT (set upon preconditions `imply` using defined valids) or precheck logic using sby-assrt as required.
+
+
+Add checks against these registers during a handling procedure.
+
+Introduce corresponding methods aiming a safe return at user configurations. 
+
+ORIGINAL CODE:
+
+module csr_regfile #(...)(...);
+                  ...
+                  // ---------------------------
+                  // CSR Write and update logic
+                  // ---------------------------
+                  ...
+                     
+                     if (csr_we) begin
+                        
+                        unique case (csr_addr.address)
+                        ...
+                           
+                           riscv::CSR_SIE: begin
+                                 
+                                 // the mideleg makes sure only delegate-able register
+                                 //(and therefore also only implemented registers) are written
+                                 mie_d = (mie_q & ~mideleg_q) | (csr_wdata & mideleg_q) | utval_q;
+                                 
+                           end
+                           ...
+                           
+                        endcase
+                        
+                     end
+                     
+                  endmodule

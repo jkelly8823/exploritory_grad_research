@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION:
+Use of User-Controlled Input to a Memory-Mapped Function Call Without Validation.
+
+EXPLANATION:
+The code appears to be modifying a file system inode using user-controlled input from `ino`. However, on line 10, the variable `ino` is directly used in a function call to `fill_node_footer(ipage, ino, ino, 0, true)`, which sets memory-mapped footers in a file system node. 
+
+This is potentially insecure as an attacker could control the input to set arbitrary data in the file system node footers. 
+
+Moreover, the F2FS_INODE(page) also seems to be using the ino variable directly as a function pointer to a memory location. This seems incorrect and could also be a vulnerability if an attacker could manipulate the ino to point to an arbitrary location in memory.
+ 
+RECOMMENDATIONS:
+Fix this vulnerability by validating the `ino` variable before using it to set memory-mapped footers in a file system node, and by verifying that it matches the expected value or is within the valid range.
+
+Original Code:
+```c
+struct node_info old_ni, new_ni;
+struct page *ipage;
+
+get_node_info(sbi, ino, &old_ni);
+
+if (unlikely(old_ni.blk_addr != NULL_ADDR))
+	return -EINVAL;
+
+ipage = grab_cache_page(NODE_MAPPING(sbi), ino);
+if (!ipage)
+	return -ENOMEM;
+
+/* Should not use this inode  from free nid list */
+remove_free_nid(NM_I(sbi), ino);
+
+SetPageUptodate(ipage);
+fill_node_footer(ipage, ino, ino, 0, true);
+
+src = F2FS_INODE(page);
+```

@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION: 
+Inconsistent Ordering of Check Statements
+
+EXPLANATION:
+The code checks for 'in_size' being less than 6 and also less than the value in the data buffer, which seems to be a 32-bit integer located at offset 2 in the data buffer. However, these checks are not properly ordered.
+
+If 'in_size' is less than 6, it will be less than any 32-bit integer read from the buffer as well. However, checking for 'in_size < 6' first allows for more efficient error handling, as a larger 'in_size' can then be checked against the value from the data buffer without risk of accessing the buffer if 'in_size' is too small. 
+
+But the given check is inefficient and can lead to a crash if 'in_size' is less than 6, as it does not check for buffer overruns when 'in_size' is too small. This could potentially be leveraged for a denial-of-service type attack depending on the code's application and usage scenario. The if-statement uses '||' - which short-circuits on a true condition - but still permits access for 'in_size' < 6.
+
+RECOMMENDATIONS:
+Reorder the checks in the if-statement to be less than the largest buffer size accessed, then less than 6. This reorder promotes proper input validation.
+
+Here's a revised version of the code:
+
+	if (in_size < 6 + 2 || 
+	    in_size < be32_to_cpu(*((__be32 *) (priv->data_buffer + 2)))) {
+		mutex_unlock(&priv->buffer_mutex);
+		return -EINVAL;
+	}
+
+Alternatively:
+
+	if (in_size < 6) {
+		/* Handle too-small size separately */
+		mutex_unlock(&priv->buffer_mutex);
+		return -EINVAL;
+	}
+	if (in_size < 6 + be32_to_cpu(*((__be32 *) (priv->data_buffer + 2)))) {
+		/* Handle size-too-small for the buffer as well */
+		mutex_unlock(&priv->buffer_mutex);
+		return -EINVAL;
+	}
+
+ORIGINAL CODE:
+```
+	return -EFAULT;
+	}
+
+	if (in_size < 6 ||
+	    in_size < be32_to_cpu(*((__be32 *) (priv->data_buffer + 2)))) {
+		mutex_unlock(&priv->buffer_mutex);
+		return -EINVAL;
+	}
+
+	/* atomic tpm command send and result receive. We only hold the ops
+	 * lock during this period so that the tpm can be unregistered even if
+	 * the char dev is held open.
+	 */
+```

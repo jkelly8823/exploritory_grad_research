@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The code does not properly handle the case where the 'lower_file' pointer is NULL before accessing its members. This can lead to a NULL pointer dereference vulnerability.
+
+EXPLANATION:
+In the `ecryptfs_mmap` function, the code does not check if the `lower_file` pointer is NULL before accessing its `f_op->mmap` member. This is problematic because if `ecryptfs_file_to_lower(file)` returns NULL, accessing the `f_op->mmap` member will result in a NULL pointer dereference. While it is not guaranteed that this will always happen, there is an opportunity for potential exploitation if an attacker could somehow manipulate the parameters to make this function operate on a NULL or maliciously crafted `lower_file`.
+
+RECOMMENDATIONS:
+Add a NULL check for the `lower_file` pointer before accessing its members. Here's the corrected code:
+
+```c
+return rc;
+}
+
+static int ecryptfs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct file *lower_file = ecryptfs_file_to_lower(file);
+	if (lower_file == NULL) {
+		return -EINVAL; // or another error code that makes sense in this context
+	}
+	/*
+	 * Don't allow mmap on top of file systems that don't support it
+	 * natively.  If FILESYSTEM_MAX_STACK_DEPTH > 2 or ecryptfs
+	 * allows recursive mounting, this will need to be extended.
+	 */
+	if (!lower_file->f_op->mmap)
+		return -ENODEV;
+	return generic_file_mmap(file, vma);
+}
+```
+
+ORIGINAL CODE:
+```c
+return rc;
+}
+
+static int ecryptfs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct file *lower_file = ecryptfs_file_to_lower(file);
+	/*
+	 * Don't allow mmap on top of file systems that don't support it
+	 * natively.  If FILESYSTEM_MAX_STACK_DEPTH > 2 or ecryptfs
+	 * allows recursive mounting, this will need to be extended.
+	 */
+	if (!lower_file->f_op->mmap)
+		return -ENODEV;
+	return generic_file_mmap(file, vma);
+}
+```
+```c
+/**
+ * ecryptfs_open
+ * @inode: inode specifying file to open
+ * @file: Structure to return filled in
+ *
+ * Opens the file specified by inode.
+ *
+
+/**
+ * ecryptfs_dir_open
+ * @inode: inode specifying file to open
+ * @file: Structure to return filled in
+ *
+ * Opens the file specified by inode.
+ *
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = ecryptfs_compat_ioctl,
+#endif
+	.mmap = ecryptfs_mmap,
+	.open = ecryptfs_open,
+	.flush = ecryptfs_flush,
+	.release = ecryptfs_release,
+	.fsync = ecryptfs_fsync,
+```

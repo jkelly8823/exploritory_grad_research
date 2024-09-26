@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to a potential buffer overflow vulnerability.
+
+EXPLANATION:
+The vulnerability arises from the allocation and memcpy operations. The `path_translated_len` variable is calculated based on the lengths of `pt` and `env_path_info`, but it does not account for the terminating null character that will be added to `path_translated` when it is initialized. This inconsistency in length may lead to a mismatch in buffer sizes. 
+
+Additionally, there is no validation of the lengths of `pt` and `env_path_info` to ensure they are within reasonable bounds for memory allocation. 
+
+In the memcpy operation, it is possible that the `ptlen` exceeds the length of `path_translated`, which is set as `ptlen + env_path_info ? strlen(env_path_info) : 0`. This may lead to overwriting beyond the allocated buffer.
+
+RECOMMENDATIONS:
+- Ensure that the length calculations for `path_translated_len` accurately reflect the buffer size, considering both the lengths of `pt` and `env_path_info`, as well as the terminating null character.
+- Validate the lengths of `pt` and `env_path_info` before using them in memory allocation operations.
+- Consider using safer string manipulation functions like `strcpy_s` or `snprintf` that prevent buffer overflow.
+- It is also worth noting that malloc can fail. You should always check for the validity of the allocated pointer.
+
+ORIGINAL CODE:
+)
+{
+    /* PATH_TRANSLATED = PATH_TRANSLATED - SCRIPT_NAME + PATH_INFO */
+    int ptlen = strlen(pt) - strlen(env_script_name);
+    int path_translated_len = ptlen + env_path_info ? strlen(env_path_info) : 0;
+    char *path_translated = NULL;
+
+    path_translated = (char *) emalloc(path_translated_len + 1);
+    memcpy(path_translated, pt, ptlen);

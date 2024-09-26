@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-16
+VULNERABILITY_DESCRIPTION:
+The code snippet is vulnerable to a DNS Cache Poisoning attack due to the use of gethostbyname, which is insecure and has been deprecated.
+
+EXPLANATION:
+The code uses gethostbyname to resolve the hostname. However, gethostbyname is a function that does not verify the authenticity of DNS responses and can be vulnerable to DNS Cache Poisoning attacks. This allows an attacker to inject false DNS responses into the cache, allowing them to redirect the victim to a malicious server. Additionally, gethostbyname uses the gethostent(3) function which is also insecure.
+
+Furthermore, the code does not handle errors properly. The RETURN_FALSE statement in the event of gethostbyname returning NULL may not provide sufficient information to the caller, and can lead to unexpected behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use the getaddrinfo function instead of gethostbyname. The getaddrinfo function is a more modern and secure way of performing DNS lookups, and it provides better error handling.
+
+Here is an example of how the code could be rewritten to use getaddrinfo:
+
+```c
+struct addrinfo hints;
+struct addrinfo* result;
+
+memset(&hints, 0, sizeof(hints));
+hints.ai_family = AF_INET;
+
+if (getaddrinfo(hostname, NULL, &hints, &result) == 0) {
+    if (result != NULL) {
+        // Process the result
+    } else {
+        // Handle error
+    }
+    freeaddrinfo(result);
+} else {
+    // Handle error
+}
+```
+
+Note that the example above assumes IPv4. If you also want to support IPv6, you should remove the line `hints.ai_family = AF_INET;`.
+
+ORIGINAL CODE:
+
+```c
+	return;
+}
+
+	if(hostname_len > MAXHOSTNAMELEN) {
+		/* name too long, protect from CVE-2015-0235 */
+		php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+		RETURN_STRINGL(hostname, hostname_len);
+	}
+
+	RETURN_STR(php_gethostbyname(hostname));
+}
+/* }}} */
+
+	return;
+}
+
+	if(hostname_len > MAXHOSTNAMELEN) {
+		/* name too long, protect from CVE-2015-0235 */
+		php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+		RETURN_FALSE;
+	}
+
+	hp = gethostbyname(hostname);
+	if (hp == NULL || hp->h_addr_list == NULL) {
+		RETURN_FALSE;
+	}
+```

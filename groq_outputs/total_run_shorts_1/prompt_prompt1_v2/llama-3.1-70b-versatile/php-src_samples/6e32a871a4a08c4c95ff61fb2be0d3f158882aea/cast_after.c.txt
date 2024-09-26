@@ -1,0 +1,82 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 32
+VULNERABILITY_DESCRIPTION:
+The stream_cookie_seeker function lacks validation for the value of 'whence' before using it in the php_stream_seek function call. This could potentially lead to a file descriptor overflow when 'whence' has an invalid value.
+
+EXPLANATION:
+Although this code does not directly contain an obvious vulnerability, the use of 'whence' without proper validation could lead to undefined behavior in the php_stream_seek function. It is crucial to ensure that 'whence' has a valid value to prevent unexpected behavior or potential security issues.
+
+The 'whence' value should be validated against standardized values, such as SEEK_SET, SEEK_CUR, and SEEK_END, to ensure that it is within the allowed range. However, this code does not perform such validation, which may result in undefined behavior when calling the php_stream_seek function.
+
+Furthermore, if the value of 'whence' is not validated and is provided by an untrusted source, it may allow an attacker to manipulate the seek operation and potentially access unauthorized areas of a file.
+
+RECOMMENDATIONS:
+To address this issue, we should add validation for the 'whence' value in the stream_cookie_seeker function before calling the php_stream_seek function. This can be achieved using a simple switch or if statement to verify that 'whence' has one of the allowed values.
+
+```c
+static PHP_FPOS_T stream_cookie_seeker(void *cookie, off_t position, int whence)
+{
+    TSRMLS_FETCH();
+
+    if (whence < 0 || whence >= 3) {
+        // Handle invalid 'whence' value
+        php_error_docref(NULL, E_WARNING, "Invalid 'whence' value");
+        return 0;
+    }
+
+    return (PHP_FPOS_T)php_stream_seek((php_stream *)cookie, position, whence);
+}
+```
+
+Alternatively, you can also use the following validation approach:
+```c
+static PHP_FPOS_T stream_cookie_seeker(void *cookie, off_t position, int whence)
+{
+    TSRMLS_FETCH();
+
+    switch (whence) {
+        case SEEK_SET:
+        case SEEK_CUR:
+        case SEEK_END:
+            break;
+        default:
+            php_error_docref(NULL, E_WARNING, "Invalid 'whence' value");
+            return 0;
+    }
+
+    return (PHP_FPOS_T)php_stream_seek((php_stream *)cookie, position, whence);
+}
+```
+
+ORIGINAL CODE:
+```c
+/* Under BSD, emulate fopencookie using funopen */
+#if defined(HAVE_FUNOPEN) && !defined(HAVE_FOPENCOOKIE)
+
+/* NetBSD 6.0+ uses off_t instead of fpos_t in funopen */
+# if defined(__NetBSD__) && (__NetBSD_Version__ > 600000000)
+#  define PHP_FPOS_T off_t
+# else
+#  define PHP_FPOS_T fpos_t
+# endif
+
+typedef struct {
+	int (*reader)(void *, char *, int);
+	int (*writer)(void *, const char *, int);
+	PHP_FPOS_T (*seeker)(void *, PHP_FPOS_T, int);
+	int (*closer)(void *);
+} COOKIE_IO_FUNCTIONS_T;
+
+FILE *fopencookie(void *cookie, const char *mode, COOKIE_IO_FUNCTIONS_T *funcs)
+	return php_stream_write((php_stream *)cookie, (char *)buffer, size);
+}
+
+static PHP_FPOS_T stream_cookie_seeker(void *cookie, off_t position, int whence)
+{
+	TSRMLS_FETCH();
+
+	return (PHP_FPOS_T)php_stream_seek((php_stream *)cookie, position, whence);
+}
+
+static int stream_cookie_closer(void *cookie)
+```

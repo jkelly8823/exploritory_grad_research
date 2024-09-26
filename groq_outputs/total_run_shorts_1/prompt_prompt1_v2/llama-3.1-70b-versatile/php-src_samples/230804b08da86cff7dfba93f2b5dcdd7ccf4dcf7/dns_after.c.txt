@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 77, 185
+VULNERABILITY_DESCRIPTION: 
+A potential buffer overflow vulnerability exists due to improper bounds checking in the `php_parserr` function.
+
+
+EXPLANATION:
+The `php_parserr` function is responsible for parsing DNS resource records and storing the parsed data in an array. However, there are several instances where the function uses `memcpy` and `snprintf` to copy and format strings without properly checking the bounds of the destination buffer. This can lead to a potential buffer overflow vulnerability.
+
+Specifically, the lines of code that are vulnerable are:
+
+- Line 77: `snprintf(name, sizeof(name), "%d.%d.%d.%d", cp[0], cp[1], cp[2], cp[3])`
+- Line 185: `memcpy(tp + l2 , cp + l1 + 1, n)`
+
+These lines of code do not properly check the bounds of the `name` and `tp + l2` buffers, which can lead to a buffer overflow vulnerability.
+
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, you should add proper bounds checking to ensure that the destination buffers are not overflowed.
+
+- For the `snprintf` call on line 77, you should use the `snprintf` function with a format string that indicates the maximum size of the buffer, like this: `snprintf(name, sizeof(name), "%d.%d.%d.%d", cp[0], cp[1], cp[2], cp[3])` should be replaced with `snprintf(name, sizeof(name), "%.3d.%.3d.%.3d.%.3d", cp[0], cp[1], cp[2], cp[3])`.
+- For the `memcpy` call on line 185, you should ensure that `l2 + n` does not exceed the size of the `tp` buffer.
+
+Additionally, you should consider using safer functions like `strcpy_s` or `memcpy_s` which provide built-in bounds checking.
+
+It's also recommended to use a static code analysis tool, such as splint or cppcheck, to identify and fix potential buffer overflow vulnerabilities in your code.
+
+ORIGINAL CODE: (the code has been truncated due to the excessive length)
+```c
+// ...truncated code...
+    case DNS_T_A:
+		CHECKCP(4);
+		add_assoc_string(*subarray, "type", "A", 1);
+		snprintf(name, sizeof(name), "%d.%d.%d.%d", cp[0], cp[1], cp[2], cp[3]);
+		add_assoc_string(*subarray, "ip", name, 1);
+		cp += dlen;
+		break;
+// ...
+    case DNS_T_TXT:
+		{
+			int l1 = 0, l2 = 0;
+			zval *entries = NULL;
+
+			add_assoc_string(*subarray, "type", "TXT", 1);
+			tp = emalloc(dlen + 1);
+			MAKE_STD_ZVAL(entries);
+			array_init(entries);
+			
+			while (l1 < dlen) {
+				n = cp[l1];
+				if ((l1 + n) >= dlen) {
+					// Invalid chunk length, truncate
+					n = dlen - (l1 + 1);
+				}
+				if (n) {
+					memcpy(tp + l2 , cp + l1 + 1, n);
+					add_next_index_stringl(entries, cp + l1 + 1, n, 1);
+				}
+				l1 = l1 + n + 1;
+				l2 = l2 + n;
+			}
+			tp[l2] = '\0';
+			cp += dlen;
+
+			add_assoc_stringl(*subarray, "txt", tp, l2, 0);
+			add_assoc_zval(*subarray, "entries", entries);
+        }
+        break;
+        // ...truncated code...
+```

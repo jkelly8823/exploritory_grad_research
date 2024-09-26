@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-15
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow when copying data from the `src` buffer to the `dest` buffer using `memcpy`. The loop condition only checks if `p` is within the range of `(src + charsize * (srclen - chunklen + 1))`, but it does not ensure that the destination buffer `dest` has enough space to hold the copied data.
+
+EXPLANATION:
+The loop iterates over the source buffer `src` and copies chunks of data to the destination buffer `dest` using `memcpy`. However, the loop condition only checks if the source pointer `p` is within the valid range, but it does not verify that the destination pointer `q` does not exceed the allocated size of the `dest` buffer. If the `dest` buffer is not large enough to hold the copied data, `memcpy` will write beyond the buffer's bounds, leading to a buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add a check to ensure that the destination pointer `q` does not exceed the allocated size of the `dest` buffer before calling `memcpy`. We can achieve this by adding a check for `q + chunklen * charsize` being within the bounds of the `dest` buffer.
+
+Additionally, we should consider using `safe_memcpy` or `memmove` instead of `memcpy` to prevent buffer overflows.
+
+We should also verify that `out_len` and `charsize` are not zero before calling `safe_emalloc` to avoid potential errors.
+
+ORIGINAL CODE:
+
+	int chunks; /* complete chunks! */
+	int restlen;
+	int charsize = sizeof(char);
+	int out_len;
+
+	if (str_type == IS_UNICODE) {
+		charsize = sizeof(UChar);
+	}
+	chunks = srclen / chunklen;
+	restlen = srclen - chunks * chunklen; /* srclen % chunklen */
+
+	out_len = (srclen + (chunks + 1) * endlen + 1);
+
+	if ((out_len > INT_MAX || out_len <= 0) || ((out_len * charsize) > INT_MAX || (out_len * charsize) <= 0)) {
+		return NULL;
+	}
+
+	dest = safe_emalloc(out_len, charsize, 0);
+
+	for (p = src, q = dest; p < (src + charsize * (srclen - chunklen + 1)); ) {
+		memcpy(q, p, chunklen * charsize);
+		q += chunklen * charsize;

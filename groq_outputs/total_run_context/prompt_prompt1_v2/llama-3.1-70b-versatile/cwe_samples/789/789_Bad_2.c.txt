@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The vulnerability present in this code is a buffer overflow. The function `proc_msg` uses a negative value for the `msg_len` parameter to calculate the size of the buffer, which will lead to a buffer overflow.
+
+EXPLANATION:
+The issue arises from the fact that the `proc_msg` function assumes `msg_len` will be less than or equal to the length of the string "preamble: ". However, the value passed to `proc_msg` is the number of characters before the colon in the string "preamble: message\n". This leads to `msg_len` being set to the value of `jnklen`, which is 9. When this value is subtracted from `pre_len` (which is 10), we get a buffer size of 1. However, `msg_len` is not the actual length of the message but the length of the preamble. 
+
+The original buffer declaration should consider both the message and the preamble instead of using a possibly smaller message length directly.
+
+RECOMMENDATIONS:
+1. Validate the `msg_len` before using it to calculate the buffer size in the `proc_msg` function. 
+2. Instead of declaring buffer `buf` of size `pre_len - msg_len`, declare a buffer that accommodates both the preamble and the actual message.
+3. Use safer functions such as `strncpy` instead of raw buffer copying.
+4. Validate that strings in `proc_msg` functions have the correct preamble length instead of assuming values that can trigger this vulnerability.
+
+ORIGINAL CODE:
+
+
+		 int proc_msg(char *s, int msg_len)
+		 {
+                  
+		    // Note space at the end of the string - assume all strings have preamble with space
+		    int pre_len = sizeof("preamble: ");
+		    char buf[pre_len - msg_len];
+		    ... Do processing here if we get this far
+		  
+		  }
+		  char *s = "preamble: message\n";
+		  char *sl = strchr(s, ':');        // Number of characters up to ':' (not including space)
+		  int jnklen = sl == NULL ? 0 : sl - s;    // If undefined pointer, use zero length
+		  int ret_val = proc_msg ("s",  jnklen);    // Violate assumption of preamble length, end up with negative value, blow out stack

@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-14, 17
+VULNERABILITY_DESCRIPTION:
+Unvalidated and Unchecked Return Address Stack Frame.
+EXPLANATION:
+The given code snippet is assembly code that handles the kvm_call_hyp function. In the code snippet, it can be observed that the return address is not validated and checked on lines 12-14 before using it for branching operation on line 12 via "blr lr" instruction. Furthermore, in lines 17, return address is directly loaded into the lr register without validating it.
+
+This can potentially allow an attacker to corrupt the stack and execute malicious code if an error occurs while calling a function. Without validation of the return address, it can point to any location in the memory leading to the execution of arbitrary code by the attacker.
+
+This is often exploited through stack-smashing attacks, where an attacker overwrites the stack frame with a malicious return address leading the program to execute attacker-controlled code.
+
+RECOMMENDATIONS:
+Before using the return address in the blr instruction, validate that it points to a location within the current stack frame. Implementing stack smashing protection is recommended to prevent this vulnerability. However, in an assembly-level language, implementing such protection can be complex.
+
+One possible solution is to push a canary value onto the stack at the beginning of the function and then before returning, verify that this value is still on the stack. If the value is different, it indicates that the stack has been corrupted, and the function should terminate.
+
+ORIGINAL CODE:
+
+
+    .align  2
+
+/*
+ * u64 kvm_call_hyp(void *hypfn, ...);
+ *
+ * This is not really a variadic function in the classic C-way and care must
+ * be taken when calling this to ensure parameters are passed in registers
+ * only, since the stack will change between the caller and the callee.
+ *
+ * Call the function with the first argument containing a pointer to the
+ * function you wish to call in Hyp mode, and subsequent arguments will be
+ * passed as x0, x1, and x2 (a maximum of 3 arguments in addition to the
+ * function pointer can be passed).  The function being called must be mapped
+ * in Hyp mode (see init_hyp_mode in arch/arm/kvm/arm.c).  Return values are
+ * passed in r0 and r1.
+ *
+ * A function pointer with a value of 0 has a special meaning, and is
+ * used to implement __hyp_get_vectors in the same way as in
+ * arch/arm64/kernel/hyp_stub.S.
+ */
+ENTRY(kvm_call_hyp)
+    hvc  #0
+    ret
+ENDPROC(kvm_call_hyp)
+    pop x2, x3
+    pop x0, x1
+
+    /* Check for __hyp_get_vectors */
+    cbnz x0, 1f
+    mrs x0, vbar_el2
+    b  2f
+
+1: push lr, xzr
+
+    /*
+     * Compute the function address in EL2, and shuffle the parameters.
+     */
+    blr lr
+
+    pop lr, xzr
+2:  eret
+
+el1_trap:
+    /*
+     * x1: ESR

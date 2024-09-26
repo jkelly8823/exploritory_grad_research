@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+The code appears to have an unvalidated integer multiplication vulnerability.
+
+EXPLANATION:
+The code multiplies the value `buffer[IDX_OPTIONS_MAX_SESSION_MEMORY]` by `1000000` without validating the value. This can lead to an integer overflow if the value is large enough, potentially causing the program to crash or behave unexpectedly.
+
+Moreover, the code does not check if the multiplication results in a valid value before passing it to `set_max_session_memory`. This could potentially lead to denial-of-service (DoS) attacks or other issues.
+
+Additionally, the `static_cast` in the next if statement does not validate the value, and the `nghttp2_option_set_max_settings` function may also be vulnerable to integer overflows.
+
+RECOMMENDATIONS:
+Validate the value of `buffer[IDX_OPTIONS_MAX_SESSION_MEMORY]` before the multiplication to ensure it is within a valid range. Also, consider using a safer type for handling multiplication, such as `uint64_t`, and validate the result of the multiplication.
+
+```cpp
+if (flags & (1 << IDX_OPTIONS_MAX_SESSION_MEMORY)) {
+  uint64_t max_session_memory = static_cast<uint64_t>(buffer[IDX_OPTIONS_MAX_SESSION_MEMORY]) * 1000000;
+  if (max_session_memory < 1 * 1000000 || max_session_memory > SOME_REASONABLE_UPPER_LIMIT) {
+    // handle error
+  } else {
+    set_max_session_memory(max_session_memory);
+  }
+}
+```
+
+ORIGINAL CODE:
+
+```cpp
+//            terms of MB increments (i.e. the value 1 == 1 MB)
+if (flags & (1 << IDX_OPTIONS_MAX_SESSION_MEMORY))
+  set_max_session_memory(buffer[IDX_OPTIONS_MAX_SESSION_MEMORY] * 1000000);
+
+if (flags & (1 << IDX_OPTIONS_MAX_SETTINGS)) {
+  nghttp2_option_set_max_settings(
+      option,
+      static_cast<size_t>(buffer[IDX_OPTIONS_MAX_SETTINGS]));
+}
+}
+
+#define GRABSETTING(entries, count, name)                                     \
+  do {                                                                          \
+```

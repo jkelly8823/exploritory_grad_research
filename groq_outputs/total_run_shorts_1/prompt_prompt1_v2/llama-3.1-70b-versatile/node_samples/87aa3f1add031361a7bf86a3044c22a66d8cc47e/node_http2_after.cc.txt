@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Denial of Service (DoS) due to potentially unlimited increment of `invalid_frame_count_` without synchronization control.
+
+EXPLANATION:
+The provided code appears to handle cases related to HTTP/2 frames. Specifically, lines 5-7 contain a potential vulnerability when dealing with a sequence of zero-length frames without the `END_STREAM` flag set. The code increments `invalid_frame_count_` and checks against a predefined threshold `js_fields_->max_invalid_frames`. However, there is no synchronization mechanism applied to the increment operation. This might result in incorrect values of `invalid_frame_count_` when executed in a multi-threaded or concurrent environment, potentially causing unnecessary denial of service by prematurely rejecting frames.
+
+RECOMMENDATIONS:
+To fix this issue, introduce atomic operations to increment `invalid_frame_count_`. However, without additional code context, it's difficult to provide precise recommendations. Alternatively, add synchronization locks (e.g., mutex) to ensure that `invalid_frame_count_` is modified only by one thread at a time. Considering the large number of existing synchronization mechanisms available across programming languages, providing the code in a specific language (like C, C++, or Rust) would be necessary for a definitive solution.
+
+ORIGINAL CODE:
+```cpp
+if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+    stream->EmitRead(UV_EOF);
+} else if (frame->hd.length == 0) {
+    if (invalid_frame_count_++ > js_fields_->max_invalid_frames) {
+        Debug(this, "rejecting empty-frame-without-END_STREAM flood\n");
+        // Consider a flood of 0-length frames without END_STREAM an error.
+        return 1;
+    }
+}
+return 0;
+```

@@ -1,0 +1,18 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 4
+VULNERABILITY_DESCRIPTION:
+Use-After-Free (UAF) vulnerability, potentially leading to memory corruption and arbitrary code execution.
+EXPLANATION:
+The code frees the memory allocated for `altsvc->origin` using `nghttp2_mem_free()`. However, the variable `altsvc` is a pointer to the freed memory, and its contents, including the `origin` and `field_value` members, should not be accessed after freeing. The comment indicates that `altsvc->origin` is used as a buffer for `altsvc->field_value`, which means that accessing `altsvc->field_value` after freeing `altsvc->origin` would lead to undefined behavior. Although the code snippet does not show any accesses to `altsvc->field_value` after freeing, the presence of this comment suggests that such accesses may occur in other parts of the code.
+RECOMMENDATIONS:
+To fix this vulnerability, the code should not access `altsvc->field_value` or `altsvc` after freeing the memory. If the `altsvc` structure needs to be modified or reused, its members should be reinitialized or reallocated after freeing. Additionally, it's recommended to set `altsvc` to `NULL` after freeing to prevent accidental accesses to the freed memory. It is also essential to ensure that other code paths do not access `altsvc` or its members after freeing.
+
+ORIGINAL CODE:
+```
+nghttp2_ext_altsvc *altsvc;
+
+altsvc = frame->payload;
+/* We use the same buffer for altsvc->origin and
+   altsvc->field_value. */
+nghttp2_mem_free(mem, altsvc->origin);
+```

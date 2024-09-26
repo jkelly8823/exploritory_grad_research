@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 57-60
+VULNERABILITY_DESCRIPTION:
+A race condition vulnerability exists in the `vgic_irq_map_search` function. This function does not acquire the `irq_phys_map_lock` when searching for an existing mapping, potentially allowing a concurrent modification of the mapping list, leading to inconsistent results or even crashes.
+
+EXPLANATION:
+In the `kvm_vgic_map_phys_irq` function, the `spin_lock` is acquired before creating or searching for an existing mapping. However, in the `vgic_irq_map_search` function, which is called by `kvm_vgic_map_phys_irq`, the `spin_lock` is not acquired. This means that while `kvm_vgic_map_phys_irq` holds the lock, another thread could concurrently modify the mapping list, potentially leading to inconsistent results or even crashes.
+
+RECOMMENDATIONS:
+Acquire the `irq_phys_map_lock` in the `vgic_irq_map_search` function to prevent concurrent modifications of the mapping list. This can be achieved by adding `spin_lock` and `spin_unlock` calls around the mapping search code.
+
+MODIFIED CODE:
+```c
+static struct irq_phys_map *vgic_irq_map_search(struct kvm_vcpu *vcpu,
+						int virt_irq)
+{
+	struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
+
+	spin_lock(&dist->irq_phys_map_lock);
+
+	struct list_head *root = vgic_get_irq_phys_map_list(vcpu, virt_irq);
+	struct irq_phys_map_entry *entry;
+
+	list_for_each_entry(entry, root, entry) {
+		if (entry->map.virt_irq == virt_irq) {
+			spin_unlock(&dist->irq_phys_map_lock);
+			return &entry->map;
+		}
+	}
+
+	spin_unlock(&dist->irq_phys_map_lock);
+	return NULL;
+}
+```
+
+ORIGINAL CODE:
+```c
+static struct irq_phys_map *vgic_irq_map_search(struct kvm_vcpu *vcpu,
+						int virt_irq)
+{
+	struct list_head *root = vgic_get_irq_phys_map_list(vcpu, virt_irq);
+	struct irq_phys_map_entry *entry;
+
+	list_for_each_entry(entry, root, entry) {
+		if (entry->map.virt_irq == virt_irq) {
+			return &entry->map;
+		}
+	}
+
+	return NULL;
+}
+```

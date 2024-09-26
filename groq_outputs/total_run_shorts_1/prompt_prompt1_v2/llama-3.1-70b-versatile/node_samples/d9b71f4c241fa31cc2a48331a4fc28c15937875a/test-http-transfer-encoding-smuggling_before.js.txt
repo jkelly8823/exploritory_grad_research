@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION:
+Potentially vulnerable to DNS rebinding attacks due to a lack of hostname validation in the net server.
+EXPLANATION:
+The code snippet uses `localhost` as the hostname for the net client. This could potentially be vulnerable to DNS rebinding attacks if an attacker is able to hijack the DNS resolution of `localhost`. This might not be feasible in most cases, but it could be exploited in certain edge cases such as: using a device that uses the same hostname (`localhost`) on a public network; or, if the DNS resolver on the host is misconfigured or vulnerable to DNS spoofing. 
+
+
+However, the far more pressing problem here is that it would appear that the client socket doesn't explicitly query for the port before sending data over the socket. This means that it does not properly validate that the socket was successfully bound to a free port, allowing the possibility for arbitrary hosts on the network to bind to the port that this host ends up looking for. 
+
+
+Also note the following line might produce failures in certain environments as common.mustCall is called on the send function with only one argument despite sending requiring two.
+```javascript
+send(common.mustCall(() => {
+```
+
+RECOMMENDATIONS:
+The hostname and port should be validated properly to prevent DNS rebinding attacks. Instead of using a `localhost` string, the code should use the resolved IP address of the `localhost`. However, this does not deal with either of the above concerns as they would result from calls made within the execution environment. To deal with that, `common.mustCall` should be called with two arguments in the `send` function. Also make sure that, before sending the data, you're waiting for the 'connect' event (if not using an arrow function in the connect). For DNS rebinding protection ensure that serverAddress().port returns and that the 'net.connect' is properly guarded with error checking and similar to prevent failures before it resumes on error.
+
+
+ORIGINAL CODE:
+```javascript
+'use strict';
+
+const common = require('../common');
+
+const http = require('http');
+const net = require('net');
+
+  '',
+].join('\r\n');
+
+// Verify that the server is called only once even with a smuggled request.
+
+const server = http.createServer(common.mustCall((req, res) => {
+  res.end();
+}, 1));
+
+function send(next) {
+  const client = net.connect(server.address().port, 'localhost');
+  client.setEncoding('utf8');
+  client.on('error', common.mustNotCall());
+  client.on('end', next);
+  client.write(msg);
+  client.resume();
+}
+
+server.listen(0, common.mustSucceed(() => {
+  send(common.mustCall(() => {
+    server.close();
+  }));
+}));
+```

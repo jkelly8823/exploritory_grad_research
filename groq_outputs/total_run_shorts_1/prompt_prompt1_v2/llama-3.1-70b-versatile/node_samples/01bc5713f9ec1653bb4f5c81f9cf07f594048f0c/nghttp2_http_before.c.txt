@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-4
+VULNERABILITY_DESCRIPTION:
+ Integer Overflow Vulnerability
+
+EXPLANATION:
+This code snippet appears to be parsing an integer from a network packet or HTTP request. The potential issue lies in the line where `stream->status_code` is assigned the result of `parse_uint`. If the input to `parse_uint` is excessively large, it may overflow when cast to an `int16_t`. This could potentially lead to incorrect or unintended behavior.
+
+Additionally, the subsequent check for `stream->status_code == -1` may not catch all cases of erroneous input. This is because `parse_uint` may return a value that, when cast to an `int16_t`, overflows and results in a valid-looking but incorrect status code.
+
+RECOMMENDATIONS:
+To mitigate this issue, it is recommended to validate the input to `parse_uint` before casting it to an `int16_t`. This can be achieved by checking if the result of `parse_uint` is within the range of valid HTTP status codes (100-599). Additionally, consider using a safer integer parsing function that checks for overflow and underflow.
+
+```c
+uint32_t parsed_status_code = parse_uint(nv->value->base, nv->value->len);
+if (parsed_status_code > 599 || parsed_status_code < 100) {
+    return NGHTTP2_ERR_HTTP_HEADER;
+}
+stream->status_code = (int16_t)parsed_status_code;
+```
+
+ORIGINAL CODE:
+
+```c
+return NGHTTP2_ERR_HTTP_HEADER;
+}
+stream->status_code = (int16_t)parse_uint(nv->value->base, nv->value->len);
+if (stream->status_code == -1) {
+  return NGHTTP2_ERR_HTTP_HEADER;
+}
+break;
+```

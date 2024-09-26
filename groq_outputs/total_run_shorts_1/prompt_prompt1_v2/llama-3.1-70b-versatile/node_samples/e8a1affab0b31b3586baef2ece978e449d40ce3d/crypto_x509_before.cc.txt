@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-5
+VULNERABILITY_DESCRIPTION:
+Insecure indirect use of X509_get_pubkey.
+
+EXPLANATION:
+The provided code snippet uses the `X509_get_pubkey` function from OpenSSL to extract the public key from an X509 certificate. This function returns a pointer to an `EVP_PKEY` struct without incrementing its internal reference count. This is an indirect use and is considered insecure as there is no error checking after calling `X509_get_pubkey`.
+
+However, a more direct vulnerability exists. This code can lead to a memory corruption due to the X509_get_pubkey function being able to return a NULL pointer, in cases where certificate is corrupted, etc. But there's no checking if the returned pkey is NULL before usage in EVPKeyPointer and then in ManagedEVPPKey.
+
+OpenSSL documentation recommends against using this function directly. Instead, applications should use the PEM_read_bio_X509_AUX or the OpenSSL public key functions.
+
+RECOMMENDATIONS:
+- Before using the returned `EVP_PKEY` struct, ensure that it is not NULL and has a valid reference count.
+- Use `X509_get0_pubkey` instead to avoid incrementing the reference count manually.
+- Instead of directly calling `X509_get_pubkey`, consider extracting public key from a certificate using public key functions.
+
+ORIGINAL CODE:
+
+  X509Certificate* cert;
+  ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());
+
+  EVPKeyPointer pkey(X509_get_pubkey(cert->get()));
+  ManagedEVPPKey epkey(std::move(pkey));
+  std::shared_ptr<KeyObjectData> key_data =
+      KeyObjectData::CreateAsymmetric(kKeyTypePublic, epkey);

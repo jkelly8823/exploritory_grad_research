@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 47-49
+VULNERABILITY_DESCRIPTION:
+Integer overflow vulnerability in memory allocation.
+
+EXPLANATION:
+In the `get_info` function, the variable `size` is checked against the expression `((ps->next_free + 1) * store->chunk_size)`. However, the multiplication operation can potentially overflow if `ps->next_free` is large and `store->chunk_size` is also large. This could lead to a situation where the check incorrectly passes, potentially allowing the allocation of more memory than is actually available.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should perform the multiplication operation using a type that can handle larger values, and it should also check for potential overflow before performing the multiplication. Here is a possible fix:
+
+```c
+sector_t required_size = ps->next_free + 1;
+sector_t chunk_size = store->chunk_size;
+
+if (sector_div_overflow(required_size, chunk_size, &required_size) != 0) {
+    // Handle the overflow error
+} else if (size < required_size) {
+    // Move onto the next free pending, making sure to take
+    // into account the location of the metadata chunks.
+    ps->next_free++;
+    skip_metadata(ps);
+
+    atomic_inc(&ps->pending_count);
+}
+```
+
+ORIGINAL CODE:
+```c
+return NUM_SNAPSHOT_HDR_CHUNKS + ((ps->exceptions_per_area + 1) * area);
+}
+
+static void skip_metadata(struct pstore *ps)
+{
+uint32_t stride = ps->exceptions_per_area + 1;
+chunk_t next_free = ps->next_free;
+if (sector_div(next_free, stride) == NUM_SNAPSHOT_HDR_CHUNKS)
+ps->next_free++;
+}
+
+/*
+* Read or write a metadata area.  Remembering to skip the first
+* chunk which holds the header.
+*/
+
+ps->current_area--;
+
+skip_metadata(ps);
+
+return 0;
+}
+
+static struct pstore *get_info(struct dm_exception_store *store)
+struct dm_exception *e)
+{
+struct pstore *ps = get_info(store);
+sector_t size = get_dev_size(dm_snap_cow(store->snap)->bdev);
+
+/* Is there enough room ? */
+if (size < ((ps->next_free + 1) * store->chunk_size))
+* Move onto the next free pending, making sure to take
+* into account the location of the metadata chunks.
+*/
+ps->next_free++;
+skip_metadata(ps);
+
+atomic_inc(&ps->pending_count);
+return 0;
+}
+```
+
+Note that there might be other security concerns in this code that are not related to integer overflows, but this is the most obvious one in this snippet.

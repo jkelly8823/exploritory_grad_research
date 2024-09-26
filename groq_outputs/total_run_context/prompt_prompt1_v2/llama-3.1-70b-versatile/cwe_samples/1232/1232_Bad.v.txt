@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-11
+VULNERABILITY_DESCRIPTION:
+Unbounded Resource Use (in this case, memory aliasing) - The code snippet is attempting to read and write to a memory location (`reglk_mem`) within a 'for' loop. However, there is no validation or checks within the loop to prevent overwriting the memory beyond its intended size.
+ 
+EXPLANATION:
+A 'for' loop is being used to clear the `reglk_mem` memory location by iteratively writing 'h0 to each location for a total of 6 iterations. However, there is a risk that `reglk_mem` exceeds the initial allocation size which is not checked in the given code. This could result in attempting to write outside of the allocated memory block.
+
+Although it's most likely there's 'for-ever' loop that gets run from 0-5 which is inside the bounds and also uses the 6 as the for-loop condition, and j<6 prevents out of bounds but if this isn't the case everywhere there's an issue so included the possible error 
+
+RECOMMENDATIONS:
+While this appears to be safe within this specific use-case, to validate this will be addressed the following lines have been modified:
+ 
+  1. Rather than assuming the loop condition is always met check if this will still occur elsewhere, so here change the for loop parameters.
+
+```verilog
+              for (j=0; j < $size(reglk_mem) && j<6; j=j+1) begin
+```
+
+ORIGINAL CODE:
+
+
+            module reglk_wrapper #(
+            ...
+            
+              always @(posedge clk_i)
+              
+                begin
+                
+                  if(~(rst_ni && ~jtag_unlock && ~rst_9))
+                  
+                    begin
+                    
+                      for (j=0; j < 6; j=j+1) begin
+                      
+                        reglk_mem[j] <= 'h0;
+                      
+                      end
+                    
+                    end
+                  
+                  ...
+                
+              
+            
+          

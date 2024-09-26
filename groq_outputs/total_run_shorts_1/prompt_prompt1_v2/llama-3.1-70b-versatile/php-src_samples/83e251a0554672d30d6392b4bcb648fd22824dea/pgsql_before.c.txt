@@ -1,0 +1,71 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 24-27, 30-33, 38-41
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to memory leaks due to the improper use of dynamically allocated memory. The strndup and PQescapeIdentifier functions allocate memory, but there is no corresponding free call in the event of an error or after the function has finished using the allocated memory.
+
+EXPLANATION:
+The code allocates memory using strndup and PQescapeIdentifier, but there is no guarantee that the memory is freed. This could lead to a memory leak if the function does not properly handle the allocated memory or if an error occurs before the memory can be freed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should ensure that all dynamically allocated memory is freed after use. You should add free calls after the function has finished using the allocated memory. It's also a good practice to check if the allocation was successful and handle the case where the allocation fails.
+
+Here's an example of how the fixed code could look like:
+```c
+escaped = strndup(field, field_len);
+if (escaped == NULL) {
+    // Handle the case where memory allocation failed
+}
+
+// ...
+
+free(escaped);
+```
+You should add similar checks and free calls for all dynamically allocated memory.
+
+ORIGINAL CODE:
+```c
+field_escaped[j] = '\0';
+return field_escaped;
+}
+#endif
+
+/* {{{ PHP_INI
+ */
+PHP_INI_BEGIN()
+STD_PHP_INI_BOOLEAN( "pgsql.allow_persistent",      "1",  PHP_INI_SYSTEM, OnUpdateBool, allow_persistent,      zend_pgsql_globals, pgsql_globals)
+char *from = NULL, *to = NULL, *tmp = NULL;
+zval *pgsql_link = NULL;
+PGconn *pgsql;
+int to_len;
+int from_len;
+int id = -1;
+
+switch (ZEND_NUM_ARGS()) {
+    /* If field is NULL and HAS DEFAULT, should be skipped */
+if (!skip_field) {
+    char *escaped;
+    size_t new_len, field_len = strlen(field);
+
+if (_php_pgsql_detect_identifier_escape(field, field_len) == SUCCESS) {
+    escaped = strndup(field, field_len);
+} else {
+#if HAVE_PQESCAPELITERAL
+    escaped = PQescapeIdentifier(pg_link, field, field_len);
+#else
+token = php_strtok_r(table_copy, ".", &tmp);
+len = strlen(token);
+if (_php_pgsql_detect_identifier_escape(token, len) == SUCCESS) {
+    escaped = strndup(token, len);
+} else {
+#if HAVE_PQESCAPELITERAL
+    escaped = PQescapeIdentifier(pg_link, token, len);
+#else
+len = strlen(tmp);
+    /* "schema"."table" format */
+if (_php_pgsql_detect_identifier_escape(tmp, len) == SUCCESS) {
+    escaped = strndup(tmp, len);
+} else {
+#if HAVE_PQESCAPELITERAL
+    escaped = PQescapeIdentifier(pg_link, tmp, len);
+#else
+```

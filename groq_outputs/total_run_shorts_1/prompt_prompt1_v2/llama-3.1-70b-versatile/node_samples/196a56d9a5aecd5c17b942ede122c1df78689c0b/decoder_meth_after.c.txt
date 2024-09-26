@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8, 19-22
+VULNERABILITY_DESCRIPTION:
+Dereferencing a NULL pointer may cause this program to crash or have undefined behavior. The variable 'store' is not checked for NULL before it's used, potentially resulting in a crash or security vulnerability.
+EXPLANATION:
+The `store` variable is not thoroughly validated for NULL before it's used in multiple locations. In the `reserve_decoder_store` and `unreserve_decoder_store` functions, the `store` variable is checked for NULL and, if NULL, another value is assigned to it. However, there is a logical issue in this handling which allows a NULL 'store' to cause the functions to return 0 without any error handling or warning. Similarly, in the `get_decoder_from_store` function, the `store` variable is dereferenced and used in multiple calls without thorough NULL checks, which could also result in a crash.
+
+Additionally, this could potentially result in a denial of service (DoS) or undefined behavior because these functions handle memory allocation and deallocation, as well as locking/unlocking of stores.
+RECOMMENDATIONS:
+Valid NULL checks should be added in the functions to prevent crashes and ensure the stability of the application. The recommendations are as follows:
+
+1.  In `reserve_decoder_store` and `unreserve_decoder_store`, if `store` is NULL and `store` is reassigned from `get_decoder_store`, the functions return immediately if it's still NULL. However, no error handling or information is logged, so it should ideally report the failure to allocate memory.
+2.  In the `get_decoder_from_store` function, add more robust NULL checks for `store` before calling any function that uses it.
+
+    A safe check could be implemented by explicitely checking if the store is NULL, like this:
+
+    ```c
+if(store == NULL){
+    // Handle error, log information, and return accordingly
+}
+```
+ORIGINAL CODE:
+
+```c
+static int reserve_decoder_store(void *store, void *data)
+{
+    struct decoder_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_decoder_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_lock_store(store);
+}
+
+static int unreserve_decoder_store(void *store, void *data)
+{
+    struct decoder_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_decoder_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_unlock_store(store);
+}
+
+/* Get decoder methods from a store, or put one in */
+static void *get_decoder_from_store(void *store, const OSSL_PROVIDER **prov,
+                                    void *data)
+{
+        || !ossl_method_store_cache_get(store, NULL, id, propq, &method)) {
+        OSSL_METHOD_CONSTRUCT_METHOD mcm = {
+            get_tmp_decoder_store,
+            reserve_decoder_store,
+            unreserve_decoder_store,
+            get_decoder_from_store,
+            put_decoder_in_store,
+            construct_decoder,
+            destruct_decoder
+```

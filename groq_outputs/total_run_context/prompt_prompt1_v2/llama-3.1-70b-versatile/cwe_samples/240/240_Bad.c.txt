@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6, 11-12
+VULNERABILITY_DESCRIPTION: 
+Buffer Overflow and Out-of-Bounds Array Access Vulnerability
+
+EXPLANATION:
+This code snippet presents two potential vulnerabilities. The first vulnerability is a buffer overflow risk due to ignoring the possibility that the buffer size exceeds the BUFFER_SIZE. This can lead to undefined behavior when writing to the buffer. The second vulnerability is an out-of-bounds array access risk when copying the message body into the 'message' structure. The code does not check if the msg->msgLength exceeds the MESSAGE_SIZE, which can also lead to undefined behavior.
+
+Additionally, the variable index is not validated against the MESSAGE_SIZE when populating the 'message' structure. This can lead to a buffer overflow vulnerability if msg->msgLength exceeds MESSAGE_SIZE.
+
+RECOMMENDATIONS:
+- Add validation to prevent buffer overflow by checking the received message size and comparing it against the BUFFER_SIZE before processing the message.
+- Add bounds checking when copying the message body into the 'message' structure to ensure index does not exceed MESSAGE_SIZE - 1.
+
+```c
+// Recommendations implemented below
+int processMessageFromSocket(int socket) {
+    int success;
+    char buffer[BUFFER_SIZE]; char message[MESSAGE_SIZE];
+    
+    // get message from socket and store into buffer
+    int bytesRead = getMessage(socket, buffer, BUFFER_SIZE);
+    if (bytesRead <= 0) return 0;
+
+    // Validate buffer size to prevent overflow risk
+    if (bytesRead > BUFFER_SIZE) return 0; // or throw error
+
+    // place contents of the buffer into message structure
+    ExMessage *msg = recastBuffer(buffer);
+    
+    // Add bounds checking to prevent out-of-bounds array access risk
+    int index;
+    for (index = 0; index < msg->msgLength && index < MESSAGE_SIZE - 1; index++) {
+        message[index] = msg->msgBody[index];
+    }
+    message[index] = '\0'; // Ensure null-termination
+    
+    // process message
+    success = processMessage(message);
+    return success;
+}
+
+ORIGINAL CODE:
+                  int processMessageFromSocket(int socket) {
+                        int success;
+                           char buffer[BUFFER_SIZE];char message[MESSAGE_SIZE];
+                           
+                           // get message from socket and store into buffer
+                           
+                           
+                           //Ignoring possibliity that buffer > BUFFER_SIZE
+                           if (getMessage(socket, buffer, BUFFER_SIZE) > 0) {
+                              
+                                 
+                                 // place contents of the buffer into message structure
+                                 ExMessage *msg = recastBuffer(buffer);
+                                 
+                                 // copy message body into string for processing
+                                 int index;for (index = 0; index < msg->msgLength; index++) {message[index] = msg->msgBody[index];}message[index] = '\0';
+                                 
+                                 // process message
+                                 success = processMessage(message);
+                           }return success;
+                     }
+```

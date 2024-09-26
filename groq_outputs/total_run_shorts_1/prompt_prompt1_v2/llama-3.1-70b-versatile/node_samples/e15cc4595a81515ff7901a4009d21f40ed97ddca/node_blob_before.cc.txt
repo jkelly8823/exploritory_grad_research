@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-7
+VULNERABILITY_DESCRIPTION:
+Potential null-pointer dereference and error-handling vulnerability.
+
+EXPLANATION:
+The code creates a new object of type `DataQueue::CreateFdEntry` using `args[0]`. However, it checks the result immediately after, and returns with `THROW_ERR_INVALID_ARG_VALUE` on failure. 
+
+This vulnerability occurs because it throws `THROW_ERR_INVALID_ARG_VALUE` on a `nullptr` result, but returns from the function without cleaning up. This leaves the function context in a potentially corrupted state. It's also possible that `env` could be `nullptr` if `Environment::GetCurrent(args)` fails.
+
+Furthermore, it's unclear whether `THROW_ERR_INVALID_ARG_VALUE` cleans up after itself and protects against further dereferences, or if it will allow the current function to continue executing with potentially compromised state.
+
+RECOMMENDATIONS:
+Consider using smart pointers for `entry` to ensure cleanup regardless of function return. Before using `env`, it's recommended to verify that `env` is not `nullptr` before accessing it. Also, ensure that `THROW_ERR_INVALID_ARG_VALUE` cleans up the function state properly before returning. Alternatively, consider using a safer way to signal an error, such as `THROW_ERR_INVALID_ARG_VALUE(env, ...)`, then immediately returning. It could be modified to handle `env` checks internally.
+
+ORIGINAL CODE:
+```cpp
+#include "node_errors.h"
+#include "node_external_reference.h"
+#include "node_file.h"
+#include "util.h"
+#include "v8.h"
+
+#include <algorithm>
+
+void BlobFromFilePath(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args);
+  auto entry = DataQueue::CreateFdEntry(env, args[0]);
+  if (entry == nullptr) {
+    return THROW_ERR_INVALID_ARG_VALUE(env, "Unabled to open file as blob");
+  }
+```

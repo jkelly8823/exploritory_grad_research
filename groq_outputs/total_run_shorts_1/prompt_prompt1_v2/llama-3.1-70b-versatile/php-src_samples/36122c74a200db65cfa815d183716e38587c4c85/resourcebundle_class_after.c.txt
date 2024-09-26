@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None specific, however potential issue usage on 'mekey' string.
+VULNERABILITY_DESCRIPTION:
+Potential invalid free operation and/or read beyond allocated memory if 'mekey' is not null-terminated or is an untrusted string. A lack of validation on the string 'mekey' could lead to a use-after-free or read beyond allocated memory if 'mekey' is freed elsewhere in the code.
+
+EXPLANATION:
+The code uses the 'mekey' variable without validating it first. The 'mekey' is assigned the value of 'Z_STRVAL_P(offset)' when 'offset' is a string, but it's not checked for null-termination or validation of its contents. When 'mekey' is used later in the 'ures_getByKey' function, if 'mekey' points to an untrusted or freed string, it can lead to undefined behavior, including a potential read beyond allocated memory or use-after-free.
+
+Additionally, there seems to be a security risk with the potential null pointer dereference on 'rb' and 'ures_getByKey' might throw an exception if 'mekey' or 'rb' is null.
+
+RECOMMENDATIONS:
+- Check if 'Z_STRVAL_P(offset)' returns a null pointer and if 'mekey' is null-terminated.
+- Validate the contents of 'mekey' before passing it to 'ures_getByKey'.
+- Validate the non-nullity of 'rb' and its internal fields 'me' and 'child'.
+- Implement proper memory management to ensure correct deallocation of resources.
+
+ORIGINAL CODE:
+```c
+{
+	int32_t     meindex = 0;
+	char *      mekey = NULL;
+    zend_bool    is_numeric = 0;
+	char         *pbuf;
+	ResourceBundle_object *rb;
+
+		rb->child = ures_getByIndex( rb->me, meindex, rb->child, &INTL_DATA_ERROR_CODE(rb) );
+	} else if(Z_TYPE_P(offset) == IS_STRING) {
+		mekey = Z_STRVAL_P(offset);
+		rb->child = ures_getByKey(rb->me, mekey, rb->child, &INTL_DATA_ERROR_CODE(rb) );
+	} else {
+		intl_errors_set(INTL_DATA_ERROR_P(rb), U_ILLEGAL_ARGUMENT_ERROR,	
+			"resourcebundle_get: index should be integer or string", 0 TSRMLS_CC);
+```

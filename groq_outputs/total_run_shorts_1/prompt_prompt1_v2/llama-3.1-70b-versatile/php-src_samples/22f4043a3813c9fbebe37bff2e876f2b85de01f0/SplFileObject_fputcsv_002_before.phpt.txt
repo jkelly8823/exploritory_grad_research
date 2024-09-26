@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10 (line $fo->fputcsv($data);)
+VULNERABILITY_DESCRIPTION:
+Potential array to string conversion vulnerability when calling the fputcsv function.
+
+EXPLANATION:
+The fputcsv function expects a one-dimensional array as its argument. However, the $data array passed to this function is not checked for multidimensionality before being used. In this case, the $data array contains another array as one of its elements. This could potentially lead to unexpected behavior when the function attempts to write the array to the CSV file, as the inner array is not properly formatted. The Notice error in the provided expectations also suggests that an array to string conversion is taking place.
+
+RECOMMENDATIONS:
+To fix this vulnerability, validate the structure of the $data array before passing it to the fputcsv function. This can be done by using a recursive function to ensure that all elements in the array are of a basic data type (e.g., string, integer). Alternatively, use a function like array_filter() or array_map() to ensure all elements are properly formatted for the fputcsv function. Here is a possible fix:
+
+```php
+function recursiveSanitize($data) {
+    $sanitizedData = array();
+    foreach ($data as $key => $value) {
+        if (is_array($value)) {
+            // Either ignore arrays or sanitize them according to your needs
+            // For this example, we'll ignore them
+            continue;
+        } else {
+            $sanitizedData[] = $value;
+        }
+    }
+    return $sanitizedData;
+}
+
+// ...
+
+$fo->fputcsv(recursiveSanitize($data));
+```
+
+ORIGINAL CODE:
+```php
+SplFileObject::fputcsv(): Checking data after calling the function
+--FILE--
+<?php
+$fo = new SplFileObject('SplFileObject_fputcsv.csv', 'w');
+
+$data = array(1, 2, 'foo', 'haha', array(4, 5, 6), 1.3, null);
+
+$fo->fputcsv($data);
+?>
+--CLEAN--
+<?php
+unlink('SplFileObject::fputcsv.csv');
+?>
+--EXPECTF--
+Notice: Array to string conversion in %s on line %d
+array(7)
+```

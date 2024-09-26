@@ -1,0 +1,67 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8
+VULNERABILITY_DESCRIPTION:
+Use of Unsanitized Data from nghttp2_session_want_read can lead to potential denial of service (DoS) vulnerabilities.
+
+EXPLANATION:
+The code in lines 5-8 uses the return value from the `nghttp2_session_want_read` function directly without any validation. If the `nghttp2_session_want_read` function is compromised or tampered with, it could potentially return an invalid or malicious value, leading to a denial of service vulnerability. Furthermore, the function does not check if the return value of `nghttp2_session_want_read` can be successfully cast to an integer before using it in the comparison.
+
+Additionally, in the MaybeScheduleWrite method, it can be observed that there might be nested asynchronous function call MaybeStopReading in MaybeScheduleWrite and the Write operation followed by the MaybeStopReading function call which may indicate asynchronous data retrieval but an asynchronous operation could cause undefined behavior if done in parallel.
+
+
+RECOMMENDATIONS:
+To address this vulnerability, it is recommended to validate the return value of `nghttp2_session_want_read` before using it. Here are the specific recommendations:
+
+- Validate the return value of `nghttp2_session_want_read` by checking if it is within the expected range. 
+- Ensure the nghttp2 library being used is not vulnerable to exploits or not compromised.
+
+Additionally, use synchronization primitives to control the flow of parallel operations if data retrieval is indeed asynchronous.
+
+Here's a modified version of the affected code:
+
+```cpp
+void Http2Session::MaybeStopReading() {
+  int want_read = nghttp2_session_want_read(session_);
+  if (want_read == NGHTTP2_ERR(WANT_READ) || want_read == NGHTTP2_ERR(WANT_WRITE)) {
+    // handle the error case
+    return;
+  }
+  if (want_read == 0) {
+    stream_->ReadStop();
+  }
+}
+```
+
+ORIGINAL CODE:
+```cpp
+void Http2Session::OnStreamAfterWrite(WriteWrap* w, int status) {
+  Debug(this, "write finished with status %d", status);
+
+  // Inform all pending writes about their completion.
+  ClearOutgoing(status);
+
+  if (!(flags_ & SESSION_STATE_WRITE_SCHEDULED)) {
+    // Schedule a new write if nghttp2 wants to send data.
+    MaybeScheduleWrite();
+  }
+}
+
+void Http2Session::MaybeStopReading() {
+  int want_read = nghttp2_session_want_read(session_);
+  Debug(this, "wants read? %d", want_read);
+  if (want_read == 0)
+    stream_->ReadStop();
+}
+
+// Unset the sending state, finish up all current writes, and reset
+// storage for data and metadata that was associated with these writes.
+
+chunks_sent_since_last_write_++;
+
+StreamWriteResult res = underlying_stream()->Write(*bufs, count);
+if (!res.async) {
+  ClearOutgoing(res.err);
+}
+
+MaybeStopReading();
+```

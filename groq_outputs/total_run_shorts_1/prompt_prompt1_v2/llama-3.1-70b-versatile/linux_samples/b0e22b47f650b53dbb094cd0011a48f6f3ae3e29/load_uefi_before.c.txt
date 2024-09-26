@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+Unconditional kfree() without proper check for NULL pointer dereference and premature deallocation.
+
+EXPLANATION:
+The given code snippet contains a vulnerability where `dbx` is being deallocated using `kfree()` without checking if it's actually pointing to a valid memory location. The check `if (!efi_rt_services_supported(EFI_RT_SUPPORTED_GET_VARIABLE))` does not guarantee that `dbx` has been initialized before reaching this point. Additionally, there's no apparent allocation for `dbx` within the provided snippet, which makes the kfree() call potentially problematic.
+
+Furthermore, if `dbx` was indeed allocated elsewhere, deallocating it here might lead to issues later on if other parts of the code still hold references to the memory location.
+
+RECOMMENDATIONS:
+Before calling `kfree()`, the `dbx` pointer should be checked for NULL to prevent a potential NULL pointer dereference. Additionally, it's essential to ensure that `dbx` is not accessed later on after being deallocated.
+
+Corrected code snippet should be:
+```c
+if (dbx != NULL && !efi_rt_services_supported(EFI_RT_SUPPORTED_GET_VARIABLE)) {
+    kfree(dbx);
+    dbx = NULL;  // Reset dbx to NULL after deallocation
+}
+```
+ORIGINAL CODE:
+```c
+static int __init load_uefi_certs(void)
+{
+    efi_guid_t secure_var = EFI_IMAGE_SECURITY_DATABASE_GUID;
+    void *db = NULL, *dbx = NULL;
+    unsigned long dbsize = 0, dbxsize = 0;
+    efi_status_t status;
+    int rc = 0;
+
+    if (!efi_rt_services_supported(EFI_RT_SUPPORTED_GET_VARIABLE))
+    kfree(dbx);
+    }
+
+    /* Load the MokListRT certs */
+    rc = load_moklist_certs();
+
+    return rc;
+}
+```

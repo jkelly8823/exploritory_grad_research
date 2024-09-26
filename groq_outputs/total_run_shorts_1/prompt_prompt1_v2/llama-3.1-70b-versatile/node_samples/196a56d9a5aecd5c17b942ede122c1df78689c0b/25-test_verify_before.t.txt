@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Environment variable injection vulnerability
+
+EXPLANATION:
+The code snippet assigns the value of an environment variable `$ENV{NO_FIPS}` directly to a variable `$no_fips`, without proper validation or sanitization. This could potentially lead to an environment variable injection vulnerability, where an attacker can inject malicious values into the application. Although the assignment itself seems to use a default value (`// 0`), if the variable is set and not numeric, it could still cause issues downstream.
+
+In the specific context of this code, the risk is mitigated by the fact that `$no_fips` is a boolean value used for a conditional skip statement. However, given the critical nature of the task at hand, it's essential to be cautious about potential vulnerabilities.
+
+RECOMMENDATIONS:
+To mitigate this potential vulnerability, it's recommended to:
+
+1. Validate the value of `$ENV{NO_FIPS}` before using it.
+2. Use a safer default value if the environment variable is not set or has an invalid value.
+
+Example fix:
+
+```perl
+my $no_fips = disabled('fips') || (($ENV{NO_FIPS} // '') eq '1');
+```
+
+In this revised code, the value of `$ENV{NO_FIPS}` is compared to '1' explicitly, ensuring that the variable is used as a boolean value.
+
+ORIGINAL CODE:
+```perl
+# Same as above but with base provider used for decoding
+SKIP: {
+    my $no_fips = disabled('fips') || ($ENV{NO_FIPS} // 0);
+    skip "EC is not supported or FIPS is disabled", 3
+        if disabled("ec") || $no_fips;
+
+    my $provconf = srctop_file("test", "fips-and-base.cnf");
+    my $provpath = bldtop_dir("providers");
+    my @prov = ("-provider-path", $provpath);
+    $ENV{OPENSSL_CONF} = $provconf;
+
+    ok(!verify("ee-cert-ec-explicit", "", ["root-cert"],
+               ["ca-cert-ec-named"], @prov), ```

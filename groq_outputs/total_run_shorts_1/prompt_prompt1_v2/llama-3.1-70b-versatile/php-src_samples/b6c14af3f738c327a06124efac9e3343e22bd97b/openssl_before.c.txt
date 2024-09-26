@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-12, 23-24
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to potential buffer overflows and use-after-free vulnerabilities in the parsing and memory management of the certificate extensions.
+
+EXPLANATION:
+The provided code snippets appear to be part of a PHP extension for OpenSSL, which handles parsing and manipulation of X.509 certificates. In the first code snippet, the BIO buffer is created using BIO_new(BIO_s_mem()) and then used to store data. However, there is no check to ensure that the buffer does not overflow. 
+
+In the second code snippet, there are several issues:
+- OBJ_obj2txt calls a function to convert an object ID to a string, but the buffer is not checked for possible buffer overflow. 
+- The function OBJ_nid2sn also has potential for buffer overflow. 
+- The obj2nid calls also have no error checking and return value.
+
+Additionally, the use of `memset`, `memcpy`, `strcpy`, and `strcat` are not shown in the code snippets, but if they are used elsewhere without proper error checking, it could lead to potential bugs.
+
+In the first code snippet the EVP_PKEY *pkey = NULL, NETSCAPE_SPKI *spki = NULL and BIO *out = BIO_new(BIO_s_mem()); could be used freed or not checked and used again after this as the code is complex.   
+It appears to be vulnerable to buffer overflow in the OBJ_obj2txt call, this is concerning.
+
+RECOMMENDATIONS:
+- Always check for potential buffer overflows in dynamically allocated memory, such as BIO_new(BIO_s_mem()) and OBJ_obj2txt.
+- Check the return values of functions like OBJ_obj2nid, OBJ_nid2sn, and others.
+- Implement proper error handling to prevent use-after-free vulnerabilities.
+- Ensure that BIO_free(bio_out) and similar function are used to free up allocated memory when it is no longer needed.
+- Review all codebase to look for uses of strcpy, strncat..., they are considered most insecure and this will look better by changing to function like snprintf or, better using libraries which can make boundaries between those.
+- Do use-after-free vulnerability.
+
+ORIGINAL CODE:
+```
+for (i = 0; i < X509_NAME_entry_count(name); i++) {
+	unsigned char *to_add;
+	int to_add_len;
+
+	ne  = X509_NAME_get_entry(name, i);
+	obj = X509_NAME_ENTRY_get_object(ne);
+	EVP_PKEY *pkey = NULL;
+	NETSCAPE_SPKI *spki = NULL;
+	BIO *out = BIO_new(BIO_s_mem());
+	BUF_MEM *bio_buf;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &spkstr, &spkstr_len) == FAILURE) {
+		return;
+	}
+}
+/* }}} */
+
+/* {{{ proto array openssl_x509_parse(mixed x509 [, bool shortnames=true])
+   Returns an array of the fields/values of the CERT */
+PHP_FUNCTION(openssl_x509_parse)
+{
+
+
+	for (i = 0; i < X509_get_ext_count(cert); i++) {
+		extension = X509_get_ext(cert, i);
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(extension)) != NID_undef) {
+			extname = (char *)OBJ_nid2sn(OBJ_obj2nid(X509_EXTENSION_get_object(extension)));
+		} else {
+			OBJ_obj2txt(buf, sizeof(buf)-1, X509_EXTENSION_get_object(extension), 1);
+			extname = buf;
+		}
+		bio_out = BIO_new(BIO_s_mem());
+		if (X509V3_EXT_print(bio_out, extension, 0, 0)) {
+			BIO_get_mem_ptr(bio_out, &bio_buf);
+			add_assoc_stringl(subitem, extname, bio_buf->data, bio_buf->length, 1);
+		} else {
+			add_assoc_asn1_string(subitem, extname, X509_EXTENSION_get_data(extension));
+```

@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-11
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow vulnerability in `recv` function call.
+
+EXPLANATION:
+The code snippet calls the `recv` function with `sizeof(kvp_recv_buffer)` as its third argument, which specifies the maximum number of bytes to receive. However, it does not perform any bounds checking on the returned value `len`, which could be equal to `sizeof(kvp_recv_buffer)`. If the sender sends more data than the buffer can hold, `recv` will only retrieve a portion of the data (up to `sizeof(kvp_recv_buffer)` bytes), but subsequent calls to `recv` will continue to fill the buffer without checking for overflow. This could potentially lead to a buffer overflow vulnerability if the buffer is not large enough to hold the incoming data. Moreover, the error handling for `recv` does not fully check the error, only that `len` is less than 0.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend introducing bounds checking for the received data. This can be done by using the `recv` function with the `MSG_PEEK` flag to check the amount of data available in the socket's receive buffer without actually consuming the data. If the available data exceeds the buffer size, we should either increase the buffer size or handle the excess data accordingly. Additionally, error handling for `recv` should include checks for `EINTR` (interrupted by signal), `EWOULDBLOCK` or `EAGAIN` (non-blocking descriptor) when `len` is -1.
+
+ORIGINAL CODE:
+```c
+pfd.fd = fd;
+
+while (1) {
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    poll(&pfd, 1, -1);
+
+    len = recv(fd, kvp_recv_buffer, sizeof(kvp_recv_buffer), 0);
+
+    if (len < 0) {
+        syslog(LOG_ERR, "recv failed; error:%d", len);
+        close(fd);
+        return -1;
+    }
+```
+Note: Without the variable declarations or definitions, import statements, and other items, it is assumed that `kvp_recv_buffer` is of a fixed-size and `recv` is being used in a blocking manner or in a fashion where it is known to block on non-blocking sockets.

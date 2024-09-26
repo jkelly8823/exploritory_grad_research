@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-18
+VULNERABILITY_DESCRIPTION:
+The code snippet contains a vulnerability due to the use of an insecure and deprecated function, `gethostbyname`, to resolve hostnames.
+
+EXPLANATION:
+The `gethostbyname` function is an older API for resolving hostnames to IP addresses. However, it has several limitations, including a lack of support for IPv6 addresses, potential truncation of hostnames longer than MAXHOSTNAMELEN, and an inability to determine whether a hostname is a valid DNS hostname or a dotted decimal IP address. In addition to these limitations, `gethostbyname` has also been the target of various attacks and has been considered insecure for several years.
+
+Furthermore, the `gethostbyname` function is not thread-safe, as indicated by the comment "XXX NOT THREAD SAFE (is safe under win32)". This can lead to issues when multiple threads attempt to use this function concurrently.
+
+RECOMMENDATIONS:
+To address this vulnerability, the `gethostbyname` function should be replaced with a more modern and secure alternative, such as the `getaddrinfo` function, which is already used in the code snippet in certain cases. The `getaddrinfo` function supports IPv6 addresses, allows for error codes to be passed to the function, and provides more detailed error information through the `gai_strerror` function. 
+
+Additionally, the code should be reviewed for usage of any other insecure or deprecated functions.
+
+ORIGINAL CODE:
+```c
+#include "php.h"
+
+#include <stddef.h>
+#include <errno.h>
+
+
+
+#ifdef PHP_WIN32
+# define PHP_TIMEOUT_ERROR_VALUE		ETIMEDOUT
+#endif
+
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 255
+#endif
+
+#if HAVE_GETADDRINFO
+#ifdef HAVE_GAI_STRERROR
+#  define PHP_GAI_STRERROR(x) (gai_strerror(x))
+#else
+#else
+	if (!inet_aton(host, &in)) {
+		/* XXX NOT THREAD SAFE (is safe under win32) */
+		if(strlen(host) > MAXHOSTNAMELEN) {
+			host_info = NULL;
+			errno = E2BIG;
+		} else {
+			host_info = gethostbyname(host);
+		}
+		if (host_info == NULL) {
+			if (error_string) {
+				spprintf(error_string, 0, "php_network_getaddresses: gethostbyname failed. errno=%d", errno);
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "%s", *error_string);
+```

@@ -1,0 +1,63 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-24
+VULNERABILITY_DESCRIPTION:
+A potential null pointer dereference vulnerability has been identified in the given code.
+
+EXPLANATION:
+The vulnerability is located in the `get_encoder_from_store` function, specifically on lines 23-24 (assuming the code snippet starts from line 1). The `store` and `data` parameters are not checked for null before being passed to other functions (`get_tmp_encoder_store`, `reserve_encoder_store`, `unreserve_encoder_store`, `put_encoder_in_store`, `construct_encoder`, and `destruct_encoder`) as part of the `OSSL_METHOD_CONSTRUCT_METHOD` struct.
+
+This can lead to a null pointer dereference if either `store` or `data` is null, causing the program to crash or potentially allowing an attacker to execute arbitrary code.
+
+RECOMMENDATIONS:
+1. Add null checks for `store` and `data` parameters before passing them to other functions.
+
+```c
+static void *get_encoder_from_store(void *store, const OSSL_PROVIDER **prov, void *data)
+{
+    if (store == NULL || data == NULL) {
+        // Handle null pointer case, e.g., return an error or a default value
+    }
+    // Original code here...
+}
+```
+
+2. Ensure that `get_tmp_encoder_store`, `reserve_encoder_store`, `unreserve_encoder_store`, `put_encoder_in_store`, `construct_encoder`, and `destruct_encoder` functions also handle null parameters properly.
+
+ORIGINAL CODE:
+```c
+static int reserve_encoder_store(void *store, void *data)
+{
+    struct encoder_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_encoder_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_lock_store(store);
+}
+
+static int unreserve_encoder_store(void *store, void *data)
+{
+    struct encoder_data_st *methdata = data;
+
+    if (store == NULL
+        && (store = get_encoder_store(methdata->libctx)) == NULL)
+        return 0;
+
+    return ossl_method_unlock_store(store);
+}
+
+/* Get encoder methods from a store, or put one in */
+static void *get_encoder_from_store(void *store, const OSSL_PROVIDER **prov,
+                                    void *data)
+{
+        || !ossl_method_store_cache_get(store, NULL, id, propq, &method)) {
+        OSSL_METHOD_CONSTRUCT_METHOD mcm = {
+            get_tmp_encoder_store,
+            reserve_encoder_store,
+            unreserve_encoder_store,
+            get_encoder_from_store,
+            put_encoder_in_store,
+            construct_encoder,
+            destruct_encoder
+```

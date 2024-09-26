@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-7
+VULNERABILITY_DESCRIPTION:
+Potential Information Disclosure through HTTP/2 Stream Rejection
+
+EXPLANATION:
+The vulnerability lies in the fact that an attacker can potentially cause the server to reveal information about the maximum number of concurrent streams that can be opened, which is a critical aspect of the server's configuration and capacity. By opening and closing a large number of streams in a short time period, an attacker can induce the server to reject streams and return an error code of NGHTTP2_ERR_CALLBACK_FAILURE. This may not be itself an attack, but it's unusual.  
+
+However the more pressing concern is the fact that an attacker can identify, that a Revert is active (or not active) and that a NGHTTP2_ERR_CALLBACK_FAILURE might indicate success in overflowing streams.  
+
+An attacker may be able to use this information to their advantage in crafting attacks against the server or in exploiting other vulnerabilities that rely on specific server configurations.
+
+RECOMMENDATIONS:
+To prevent this vulnerability, consider the following recommendations:
+
+1.  Instead of returning a specific error code of NGHTTP2_ERR_CALLBACK_FAILURE, consider returning a more generic error code that does not reveal any information about the server's configuration or capacity.
+2.  Implement rate limiting and/or IP blocking to prevent attackers from flooding the server with requests meant to overflow streams.
+3.  Review and validate user input and ensure that it's not used in a way that may cause the server to return sensitive information.
+
+ORIGINAL CODE:
+```c
+#include "node_http2.h"
+#include "node_http2_state.h"
+#include "node_perf.h"
+#include "node_revert.h"
+#include "util-inl.h"
+
+#include <algorithm>
+
+    if (UNLIKELY(!session->CanAddStream() ||
+                 Http2Stream::New(session, id, frame->headers.cat) ==
+                     nullptr)) {
+      if (session->rejected_stream_count_++ > 100 &&
+          !IsReverted(SECURITY_REVERT_CVE_2019_9514)) {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+      }
+      // Too many concurrent streams being opened
+      nghttp2_submit_rst_stream(**session, NGHTTP2_FLAG_NONE, id,
+                                NGHTTP2_ENHANCE_YOUR_CALM);
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+
+    session->rejected_stream_count_ = 0;
+  } else if (!stream->IsDestroyed()) {
+    stream->StartHeaders(frame->headers.cat);
+  }
+  return 0;
+```

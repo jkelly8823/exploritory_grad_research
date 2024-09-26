@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Unintended memory leak due to an unbalanced free operation. If the `llcp_sock->service_name` memory allocation fails to be freed under certain conditions, this may lead to a memory leak.
+
+EXPLANATION:
+The code seems to handle socket release and puts device. However, in the case where `nfc_llcp_get_local_ssap(local)` succeeds in the first try and `nfc_llcp_get_sdp_ssap(local, llcp_sock)` fails, `kfree(llcp_sock->service_name)` is executed. This `kfree(llcp_sock->service_name)` seems to be missing in other blocks, specifically when `nfc_llcp_get_local_ssap(local)` is called and `nfc_llcp_get_sdp_ssap(local, llcp_sock)` never gets called. This could result in an unintended memory leak.
+
+RECOMMENDATIONS:
+To fix the potential memory leak issue, add `kfree(llcp_sock->service_name)` in the case when `nfc_llcp_get_sdp_ssap(local, llcp_sock)` is not called, specifically after the `llcp_sock->ssap = nfc_llcp_get_local_ssap(local)` line.
+
+This possible fix:
+```c
+llcp_sock->ssap = nfc_llcp_get_local_ssap(local);
+if (llcp_sock->ssap == LLCP_SAP_MAX) {
+    nfc_llcp_local_put(llcp_sock->local);
+    kfree(llcp_sock->service_name);  // Add this line to prevent potential memory leak
+    ret = -ENOMEM;
+    goto put_dev;
+}
+```
+Also for better handling of `llcp_sock->service_name`, consider freeing it at a centralized location (e.g. a dedicated function) to prevent code duplication.
+
+ORIGINAL CODE:
+```c
+GFP_KERNEL);
+if (!llcp_sock->service_name) {
+    nfc_llcp_local_put(llcp_sock->local);
+    ret = -ENOMEM;
+    goto put_dev;
+}
+llcp_sock->ssap = nfc_llcp_get_sdp_ssap(local, llcp_sock);
+if (llcp_sock->ssap == LLCP_SAP_MAX) {
+    nfc_llcp_local_put(llcp_sock->local);
+    kfree(llcp_sock->service_name);
+    llcp_sock->service_name = NULL;
+    ret = -EADDRINUSE;
+    goto put_dev;
+}
+llcp_sock->ssap = nfc_llcp_get_local_ssap(local);
+if (llcp_sock->ssap == LLCP_SAP_MAX) {
+    nfc_llcp_local_put(llcp_sock->local);
+    ret = -ENOMEM;
+    goto put_dev;
+}
+
+sock_llcp_release:
+    nfc_llcp_put_ssap(local, llcp_sock->ssap);
+    nfc_llcp_local_put(llcp_sock->local);
+
+put_dev:
+    nfc_put_device(dev);
+```

@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION: 
+Potential Command Injection Vulnerability
+
+EXPLANATION:
+The vulnerability exists in the `checkdhparams` function, specifically in the line where the array containing the `openssl` command is defined. However, the main concern in the given code snippet is the `run(app(["openssl", "dhparam", "-noout", "-text"], ...))` function call. This line calls the `openssl dhparam` command with user-controlled input from `data_file("pkcs3-2-1024.pem")`. 
+
+While the provided input seems to be a hardcoded string, there is still the risk of command injection if the `data_file` function can return a string containing malicious input. Additionally, there is also no validation or sanitization performed on the commands in the `app` array. Any input in this array should be validated to prevent a command injection attack.
+
+RECOMMENDATIONS:
+Recommendations include validating any inputs in the `app` array and ensuring they are not user-controlled or, if they are, properly sanitizing them to prevent command injection. Additionally, if the `data_file` function can return a string containing malicious input, it should also be validated and sanitized. Here is an example:
+
+```perl
+# Validate that the first element is "openssl" and the other elements do not contain malicious commands
+my @commands = (["openssl", "dhparam", "-noout", "-text"]);
+for my $command (@commands) {
+    # Simple validation for demonstration purposes. In production, consider more thorough validation or consider using a library to aid in secure implementation.
+    next if ($command->[0] ne 'openssl' || ($command->[1] eq "dhparam" && ($command->[2] eq "-noout" && $command->[3] eq "-text" }));
+    die "Potential command injection detected: $command.@-";
+}
+
+ok(run(app($commands[0]),
+       stdin => data_file("pkcs3-2-1024.pem")),
+   "stdinbuffer input test that uses BIO_gets");
+
+# Validate the file contents
+my $data_file_contents = data_file("pkcs3-2-1024.pem");
+# Consider more advanced and safer validation methods for this input based on expected format
+die "Potential command injection detected in file contents: $data_file_contents.@-" if $data_file_contents =~ /\n|;|:|'|\"|\`|M$|^.*>/;
+```
+Note that the security measures and validation examples provided above should be tailored to the specific requirements of the input, and consider the most secure approach possible.
+
+ORIGINAL CODE:
+```perl
+#! /usr/bin/env perl
+# Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the Apache License 2.0 (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+use strict;
+use warnings;
+
+use OpenSSL::Test qw(:DEFAULT data_file);
+use OpenSSL::Test::Utils;
+
+#Tests for the dhparam CLI application
+
+
+plan skip_all => "DH is not supported in this build"
+    if disabled("dh");
+plan tests => 17;
+
+sub checkdhparams {
+    my $file = shift; #Filename containing params
+    my $type = shift; #PKCS3 or X9.42?
+        checkdhparams("gen-x942-0-512.der", "X9.42", 0, "DER", 512);
+    };
+}
+
+ok(run(app(["openssl", "dhparam", "-noout", "-text"],
+           stdin => data_file("pkcs3-2-1024.pem"))),
+   "stdinbuffer input test that uses BIO_gets");
+```

@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow through Unchecked Copy Operation
+
+EXPLANATION:
+The `memcpy` operation in lines 13-15 is vulnerable to a buffer overflow attack. The `data_len` variable, which is used to determine the number of bytes to copy, is read directly from the input data. This value is not validated or checked for correctness before being used. As a result, if the input data contains a maliciously crafted `data_len` value that exceeds the capacity of the `payload->key` buffer, it will cause a buffer overflow, potentially leading to arbitrary code execution or data corruption.
+
+RECOMMENDATIONS:
+1. Validate the `data_len` value before using it in the `memcpy` operation. Ensure that it does not exceed the capacity of the `payload->key` buffer.
+2. Use the `memsafe_copy` function or a similar function that checks for buffer overflows instead of the `memcpy` function.
+3. Consider adding additional error handling mechanisms to prevent exploitation of this vulnerability.
+
+ORIGINAL CODE:
+```c
+/* sensitive */
+tpm_buf_append_u16(&buf, 4 + TPM_DIGEST_SIZE + payload->key_len + 1);
+
+tpm_buf_append_u16(&buf, TPM_DIGEST_SIZE);
+tpm_buf_append(&buf, options->blobauth, TPM_DIGEST_SIZE);
+tpm_buf_append_u16(&buf, payload->key_len + 1);
+tpm_buf_append(&buf, payload->key, payload->key_len);
+tpm_buf_append_u8(&buf, payload->migratable);
+
+/* public */
+tpm_buf_append_u16(&buf, 14);
+
+		       u32 blob_handle)
+{
+	struct tpm_buf buf;
+	u16 data_len;
+	u8 *data;
+	int rc;
+
+	rc = tpm_buf_init(&buf, TPM2_ST_SESSIONS, TPM2_CC_UNSEAL);
+	if (rc)
+		rc = -EPERM;
+
+	if (!rc) {
+		data_len = be16_to_cpup(
+			(__be16 *) &buf.data[TPM_HEADER_SIZE + 4]);
+		data = &buf.data[TPM_HEADER_SIZE + 6];
+
+		memcpy(payload->key, data, data_len - 1);
+		payload->key_len = data_len - 1;
+		payload->migratable = data[data_len - 1];
+	}
+
+	tpm_buf_destroy(&buf);
+	return rc;
+```

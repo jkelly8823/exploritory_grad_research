@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION: 
+This code is vulnerable to a classic buffer overflow attack and also to command injection.
+
+EXPLANATION: 
+The vulnerability arises from directly concatenating an untrusted input (argv[1]) into a command buffer (cmd), which is then executed by the system. This untrusted input can be excessively long and overflow the buffer 'cmd', possibly overwriting adjacent variables or even return addresses on the stack. Moreover, since this code executes the concatenated string as a system command, it allows an attacker to inject malicious commands that the system will execute.
+
+The 'system' function is especially concerning because it runs a shell with the provided string, thereby greatly increasing the attack surface. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, always sanitize untrusted inputs and validate their lengths before using them to construct commands. One way to do this is by using safer functions like 'strcpy' and 'strncpy' instead of 'strcat', and ensuring that the destination buffer has enough space. 
+
+Consider functions like 'snprintf' that allow more fine-grained control over the amount of data copied or constructed. 
+
+Additionally, consider using more secure methods to execute commands, such as the 'execv' family of functions, which does not involve the shell.
+
+Here is an example of safer approach:
+
+```c
+#define _GNU_SOURCE
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#define CMD_MAX 256
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Please provide a command argument.\n");
+        return 1;
+    }
+
+    char cmd[CMD_MAX] = "/usr/bin/cat ";
+
+    // Sanity check to ensure no buffer overflow occurs.
+    if (strlen(argv[1]) + strlen(cmd) + 1 >= CMD_MAX) {
+        printf("Argument too long, stopping to prevent buffer overflow.\n");
+        return 1;
+    }
+
+    // Use safer function 'strncpy' to append a string.
+    strncpy(cmd + strlen(cmd), argv[1], CMD_MAX - strlen(cmd) - 1);
+    cmd[CMD_MAX - 1] = '\0'; // ensure it's null terminated.
+
+    // Avoid using 'system' when possible; better alternatives include 'fork' & 'execv'
+    // Here is how you may replace 'system' with safer methods.
+    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+
+    return 0;
+}
+```
+However, a safer alternative would be to use 'fork' and 'exec' to directly execute '/usr/bin/cat' and its argument.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Please provide a command argument.\n");
+        return 1;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        printf("Failed to fork a child process.\n");
+        return 1;
+    } else if (pid == 0) {
+        execl("/usr/bin/cat", "cat", argv[1], (char *)NULL);
+        return 0; // child terminated; let parent handle the rest.
+    }
+
+    // Wait for the child process to terminate.
+    wait(NULL);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+int main(int argc, char** argv) {char cmd[CMD_MAX] = "/usr/bin/cat ";strcat(cmd, argv[1]);system(cmd);}

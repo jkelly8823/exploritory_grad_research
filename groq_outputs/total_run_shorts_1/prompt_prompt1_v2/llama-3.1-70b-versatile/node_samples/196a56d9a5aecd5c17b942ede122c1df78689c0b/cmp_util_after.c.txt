@@ -1,0 +1,22 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Potential buffer overflow vulnerability in OPENSSL_strndup.
+
+EXPLANATION:
+This vulnerability arises from the use of OPENSSL_strndup() to duplicate a substring of p_file. The potential issue lies in the fact that OPENSSL_strndup() allocates new memory to hold a copy of the input string and an extra null-terminating character. If p_line is very close to the end of p_file, it is possible that p_line - 1 - p_file could result in an integer underflow, potentially causing OPENSSL_strndup() to allocate an excessively large buffer. Additionally, without checking the return value of OPENSSL_strndup(), there is a possibility of a null pointer dereference if the allocation fails.
+
+However, the primary concern here is the fact that the return value is assigned to *file, and *file is then dereferenced without any checks. If OPENSSL_strndup() returns NULL due to allocation failure or other reasons, this will lead to undefined behavior.
+
+RECOMMENDATIONS:
+1. Always check the return value of memory allocation functions like OPENSSL_strndup() to ensure that the allocation was successful before using the returned pointer.
+2. Validate the range of the p_line - 1 - p_file expression to prevent potential integer underflows.
+3. Consider using a safer string duplication function that doesn't allocate memory, or provide error handling to ensure that a null pointer dereference is avoided.
+
+ORIGINAL CODE:
+                    *file = OPENSSL_strndup(p_file, p_line - 1 - p_file);
+                    /* no real problem if OPENSSL_strndup() returns NULL */
+                    *line = (int)line_number;
+                    msg = strchr(p_level, ':');
+                    if (msg != NULL && *++msg == ' ')
+                        msg++;

@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-9
+VULNERABILITY_DESCRIPTION:
+The code does not properly clean up dynamically allocated memory after failure, leading to a memory leak.
+
+EXPLANATION:
+The code allocates memory using `php_zip_make_relative_path`, which presumably returns a dynamically allocated string. However, in the event that `zip_stat` fails or the path length exceeds `MAXPATHLEN`, the function returns 0 without freeing the allocated memory. This can cause a memory leak if this function is called repeatedly.
+
+RECOMMENDATIONS:
+To fix the memory leak, it is recommended to free the dynamically allocated memory using a function like `efree` (or equivalent, depending on the memory management functions used in this context) in the error path. 
+
+Here is an example of how this could be fixed:
+
+```c
+if (path_cleaned_len >= MAXPATHLEN || zip_stat(za, file, 0, &sb) != 0) {
+    efree(path_cleaned);
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+
+```c
+	return 0;
+}
+	path_cleaned =  php_zip_make_relative_path(new_state.cwd, new_state.cwd_length);
+	if(!path_cleaned) {
+		return 0;
+	}
+	path_cleaned_len = strlen(path_cleaned);
+
+	if (path_cleaned_len >= MAXPATHLEN || zip_stat(za, file, 0, &sb) != 0) {
+		return 0;
+```

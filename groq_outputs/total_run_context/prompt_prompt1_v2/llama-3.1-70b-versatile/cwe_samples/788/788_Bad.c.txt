@@ -1,0 +1,24 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION: 
+Potential buffer overflow vulnerability and potential null pointer dereference.
+
+EXPLANATION:
+This vulnerability exists because of the combination of two consecutive operations that are not properly validated or checked for potential failures. 
+
+In line 7, the strcpy function is used to copy the hostname pointed by hp->h_name into the hostname array. However, the hostname array is of a fixed length (64 characters). There is no guarantee that hp->h_name will contain a string of a length less than or equal to 64. This could result in a buffer overflow if hp->h_name contains a longer string. Buffer overflows can lead to arbitrary code execution.
+
+In line 8, hp is dereferenced without a prior check to ensure it's not null. If the gethostbyaddr function fails (which it can do due to network errors or the address being unknown), it will return NULL, causing hp to be NULL. A subsequent dereference operation like strcpy(hp->h_name, ...) can lead to a segmentation fault or undefined behavior.
+
+RECOMMENDATIONS:
+- Instead of using strcpy, use strncpy to limit the number of characters copied from hp->h_name to hostname and to allow room for the null-terminator character.
+- Always check the return value of gethostbyaddr to ensure that hp is not NULL before attempting to dereference it.
+
+ORIGINAL CODE:
+                  void host_lookup(char *user_supplied_addr){
+                        struct hostent *hp;in_addr_t *addr;char hostname[64];in_addr_t inet_addr(const char *cp);
+                           
+                           /*routine that ensures user_supplied_addr is in the right format for conversion */
+                           
+                           validate_addr_form(user_supplied_addr);addr = inet_addr(user_supplied_addr);hp = gethostbyaddr( addr, sizeof(struct in_addr), AF_INET);strcpy(hostname, hp->h_name);
+                     }

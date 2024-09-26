@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 
+These two lines of code demonstrate the vulnerability: 
+addr = php_gethostbyname(hostname); 
+hp = gethostbyname(hostname); 
+
+However, this code presents slightly different code on either side of a closing bracket, both of which display different examples. I'll assume the latter code is meant to be included first.
+
+VULNERABILITY_DESCRIPTION:
+The code does not ensure that a potentially null pointer is not dereferenced when it calls RETVAL_STRING(addr, 0) or RETURN_FALSE for the latter code.
+
+EXPLANATION: 
+Despite both examples containing warnings or checks for name length, no check for a returned null pointer from functions gethostbyname or php_gethostbyname was made. These functions can return null on failure. The issue in this example originates with the lack of null pointer checks following gethostbyname calls, which can lead to segmentation faults if the returned pointer is null and dereferenced.
+
+However, there's one additional problem within this vulnerable function. There seems to be a "Potential use-after-free vulnerability" for `php_gethostbyname` and "use-after-free vulnerability" for `gethostbyname`. Both `gethostbyname` and `php_gethostbyname` use a static cache or structure that may return, in some implementations, a pointer that may be overwritten by the next call. In the current context, we have free'd the string after using it.
+
+RECOMMENDATIONS:
+The most evident solution is to check whether the pointer returned from php_gethostbyname/gethostbyname is NULL before it's passed as a parameter to RETVAL_STRING/RETURN_FALSE.
+
+- Check for null pointer returned from gethostbyname:
+```
+(addr) = php_gethostbyname(hostname);
+if(addr != NULL) {
+    RETVAL_STRING((addr), 0);
+} else {
+    // Return NULL / throw exception and/or error handling
+    RETURN_NULL;
+}
+```
+or
+```
+hp = gethostbyname(hostname);
+if (hp != NULL && hp->h_addr_list != NULL) {
+    //Now process further with this data
+    RETURN_STRING(hp->h_addr_list[0], 0);
+} else {
+    // Return NULL / throw exception and/or error handling
+    RETURN_FALSE;
+}
+```
+The latter doesn't explicitly say which is safer than another, as it's dependent upon particular definitions and implementation not provided within the previous snippet.
+
+ORIGINAL CODE:
+```cpp
+	return;
+}
+
+if(hostname_len > MAXHOSTNAMELEN) {
+	/* name too long, protect from CVE-2015-0235 */
+	php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+	RETURN_STRINGL(hostname, hostname_len, 1);
+}
+addr = php_gethostbyname(hostname);
+
+RETVAL_STRING(addr, 0);
+}
+	return;
+}
+
+if(hostname_len > MAXHOSTNAMELEN) {
+	/* name too long, protect from CVE-2015-0235 */
+	php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXHOSTNAMELEN);
+	RETURN_FALSE;
+}
+
+hp = gethostbyname(hostname);
+if (hp == NULL || hp->h_addr_list == NULL) {
+	RETURN_FALSE;
+}
+```

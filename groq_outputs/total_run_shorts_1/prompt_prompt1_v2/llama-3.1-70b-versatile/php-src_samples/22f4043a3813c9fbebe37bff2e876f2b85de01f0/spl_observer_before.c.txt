@@ -1,0 +1,52 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6-8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a buffer overflow attack due to the use of `strncpy` without checking the bounds of the destination buffer.
+
+EXPLANATION:
+The code uses `strncpy` to copy data from the `zvalue` struct to the `hash` buffer. However, it does not check if the data being copied will exceed the bounds of the destination buffer. If the `hash_len` is less than the size of the `zvalue` struct, the `strncpy` function will only copy the specified number of bytes, but if `hash_len` is equal to or greater than the size of the `zvalue` struct, the `strncpy` function will copy the entire struct, potentially overflowing the destination buffer.
+
+Additionally, the code assumes that `hash` has been allocated with a size of `hash_len+1`, but it is not checked if the allocation was successful. If the allocation failed and `hash` is `NULL`, the `strncpy` function will cause a segmentation fault.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should check the bounds of the destination buffer before copying data into it. Additionally, it should check if the allocation of the `hash` buffer was successful before using it. Here's an example of how the code could be fixed:
+
+```c
+char *hash = emalloc((hash_len+1)*sizeof(char));
+if (!hash) {
+    // Handle allocation failure
+    return NULL;
+}
+
+zend_object_value zvalue;
+memset(&zvalue, 0, sizeof(zend_object_value));
+zvalue.handle = Z_OBJ_HANDLE_P(obj);
+zvalue.handlers = Z_OBJ_HT_P(obj);
+
+memcpy(hash, &zvalue, MIN(hash_len, sizeof(zend_object_value)));
+hash[MIN(hash_len, sizeof(zend_object_value))] = 0;
+
+if (hash_len_ptr) {
+    *hash_len_ptr = hash_len;
+}
+```
+
+In this example, the `memcpy` function is used instead of `strncpy` to copy the data, and the `MIN` function is used to ensure that the size of the copy operation does not exceed the size of the destination buffer.
+
+ORIGINAL CODE:
+```c
+	return (char*)&Z_OBJVAL_P(obj);
+#else
+	char *hash = emalloc((hash_len+1)*sizeof(char));
+
+	zend_object_value zvalue;
+	memset(&zvalue, 0, sizeof(zend_object_value));
+	zvalue.handle = Z_OBJ_HANDLE_P(obj);
+	zvalue.handlers = Z_OBJ_HT_P(obj);
+
+	strncpy(hash, (char *)&zvalue, hash_len);
+	hash[hash_len] = 0;
+
+	if (hash_len_ptr) {
+		*hash_len_ptr = hash_len;
+```

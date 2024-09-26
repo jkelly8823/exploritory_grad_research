@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-6
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a Path Traversal vulnerability.
+
+EXPLANATION:
+The vulnerability lies in the lines where the getNextMessage function writes to the 'filename' and 'buffer' arrays. There is no validation or sanitization of the input data, allowing a malicious user to potentially provide a filename that could be used for path traversal, such as '../secret-data.txt'. This could allow an attacker to write data to arbitrary locations on the file system.
+
+Additionally, the 'filename' and 'buffer' arrays have fixed sizes (FILENAME_SIZE and BUFFER_SIZE), but the getNextMessage function does not seem to perform any bounds checking or limit the data it reads to the size of these arrays. This could potentially cause buffer overflow errors, especially if the size of the data received from the socket is larger than the array sizes.
+
+It is also worth noting that the openFileToWrite and writeToFile functions are not shown in the snippet, but their implementations could also be vulnerable to issues if they do not validate the input filename or check for write permissions.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, consider the following:
+
+- Validate the input data from the socket connection, especially the filename. Ensure that it only contains valid characters and does not contain path traversal attacks.
+- Use a safer parsing method to receive the filename and buffer from the socket connection, such as fgets() or read(), with error checking.
+- Implement bounds checking in the getNextMessage function to prevent buffer overflow.
+- Use a safer method for writing to files, such as fopen() and fwrite(), and check for write permissions.
+- Use a more secure method for handling file writing, such as using temporary files or a write buffer to store data before writing it to the file.
+
+ORIGINAL CODE:
+```
+int writeDataFromSocketToFile(char *host, int port){
+    char filename[FILENAME_SIZE];
+    char buffer[BUFFER_SIZE];
+    int socket = openSocketConnection(host, port);
+    if (socket < 0) {
+        printf("Unable to open socket connection");
+        return(FAIL);
+    }
+    if (getNextMessage(socket, filename, FILENAME_SIZE) > 0) {
+        if (openFileToWrite(filename) > 0) {
+            while (getNextMessage(socket, buffer, BUFFER_SIZE) > 0){
+                if (!(writeToFile(buffer) > 0))
+                    break;
+            }
+        }
+        closeFile();
+    }
+    closeSocket(socket);
+}
+```

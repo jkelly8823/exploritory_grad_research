@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 56-59
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow via out-of-range array values.
+
+EXPLANATION:
+The code uses hardcoded values for array indices, specifically in the BF_set_key function. In the for loop where the input key is being read and converted into a buffer, an out-of-range index access is present for the BF_word_signed cast.
+
+A BF_word_signed cast when combined with left shifting and or assignment of a 8 bit unsigned char will result in sign extension, converting the high bit of the byte into the most significant bit of the word. This is used to set the initial state for Blowfish cipher.
+
+However, the input length isn't checked for these array indices, allowing an attacker to exploit the code if they input an overly long string.
+
+RECOMMENDATIONS:
+To fix this, introduce input validation for the key input and use flexible array handling considering cases with variable lengths, for example consider fgets and make a copy of the content at that base index of array for later process of values.
+
+```c
+#include <string.h>
+#include <stdio.h>
+#include <ctype.h>
+
+static int validate_key(__CONST char *key) {
+    if( !isalpha(*key) )
+        return 0;
+    while( *key != '\0' ) {
+        if( !isalnum(*key) )
+            return 0;
+        key++;
+    }
+    return 1;
+}
+
+/* key and value reading */
+
+for (j = 0; j < 4 && *ptr != '\0'; j++) {
+    tmp <<= 8;
+    if (sign_extension_bug)
+        tmp |= (BF_word_signed)(signed char)*ptr;
+    else
+        tmp |= (unsigned char)*ptr;
+    if (!*ptr) ptr = key; else ptr++;
+}
+validation could become
+for (j = 0; j < 4 && j < strlen(key); j++) {
+    tmp <<= 8;
+    if (sign_extension_bug)
+        tmp |= (BF_word_signed)(signed char)key[j];
+    else
+        tmp |= (unsigned char)key[j];
+}
+Or as an optimised solution
+if (strlen(key) < 4)
+    return -1;
+
+for (j = 0; j < 4; j++) {
+    tmp <<= 8;
+    if (sign_extension_bug)
+        tmp |= (BF_word_signed)(signed char)key[j];
+    else
+        tmp |= (unsigned char)key[j];
+}
+with a 'return' statement to signal that an error has occurred.
+
+Additionally, introduce checks for cases where operation needs allocation and verify it's not null causing other issues.
+
+```

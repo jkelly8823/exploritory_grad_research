@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+Misuse of Private Key in Public Context.
+
+EXPLANATION:
+The vulnerable line is `assert(!x509.checkPrivateKey(keyPair.privateKey));`. This code snippet is attempting to check whether `keyPair.privateKey` is a private key belonging to the `x509` certificate. However, the usage of `keyPair.privateKey` outside of the expected secure context, specifically on a non-privileged assert function, is a misuse of private key and poses a security vulnerability.
+
+Furthermore, the following line, `createPrivateKey(key);`, also seems to create a private key without proper secure key creation handling. It seems there might be an attempt to reuse or regenerate a private key without ensuring proper, secure key handling.
+
+It is also worth noting that there might be potential for reuse of an already used private key in an insecure manner due to unclear key management from the given code.
+
+RECOMMENDATIONS:
+- Utilize proper, intended secure context when working with private keys (i.e., do not check the private key on the `x509.checkPrivateKey()` in a public function when verifying its correctness).
+- Ensure proper secure handling and regeneration of private keys using `crypto` methods.
+- Consider adding additional validation for ensuring that generated keys adhere to required Key usage.
+
+ORIGINAL CODE:
+```javascript
+X509Certificate,
+  createPrivateKey,
+  generateKeyPairSync,
+} = require('crypto');
+
+const {
+  isX509Certificate
+  {
+    // https://github.com/nodejs/node/issues/45377
+    // https://github.com/nodejs/node/issues/45485
+    // Confirm failures of X509Certificate:verify() and X509Certificate:CheckPrivateKey()
+    // do not affect other functions that use OpenSSL.
+    // Subsequent calls to e.g. createPrivateKey should not throw.
+    const keyPair = generateKeyPairSync('ed25519');
+    assert(!x509.verify(keyPair.publicKey));
+    createPrivateKey(key);
+    assert(!x509.checkPrivateKey(keyPair.privateKey));
+    createPrivateKey(key);
+  }
+
+  // X509Certificate can be cloned via MessageChannel/MessagePort
+  const mc = new MessageChannel();
+```

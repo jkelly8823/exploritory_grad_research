@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 174-176
+VULNERABILITY_DESCRIPTION:
+Use of Spin Locks with Sleep Functions
+EXPLANATION:
+In the provided code snippet, the `spin_lock_irqsave` function is used in conjunction with the `mod_timer` function, which can potentially cause the kernel to sleep. However, spin locks are not safe to be used with sleep functions, as they can lead to deadlocks or other synchronization issues. Specifically, in the lines 174-176, the `spin_lock_irqsave` and `spin_unlock_irqrestore` functions are used to protect access to the `wcn->tx_ack_skb` variable. However, since `mod_timer` is called within the same critical section, it can potentially cause the kernel to sleep while holding the spin lock, which is not allowed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, instead of using `spin_lock_irqsave`, use `mutex_lock` and `mutex_unlock` functions. These functions are safer to use with sleep functions and will prevent deadlocks. Additionally, it's recommended to refactor the code to avoid holding a lock when calling sleep functions.
+
+```
+mutex_lock(&wcn->dxe_lock);
+if (!(info->flags & IEEE80211_TX_CTL_NO_ACK))
+	bd.tx_comp = 1;
+mutex_unlock(&wcn->dxe_lock);
+
+/* TX watchdog if no TX irq or ack indication received  */
+mod_timer(&wcn->tx_ack_timer, jiffies + HZ / 10);
+```
+
+ORIGINAL CODE:
+Please find below the code segment related to the vulnerability.
+
+```c
+if (info->flags & IEEE80211_TX_CTL_REQ_TX_STATUS) {
+	wcn36xx_dbg(WCN36XX_DBG_DXE, "TX_ACK status requested\n");
+
+	spin_lock_irqsave(&wcn->dxe_lock, flags);
+	if (wcn->tx_ack_skb) {
+		spin_unlock_irqrestore(&wcn->dxe_lock, flags);
+		wcn36xx_warn("tx_ack_skb already set\n");
+		return -EINVAL;
+	}
+
+	wcn->tx_ack_skb = skb;
+	spin_unlock_irqrestore(&wcn->dxe_lock, flags);
+
+	/* Only one at a time is supported by fw. Stop the TX queues
+	 * until the ack status gets back.
+	 */
+	ieee80211_stop_queues(wcn->hw);
+
+	/* TX watchdog if no TX irq or ack indication received  */
+	mod_timer(&wcn->tx_ack_timer, jiffies + HZ / 10);
+```

@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to TLS certificate validation bypass by using canonicalizeIP() on user-controlled input (hostname) for IP validation.
+However, a more significant vulnerability exists in how hostname and altNames are used for validation.
+
+This code snippet appears to be part of a TLS certificate validation mechanism. However, the way it handles DNS names and IP addresses can be used to bypass the validation.
+
+In the case of IP addresses, this code performs the canonicalization using `canonicalizeIP(hostname)`, which is good. However, for hostname validation, the `unfqdn()` function is used to remove the trailing dot from the hostname, but it does not handle internationalized domain names. This could allow an attacker to bypass the validation using a crafted IDN.
+
+Furthermore, the use of `net.isIP(hostname)` to determine whether to perform IP validation or hostname validation can be vulnerable to spoofing attacks. If an attacker can control the hostname, they might be able to make it pass as an IP address and bypass DNS validation.
+
+EXPLANATION:
+The main issue with this code is the inconsistent handling of hostname and altNames. In the case of altNames, the code correctly checks for the 'DNS:' and 'IP Address:' prefixes. However, when validating the hostname, it only checks for the presence of a CN or DNS entries.
+
+The `unfqdn()` function removes the trailing dot from the hostname. However, this could potentially be bypassed by using a crafted IDN.
+
+Additionally, the `net.isIP(hostname)` function can be vulnerable to spoofing attacks if the attacker can control the hostname.
+
+RECOMMENDATIONS:
+1.  Use a secure IDN library to handle internationalized domain names properly.
+2.  Use a more robust method for determining whether the hostname is an IP address or not. For example, use a library like `ipaddr.js` to validate IP addresses.
+3.  Consistently handle hostname and altNames validation. For example, consider checking for the 'DNS:' prefix in the hostname as well.
+4.  Validate the hostname against the 'subjectAltName' extension without trusting the CN field.
+
+ORIGINAL CODE:
+```javascript
+const { getOptionValue } = require('internal/options');
+const { getRootCertificates, getSSLCiphers } = internalBinding('crypto');
+const { Buffer } = require('buffer');
+const { canonicalizeIP } = internalBinding('cares_wrap');
+const _tls_common = require('_tls_common');
+const _tls_wrap = require('_tls_wrap');
+const { createSecurePair } = require('internal/tls/secure-pair');
+const subject = cert.subject;
+const altNames = cert.subjectaltname;
+const dnsNames = [];
+const ips = [];
+
+hostname = '' + hostname;
+
+ArrayPrototypeForEach(splitAltNames, (name) => {
+  if (StringPrototypeStartsWith(name, 'DNS:')) {
+    ArrayPrototypePush(dnsNames, StringPrototypeSlice(name, 4));
+  } else if (StringPrototypeStartsWith(name, 'IP Address:')) {
+    ArrayPrototypePush(ips, canonicalizeIP(StringPrototypeSlice(name, 11)));
+  }
+});
+let valid = false;
+let reason = 'Unknown reason';
+
+hostname = unfqdn(hostname);  // Remove trailing dot for error messages.
+
+if (net.isIP(hostname)) {
+  valid = ArrayPrototypeIncludes(ips, canonicalizeIP(hostname));
+  if (!valid)
+    reason = `IP: ${hostname} is not in the cert's list: ` +
+             ArrayPrototypeJoin(ips, ', ');
+} else if (dnsNames.length > 0 || subject?.CN) {
+  const hostParts = splitHost(hostname);
+  const wildcard = (pattern) => check(hostParts, pattern, true);
+
+  if (dnsNames.length > 0) {
+    valid = ArrayPrototypeSome(dnsNames, wildcard);
+    if (!valid)
+      reason =
+        `Host: ${hostname}. is not in the cert's altnames: ${altNames}`;
+  } else {
+    reason = `Host: ${hostname}. is not cert's CN: ${cn}`;
+  }
+} else {
+  reason = 'Cert does not contain a DNS name';
+}
+
+if (!valid) {
+  return new ERR_TLS_CERT_ALTNAME_INVALID(reason, hostname, cert);
+}
+```

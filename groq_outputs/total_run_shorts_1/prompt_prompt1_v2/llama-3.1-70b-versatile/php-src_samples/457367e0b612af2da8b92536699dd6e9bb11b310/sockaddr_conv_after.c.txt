@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 6-15
+VULNERABILITY_DESCRIPTION:
+Remote Host Lookup Vulnerability due to insecure usage of gethostbyname() function.
+
+EXPLANATION:
+The function gethostbyname() is used to perform a hostname lookup. However, this function supports both IPv4 and IPv6 addresses but does not provide sufficient error handling. Furthermore, the result of gethostbyname() is not checked for NULL before being used in subsequent operations. 
+
+Moreover, the function inet_aton() is used, but it does not handle IPv6 addresses correctly. The checking of the length of the hostname before lookup also suggests potential buffer overflow concerns (though at first glance only input validation, not actual vulnerability handling).
+
+Lastly, be aware, gethostbyname() does only resolve IPv4 hosts and it doesn't attempt to resolve IPv6 addresses.
+
+RECOMMENDATIONS:
+The use of gethostbyname() is deprecated in favor of getaddrinfo() which provides better error handling and support for IPv6. To fix this vulnerability:
+- Replace gethostbyname() with getaddrinfo() and properly check the return value for errors.
+- Validate all input before passing it to the getaddrinfo() function.
+- Properly handle IPv6 addresses by using getaddrinfo() or other functions that handle both IPv4 and IPv6 addresses.
+
+ORIGINAL CODE:
+```c
+#include <arpa/inet.h>
+#endif
+
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 255
+#endif
+
+extern int php_string_to_if_index(const char *val, unsigned *out);
+
+#if HAVE_IPV6
+/* Sets addr by hostname, or by ip in string form (AF_INET6) */
+	if (inet_aton(string, &tmp)) {
+		sin->sin_addr.s_addr = tmp.s_addr;
+	} else {
+		if (strlen(string) > MAXHOSTNAMELEN || ! (host_entry = gethostbyname(string))) {
+			/* Note: < -10000 indicates a host lookup error */
+#ifdef PHP_WIN32
+			PHP_SOCKET_ERROR(php_sock, "Host lookup failed", WSAGetLastError());
+#else
+```

@@ -1,0 +1,40 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-8, 15
+VULNERABILITY_DESCRIPTION:
+This code contains a resource leak vulnerability. If an exception occurs when reading from the file, the FileReader object is not properly closed, resulting in a resource leak.
+
+EXPLANATION:
+The file reading operation is wrapped in a try-catch block. However, within the try block, the FileReader object 'fr' is not closed in a finally block or with a try-with-resources statement. This means that if an exception occurs during the file reading operation (e.g., if the file does not exist or there is an I/O error), the FileReader object is not properly closed, leading to a resource leak. Additionally, the catch block catches all exceptions and ignores them without closing the FileReader object, making the resource leak more likely.
+
+Furthermore, on line 15, the code catches all exceptions without performing any error handling. This can potentially mask serious errors and make debugging difficult. 
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend using a try-with-resources statement to ensure that the FileReader object is closed properly, regardless of whether an exception occurs. We also recommend logging or re-throwing exceptions instead of ignoring them.
+
+```java
+public String readFile(String filename) {
+    String retString = null;
+    try (FileReader fr = new FileReader(filename)) {
+        char[] cBuf = new char[(int) filename.length()];
+        int iRead = fr.read(cBuf, 0, cBuf.length);
+        retString = new String(cBuf);
+    } catch (IOException ex) {
+        // Log or re-throw the exception
+        throw new RuntimeException(ex);
+    }
+    return retString;
+}
+```
+
+ORGIGINAL CODE:
+```java
+public String readFile(String filename) {
+    String retString = null;try {
+        // initialize File and FileReader objectsFile file = new File(filename);FileReader fr = new FileReader(file);
+        // initialize character bufferlong fLen = file.length();char[] cBuf = new char[(int) fLen];
+        // read data from fileint iRead = fr.read(cBuf, 0, (int) fLen);
+        // close filefr.close();
+        retString = new String(cBuf);
+    } catch (Exception ex) {/* do nothing, but catch so it'll compile... */}return retString;
+}
+```

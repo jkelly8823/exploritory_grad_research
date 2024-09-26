@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use-After-Free Vulnerability
+EXPLANATION:
+The code calls zval_update_constant_ex with return_value as an argument, which appears to be a dynamically allocated resource (zval structure). However, on the line marked vulnerable, the function zval_update_constant_ex may cause the zval structure to be modified or even marked as freed if the update operation fails or reallocates memory, which can result in a use-after-free vulnerability on subsequent uses of return_value. Since we are updating return_value while already having taken a copy with zval_copy_ctor, it's essential to avoid use-after-free by ensuring return_value remains valid.
+RECOMMENDATIONS:
+The fix for this would be to avoid modifying return_value after the call to zval_copy_ctor. One possible fix is to assign the result of zval_update_constant_ex to a new variable and use that instead of return_value:
+
+```c
+zval *temp_value = *return_value;
+// replace temp_value in zval_update_constant_ex
+zval_update_constant_ex(&temp_value, (void*)0, param->fptr->common.scope TSRMLS_CC);
+// assign back to return_value
+*return_value = temp_value;
+```
+
+Alternatively, you could directly assign zval_update_constant_ex to return_value without calling zval_copy_ctor:
+
+```c
+zval *return_value = *precv->op2.zv;
+INIT_PZVAL(return_value);
+zval_update_constant_ex(&return_value, (void*)0, param->fptr->common.scope TSRMLS_CC);
+```
+
+Note that the above code snippets may require further modifications to fit the original context and needs of the project.
+ORIGINAL CODE:
+
+```c
+*return_value = *precv->op2.zv;
+INIT_PZVAL(return_value);
+if ((Z_TYPE_P(return_value) & IS_CONSTANT_TYPE_MASK) != IS_CONSTANT
+			&& (Z_TYPE_P(return_value) & IS_CONSTANT_TYPE_MASK) != IS_CONSTANT_ARRAY) {
+		zval_copy_ctor(return_value);
+}
+zval_update_constant_ex(&return_value, (void*)0, param->fptr->common.scope TSRMLS_CC);
+}

@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6
+VULNERABILITY_DESCRIPTION:
+Unvalidated User Input in `XMLRPC_REQUEST_FromXML` function
+
+EXPLANATION:
+The `XMLRPC_REQUEST_FromXML` function is used to generate an `XMLRPC_REQUEST` object from raw XML. However, there is no validation of the input XML before it is passed to this function. This could lead to an XML injection vulnerability if the input XML is not properly sanitized. A malicious attacker could insert specially crafted XML to inject arbitrary system commands or manipulate the behavior of the application.
+
+Moreover, the `XMLRPC_RequestGetMethodName` function is also called on the parsed response, which could potentially lead to a code injection vulnerability if the method name is not properly escaped. This could allow an attacker to inject and execute arbitrary PHP code.
+
+RECOMMENDATIONS:
+1. Sanitize the input XML using a secure library such as `xmlwf` or `libxml2` to prevent XML injection attacks.
+2. Use a secure parsing function that checks for and prevents code injection attacks, or implement additional validation and sanitization on the parsed response to prevent exploitation.
+3. If the `XMLRPC_RequestGetMethodName` function is not properly escaping its output, escape or validate it before passing it to the `estrdup` and assignment to `method_name_out`.
+4. Review the documentation of `XMLRPC_REQUEST_FromXML` and `XMLRPC_RequestGetMethodName` to identify and address any security concerns that may be raised.
+
+ORIGINAL CODE:
+```c
+zval* retval = NULL;
+XMLRPC_REQUEST response;
+STRUCT_XMLRPC_REQUEST_INPUT_OPTIONS opts = {{0}};
+opts.xml_elem_opts.encoding = encoding_in ? utf8_get_encoding_id_from_string(Z_STRVAL_P(encoding_in)) : ENCODING_DEFAULT;
+
+/* generate XMLRPC_REQUEST from raw xml */
+response = XMLRPC_REQUEST_FromXML(Z_STRVAL_P(xml_in), Z_STRLEN_P(xml_in), &opts);
+
+    if(XMLRPC_RequestGetRequestType(response) == xmlrpc_request_call) {
+        if(method_name_out) {
+            zval_dtor(method_name_out);
+            Z_TYPE_P(method_name_out) = IS_STRING;
+            Z_STRVAL_P(method_name_out) = estrdup(XMLRPC_RequestGetMethodName(response));
+            Z_STRLEN_P(method_name_out) = strlen(Z_STRVAL_P(method_name_out));
+        }
+    }
+
+    /* dust, sweep, and mop */
+```

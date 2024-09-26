@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 23-25
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a denial of service attack through an infinite loop in the case of a specific error in the `X509V3_EXT_print` function.
+
+EXPLANATION:
+The `X509V3_EXT_print` function returns a boolean indicating success or failure. However, if the function fails, it is possible that the error is not recoverable and an exception is thrown. In such cases, the `bio` pointer remains in an error state and resetting it (`BIO_reset(bio.get())`) might not resolve the issue. If another function (`ToV8Value`) also attempts to use the same `bio`, this could cause infinite recursion or loops, as errors are not properly checked for or handled.
+
+Moreover, the lack of proper checking and handling of potential error scenarios can lead to deadlocks or performance degradation in scenarios where this functionality is frequently invoked.
+
+RECOMMENDATIONS:
+The following changes can prevent this vulnerability:
+
+*   Always verify whether bio operations were successful and handle any potential errors. Implement proper error checking and propagate useful error messages for each bio interaction to prevent potential infinite loops.
+*   Introduce additional checks for an index before returning it in `X509_get_ext_by_NID(cert, nid, -1)` function to avoid exceptions raised by subsequent assertions like `CHECK_NOT_NULL`.
+*   Wrap all interactions with `bio` and other low-level APIs in try-catch blocks to prevent exception-related vulnerability in case low-level implementation specifics of invoked functions force API developers to directly interact with the underlying system code such as X509V3 library functions.
+*   Finally, rather than silencing specific error cases,  introduce well-thought actions and diagnostics about operation failure using the API or the system for any events that lead or even might possibly result in errors that might result for calling APIs to mitigate vulnerability risks when dealing with important data.
+
+ORIGINAL CODE:
+```cpp
+v8::MaybeLocal<v8::Object> GetRawDERCertificate(Environment* env, X509* cert);
+v8::Local<v8::Value> ToV8Value(Environment* env, const BIOPointer& bio);
+bool SafeX509ExtPrint(const BIOPointer& out, X509_EXTENSION* ext);
+
+v8::MaybeLocal<v8::Value> GetSubject(
+    Environment* env,
+    const BIOPointer& bio,
+    const BIOPointer& bio,
+    X509* cert);
+
+template <int nid>
+v8::MaybeLocal<v8::Value> GetInfoString(
+    Environment* env,
+    const BIOPointer& bio,
+    X509* cert) {
+  int index = X509_get_ext_by_NID(cert, nid, -1);
+  if (index < 0)
+    return Undefined(env->isolate());
+
+  X509_EXTENSION* ext = X509_get_ext(cert, index);
+  CHECK_NOT_NULL(ext);
+
+  if (!SafeX509ExtPrint(bio, ext) &&
+      X509V3_EXT_print(bio.get(), ext, 0, 0) != 1) {
+    USE(BIO_reset(bio.get()));
+    return v8::Null(env->isolate());
+  }
+
+  return ToV8Value(env, bio);
+}
+
+}  // namespace crypto
+}  // namespace node
+```

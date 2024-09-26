@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow vulnerability through unbounded strncpy call.
+
+EXPLANATION:
+The code snippet has a potential buffer overflow vulnerability. The strncpy function is used to copy the contents of the zvalue structure to the hash buffer. However, the size of the hash buffer is calculated as (hash_len+1)*sizeof(char), but strncpy is used with only hash_len as the size parameter. This means that the null-terminator is written outside the bounds of the buffer, potentially causing a buffer overflow.
+
+However, there is another potential issue: strncpy does not guarantee null-termination if the destination buffer is not large enough. Although in this case it is handled by adding a null-terminator after the strncpy call, if the source string's length is equal to or greater than the destination buffer's size (hash_len in this case), it could pose a security vulnerability.
+
+Another concern is that emalloc is used to allocate memory for the hash buffer, but there is no error checking for the allocation result. If emalloc fails and returns NULL, using the hash pointer will result in undefined behavior.
+
+RECOMMENDATIONS:
+- Validate the result of emalloc to ensure that memory was allocated successfully.
+- Use snprintf or memcpy instead of strncpy, as they provide more control over the amount of data that is copied.
+- Ensure that the destination buffer is null-terminated after copying data into it.
+- Consider using a safer string copying function such as strlcpy or strndup.
+
+ORIGINAL CODE:
+	
+		return (char*)&Z_OBJVAL_P(obj);
+#else
+		char *hash = emalloc((hash_len+1)*sizeof(char));
+
+		zend_object_value zvalue;
+		memset(&zvalue, 0, sizeof(zend_object_value));
+		zvalue.handle = Z_OBJ_HANDLE_P(obj);
+		zvalue.handlers = Z_OBJ_HT_P(obj);
+
+		strncpy(hash, (char *)&zvalue, hash_len);
+		hash[hash_len] = 0;
+
+		if (hash_len_ptr) {
+			*hash_len_ptr = hash_len;

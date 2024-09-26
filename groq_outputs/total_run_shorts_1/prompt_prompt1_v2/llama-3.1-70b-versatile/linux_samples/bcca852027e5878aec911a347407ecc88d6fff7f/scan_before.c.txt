@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability.
+
+EXPLANATION:
+The code snippet includes an 'rcu_read_unlock()' call before adding an item to a list. However, it is critical to ensure that 'trans_bss' struct is still valid and has not been deleted or freed before the 'list_add_tail()' operation. If 'trans_bss' has been freed due to the read lock being released and the writer updating the list in between, then this operation would result in a Use After Free vulnerability. 
+
+Without more context, I can only assume that this is indeed a possibility. This is especially true in code that makes use of the 'rcu_read_unlock' call because this suggests that a more complex locking strategy is being used. It is good practice to validate all pointer or struct references after a lock is released.
+
+RECOMMENDATIONS:
+Before calling 'list_add_tail()', you should revalidate the 'trans_bss' struct pointer. Adding some form of lock or validation will help prevent 'Use After Free' vulnerabilities:
+
+```c
+struct something *bss_local;
+bss_local = trans_bss;
+/* Re-check that 'bss_local' is not null and 'trans_bss' is still valid */
+if (bss_local) {
+    list_add_tail(&nontrans_bss->nontrans_list, &bss_local->nontrans_list);
+}
+return 0;
+/* Keep in mind that you need not only to check the pointer is not null, you also need to ensure it is correct object */
+```
+Original code modified to include locking validation logic. There is no foolproof method that avoids potential problems, but utilizing good practices and acquiring proper locks is usually enough. With limited data available to me at this time, it is difficult to state an accurate adjustment. 
+
+ORIGINAL CODE:
+```c
+	rcu_read_unlock();
+
+	/* add to the list */
+	list_add_tail(&nontrans_bss->nontrans_list, &trans_bss->nontrans_list);
+	return 0;
+}

@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9, 19
+VULNERABILITY_DESCRIPTION: Unchecked pointer dereference and incorrect function usage
+EXPLANATION:
+The function `WPACKET_put_bytes__` has two potential vulnerabilities:
+
+1. The `WPACKET_allocate_bytes` function returns an unsigned char pointer that is not checked for NULL before its dereference in the `put_value` function. If the memory allocation fails, this will result in a null pointer dereference.
+
+2. The function `put_value` seems to be incorrectly using `WPACKET_start_sub_packet_len__` without passing it the allocated `data` and the calculated length. It's also passing 0 as the length, which might be incorrect. This may lead to incorrect data being stored in the packet.
+
+RECOMMENDATIONS:
+To fix the vulnerabilities:
+
+1. Check the return value of `WPACKET_allocate_bytes` and ensure that `data` is not NULL before passing it to `put_value`.
+
+2. Modify the `put_value` function to correctly store the value at the allocated memory location, and then use the stored `data` with its calculated length in the `WPACKET_start_sub_packet_len__` function.
+
+Here's an updated version of the code that addresses these vulnerabilities:
+
+```c
+int WPACKET_put_bytes__(WPACKET *pkt, uint64_t val, size_t size)
+{
+    unsigned char *data;
+
+    if (!ossl_assert(size <= sizeof(uint64_t))
+            || !WPACKET_allocate_bytes(pkt, size, &data))
+        return 0;
+    
+    if(data == NULL) {
+        return 0;
+    }
+
+    if(!put_value(data, val, size)) {
+        return 0;
+    }
+
+    return WPACKET_start_sub_packet_len__(pkt, size);
+}
+
+static int put_value(unsigned char *data, uint64_t value, size_t len)
+{
+    memmove(data, &value, len);
+    return 1;
+}
+```
+
+ORIGINAL CODE:
+```c
+/*
+ * Copyright 2015-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+*/
+
+/* Store the |value| of length |len| at location |data| */
+static int put_value(unsigned char *data, uint64_t value, size_t len)
+{
+    if (data == NULL)
+        return 1;
+
+    return WPACKET_start_sub_packet_len__(pkt, 0);
+}
+
+int WPACKET_put_bytes__(WPACKET *pkt, uint64_t val, size_t size)
+{
+    unsigned char *data;
+
+    /* Internal API, so should not fail */
+    if (!ossl_assert(size <= sizeof(uint64_t))
+            || !WPACKET_allocate_bytes(pkt, size, &data)
+            || !put_value(data, val, size))
+        return 0;
+```

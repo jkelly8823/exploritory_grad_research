@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION: 
+Unquoted Argument in PostgreSQL Queries
+
+EXPLANATION: 
+The call to pg_query() with a non-constant argument "SET standard_conforming_strings = 0" poses a SQL injection risk. Although this specific query doesn't directly handle user input, the pattern is vulnerable to exploitation if user input is later incorporated into similar queries. 
+
+However, a more immediate concern arises from the assignment of a variable to a PostgreSQL database function. A more significant vulnerability exists on that line. In PostgreSQL, setting standard_conforming_strings to 0 can circumvent protection against string constant escape sequences, which can lead to potential SQL injection vulnerabilities in the future.
+
+RECOMMENDATIONS: 
+Use a prepared statement when setting configuration values. Setting standard_conforming_strings should be done through a config file instead of code or using a known safe value directly in the query for PostgreSQL configurations. However, for this query, a hardcoded value is acceptable, but it is better practice to define such variables in the config file or evaluate them as boolean types. 
+
+A safer version of this query should be implemented as follows:
+```php
+pg_query($db, "SET standard_conforming_strings = 'off'") or die("Error in set standard_conforming_strings\n");
+// Or,
+$set_standard_conforming_strings = 'off';
+pg_query($db, "SET standard_conforming_strings = '$set_standard_conforming_strings'");
+// However, we are going to try a safer query version where the value can not be injected via escape techniques in the variable:
+pg_query($db, "SET standard_conforming_strings = 'on'"); // or off
+```
+ORIGINAL CODE:
+```php
+include 'config.inc';
+
+$db = pg_connect($conn_str);
+pg_query($db, "SET standard_conforming_strings = 0");
+
+$fields = array('num'=>'1234', 'str'=>'ABC', 'bin'=>'XYZ');
+$ids = array('num'=>'1234');
+
+pg_update($db, $table_name, $fields, $ids) or print "Error in test 1\n";
+```

@@ -1,0 +1,57 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a null pointer dereference due to inadequate error checking and handling. 
+
+EXPLANATION:
+The vulnerability is caused by the incomplete error checking when allocating a new PID. The code assigns `ptr` (a potentially error-containing value) to `retval` and then checks `retval` later. However, between these two operations, `retval` can be modified, potentially masking the error value assigned to it. Furthermore, it can be seen that before allocation and after, there are instances of `retval` set, but these are assigned a different context and value  ("goto bad_fork_cleanup_io" -> "retval was non-zero during fork, go take care of it").
+
+However, this concern stems primarily from not viewing the preceding three lines (not to mention the entirety of the code). Hence it leaves lots of open questions. For our purposes however, this snippet can be said to be invalid as far as vulnerability assessments go with the current view we're seeing.
+
+After PID allocation, in a typical allocation function, the usage of it's return should be closely scrutinized (usually immediately). Here, return is set within PID. The statement "PID" does indeed return a pointer, known to possibly be settable with error (e.g. memory handling). However, in this case, we find close proximity (immediately) lines surrounding PID do inspect this, and handle all accordingly, albeit having set "retval" before it. With variables being modified due to their order being switched can come all assortment, where concern arises.
+
+In general to handle any errors, code must adhere to coding standards to ensure quality check doesn't have void point.
+
+RECOMMENDATIONS:
+Proper error checking for PID allocation using this 'retval' approach is done over multiple lines as shown, and could possibly benefit from splitting and/or re-arranging lines to make sure PID cannot be set while ensuring that 'retval' holds an updated error if that is the case. Consider adding checks for NULL in a secure and timely fashion.
+
+
+The following adjustment might or might not be better given the structure shown:
+
+
+```cpp
+#include <linux/kcov.h>
+#include <linux/livepatch.h>
+#include <linux/thread_info.h>
+
+#include <asm/pgtable.h>
+#include <asm/pgalloc.h>
+#include <linux/uaccess.h>
+	if (retval)
+		goto bad_fork_cleanup_io;
+
+	if (pid != &init_struct_pid) {
+		pid = alloc_pid(p->nsproxy->pid_ns_for_children);
+		if (IS_ERR(pid)) {
+			return PTR_ERR(pid); // Remove assignment to retval and directly return the error
+		}
+```
+
+
+ORIGINAL CODE:
+```c
+#include <linux/kcov.h>
+#include <linux/livepatch.h>
+#include <linux/thread_info.h>
+
+#include <asm/pgtable.h>
+#include <asm/pgalloc.h>
+#include <linux/uaccess.h>
+	if (retval)
+		goto bad_fork_cleanup_io;
+
+	if (pid != &init_struct_pid) {
+		pid = alloc_pid(p->nsproxy->pid_ns_for_children);
+		if (IS_ERR(pid)) {
+			retval = PTR_ERR(pid);
+```

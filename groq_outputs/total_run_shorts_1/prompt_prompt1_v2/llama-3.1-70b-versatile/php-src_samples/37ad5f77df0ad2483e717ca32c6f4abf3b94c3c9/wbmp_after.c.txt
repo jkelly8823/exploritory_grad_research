@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-7, 11
+VULNERABILITY_DESCRIPTION:
+ Double Free vulnerability
+
+EXPLANATION:
+We observe in lines 4-7 that memory is allocated to wbmp->bitmap using safe_emalloc. However, this memory is not properly freed before a new allocation is made at line 11 for wbmp->bitmap. The original allocation is also not checked for NULL before the reassignment, potentially leading to loss of data. Although we do not see the definition for safe_emalloc in this code snippet, this double assignment suggests that there is an allocation happening twice for wbmp->bitmap.
+
+Moreover, although we cannot verify this based on this snippet alone, gdFree(wbmp) is called when either allocation fails, without freeing wbmp->bitmap. It is essential to free the wbmp->bitmap in this context to avoid memory leaks.
+
+Finally, we see the potential for double free in the following sequence: if safe_emalloc at line 4 succeeds, but safe_emalloc at line 11 fails, the previously allocated memory at line 4 is not freed before wbmp is freed.
+
+RECOMMENDATIONS:
+- Free the memory for wbmp->bitmap before reassigning or overwriting it.
+- Use free(wbmp->bitmap) before gdFree(wbmp) when either allocation fails to prevent potential memory leaks and undefined behavior.
+- Consider re-examining the implementation of safe_emalloc to avoid double free vulnerability.
+
+ORIGINAL CODE:
+```c
+if ((wbmp = (Wbmp *) gdMalloc (sizeof (Wbmp))) == NULL)
+    return (NULL);
+
+if (overflow2(sizeof (int), width)) {
+    gdFree(wbmp);
+    return NULL;
+  }
+if (overflow2(sizeof (int) * width, height)) {
+    gdFree(wbmp);
+    return NULL;
+  }
+
+if ((wbmp->bitmap = (int *) safe_emalloc(sizeof(int), width * height, 0)) == NULL)
+    {
+      gdFree (wbmp);
+      return (NULL);
+  printf ("W: %d, H: %d\n", wbmp->width, wbmp->height);
+#endif
+
+if (overflow2(sizeof (int), wbmp->width) ||
+    overflow2(sizeof (int) * wbmp->width, wbmp->height))
+    {
+      gdFree(wbmp);
+      return (-1);
+    }
+
+if ((wbmp->bitmap = (int *) safe_emalloc(wbmp->width * wbmp->height, sizeof(int), 0)) == NULL)
+    {
+      gdFree (wbmp);
+      return (-1);
+```

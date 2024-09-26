@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-14
+VULNERABILITY_DESCRIPTION:
+Unintended Relative Path Resolution
+EXPLANATION:
+The given PHP script snippet utilizes relative directory traversal using `chdir('..')`. This can be hazardous as it trusts input from the environment using `getenv("TEST_PHP_EXECUTABLE")`, but more directly, this potential vulnerability arises as a result of not validating or sanitizing the current working directory when changing it relatively.
+
+Moreover, the chdir function changes the directory of the current script execution. If this code is used in an uncontrolled environment with inadequate input validation or without user access controls, an attacker could potentially utilize this to perform a Directory Traversal attack, where they can force the function to execute outside of the intended directory.
+
+Additionally, the usage of relative paths, specifically `..`, may result in an unexpected behavior based on where the directory traversal starts. As there is a minimum of 2 back-to-back directory traversals, that means that this could result in unpredictable behavior and cause harm to the expected state of the running process directory structure.
+
+However, in the context of this simple example and given potentially sanitized directory hierarchies and operating system directory restrictions, these vulnerabilities may not directly be exploited.
+
+RECOMMENDATIONS:
+Implement input validation to prevent directory traversal attacks and ensure you can handle an insecure input or execute in an environment without adequate security mechanisms in place. 
+
+For added directory management and accountability, instead of depending solely on `chdir()` with a `..`, one could initialize a directory path from user input and use an approach as can be seen below, to set it as opposed to leveraging only this potentially flawed method.
+
+```php
+$desired_directory = realpath(dirname($potential_inputs_directory) . '/..') // Get one level higher
+// do validation here
+// chdir() only into the validated, sanitized path
+```
+Replace `getenv()` calls with more robust security when taking in external inputs.
+ 
+Apply file-system-wide output inspection and restrictions using `ini_set()` as per provided constraints to run user input files.
+Apply a timeout range when working in areas that deal with changing or using directories.
+
+ORIGINAL CODE:
+```php
+<?php
+$php = getenv("TEST_PHP_EXECUTABLE");
+$test_code = <<<PHP
+<?php
+chdir('..');
+var_dump(get_current_user() != "");
+chdir('..');
+var_dump(getmyinode() != false);
+var_dump(getlastmod() != false);
+PHP;
+
+file_put_contents("bug61546_sub.php", $test_code);
+```

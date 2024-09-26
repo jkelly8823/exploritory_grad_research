@@ -1,0 +1,59 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 32
+VULNERABILITY_DESCRIPTION:
+The code contains a potential vulnerability in the form of a null pointer dereference. In the function `EVP_CIPHER_is_a`, the function does not check if the `cipher->prov` is null before calling `evp_is_a` with it as an argument.
+
+EXPLANATION:
+In the function `EVP_CIPHER_is_a`, the code first checks if the `cipher` pointer is null and returns 0 if it is. However, it then calls `evp_is_a` with `cipher->prov` as an argument without checking if `cipher->prov` is null. This means that if `cipher` is not null but `cipher->prov` is null, the code will attempt to call `evp_is_a` with a null pointer, resulting in undefined behavior.
+
+Similarly, the same vulnerability exists in the function `EVP_MD_is_a`.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add a null check for `cipher->prov` and `md->prov` before calling `evp_is_a`. Here is how you can do it:
+
+```c
+int EVP_CIPHER_is_a(const EVP_CIPHER *cipher, const char *name)
+{
+    if (cipher == NULL || cipher->prov == NULL)
+        return evp_is_a(NULL, 0, EVP_CIPHER_get0_name(cipher), name);
+    return evp_is_a(cipher->prov, cipher->name_id, NULL, name);
+}
+
+int EVP_MD_is_a(const EVP_MD *md, const char *name)
+{
+    if (md == NULL || md->prov == NULL)
+        return evp_is_a(NULL, 0, EVP_MD_get0_name(md), name);
+    return evp_is_a(md->prov, md->name_id, NULL, name);
+}
+```
+
+ORIGINAL CODE:
+```c
+int EVP_CIPHER_CTX_get_iv_length(const EVP_CIPHER_CTX *ctx)
+{
+    // ...
+}
+
+int EVP_CIPHER_CTX_get_tag_length(const EVP_CIPHER_CTX *ctx)
+{
+    // ...
+}
+
+int EVP_CIPHER_is_a(const EVP_CIPHER *cipher, const char *name)
+{
+    if (cipher == NULL)
+        return 0;
+    if (cipher->prov != NULL)
+        return evp_is_a(cipher->prov, cipher->name_id, NULL, name);
+    return evp_is_a(NULL, 0, EVP_CIPHER_get0_name(cipher), name);
+}
+
+int EVP_MD_is_a(const EVP_MD *md, const char *name)
+{
+    if (md == NULL)
+        return 0;
+    if (md->prov != NULL)
+        return evp_is_a(md->prov, md->name_id, NULL, name);
+    return evp_is_a(NULL, 0, EVP_MD_get0_name(md), name);
+}
+```

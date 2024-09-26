@@ -1,0 +1,70 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+No apparent vulnerabilities found in the given code snippet.
+EXPLANATION:
+This code snippet appears to be part of a test suite, which is executing Node.js processes with different policy files and input scripts. The test cases check error messages and exit codes of these processes to ensure that certain conditions are met. Given the test nature of this code, it's not attempting to introduce or handle untrusted input in a way that could be exploited.
+RECOMMENDATIONS:
+No recommendations for fixing a vulnerability are necessary, as no vulnerabilities were found.
+
+ORIGINAL CODE:
+```javascript
+const { spawnSync } = require('child_process');
+const fixtures = require('../common/fixtures.js');
+
+{
+  const policyFilepath = fixtures.path('policy-manifest', 'invalid.json');
+  const result = spawnSync(process.execPath, [
+    '--experimental-policy',
+    policyFilepath,
+    './fhqwhgads.js',
+  ]);
+
+  assert.notStrictEqual(result.status, 0);
+  const stderr = result.stderr.toString();
+  assert.match(stderr, /ERR_MANIFEST_INVALID_SPECIFIER/);
+  assert.match(stderr, /pattern needs to have a single trailing "\*"/);
+}
+
+{
+  const policyFilepath = fixtures.path('policy-manifest', 'onerror-exit.json');
+  const result = spawnSync(process.execPath, [
+    '--experimental-policy',
+    policyFilepath,
+    '-e',
+    'require("os").cpus()',
+  ]);
+
+  assert.notStrictEqual(result.status, 0);
+  const stderr = result.stderr.toString();
+  assert.match(stderr, /ERR_MANIFEST_DEPENDENCY_MISSING/);
+  assert.match(stderr, /does not list module as a dependency specifier for conditions: require, node, node-addons/);
+}
+
+{
+  const policyFilepath = fixtures.path('policy-manifest', 'onerror-exit.json');
+  const mainModuleBypass = fixtures.path('policy-manifest', 'main-module-bypass.js');
+  const result = spawnSync(process.execPath, [
+    '--experimental-policy',
+    policyFilepath,
+    mainModuleBypass,
+  ]);
+
+  assert.notStrictEqual(result.status, 0);
+  const stderr = result.stderr.toString();
+  assert.match(stderr, /ERR_MANIFEST_DEPENDENCY_MISSING/);
+  assert.match(stderr, /does not list os as a dependency specifier for conditions: require, node, node-addons/);
+}
+
+{
+  const policyFilepath = fixtures.path('policy-manifest', 'onerror-resource-exit.json');
+  const objectDefinePropertyBypass = fixtures.path('policy-manifest', 'object-define-property-bypass.js');
+  const result = spawnSync(process.execPath, [
+    '--experimental-policy',
+    policyFilepath,
+    objectDefinePropertyBypass,
+  ]);
+
+  assert.strictEqual(result.status, 0);
+}
+```

@@ -1,0 +1,26 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5
+VULNERABILITY_DESCRIPTION: Potential Denial of Service Vulnerability, specifically an excessive resource consumption vulnerability.
+
+EXPLANATION:
+This vulnerability arises due to an open condition where the `invalid_frame_count_` can keep incrementing unchecked. This could be exploited by sending an attacker-supplied input stream of bogus frames. A combination of frequent frame transmissions and the 'CVE-2019-9514' revert condition could eventually increase the count beyond the '1000' threshold and hit the error handling endpoint; it's vital to include additional parameter checks or robust network error handling before `invalid_frame_count_` reaches certain threshold(s). This was observed within lines 4-5.
+
+RECOMMENDATIONS:
+1. Implement a counter reset protocol. Occasionally reviewing the count and resetting under proper situations might be helpful in mitigating risk. Also take into consideration that a prolonged increase can potentially flag false positives which impact reliability.
+2. Consider checking additional threshold after a fixed time period with conditions in place or by introducing error state timeouts that reset the value of `invalid_frame_count_`.
+3. The actual response to increment beyond `1000` should be better regulated - perhaps adding more thresholds, applying varying recovery styles and handling network error to accommodate varied needs (e.g. handling normal increase patterns or network intensive conditions)
+
+ORIGINAL CODE:
+```cpp
+Http2Session* session = static_cast<Http2Session*>(user_data);
+
+Debug(session, "invalid frame received, code: %d", lib_error_code);
+if (session->invalid_frame_count_++ > 1000 &&
+    !IsReverted(SECURITY_REVERT_CVE_2019_9514)) {
+  return 1;
+}
+
+// If the error is fatal or if error code is ERR_STREAM_CLOSED... emit error
+if (nghttp2_is_fatal(lib_error_code) ||
+    lib_error_code == NGHTTP2_ERR_STREAM_CLOSED) {
+```

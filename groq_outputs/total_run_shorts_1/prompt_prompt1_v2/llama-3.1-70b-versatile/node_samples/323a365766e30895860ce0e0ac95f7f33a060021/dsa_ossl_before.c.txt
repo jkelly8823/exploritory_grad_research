@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Potential OpenSSL Synchronization Vulnerability
+
+EXPLANATION:
+The given code snippet appears to be using OpenSSL's BN_MONT_CTX_set_locked function, which is used to set up a Montgomery multiplication context for a large integer. The issue arises from the potential misuse of the lock in a multi-threaded environment.
+
+The `BN_MONT_CTX_set_locked` function is a thread-safe version of `BN_MONT_CTX_set`, but it assumes that the lock will be held during the execution of the function. However, this snippet does not show the lock being acquired before calling this function, which could lead to a potential synchronization vulnerability if other threads are accessing the same lock and `dsa` object.
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, ensure that the lock is acquired before calling `BN_MONT_CTX_set_locked` and released afterwards. This can be achieved using `CRYPTO_THREAD_write_lock` and `CRYPTO_THREAD_unlock` functions, assuming the lock is a OpenSSL mutex.
+
+Add the following code before the line:
+```c
+CRYPTO_THREAD_write_lock(dsa->lock);
+```
+And the following code after the line:
+```c
+CRYPTO_THREAD_unlock(dsa->lock);
+```
+This will ensure that the lock is properly acquired and released, preventing potential synchronization issues in a multi-threaded environment.
+
+ORIGINAL CODE:
+```c
+} while (BN_is_zero(k));
+
+BN_set_flags(k, BN_FLG_CONSTTIME);
+
+if (dsa->flags & DSA_FLAG_CACHE_MONT_P) {
+    if (!BN_MONT_CTX_set_locked(&dsa->method_mont_p,
+                                dsa->lock, dsa->p, ctx))
+```

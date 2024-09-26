@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-15
+VULNERABILITY_DESCRIPTION:
+Path Traversal and Directory Path Injection Vulnerability
+ EXPLANATION:
+The vulnerability is present in the lines where the filename is extracted from the HTTP header and then used to output the file to a local upload directory. The filename is obtained using `pLine.lastIndexOf("\\")` which could lead to a path traversal vulnerability. An attacker could potentially manipulate the filename to traverse beyond the intended upload directory, potentially allowing them to write to sensitive areas of the file system.
+
+Furthermore, the upload location is created by concatenating a constant directory string with the filename. This is vulnerable to directory path injection, which could allow an attacker to write to arbitrary locations within the file system.
+
+Another concern is the use of `FileWriter` with the `true` parameter, which means that the file will be appended to if it already exists. This could lead to unintended behavior or data corruption.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the filename before using it to prevent path traversal and directory path injection attacks. Consider using a library such as Apache Commons IO to handle file operations safely.
+2. Use a secure approach to generate unique filenames for uploaded files, such as using a UUID or a random string. This will prevent an attacker from exploiting the `true` parameter in the `FileWriter` constructor.
+3. Consider using a more secure approach to handling multipart/form-data uploads, such as using Java's built-in `MultipartConfig` annotation or a library like Apache Commons FileUpload.
+
+ORIGINAL CODE:
+```java
+public class FileUploadServlet extends HttpServlet {
+    ...
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        ...
+        String pLine = new String();String uploadLocation = new String(UPLOAD_DIRECTORY_STRING); //Constant value
+        // verify that content type is multipart form data
+        if (contentType != null && contentType.indexOf("multipart/form-data") != -1) {
+            // extract the filename from the Http header
+            BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));...pLine = br.readLine();String filename = pLine.substring(pLine.lastIndexOf("\\"), pLine.lastIndexOf("\""));...
+            // output the file to the local upload directory
+            try {
+                BufferedWriter bw = new BufferedWriter(new FileWriter(uploadLocation+filename, true));for (String line; (line=br.readLine())!=null; ) {if (line.indexOf(boundary) == -1) {bw.write(line);bw.newLine();bw.flush();}} //end of for loopbw.close();
+                // ...
+            } catch (IOException ex) {...}
+        }
+        // ...
+    }
+    ...
+}
+```

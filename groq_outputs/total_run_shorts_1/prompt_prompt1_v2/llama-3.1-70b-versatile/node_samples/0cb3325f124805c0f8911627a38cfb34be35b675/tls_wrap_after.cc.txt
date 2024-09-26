@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: 
+Dangling Pointer Vulnerability (Potential Use-After-Free)
+
+EXPLANATION:
+The vulnerability is introduced in line 7. The code is storing the address of `bufs[i]` in the `pending_cleartext_input_` container. However, there is no guarantee that the `bufs` array will not go out of scope or be reallocated after this insertion, potentially causing a dangling pointer. If the `bufs` array is freed or its memory is reused, accessing the stored pointers in `pending_cleartext_input_` could lead to undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, instead of storing pointers to `bufs[i]`, you could store copies of the buffers or use a smart pointer that manages the memory. Alternatively, you could ensure that the `bufs` array remains valid for as long as the pointers are stored in `pending_cleartext_input_`.
+
+Here's a possible fix that involves storing copies of the buffers:
+
+```cpp
+pending_cleartext_input_.insert(pending_cleartext_input_.end(),
+                                bufs[i],
+                                bufs[count]);
+```
+
+Note: This fix assumes that `pending_cleartext_input_` is a container of the same type as `bufs`.
+
+If you cannot store copies of the buffers, you can use a smart pointer like `std::unique_ptr` or `std::shared_ptr` to manage the memory:
+
+```cpp
+std::vector<std::unique_ptr<char[]>> pending_cleartext_input_;
+...
+pending_cleartext_input_.emplace_back(new char[bufs[i]]);
+```
+
+ORIGINAL CODE:
+```cpp
+if (i != count) {
+    int err;
+    Local<Value> arg = GetSSLError(written, &err, &error_);
+    if (!arg.IsEmpty()) {
+      current_write_ = nullptr;
+      return UV_EPROTO;
+    }
+
+    pending_cleartext_input_.insert(pending_cleartext_input_.end(),
+                                    &bufs[i],
+                                    &bufs[count]);
+```

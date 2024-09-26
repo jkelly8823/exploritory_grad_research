@@ -1,0 +1,66 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 77-81, 84-87
+VULNERABILITY_DESCRIPTION:
+Possible double-free error, use-after-free error, and memory leaks.
+
+EXPLANATION:
+The code snippet contains several memory management issues. In lines 77-81 and 84-87, the `got` pointer is assigned to `OPENSSL_malloc` and then multiplied by 2 (`got_len *= 2`) at line 85 and 87. However, there is no corresponding multiplication or reallocation of the memory. This can lead to a use-after-free error, as the program may access memory that has been freed or reallocated.
+
+Moreover, at line 81, `OPENSSL_malloc` is called and the result is checked for `NULL`. If `TEST_ptr(got)` fails, the code jumps to `err` and frees the memory with `t->err = "MALLOC_FAILURE";`. However, if `TEST_ptr(got)` succeeds, but `EVP_DigestSignFinal` or `EVP_DigestSign` fails, the memory allocated by `OPENSSL_malloc` is not freed, resulting in a memory leak.
+
+RECOMMENDATIONS:
+
+1. For lines 77-81 and 84-87, reallocate the memory to match the new `got_len` value using `OPENSSL_realloc`. Ensure that the reallocation is done correctly, considering the new size and the pointer's initial allocation.
+
+2. Consider using smart pointers or memory management classes to avoid manual memory management.
+
+3. After calling `EVP_DigestSignFinal` and `EVP_DigestSign`, check the results and free the memory allocated by `OPENSSL_malloc` to avoid memory leaks.
+
+ORIGINAL CODE:
+(partially included) 
+...
+    unsigned char *got = NULL;
+    size_t got_len = 0;
+
+    if (fips_provider_version_eq(libctx, 3, 0, 0)) {
+        /* FIPS(3.0.0): can't deal with oversized output buffers #18533 */
+        got_len = expected->output_len;
+    } else {
+        /* Find out the KDF output size */
+        if (EVP_PKEY_derive(expected->ctx, NULL, &got_len) <= 0) {
+            t->err = "INTERNAL_ERROR";
+            goto err;
+        }
+
+        /*
+         * We may get an absurd output size, which signals that anything goes.
+         * If not, we specify a too big buffer for the output, to test that
+         * EVP_PKEY_derive() can cope with it.
+         */
+        if (got_len == SIZE_MAX || got_len == 0)
+            got_len = expected->output_len;
+        else
+            got_len = expected->output_len * 2;
+    }
+
+    if (!TEST_ptr(got = OPENSSL_malloc(got_len == 0 ? 1 : got_len))) {
+        t->err = "INTERNAL_ERROR";
+        goto err;
+        t->err = "MALLOC_FAILURE";
+        goto err;
+    }
+    got_len *= 2;
+    if (!EVP_DigestSignFinal(expected->ctx, got, &got_len)) {
+        t->err = "DIGESTSIGNFINAL_ERROR";
+        goto err;
+    }
+        t->err = "MALLOC_FAILURE";
+        goto err;
+    }
+    got_len *= 2;
+    if (!EVP_DigestSign(expected->ctx, got, &got_len,
+                        expected->osin, expected->osin_len)) {
+        t->err = "DIGESTSIGN_ERROR";
+        goto err;
+...
+(Please note that this analysis is not exhaustive due to the provided partial code snippet)

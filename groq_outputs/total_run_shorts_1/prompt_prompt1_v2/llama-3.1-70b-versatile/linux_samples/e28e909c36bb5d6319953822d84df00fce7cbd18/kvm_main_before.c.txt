@@ -1,0 +1,95 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9-10, 18-19, 24
+VULNERABILITY_DESCRIPTION: 
+This code snippet contains potential buffer overflow vulnerabilities in the `vm_stat_get` and `vm_stat_get_vcpu` functions. It also contains potential null pointer dereferences in the `kvm_create_vm` function and `vm_stat_get_vcpu`.
+
+EXPLANATION:
+The vulnerabilities arise from the use of arbitrary memory offsets and pointer arithmetic in the `vm_stat_get` and `vm_stat_get_vcpu` functions. The function takes a user-provided offset, converts it to a void pointer, and then accesses memory at that address. This can lead to buffer overflows if the provided offset exceeds the bounds of the structure.
+
+Additionally, the `kvm_create_vm` function and `vm_stat_get_vcpu` use a pointer (`kvm_debugfs_dir`) without checking if it is null first, which can result in null pointer dereferences.
+
+RECOMMENDATIONS:
+1. Validate user-provided offsets to prevent buffer overflows. Bounds-check the offset against the structure it is being used with to ensure it is within valid memory.
+2. Check for null pointers before dereferencing them. In the `kvm_create_vm` function and `vm_stat_get_vcpu`, check `kvm_debugfs_dir` for null before using it.
+
+ORIGINAL CODE:
+```c
+#define CREATE_TRACE_POINTS
+#include <trace/events/kvm.h>
+
+MODULE_AUTHOR("Qumranet");
+MODULE_LICENSE("GPL");
+
+/* Architectures should define their poll value according to the halt latency */
+struct dentry *kvm_debugfs_dir;
+EXPORT_SYMBOL_GPL(kvm_debugfs_dir);
+
+static long kvm_vcpu_ioctl(struct file *file, unsigned int ioctl,
+			   unsigned long arg);
+#ifdef CONFIG_KVM_COMPAT
+static long kvm_vcpu_compat_ioctl(struct file *file, unsigned int ioctl,
+	kvfree(slots);
+}
+
+static struct kvm *kvm_create_vm(unsigned long type)
+{
+	int r, i;
+	struct kvm *kvm = kvm_arch_alloc_vm();
+	int i;
+	struct mm_struct *mm = kvm->mm;
+
+	kvm_arch_sync_events(kvm);
+	spin_lock(&kvm_lock);
+	list_del(&kvm->vm_list);
+	spin_unlock(&kvm_lock);
+	}
+#endif
+	r = anon_inode_getfd("kvm-vm", &kvm_vm_fops, kvm, O_RDWR | O_CLOEXEC);
+	if (r < 0)
+		kvm_put_kvm(kvm);
+
+	return r;
+}
+
+	.notifier_call = kvm_cpu_hotplug,
+};
+
+static int vm_stat_get(void *_offset, u64 *val)
+{
+	unsigned offset = (long)_offset;
+	struct kvm *kvm;
+
+	*val = 0;
+	spin_lock(&kvm_lock);
+	list_for_each_entry(kvm, &vm_list, vm_list)
+		*val += *(u32 *)((void *)kvm + offset);
+	spin_unlock(&kvm_lock);
+	return 0;
+}
+
+{
+	unsigned offset = (long)_offset;
+	struct kvm *kvm;
+	struct kvm_vcpu *vcpu;
+	int i;
+
+	*val = 0;
+	spin_lock(&kvm_lock);
+	list_for_each_entry(kvm, &vm_list, vm_list)
+		kvm_for_each_vcpu(i, vcpu, kvm)
+			*val += *(u32 *)((void *)vcpu + offset);
+
+	spin_unlock(&kvm_lock);
+	return 0;
+}
+
+	if (kvm_debugfs_dir == NULL)
+		goto out;
+
+	for (p = debugfs_entries; p->name; ++p) {
+		if (!debugfs_create_file(p->name, 0444, kvm_debugfs_dir,
+					 (void *)(long)p->offset,
+					 stat_fops[p->kind]))
+			goto out_dir;
+```
+Note: `p` variable is not declared in the given code, it is assumed that `p` is declared somewhere else in the code.

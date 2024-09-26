@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11, 17
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to DNS Rebindings and uncontrolled Recursion due to the use of `req.hostname` being reassigned without proper validation.
+EXPLANATION:
+The `req.hostname` is first assigned the value of `hostname` and then reassigned the value of `name`. This can potentially lead to a DNS Rebinding vulnerability, especially if the `name` variable contains user-controlled input. This could allow an attacker to trick the DNS resolver into resolving the name to a different IP address.
+
+Additionally, the `req.ttl` is assigned the value of `!!(options && options.ttl)`, which is a boolean value. However, the `req.ttl` is typically expected to be a numeric value. This can potentially lead to uncontrolled recursion, as the `req.ttl` value may not be properly validated.
+
+RECOMMENDATIONS:
+1. Validate the `name` variable to ensure it is a valid DNS name and does not contain any malicious input.
+2. Ensure that `req.hostname` is not reassigned without proper validation and sanitization.
+3. Ensure that `req.ttl` is assigned a numeric value and not a boolean value.
+4. Use a secure DNS resolver that can detect and prevent DNS Rebinding attacks.
+
+ORIGINAL CODE:
+```javascript
+'use strict';
+
+const cares = internalBinding('cares_wrap');
+const { toASCII } = require('internal/idna');
+const { isIP, isIPv4, isLegalPort } = require('internal/net');
+const { customPromisifyArgs } = require('internal/util');
+const errors = require('internal/errors');
+const {
+  req.hostname = hostname;
+  req.oncomplete = all ? onlookupall : onlookup;
+
+  var err = cares.getaddrinfo(req, toASCII(hostname), family, hints, verbatim);
+  if (err) {
+    process.nextTick(callback, dnsException(err, 'getaddrinfo', hostname));
+    return {};
+  }
+    req.hostname = name;
+    req.oncomplete = onresolve;
+    req.ttl = !!(options && options.ttl);
+    var err = this._handle[bindingName](req, toASCII(name));
+    if (err) throw dnsException(err, bindingName, name);
+    return req;
+  }
+  Object.defineProperty(query, 'name', { value: bindingName });
+```

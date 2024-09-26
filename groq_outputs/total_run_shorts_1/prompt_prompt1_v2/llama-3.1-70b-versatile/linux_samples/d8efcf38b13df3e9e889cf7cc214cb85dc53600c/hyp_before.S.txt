@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-11
+VULNERABILITY_DESCRIPTION:
+Invalid context assumption leading to incorrect use of registers.
+
+EXPLANATION:
+This code snippet is written in ARM64 assembly language. However, it assumes an incorrect context. Specifically, it uses 'pop' and 'push' instructions to access registers x0-x3 after an 'eret' instruction, which switches to EL1 mode from EL2. In EL1 mode, the return stack pointer (x30) is different from the stack pointer (x31) used in EL2. The 'pop' instruction (line 8) should use 'pop x29' for the frame record pointer, but instead, it's updating the wrong registers. Additionally, using 'pop x0, x1' (line 9) and 'pop x2, x3' (line 10) before 'pop lr' (line 11) might also lead to incorrect register usage.
+
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is essential to consider the proper usage of 'pop' and 'push' instructions based on the current mode (EL1 or EL2) and correctly utilize the return stack pointer and the stack pointer. As the hunk of this code only contains a part of the code and might be missing some context, rewrite the code considering the context, and handle the stack frame accordingly.
+
+ORIGINAL CODE:
+```
+.align	2
+
+ENTRY(kvm_call_hyp)
+	hvc	#0
+	ret
+ENDPROC(kvm_call_hyp)
+	pop	x2, x3
+	pop	x0, x1
+
+	push	lr, xzr
+
+	/*
+	 * Compute the function address in EL2, and shuffle the parameters.
+	 */
+	blr	lr
+
+	pop	lr, xzr
+	eret
+
+el1_trap:
+	/*
+	 * x1: ESR
+```

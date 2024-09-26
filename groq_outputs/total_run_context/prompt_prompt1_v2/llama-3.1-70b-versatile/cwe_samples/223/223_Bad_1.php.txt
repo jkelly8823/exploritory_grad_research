@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 6, 8, 9
+VULNERABILITY_DESCRIPTION:
+Path Traversal and Symbolic Link (Symlink) vulnerabilities are present in the given code.
+
+EXPLANATION:
+The code fails to properly handle symbolic links and allows path traversal. If a symbolic link points to a file outside of the intended directory, the function will resolve the link and read the contents of the file, potentially exposing sensitive data. Additionally, if the user is the owner of the file they are trying to access (which is not a secure way to manage permissions), the function does not sanitize the input, allowing for potential path traversal attacks.
+
+On line 8, the code resolves the symbolic link using `readlink($filename)`, but it does not validate the resolved path. This allows an attacker to potentially access sensitive files.
+
+On line 9, the code uses `echo file_get_contents($realFile);`, which directly reads and outputs the contents of the file without proper validation or sanitization.
+
+On line 6, `is_link($filename)` is used to check if the file is a symbolic link, but this is not enough to prevent the vulnerability, as the resolved path is not validated.
+
+RECOMMENDATIONS:
+
+1. Use `realpath($filename)` instead of `readlink($filename)` to resolve symbolic links and get the absolute path of the file.
+
+2. Validate the resolved path to ensure it is within the intended directory.
+
+3. Use proper permission checks instead of relying on file ownership.
+
+4. Sanitize the file path and name to prevent path traversal attacks.
+
+5. Avoid directly outputting file contents without proper validation or sanitization.
+
+6. Consider using a more secure way to read and output file contents, such as using a library that handles file operations securely.
+
+ORIGINAL CODE:
+
+```php
+function readFile($filename){
+    $user = getCurrentUser();$realFile = $filename;
+
+    //resolve file if its a symbolic link
+    if(is_link($filename)){$realFile = readlink($filename);}
+    if(fileowner($realFile) == $user){echo file_get_contents($realFile);return;}else{echo 'Access denied';writeLog($user . ' attempted to access the file '. $filename . ' on '. date('r'));}
+}
+```

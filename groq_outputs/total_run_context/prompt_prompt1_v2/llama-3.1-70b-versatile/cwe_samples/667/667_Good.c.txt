@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7
+VULNERABILITY_DESCRIPTION: 
+The pthread_mutex_unlock() function is called with the return value, but it does not check for its result. If pthread_mutex_unlock() fails, the error code will be lost.
+
+EXPLANATION:
+The provided code locks a mutex with pthread_mutex_lock() and checks its result for errors. However, it does not follow the same pattern when unlocking the mutex with pthread_mutex_unlock(). If pthread_mutex_unlock() fails, its return value will be lost because it is returned immediately. This can lead to the loss of error information and potentially crashes or other unexpected behavior in the program.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the return value of pthread_mutex_unlock() should be stored in a variable and checked for errors. Here's an updated version of the function:
+```
+int f(pthread_mutex_t *mutex) {
+    int result_lock;
+    int result_unlock;
+    result_lock = pthread_mutex_lock(mutex);
+    if (0 != result_lock) return result_lock;
+
+    /* access shared resource */
+
+    result_unlock = pthread_mutex_unlock(mutex);
+    if (0 != result_unlock) return result_unlock;
+
+    return 0;
+}
+```
+Alternatively, if the code intends to ignore the return value of pthread_mutex_unlock(), it should be assigned to a temporary variable or explicitly cast to void to make it clear that the value is being ignored.
+```
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);
+    if (0 != result)return result;
+
+    /* access shared resource */
+
+    (void)pthread_mutex_unlock(mutex);
+    return 0;
+}
+```
+ORIGINAL CODE:
+```
+int f(pthread_mutex_t *mutex) {
+    int result;
+    result = pthread_mutex_lock(mutex);if (0 != result)return result;
+
+    /* access shared resource */
+
+
+    return pthread_mutex_unlock(mutex);
+}
+```

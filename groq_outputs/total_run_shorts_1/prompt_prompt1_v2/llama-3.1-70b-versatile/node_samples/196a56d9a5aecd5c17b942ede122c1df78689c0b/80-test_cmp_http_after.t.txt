@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12, 13, 14
+VULNERABILITY_DESCRIPTION:
+Insecure use of kill and waitpid functions, possibly leading to a potential signal handling vulnerability.
+
+EXPLANATION:
+The kill function is used with the 'KILL' signal, which forces the process to terminate immediately. However, this can cause issues if the process is in an inconsistent state, potentially leading to system crashes or data corruption. Furthermore, the waitpid function is used with an option that prevents the parent process from synchronizing with the child process properly. If the child process produces output that is not properly handled by the parent process, this could lead to a deadlock or other synchronization issues. Additionally, using 'KILL' signal does not allow child process to properly close its resources.
+
+RECOMMENDATIONS:
+Instead of using the 'KILL' signal, it is recommended to use a more gentle termination signal such as 'TERM' or 'INT', which allows the child process to exit cleanly. Also, the waitpid function should be used with options that ensure proper synchronization between the parent and child processes, such as WNOHANG and WUNTRACED.
+
+ORIGINAL CODE:
+```perl
+my $pid = $_[0];
+print "Killing mock server with pid=$pid\n";
+kill('KILL', $pid);
+waitpid($pid, 0);
+```
+
+RECOMMENDATION WITH FIX:
+
+```perl
+my $pid = $_[0];
+print "Stopping mock server with pid=$pid\n";
+kill('TERM', $pid);
+waitpid($pid, WNOHANG|WUNTRACED);
+if ($? == -1) {
+    # Handle failure to stop process
+} elsif ($? & 127) {
+    # Process was killed by a signal
+} else {
+    # Process terminated normally
+}
+```
+This version uses a more gentle termination signal, 'TERM', which allows the child process to exit cleanly. It also uses waitpid with options WNOHANG|WUNTRACED, which ensures proper synchronization between the parent and child processes. Additionally, it checks the return value of waitpid to handle potential issues during process termination.

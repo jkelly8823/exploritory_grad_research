@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-22
+VULNERABILITY_DESCRIPTION:
+The code is intentionally creating a server that expects to encounter a 'HPE_HEADER_OVERFLOW' error due to a deliberately oversized HTTP payload, which can be exploited by an attacker to cause denial of service or potentially even execute arbitrary code.
+
+EXPLANATION:
+The vulnerability in this code lies in its attempt to simulate a parsing error that could occur when handling HTTP requests with oversized headers. The server is set up to expect an error when a client sends a payload that exceeds the maximum header size allowed. However, in doing so, the code creates a potential vulnerability by deliberately creating an oversized payload and setting up error handling that may be triggered by an attacker, potentially causing a denial-of-service or potentially allowing an attacker to execute arbitrary code.
+
+RECOMMENDATIONS:
+- Instead of creating an oversized payload to simulate an error, use a more controlled approach to test error handling, such as setting up a mock client or using a testing framework that allows for more precise control over the test environment.
+- Consider implementing input validation and sanitization to prevent clients from sending oversized payloads in the first place.
+- Make sure that error handling mechanisms are robust and do not allow attackers to execute arbitrary code or cause denial-of-service attacks.
+- Consider using a more secure parser or updating the version of the parser being used to one that has fixed the 'HPE_HEADER_OVERFLOW' vulnerability.
+
+ORIGINAL CODE:
+const { createServer, maxHeaderSize } = require('http');
+const { createConnection } = require('net');
+
+const { getOptionValue } = require('internal/options');
+
+const CRLF = '\r\n';
+const DUMMY_HEADER_NAME = 'Cookie: ';
+const DUMMY_HEADER_VALUE = 'a'.repeat(
+  // Plus one is to make it 1 byte too big
+  maxHeaderSize - DUMMY_HEADER_NAME.length - (2 * CRLF.length) + 1
+);
+const PAYLOAD_GET = 'GET /blah HTTP/1.1';
+const PAYLOAD = PAYLOAD_GET + CRLF +
+  DUMMY_HEADER_NAME + DUMMY_HEADER_VALUE + CRLF.repeat(2);
+const server = createServer();
+
+server.on('connection', mustCall((socket) => {
+  // Legacy parser gives sligthly different response.
+  // This discripancy is not fixed on purpose.
+  const legacy = getOptionValue('--http-parser') === 'legacy';
+  socket.on('error', expectsError({
+    name: 'Error',
+    message: 'Parse Error: Header overflow',
+    code: 'HPE_HEADER_OVERFLOW',
+    bytesParsed: maxHeaderSize + PAYLOAD_GET.length - (legacy ? -1 : 0),
+    rawPacket: Buffer.from(PAYLOAD)
+  }));
+}));

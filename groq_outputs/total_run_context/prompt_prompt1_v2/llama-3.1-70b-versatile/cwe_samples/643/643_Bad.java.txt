@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION: SQL Injection vulnerability via XPath expression.
+
+EXPLANATION:
+This vulnerability exists because user-provided data (login.getUserName() and login.getPassword()) is not sanitized before being used to construct an XPath expression. This allows an attacker to inject malicious XPath expressions, potentially leading to unauthorized access or data tampering.
+
+The specific risk is that an attacker can use XPath injection to bypass security checks or extract sensitive data from the XML document. By manipulating the login.getUserName() or login.getPassword() values, an attacker can alter the XPath expression to retrieve or modify unintended data.
+
+RECOMMENDATIONS:
+To fix this vulnerability, use a parameterized XPath expression or sanitize user-provided input before constructing the XPath expression. Here are a few alternatives:
+
+*   Use a parameterized XPath expression by replacing the original code with the following:
+
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();
+XPathExpression xlogin = xpath.compile("//users/user[login/text()=$login and password/text()=$password]/home_dir/text()");
+XPathVariableResolver resolver = new MapVariableResolver();
+Map<QName, Object> vars = new HashMap<>();
+vars.put(new QName("login"), login.getUserName());
+vars.put(new QName("password"), login.getPassword());
+String homedir = xlogin.evaluate(d, resolver);
+```
+
+In this example, the `$login` and `$password` variables are externally defined and then later resolved during the execution of the XPath expression, thus preventing any malicious input from affecting the structure of the XPath expression itself.
+
+*   Alternatively, implement proper sanitization of user-provided input before incorporating it into the XPath expression. For example, you can escape any special characters that may be used in XPath syntax.
+
+ORIGINAL CODE:
+```java
+XPath xpath = XPathFactory.newInstance().newXPath();
+XPathExpression xlogin = xpath.compile("//users/user[login/text()='" + login.getUserName() + "' and password/text() = '" + login.getPassword() + "']/home_dir/text()");
+Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File("db.xml"));
+String homedir = xlogin.evaluate(d);
+```

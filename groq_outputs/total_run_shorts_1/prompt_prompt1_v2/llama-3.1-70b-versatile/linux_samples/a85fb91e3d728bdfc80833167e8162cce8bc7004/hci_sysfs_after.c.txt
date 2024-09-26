@@ -1,0 +1,78 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 28-31
+VULNERABILITY_DESCRIPTION:
+The code uses an infinite loop to deregister the device in the `hci_conn_del_sysfs` function, potentially leading to a memory leak due to the repeated dereference of an unassigned `dev` pointer.
+
+EXPLANATION:
+In the `hci_conn_del_sysfs` function, there is an infinite loop where the `put_device(dev)` function is called repeatedly. However, the `dev` pointer is not assigned a value within this loop. This will cause an infinite loop of dereferences of an unassigned pointer, potentially leading to a memory leak or a segmentation fault. This is likely a bug and may have unintended consequences.
+
+RECOMMENDATIONS:
+The infinite loop should be modified to only call `put_device(dev)` on the `dev` pointer that needs to be removed. This is likely the `conn->dev` pointer, which is the same one passed to `device_unregister(&conn->dev)` later in the function. The corrected code should look something like this:
+```c
+void hci_conn_del_sysfs(struct hci_conn *conn)
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	bt_dev_dbg(hdev, "conn %p", conn);
+
+	if (!device_is_registered(&conn->dev)) {
+		/* If device_add() has *not* succeeded, use *only* put_device()
+		 * to drop the reference count.
+		 */
+		put_device(&conn->dev);
+		return;
+	}
+
+	put_device(&conn->dev);
+	device_unregister(&conn->dev);
+}
+```
+ORIGINAL CODE:
+```c
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	bt_dev_dbg(hdev, "conn %p", conn);
+
+	conn->dev.type = &bt_link;
+	conn->dev.class = &bt_class;
+	conn->dev.parent = &hdev->dev;
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	bt_dev_dbg(hdev, "conn %p", conn);
+
+	if (device_is_registered(&conn->dev))
+		return;
+
+	dev_set_name(&conn->dev, "%s:%d", hdev->name, conn->handle);
+
+	if (device_add(&conn->dev) < 0)
+		bt_dev_err(hdev, "failed to register connection device");
+}
+
+void hci_conn_del_sysfs(struct hci_conn *conn)
+{
+	struct hci_dev *hdev = conn->hdev;
+
+	bt_dev_dbg(hdev, "conn %p", conn);
+
+	if (!device_is_registered(&conn->dev)) {
+		/* If device_add() has *not* succeeded, use *only* put_device()
+		 * to drop the reference count.
+		 */
+		put_device(&conn->dev);
+		return;
+	}
+
+	while (1) {
+		struct device *dev;
+
+		put_device(dev);
+	}
+
+	device_unregister(&conn->dev);
+}
+
+static void bt_host_release(struct device *dev)
+```

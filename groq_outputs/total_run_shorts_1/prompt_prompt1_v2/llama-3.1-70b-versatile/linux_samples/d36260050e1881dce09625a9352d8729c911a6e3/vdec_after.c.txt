@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2, 5, 8-15
+VULNERABILITY_DESCRIPTION:
+Inadequate Error Handling and Potential Invalid Memory Access.
+
+EXPLANATION:
+The code snippet appears to be part of a function that iterates through an array `fmt` and returns a pointer to a valid format structure based on the provided `type` and `index`. However, there are a few issues with the code.
+
+1.  In the line `return NULL;`, the function returns immediately without any checks. This line is unreachable in the context of this snippet but is flagged for awareness in case of upstream movement of code.
+
+2.  The loop counter `i` is used to access the `fmt` array, but there is no bounds checking to prevent an out-of-bounds access in case the `size` variable is not valid.
+
+3.  The line `if (i == size) return NULL;` checks if the loop has iterated through the entire array without finding a match. However, this check comes before the `return &fmt[i];`, where `i` is potentially out of bounds and the access can be invalid.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, it is recommended to add bounds checking for the `fmt` array access and move the `return NULL;` to a valid position. Also, consider adding error handling for cases where the `size` or `type` variables are not valid.
+
+Here is an example of the fixed code:
+
+```c
+if (size <= 0) {
+    return NULL;
+}
+
+for (i = 0; i < size; i++) {
+    // ...
+}
+
+if (i >= size) {
+    // Handle array exhausted without finding valid match case.
+    return NULL;
+}
+
+return &fmt[i];
+```
+
+ORIGINAL CODE:
+```c
+return NULL;
+
+for (i = 0; i < size; i++) {
+    bool valid;
+
+    if (fmt[i].type != type)
+        continue;
+    valid = type != V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ||
+        venus_helper_check_codec(inst, fmt[i].pixfmt);
+    if (k == index && valid)
+        break;
+    if (valid)
+        k++;
+}
+
+if (i == size)
+    return NULL;
+
+return &fmt[i];
+}
+static const struct venus_format *
+```

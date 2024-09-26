@@ -1,0 +1,72 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 39, 44
+VULNERABILITY_DESCRIPTION:
+Resource management vulnerability due to incorrect handling of PCI ROM mapping.
+
+EXPLANATION:
+The vulnerability exists in the way the code handles PCI ROM mapping. If `bar` is not equal to `PCI_ROM_RESOURCE`, the code calls `pci_unmap_rom` without checking if the ROM was actually mapped. This can lead to a resource management vulnerability if `pci_map_rom` was successfully called earlier but its value is now stored in `vdev->barmap[bar]` and not `io`.
+
+Additionally, the ` pci_unmap_rom` should be called in the cleanup path for `bar == PCI_ROM_RESOURCE` instead of directly after the mapping. This ensures that the unmapping is always done, regardless of the return path.
+
+RECOMMENDATIONS:
+The code should be modified to ensure that `pci_unmap_rom` is only called when the ROM was actually mapped. This can be achieved by introducing a separate variable to track if the ROM was mapped.
+
+Here's a suggested modification:
+
+```c
+size_t x_start = 0, x_end = 0;
+resource_size_t end;
+void __iomem *io;
+struct resource *res = &vdev->pdev->resource[bar];
+ssize_t done;
+bool rom_mapped = false; // Introduced a new variable to track if the ROM was mapped
+
+if (pci_resource_start(pdev, bar))
+    end = pci_resource_len(pdev, bar);
+
+count = min(count, (size_t)(end - pos));
+
+if (res->flags & IORESOURCE_MEM) {
+    down_read(&vdev->memory_lock);
+    if (!__vfio_pci_memory_enabled(vdev)) {
+        up_read(&vdev->memory_lock);
+        return -EIO;
+    }
+}
+
+if (bar == PCI_ROM_RESOURCE) {
+    /* The ROM can fill less space than the BAR, so we start the excluded range at the end of the actual ROM.  This makes filling large ROM BARs much faster. */
+    io = pci_map_rom(pdev, &x_start);
+    if (!io) {
+        done = -ENOMEM;
+        goto out;
+    }
+    rom_mapped = true; // Set the new variable to true
+    x_end = end;
+} else {
+    int ret = vfio_pci_setup_barmap(vdev, bar);
+    if (ret) {
+        done = ret;
+        goto out;
+    }
+
+    io = vdev->barmap[bar];
+}
+
+if (rom_mapped) // Use the new variable to call pci_unmap_rom
+    pci_unmap_rom(pdev, io);
+
+out:
+if (res->flags & IORESOURCE_MEM)
+    up_read(&vdev->memory_lock);
+
+return done;
+}
+```
+
+ORIGINAL CODE:
+(Note: The original code is provided, and my answer has used this code as the basis for the modified code I provided but for the answer's format has excluded all but the line numbers of the function it was based on.)
+
+VULNERABLE LINE 27+  34.    io = pci_map_rom(pdev, &x_start);
+VULNERABLE LINE 39 
+ pci_unmap_rom(pdev, io);

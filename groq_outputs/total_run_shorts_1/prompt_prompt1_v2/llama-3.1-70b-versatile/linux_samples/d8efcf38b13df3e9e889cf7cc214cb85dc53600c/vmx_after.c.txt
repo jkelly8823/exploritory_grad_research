@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code appears to be vulnerable to a denial-of-service (DoS) attack due to the direct use of user-controlled input in the form of `intr_info` without proper sanitization or bounds checking.
+
+EXPLANATION:
+The line `return vmcs12->exception_bitmap & (1u << (intr_info & INTR_INFO_VECTOR_MASK));` is vulnerable because it uses the user-controlled value `intr_info` as a mask to shift bits. The `intr_info` variable could potentially exceed the allowed range, causing an out-of-bounds access or potentially even a crash. Moreover, an attacker-controlled value being used to index a bitfield is a red flag for a potential vulnerability.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, it is recommended to validate the `intr_info` value before using it as a mask to shift bits. You can achieve this by adding a bounds check to ensure that `intr_info` is within a valid range. Additionally, consider using a safer data type, such as an enum or a struct with named members, to make the intent of the code clearer.
+
+```cpp
+// Bounds check
+const unsigned int vectorMask = intr_info & INTR_INFO_VECTOR_MASK;
+if (vectorMask >= 0 && vectorMask < 32) {
+    return vmcs12->exception_bitmap & (1u << vectorMask);
+} else {
+    // Handle invalid vector value
+    return 0;
+}
+```
+
+ORIGINAL CODE:
+```
+else if (is_page_fault(intr_info))
+    return enable_ept;
+else if (is_no_device(intr_info) &&
+         !(vmcs12->guest_cr0 & X86_CR0_TS))
+    return 0;
+return vmcs12->exception_bitmap &
+        (1u << (intr_info & INTR_INFO_VECTOR_MASK));
+case EXIT_REASON_EXTERNAL_INTERRUPT:
+```

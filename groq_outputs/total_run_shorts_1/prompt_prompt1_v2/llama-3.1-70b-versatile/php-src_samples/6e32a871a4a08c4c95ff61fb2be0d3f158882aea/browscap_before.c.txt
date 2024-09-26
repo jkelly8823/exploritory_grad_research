@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-17, 20-23
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference. If `zend_hash_find(bdata->htab, Z_STRVAL_PP(z_agent_name), Z_STRLEN_PP(z_agent_name) + 1, (void **)&agent)` returns FAILURE, the variable `agent` is not reassigned, which could lead to a null pointer being passed to the `zend_hash_merge` function.
+
+EXPLANATION:
+The code does not properly handle the case where `zend_hash_find` fails to find the specified key. This results in the `agent` variable remaining unchanged and potentially being null when passed to `zend_hash_merge`. If `agent` is indeed null at this point, this could lead to a null pointer dereference, potentially causing program crashes or other undefined behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended that the code properly handle the case where `zend_hash_find` fails to find the specified key. This can be achieved by checking the return value of `zend_hash_find` and either handling the error or reassigning the `agent` variable with a valid value.
+
+Additionally, to prevent the null pointer dereference, a check for null should be added before using `agent`. Here's an example:
+
+```c
+if (zend_hash_find(bdata->htab, Z_STRVAL_PP(z_agent_name), Z_STRLEN_PP(z_agent_name) + 1, (void **)&agent) == FAILURE) {
+    agent = NULL; // or a default value
+}
+
+if (agent != NULL) {
+    if (return_array) {
+        zend_hash_merge(Z_ARRVAL_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *), 0);
+    }
+    else {
+        zend_hash_merge(Z_OBJPROP_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *), 0);
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+}
+/* }}} */
+
+/* {{{ proto mixed get_browser([string browser_name [, bool return_array]])
+   Get information about the capabilities of a browser. If browser_name is omitted or null, HTTP_USER_AGENT is used. Returns an object by default; if return_array is true, returns an array. */
+PHP_FUNCTION(get_browser)
+{
+
+	if (return_array) {
+		array_init(return_value);
+		zend_hash_copy(Z_ARRVAL_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *));
+	}
+	else {
+		object_init(return_value);
+		zend_hash_copy(Z_OBJPROP_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *));
+	}
+
+	while (zend_hash_find(Z_ARRVAL_PP(agent), "parent", sizeof("parent"), (void **) &z_agent_name) == SUCCESS) {
+		if (zend_hash_find(bdata->htab, Z_STRVAL_PP(z_agent_name), Z_STRLEN_PP(z_agent_name) + 1, (void **)&agent) == FAILURE) {
+		}
+
+		if (return_array) {
+			zend_hash_merge(Z_ARRVAL_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *), 0);
+		}
+		else {
+			zend_hash_merge(Z_OBJPROP_P(return_value), Z_ARRVAL_PP(agent), (copy_ctor_func_t) zval_add_ref, (void *) &tmp_copy, sizeof(zval *), 0);
+		}
+	}
+
+	efree(lookup_browser_name);
+```

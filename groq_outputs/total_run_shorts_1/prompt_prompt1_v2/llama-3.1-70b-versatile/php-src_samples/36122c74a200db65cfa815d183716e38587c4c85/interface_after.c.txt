@@ -1,0 +1,79 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 33-34, 49-50, 56
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized Memory and Incorrect Order of Operations in Memory Deallocation.
+
+EXPLANATION:
+The provided code snippet is vulnerable due to the mishandling of memory deallocation. 
+
+In the first identified vulnerability (lines 33-34), the `to_free->slist` is freed before the last usage of `ch->to_free`. This means that any subsequent usage of `ch->to_free->slist` could result in a Use After Free error.
+
+The second identified vulnerability (lines 49-50), the order of deallocation is also incorrect. `ch->to_free->slist` is hashed before being freed. The code does not account for any existing elements in `ch->to_free->slist` and calls `efree` on all dynamically allocated data in it.
+
+The third identified vulnerability (line 56) points to an issue with the order of operations when dealing with clones. If more than one instance (or clone) exists, no memory is ever released for that curl handle and instead we are left with `Z_DELREF_P(ch->clone)`, leading to memory leaks.
+
+
+RECOMMENDATIONS:
+
+* Before `efree(dupch->to_free->slist)`, ensure all usage of `ch->to_free->slist` is done and destroy the hash table `zend_hash_destroy(ch->to_free->slist)`. 
+* Always ensure that memory deallocation is performed after all usages of that memory to prevent Use After Free errors.
+* As a temporary measure to handle and resolve memleaks deallocate the curl handle when its reference count reaches 0. 
+* Ensure proper order of deallocation to prevent issues with incomplete memory cleanup.
+
+ORIGINAL CODE:
+
+/* {{{ curl_free_slist
+ */
+static void curl_free_slist(void *slist)
+{
+    curl_slist_free_all(*((struct curl_slist **) slist));
+}
+/* }}} */
+
+/* {{{ proto array curl_version([int version])
+    (*ch)->handlers->read->stream = NULL;
+
+    zend_llist_init(&(*ch)->to_free->str,   sizeof(char *),            (llist_dtor_func_t) curl_free_string, 0);
+    zend_llist_init(&(*ch)->to_free->post,  sizeof(struct HttpPost),   (llist_dtor_func_t) curl_free_post,   0);
+    (*ch)->safe_upload = 0; /* for now, for BC reason we allow unsafe API */
+
+    (*ch)->to_free->slist = emalloc(sizeof(HashTable));
+    zend_hash_init((*ch)->to_free->slist, 4, NULL, curl_free_slist, 0);
+    }
+/* }}} */
+
+#if LIBCURL_VERSION_NUM >= 0x071301 /* Available since 7.19.1 */
+    }
+#endif
+
+    efree(dupch->to_free->slist);
+    efree(dupch->to_free);
+    dupch->to_free = ch->to_free;
+
+    /* Keep track of cloned copies to avoid invoking curl destructors for every clone */
+
+        ph = HASH_OF(*zvalue);
+        if (!ph) {
+            char *name = NULL;
+            switch (option) {
+                case CURLOPT_HTTPHEADER:
+                    name = "CURLOPT_HTTPHEADER";
+                    break;
+                return 1;
+            }
+        }
+        zend_hash_index_update(ch->to_free->slist, (ulong) option, &slist, sizeof(struct curl_slist *), NULL);
+
+        error = curl_easy_setopt(ch->cp, option, slist);
+
+        break;
+    /* cURL destructors should be invoked only by last curl handle */
+if (Z_REFCOUNT_P(ch->clone) <= 1) {
+    zend_llist_clean(&ch->to_free->str);
+    zend_llist_clean(&ch->to_free->post);
+    zend_hash_destroy(ch->to_free->slist);
+    efree(ch->to_free->slist);
+    efree(ch->to_free);
+    FREE_ZVAL(ch->clone);
+    } else {
+        Z_DELREF_P(ch->clone);

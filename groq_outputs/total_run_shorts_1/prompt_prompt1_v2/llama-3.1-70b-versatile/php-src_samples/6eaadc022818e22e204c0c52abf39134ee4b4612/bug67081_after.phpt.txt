@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7, 9-13, 15-19
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to XML External Entity (XXE) attacks.
+
+EXPLANATION:
+The code is using the DOMDocument class in PHP to load and manipulate XML files. The `substituteEntities` property is set to `true`, which can lead to XXE attacks if the XML file being loaded contains malicious entities. An XXE attack can allow an attacker to access sensitive data, execute arbitrary code, or perform a denial-of-service attack.
+
+The use of `dirname(__FILE__) . DIRECTORY_SEPARATOR . "file.xml"` to load the XML file is not the issue; the issue is that the XML file being loaded is not validated or sanitized before being processed. If an attacker were to create a malicious XML file that contains an external entity, the PHP script would execute it, leading to a potential XXE attack.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we need to disable the ability to expand external entities. This can be done by setting the `substituteEntities` property to `false` or by setting the `validating` property to `false` and the `resolveExternalEntities` property to `false`. Here is how you can modify the code:
+
+```php
+$domDocument = new DOMDocument();
+$domDocument->substituteEntities = false;
+$domDocument->resolveExternalEntities = false;
+$domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "file.xml");
+```
+
+Alternatively, you can also use the `LIBXML_NOENT` option with the `loadXML` or `load` method to disable the expansion of external entities.
+
+```php
+$domDocument = new DOMDocument();
+$domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "file.xml", LIBXML_NOENT);
+```
+
+ORIGINAL CODE:
+```php
+--FILE--
+<?php
+    $domDocument = new DOMDocument();
+    $domDocument->substituteEntities = true;
+    $domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "bug67081_0.xml");
+    var_dump($domDocument->doctype->internalSubset);
+
+    $domDocument = new DOMDocument();
+    $domDocument->substituteEntities = true;
+    $domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "bug67081_1.xml");
+    var_dump($domDocument->doctype->internalSubset);
+
+    $domDocument = new DOMDocument();
+    $domDocument->substituteEntities = true;
+    $domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "bug67081_2.xml");
+    var_dump($domDocument->doctype->internalSubset);
+
+    $domDocument = new DOMDocument();
+    $domDocument->substituteEntities = true;
+    $domDocument->load(dirname(__FILE__) . DIRECTORY_SEPARATOR . "dom.xml");
+    var_dump($domDocument->doctype->internalSubset);
+?>
+===DONE===
+```

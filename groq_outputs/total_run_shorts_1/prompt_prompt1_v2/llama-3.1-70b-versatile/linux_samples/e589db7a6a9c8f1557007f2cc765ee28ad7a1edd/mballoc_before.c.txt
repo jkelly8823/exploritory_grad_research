@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 17-18, 33-34, 51-52
+VULNERABILITY_DESCRIPTION:
+Integer Overflow and Underflow Vulnerability
+
+EXPLANATION:
+In the provided code snippet, there are multiple instances where integer values are added or subtracted without proper bounds checking. For example, on lines 17-18, `ret = ext4_free_group_clusters(sb, gdp) + count_clusters;` can lead to an integer overflow if the `ret` value exceeds the maximum allowed integer value. Similarly, on lines 33-34, `blk_free_count = blocks_freed + ext4_free_group_clusters(sb, desc);` can also result in an integer overflow. On lines 51-52, the code checks for overflow condition but does not properly validate the value of `minlen` after it is divided by `EXT4_NUM_B2C(EXT4_SB(sb), range->minlen >> sb->s_blocksize_bits)`. 
+
+RECOMMENDATIONS:
+1. Add bounds checking for all arithmetic operations to prevent integer overflows and underflows. 
+2. Use functions like `u64_add_overflow()` or `u64_sub_overflow()` to check for potential overflows and underflows.
+3. Ensure that all variables used for arithmetic operations are of the correct size and signed/unsigned type to prevent silent overflows.
+4. Validate the values of `minlen` and `range->minlen >> sb->s_blocksize_bits` before dividing or performing any operations to prevent potential underflows.
+
+ORIGINAL CODE:
+```c
+}
+len = ext4_free_group_clusters(sb, gdp) - ac->ac_b_ex(fe_len);
+ext4_free_group_clusters_set(sb, gdp, len);
+ext4_block_bitmap_csum_set(sb, ac->ac_b_ex(fe_group, gdp, bitmap_bh,
+                   EXT4_BLOCKS_PER_GROUP(sb) / 8);
+ext4_group_desc_csum_set(sb, ac->ac_b_ex(fe_group, gdp);
+
+ext4_unlock_group(sb, ac->ac_b_ex(fe_group);
+percpu_counter_sub(&sbi->s_freeclusters_counter, ac->ac_b_ex(fe_len);
+
+ret = ext4_free_group_clusters(sb, gdp) + count_clusters;
+ext4_free_group_clusters_set(sb, gdp, ret);
+ext4_block_bitmap_csum_set(sb, block_group, gdp, bitmap_bh,
+                   EXT4_BLOCKS_PER_GROUP(sb) / 8);
+ext4_group_desc_csum_set(sb, block_group, gdp);
+ext4_unlock_group(sb, block_group;
+percpu_counter_add(&sbi->s_freeclusters_counter, count_clusters);
+
+mb_free_blocks(NULL, &e4b, bit, count);
+blk_free_count = blocks_freed + ext4_free_group_clusters(sb, desc);
+ext4_free_group_clusters_set(sb, desc, blk_free_count);
+ext4_block_bitmap_csum_set(sb, block_group, desc, bitmap_bh,
+                   EXT4_BLOCKS_PER_GROUP(sb) / 8);
+ext4_group_desc_csum_set(sb, block_group, desc);
+ext4_unlock_group(sb, block_group;
+percpu_counter_add(&sbi->s_freeclusters_counter,
+           EXT4_B2C(sbi, blocks_freed));
+minlen = EXT4_NUM_B2C(EXT4_SB(sb),
+              range->minlen >> sb->s_blocksize_bits);
+
+if (unlikely(minlen > EXT4_CLUSTERS_PER_GROUP(sb)) ||
+    unlikely(start >= max_blks))
+    return -EINVAL;
+if (end >= max_blks)
+    end = max_blks - 1;
+if (end <= first_data_blk)
+```

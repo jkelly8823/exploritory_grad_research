@@ -1,0 +1,92 @@
+VULNERABLE: YES
+VULNERABLE_LINES: No explicit line numbers due to multiple potential vulnerabilities in various conditions.
+VULNERABILITY_DESCRIPTION:
+Insecure comparison and handling due to unsigned integer wraparound when dealing with IV length, and also sensitive data handling due to presence of SSLfatal in its potential use of potentially tainted data in error handling.
+
+
+EXPLANATION:
+In this code snippet, we have identified two potential security vulnerabilities.
+
+1. Insecure comparison and handling due to unsigned integer wraparound when dealing with IV length.
+   This can potentially lead to incorrect decisions and allow encrypted messages to be decrypted with a wrong IV. 
+
+   Located in lines like 'if (eivlen < 0)'. Here the condition is to check for possible error conditions for eivlen (like an error during EVP_CIPHER_CTX_get_iv_length) - even so, on 32 bit, error return -1 becomes an obviously large integer because of the wrap around issue for eivlen data types for that build variant.
+
+
+2. Usage of sensitive data presence in its potential use of tainted information from EVP_CIPHER_CTX_get_mode(s->enc_write_ctx). Potential for such issues can occur within the SSLfatal context in: "SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG)"
+
+
+RECOMMENDATIONS:
+  
+
+1. Please provide additional checks to rule out wraparound possibilities while performing these comparisons.
+
+Example: Check the return type from `EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx)` - before using - to prevent comparisons from wrapping around to a large number.
+
+```c
+int eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+if (eivlen == -1) {
+  SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG);
+  goto err;
+}
+if (eivlen < 0) {
+  //error handling for less-than case remains in place.
+}
+```
+
+2. Avoid entering sensitive information in error message, always ensure your error messages are secure and the error strings do not carry any crucial information.
+
+   Example:
+   Given Example:
+```c 
+   SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG);
+   ```
+
+    Modify to 
+```c
+   SSLfatal(s, SSL_AD_INTERNAL_ERROR, "An internal error occurred");
+```
+   When error has enough information about error location by its function/file location, it could remove reference to SSL_R_LIBRARY_BUG with less generic text.
+
+
+ORIGINAL CODE:
+/*
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+    if (s->rlayer.rstate == SSL_ST_READ_BODY)
+        return 0;
+
+    /* Take into account DTLS buffered app data */
+    if (SSL_IS_DTLS(s)) {
+        DTLS1_RECORD_DATA *rdata;
+        pitem *item, *iter;
+
+        iter = pqueue_iterator(s->rlayer.d->buffered_app_data.q);
+        while ((item = pqueue_next(&iter)) != NULL) {
+            rdata = item->data;
+            num += rdata->rrec.length;
+        }
+    }
+
+    for (i = 0; i < RECORD_LAYER_get_numrpipes(&s->rlayer); i++) {
+        if (SSL3_RECORD_get_type(&s->rlayer.rrec[i])
+            != SSL3_RT_APPLICATION_DATA)
+            return num;
+        num += SSL3_RECORD_get_length(&s->rlayer.rrec[i]);
+    }
+
+    return num;
+        int mode = EVP_CIPHER_CTX_get_mode(s->enc_write_ctx);
+        if (mode == EVP_CIPH_CBC_MODE) {
+            eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+            if (eivlen < 0) {
+                SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG);
+                goto err;
+	    }
+            if (eivlen <= 1)
+                eivlen = 0;
+        } else if (mode == EVP_CIPH_GCM_MODE) {
+            /* Need explicit part of IV for GCM mode */

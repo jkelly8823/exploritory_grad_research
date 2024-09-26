@@ -1,0 +1,75 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-19
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a resource leak. The `http_context_headers` function and `MAKE_STD_ZVAL` macro are not properly cleaned up in case of an error.
+
+EXPLANATION:
+In the code, if `Has basic authentication credentials or Proxy authentication credentials for data on the system` then it calls `http_context_headers` function and `MAKE_STD_ZVAL` macro, however it does not check for any errors. If any error occurs then it can result in `resource leak`. Moreover, in the else block of the statement `if (context)`, a new resource is allocated for `context` using `php_stream_context_alloc`, but it's not checked whether the allocation was successful.
+
+RECOMMENDATIONS:
+To fix the vulnerability, error handling should be added for the `http_context_headers` function and the `MAKE_STD_ZVAL` macro. Additionally, the return value of `php_stream_context_alloc` should be checked to ensure the allocation was successful.
+
+Here is a possible fix:
+
+```c
+    if (headers.len > 0) {
+        zval *str_headers;
+
+        if (!context) {
+            context = php_stream_context_alloc(TSRMLS_C);
+            if (!context) {
+                // handle allocation failure
+            }
+        } else {
+            if (http_context_headers(context, has_authorization, has_proxy_authorization, 0, &headers TSRMLS_CC) != SUCCESS) {
+                // handle error
+            }
+        }
+
+        smart_str_0(&headers);
+        MAKE_STD_ZVAL(str_headers);
+        if (str_headers == NULL) {
+            // handle allocation failure
+        }
+    }
+```
+
+ORIGINAL CODE:
+    smart_str headers = {0};
+    char* key = NULL;
+    time_t t = time(0);
+    zend_bool has_proxy_authorization = 0;
+    zend_bool has_authorization = 0;
+
+        if (strchr(uri,':') != NULL || IS_ABSOLUTE_PATH(uri, uri_len)) {
+            uri_len = strlen(uri);
+        } else if (VCWD_REALPATH(uri, fn) == NULL) {
+            zval_ptr_dtor(&str_proxy);
+        }
+
+        has_proxy_authorization = proxy_authentication(this_ptr, &headers TSRMLS_CC);
+    }
+
+    has_authorization = basic_authentication(this_ptr, &headers TSRMLS_CC);
+
+    /* Use HTTP/1.1 with "Connection: close" by default */
+    if (php_stream_context_get_option(context, "http", "protocol_version", &tmp) == FAILURE) {
+        zval *http_version;
+        ZVAL_DOUBLE(http_version, 1.1);
+        php_stream_context_set_option(context, "http", "protocol_version", http_version);
+        zval_ptr_dtor(&http_version);
+        smart_str_appendl(&headers, "Connection: close\r\n", sizeof("Connection: close\r\n")-1);
+    }
+
+    if (headers.len > 0) {
+        zval *str_headers;
+
+        if (!context) {
+            context = php_stream_context_alloc(TSRMLS_C);
+        } else {
+            http_context_headers(context, has_authorization, has_proxy_authorization, 0, &headers TSRMLS_CC);
+        }
+
+        smart_str_0(&headers);
+        MAKE_STD_ZVAL(str_headers);
+    }

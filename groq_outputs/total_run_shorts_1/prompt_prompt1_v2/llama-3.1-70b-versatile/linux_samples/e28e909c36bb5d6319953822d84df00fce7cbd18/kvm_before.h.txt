@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3, 5-7, 8-10
+VULNERABILITY_DESCRIPTION: Potential Information Disclosure in debug print statements
+EXPLANATION: 
+The code includes several debug print statements using TP_printk. While these statements can be useful for debugging, they may leak sensitive information such as kernel addresses, vector numbers, and mode. This information can potentially be used by an attacker to gain insight into the kernel's internal state.
+
+In a production environment, debug print statements should be thoroughly audited and disabled or sanitized to prevent sensitive information disclosure.
+
+RECOMMENDATIONS:
+To fix this vulnerability, one or more of the following steps can be taken:
+1. Remove any debug print statements that print sensitive information. These statements should only be used during development and testing phases.
+2. Sanitize the data printed in debug statements. For example, use an abstraction layer to remove sensitive information before printing.
+3. Use rate limiting and filtering to prevent excessive logging in production environments.
+4. Limit access to debug logs by setting proper permissions on the log files.
+
+ORIGINAL CODE:
+
+```
+__entry->coalesced = coalesced;
+),
+
+TP_printk("pin %u dst %x vec=%u (%s|%s|%s%s)%s",
+  __entry->pin, (u8)(__entry->e >> 56), (u8)__entry->e,
+  __print_symbolic((__entry->e >> 8 & 0x7), kvm_deliver_mode),
+  (__entry->e & (1<<11)) ? "logical" : "physical",
+  (__entry->e & (1<<15)) ? "level" : "edge",
+  __entry->e        = e;
+),
+
+TP_printk("dst %x vec=%u (%s|%s|%s%s)",
+  (u8)(__entry->e >> 56), (u8)__entry->e,
+  __print_symbolic((__entry->e >> 8 & 0x7), kvm_deliver_mode),
+  (__entry->e & (1<<11)) ? "logical" : "physical",
+  (__entry->e & (1<<15)) ? "level" : "edge",
+  __entry->data       = data;
+),
+
+TP_printk("dst %u vec %x (%s|%s|%s%s)",
+  (u8)(__entry->address >> 12), (u8)__entry->data,
+  __print_symbolic((__entry->data >> 8 & 0x7), kvm_deliver_mode),
+  (__entry->address & (1<<2)) ? "logical" : "physical",
+  (__entry->data & (1<<15)) ? "level" : "edge",
+```

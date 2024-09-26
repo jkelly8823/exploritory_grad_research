@@ -1,0 +1,69 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+Insecure direct object references (IDOR) vulnerability due to the use of the `Manifest.prototype.getDependencyMapper()` function, potentially allowing an attacker to manipulate the dependency graph and inject malicious dependencies.
+
+EXPLANATION:
+The provided code snippet creates a `moduleURL` from the `id` variable using the `pathToFileURL()` function. It then retrieves a dependency mapper from a `manifest` object by calling the `getDependencyMapper()` function. This function may return an object that is user-controllable, allowing an attacker to manipulate the dependency graph. If an attacker can influence the `manifest` object, they could potentially inject malicious dependencies into the system.
+
+Additionally, there is a potential vulnerability in the `manifest.assertIntegrity()` function. If an attacker can control the `moduleURL` and `content`, they may be able to bypass integrity checks, leading to further vulnerabilities.
+
+The code also sets the `__proto__` property of `Module._cache` to `null`. While this may be intended to prevent prototype pollution attacks, it does not prevent the vulnerability.
+
+RECOMMENDATIONS:
+1. Validate the `id` variable before creating a `moduleURL`.
+2. Ensure that the `manifest` object is not user-controllable.
+3. Use secure protocol URLs for fetching dependencies.
+4. Implement input validation for the `getDependencyMapper()` function.
+5. Consider using a more secure alternative to `pathToFileURL()`.
+
+ORIGINAL CODE:
+```javascript
+  if (manifest) {
+    const moduleURL = pathToFileURL(id);
+    redirects = manifest.getDependencyMapper(moduleURL);
+  }
+  setOwnProperty(this, 'require', makeRequireFunction(this, redirects));
+  // Loads a module at the given file path. Returns that module's
+  // `exports` property.
+  this[require_private_symbol] = internalRequire;
+}
+
+Module._cache = { __proto__: null };
+    cascadedLoader.cjsCache.set(this, exports);
+};
+
+// Resolved path to process.argv[1] will be lazily placed here
+// (needed for setting breakpoint when called with --inspect-brk)
+let resolvedArgv;
+let hasPausedEntry = false;
+// Returns exception, if any.
+Module.prototype._compile = function(content, filename) {
+  let moduleURL;
+  const manifest = policy()?.manifest;
+  if (manifest) {
+    moduleURL = pathToFileURL(filename);
+    manifest.getDependencyMapper(moduleURL);
+    manifest.assertIntegrity(moduleURL, content);
+  }
+
+  const compiledWrapper = wrapSafe(filename, content, this);
+    }
+  }
+  const dirname = path.dirname(filename);
+  let result;
+  const exports = this.exports;
+  const thisValue = exports;
+  const module = this;
+  if (requireDepth === 0) statCache = new SafeMap();
+  if (inspectorWrapper) {
+    result = inspectorWrapper(compiledWrapper, thisValue, exports,
+                              module.require, module, filename, dirname);
+  } else {
+    result = ReflectApply(compiledWrapper, thisValue,
+                          [exports, module.require, module, filename, dirname]);
+  }
+  hasLoadedAnyUserCJSModule = true;
+  if (requireDepth === 0) statCache = null;
+  return result;
+```

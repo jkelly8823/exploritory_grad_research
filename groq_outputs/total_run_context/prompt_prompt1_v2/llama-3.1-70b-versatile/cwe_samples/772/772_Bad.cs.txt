@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to SQL Injection attacks and also does not handle the connection in a proper way which can lead to resource leaks.
+
+EXPLANATION:
+The vulnerability is present in lines 3 and 5. The code is constructing a SqlCommand object and assigning a connectionString and queryString to it. However, it does not validate or sanitize the queryString, which allows an attacker to inject malicious SQL code. This is a significant security risk as it can allow an attacker to access, modify or delete data in the database.
+
+Furthermore, even if the queryString is sanitized, the code does not handle the connection properly. After executing the query, the code calls Close() on the connection, but it should also consider the case where an exception occurs and the connection is not closed. If not handled, this can lead to connection leaks.
+
+RECOMMENDATIONS:
+1. Validate and sanitize the queryString to prevent SQL Injection attacks. This can be achieved using parameterized queries or stored procedures.
+
+Example:
+
+```csharp
+SqlCommand cmd = new SqlCommand("SELECT * FROM users WHERE id = @id", conn);
+cmd.Parameters.AddWithValue("@id", queryString);
+```
+
+2. Wrap the SqlConnection and SqlCommand in a using block, which automatically disposes and closes the connection even in case of exceptions.
+
+Example:
+
+```csharp
+using (SqlConnection conn = new SqlConnection(connString))
+{
+    using (SqlCommand cmd = new SqlCommand(queryString, conn))
+    {
+        conn.Open();
+        using (SqlDataReader rdr = cmd.ExecuteReader())
+        {
+            HarvestResults(rdr);
+        }
+    }
+}
+```
+
+ORIGINAL CODE:
+
+```csharp
+SqlConnection conn = new SqlConnection(connString);SqlCommand cmd = new SqlCommand(queryString);cmd.Connection = conn;conn.Open();SqlDataReader rdr = cmd.ExecuteReader();HarvestResults(rdr);conn.Connection.Close();
+```

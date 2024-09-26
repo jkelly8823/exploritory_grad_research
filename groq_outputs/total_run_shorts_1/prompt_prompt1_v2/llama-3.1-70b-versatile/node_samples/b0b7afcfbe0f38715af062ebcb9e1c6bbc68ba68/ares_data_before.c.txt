@@ -1,0 +1,110 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-35, 39-41, 45-49, 53-57, 61-63
+VULNERABILITY_DESCRIPTION:
+The code contains a use-after-free vulnerability in the ares_free_data function.
+
+EXPLANATION:
+The ares_free_data function is designed to free up memory allocated for various DNS reply structures. However, the function contains several use-after-free vulnerabilities. 
+
+The use-after-free vulnerabilities occur because the function recursively frees up memory for sub-structures but does not check if these sub-structures have already been freed. This is problematic because the memory for the sub-structures may have already been freed elsewhere in the program, and calling ares_free_data on them would lead to a double-free error.
+
+Additionally, the function does not check if the memory for the sub-structures has been freed before trying to access their contents. This can lead to unexpected behavior or crashes if the memory has already been freed.
+
+RECOMMENDATIONS:
+1. To fix this vulnerability, add checks to ensure that the memory for the sub-structures has not been freed before trying to access their contents. This can be done by setting a flag in the structure that indicates whether it has been freed or not.
+
+2. Modify the recursive calls to ares_free_data to check if the memory for the sub-structures has already been freed before trying to free it again. This can be done by adding a check for the flag that indicates whether the structure has been freed or not.
+
+3. Ensure that the function handles cases where the memory for the structure or its sub-structures has already been freed.
+
+ORIGINAL CODE:
+```c
+void ares_free_data(void *dataptr)
+{
+  struct ares_data *ptr;
+
+  if (!dataptr)
+    return;
+
+#ifdef __INTEL_COMPILER
+#  pragma warning(push)
+#  pragma warning(disable:1684)
+   /* 1684: conversion from pointer to same-sized integral type */
+#endif
+
+  ptr = (void *)((char *)dataptr - offsetof(struct ares_data, data));
+
+#ifdef __INTEL_COMPILER
+#  pragma warning(pop)
+#endif
+
+  if (ptr->mark != ARES_DATATYPE_MARK)
+    return;
+
+  switch (ptr->type)
+    {
+      case ARES_DATATYPE_MX_REPLY:
+
+        if (ptr->data.mx_reply.next)
+          ares_free_data(ptr->data.mx_reply.next);
+        if (ptr->data.mx_reply.host)
+          ares_free(ptr->data.mx_reply.host);
+        break;
+
+      case ARES_DATATYPE_SRV_REPLY:
+
+        if (ptr->data.srv_reply.next)
+          ares_free_data(ptr->data.srv_reply.next);
+        if (ptr->data.srv_reply.host)
+          ares_free(ptr->data.srv_reply.host);
+        break;
+
+      case ARES_DATATYPE_TXT_REPLY:
+      case ARES_DATATYPE_TXT_EXT:
+
+        if (ptr->data.txt_reply.next)
+          ares_free_data(ptr->data.txt_reply.next);
+        if (ptr->data.txt_reply.txt)
+          ares_free(ptr->data.txt_reply.txt);
+        break;
+
+      case ARES_DATATYPE_ADDR_NODE:
+
+        if (ptr->data.addr_node.next)
+          ares_free_data(ptr->data.addr_node.next);
+        break;
+
+      case ARES_DATATYPE_ADDR_PORT_NODE:
+
+        if (ptr->data.addr_port_node.next)
+          ares_free_data(ptr->data.addr_port_node.next);
+        break;
+
+      case ARES_DATATYPE_NAPTR_REPLY:
+
+        if (ptr->data.naptr_reply.next)
+          ares_free_data(ptr->data.naptr_reply.next);
+        if (ptr->data.naptr_reply.flags)
+          ares_free(ptr->data.naptr_reply.flags);
+        if (ptr->data.naptr_reply.service)
+          ares_free(ptr->data.naptr_reply.service);
+        if (ptr->data.naptr_reply.regexp)
+          ares_free(ptr->data.naptr_reply.regexp);
+        if (ptr->data.naptr_reply.replacement)
+          ares_free(ptr->data.naptr_reply.replacement);
+        break;
+
+      case ARES_DATATYPE_SOA_REPLY:
+        if (ptr->data.soa_reply.nsname)
+          ares_free(ptr->data.soa_reply.nsname);
+        if (ptr->data.soa_reply.hostmaster)
+          ares_free(ptr->data.soa_reply.hostmaster);
+	break;
+
+      default:
+        return;
+    }
+
+  ares_free(ptr);
+}
+```

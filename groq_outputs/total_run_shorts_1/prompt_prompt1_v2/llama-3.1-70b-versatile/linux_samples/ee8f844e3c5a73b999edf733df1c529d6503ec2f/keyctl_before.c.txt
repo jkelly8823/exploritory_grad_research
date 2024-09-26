@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+Use After Free vulnerability.
+
+EXPLANATION:
+The `join_session_keyring` function returns an error code, which is stored in the `ret` variable. However, before the error code is checked, the `name` pointer is freed using `kfree`. This is problematic because if `join_session_keyring` alters the `name` pointer, or uses it to access memory, before `join_session_keyring` returns, that memory is now invalid, but the invalid memory address remains in the `name` pointer. Furthermore, even if `join_session_keyring` does not alter the `name` pointer or the memory it points to, `kfree` makes the memory pointed to by `name` invalid. This creates a potential vulnerability because if the contents of `name`, or the memory pointed to by `name` are used after `kfree`,  a Use After Free vulnerability will occur. 
+
+However, if `join_session_keyring` does indeed return immediately, and freeing `name` does not create a vulnerability, there is an alternative analysis of `join_session_keyring`, one in which we analyze its lack of error checking: If `join_session_keyring` does not return immediately and rather stores an error code somewhere, and freeing `name` does not create a Use After Free vulnerability, and if `PTR_ERR(name)` stores the error information in the pointer `name` and frees `name` and then the value of `ret` isn't checked for errors after that point,  a different type of vulnerability will occur: An Information Leak.
+
+The difference between occurrence depends on what exactly `join_session_keyring` does. It's possible `join_session_keyring` uses `name` after return but only tests for errors in the return value, which actually comes from `PTR_ERR(name)` and in this event and case this could create an Information Leak.
+
+RECOMMENDATIONS:
+Reorder the operations to first check the error code returned by `join_session_keyring`, and only then free the `name` pointer. This will prevent a potential Use After Free vulnerability.
+
+```c
+long keyctl_join_session_keyring(const char __user *_name)
+...
+		}
+	}
+
+	/* join the session */
+	ret = join_session_keyring(name);
+	if (ret != 0) {
+		ret = PTR_ERR(name);
+	}
+	kfree(name);
+
+error:
+	return ret;
+}
+```
+
+However the actual fix depends on specifics of `join_session_keyring` and the actual code.
+
+ORIGINAL CODE:
+```c
+ * Create and join an anonymous session keyring or join a named session
+ * keyring, creating it if necessary.  A named session keyring must have Search
+ * permission for it to be joined.  Session keyrings without this permit will
+ * be skipped over.
+ *
+ * If successful, the ID of the joined session keyring will be returned.
+ */
+long keyctl_join_session_keyring(const char __user *_name)
+			ret = PTR_ERR(name);
+			goto error;
+		}
+	}
+
+	/* join the session */
+	ret = join_session_keyring(name);
+	kfree(name);
+
+error:
+	return ret;
+}
+```

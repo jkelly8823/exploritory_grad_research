@@ -1,0 +1,23 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-7
+VULNERABILITY_DESCRIPTION:
+ The provided code is vulnerable due to the lack of proper error checking and handling when dealing with the X509Certificate object and the EVPKeyPointer.
+
+EXPLANATION:
+The issue arises when calling ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());. This function might return an error which would then be cleared when calling ClearErrorOnReturn clear_error_on_return;. This means that any actual error occurring in between will be hidden, causing the EVPKeyPointer and the later GetCryptoError returned by ThrowCryptoError to potentially hold an incorrect error code. There are however also checks for other potential errors later in the code snippet, for instance when calling  if (!pkey) return ThrowCryptoError(env, ERR_get_error()); it's properly checked that EVPKeyPointer pkey(X509_get_pubkey(cert->get())) has returned properly.
+
+RECOMMENDATIONS:
+ClearErrorOnReturn clear_error_on_return; should be placed immediately before a function call that might affect errors that will eventually be caught rather than before another assignment. Consider using smart pointer or equivalent in-place to prevent memory errors.
+
+ORIGINAL CODE:
+  X509Certificate* cert;
+  ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());
+
+  // TODO(tniessen): consider checking X509_get_pubkey() when the
+  // X509Certificate object is being created.
+  EVPKeyPointer pkey(X509_get_pubkey(cert->get()));
+  ClearErrorOnReturn clear_error_on_return;
+  if (!pkey) return ThrowCryptoError(env, ERR_get_error());
+  ManagedEVPPKey epkey(std::move(pkey));
+  std::shared_ptr<KeyObjectData> key_data =
+      KeyObjectData::CreateAsymmetric(kKeyTypePublic, epkey);

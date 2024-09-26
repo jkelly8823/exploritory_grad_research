@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 7-8
+VULNERABILITY_DESCRIPTION:
+A potential NULL pointer dereference vulnerability exists due to the lack of error checking on `p->nsproxy` and `p->nsproxy->pid_ns_for_children` before calling `alloc_pid`.
+
+EXPLANATION:
+The provided code uses `p->nsproxy->pid_ns_for_children` when calling `alloc_pid` but does not check for potential NULL pointer errors. Additionally, `alloc_pid` can return an error pointer which is checked for, but if it is not an error, `pid` is not checked for NULL. If either `p->nsproxy` or `p->nsproxy->pid_ns_for_children` is NULL, or if `alloc_pid` fails and `pid` is NULL, it can result in a NULL pointer dereference error.
+
+RECOMMENDATIONS:
+Before using `p->nsproxy->pid_ns_for_children` to call `alloc_pid`, it is recommended to add error checking to ensure that both `p->nsproxy` and `p->nsproxy->pid_ns_for_children` are not NULL. Additionally, it is recommended to check the value of `pid` after `alloc_pid` to ensure it is not NULL. Here is an example of the recommended changes:
+```
+if (!p->nsproxy || !p->nsproxy->pid_ns_for_children) {
+    retval = -EINVAL;
+    goto bad_fork_cleanup_io;
+}
+
+pid = alloc_pid(p->nsproxy->pid_ns_for_children);
+if (IS_ERR(pid)) {
+    retval = PTR_ERR(pid);
+    goto bad_fork_cleanup_io;
+} else if (!pid) {
+    retval = -EAGAIN;
+    goto bad_fork_cleanup_io;
+}
+```
+
+ORIGINAL CODE:
+```
+#include <linux/kcov.h>
+#include <linux/livepatch.h>
+#include <linux/thread_info.h>
+#include <linux/stackleak.h>
+
+#include <asm/pgtable.h>
+#include <asm/pgalloc.h>
+#include <linux/uaccess.h>
+	if (retval)
+		goto bad_fork_cleanup_io;
+
+	stackleak_task_init(p);
+
+	if (pid != &init_struct_pid) {
+		pid = alloc_pid(p->nsproxy->pid_ns_for_children);
+		if (IS_ERR(pid)) {
+			retval = PTR_ERR(pid);
+```

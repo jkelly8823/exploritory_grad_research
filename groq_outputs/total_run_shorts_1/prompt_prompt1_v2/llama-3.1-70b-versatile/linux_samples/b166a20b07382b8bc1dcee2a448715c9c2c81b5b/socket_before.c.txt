@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 22-24
+VULNERABILITY_DESCRIPTION:
+Insufficient synchronization of conflicting operations on the sk_sockets_allocated counter.
+
+EXPLANATION:
+The code appears to be dealing with the cleanup and release of SCTP sockets. It properly acquires and releases the addr_wq_lock spinlock and the sock lock to ensure synchronization between the network and socket layers. However, the code does not properly synchronize access to the sk_sockets_allocated counter.
+
+The code increments the sk_sockets_allocated counter on line 17 (sk_sockets_allocated_inc(sk)) while the addr_wq_lock is released. Later, on line 22 (sk_sockets_allocated_dec(sk)), the code decrements the counter without acquiring the addr_wq_lock. This creates a window of opportunity for concurrent accesses to the counter, potentially leading to a race condition or incorrect values.
+
+Additionally, on line 24, there is a missing bh_unlock before the local_bh_disable call.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the code should acquire the addr_wq_lock before accessing the sk_sockets_allocated counter. Since the lock is already held in the first part of the function, it's better to reorder the operations to release it later. 
+
+ORIGINAL CODE:
+
+
+	/* Supposedly, no process has access to the socket, but
+	 * the net layers still may.
+	 * Also, sctp_destroy_sock() needs to be called with addr_wq_lock
+	 * held and that should be grabbed before socket lock.
+	 */
+	spin_lock_bh(&net->sctp.addr_wq_lock);
+	bh_lock_sock_nested(sk);
+
+	/* Hold the sock, since sk_common_release() will put sock_put()
+	 * and we have just a little more cleanup.
+	 */
+	sk_common_release(sk);
+
+	bh_unlock_sock(sk);
+
+	/* Nothing can fail after this block, otherwise
+	 * sctp_destroy_sock() will be called without addr_wq_lock held
+	 */
+	if (net->sctp.default_auto_asconf) {
+		list_add_tail(&sp->auto_asconf_list,
+		    &net->sctp.auto_asconf_splist);
+
+	if (sp->do_auto_asconf) {
+		sp->do_auto_asconf = 0;
+		list_del(&sp->auto_asconf_list);
+	}
+	sctp_endpoint_free(sp->ep);
+	sk_sockets_allocated_inc(sk);
+	sk_sockets_allocated_dec(sk);
+	}
+	spin_unlock_bh(&net->sctp.addr_wq_lock);
+	local_bh_disable();
+	sock_put(sk);
+
+	SCTP_DBG_OBJCNT_DEC(sock);

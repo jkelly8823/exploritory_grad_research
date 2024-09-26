@@ -1,0 +1,48 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12
+VULNERABILITY_DESCRIPTION:
+The code contains a vulnerability related to the insecure usage of magic quotes. Magic quotes are a deprecated feature in PHP that automatically escapes incoming data. However, in this code, magic quotes are being disabled and then reenabled, which can lead to inconsistent escaping and potential security vulnerabilities.
+
+EXPLANATION:
+The vulnerability is located in the `php_std_auto_global_callback` function, specifically on line 12. Here, magic quotes are disabled using `zend_alter_ini_entry_ex` and then reenabled later on. This can lead to a situation where user input data is not properly escaped, allowing for potential SQL injection or cross-site scripting (XSS) attacks.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended to remove the magic quotes functionality altogether and instead use a robust input validation and sanitization mechanism. This can be achieved by using prepared statements, parameterized queries, and escaping user input data using functions such as `htmlspecialchars` and `mysqli_real_escape_string`.
+
+Additionally, it's recommended to disable magic quotes by default in the PHP configuration, and instead use a consistent and robust input validation mechanism throughout the application.
+
+ORIGINAL CODE:
+
+```c
+/* turn off magic_quotes while importing environment variables */
+int magic_quotes_gpc = PG(magic_quotes_gpc);
+
+if (PG(magic_quotes_gpc)) {
+	zend_alter_ini_entry_ex("magic_quotes_gpc", sizeof("magic_quotes_gpc"), "0", 1, ZEND_INI_SYSTEM, ZEND_INI_STAGE_ACTIVATE, 1 TSRMLS_CC);
+}
+
+for (env = environ; env != NULL && *env != NULL; env++) {
+if (t != buf && t != NULL) {
+	efree(t);
+}
+PG(magic_quotes_gpc) = magic_quotes_gpc;
+}
+
+zend_bool php_std_auto_global_callback(char *name, uint name_len TSRMLS_DC)
+{
+	zval_ptr_dtor(&PG(http_globals)[TRACK_VARS_SERVER]);
+}
+PG(http_globals)[TRACK_VARS_SERVER] = array_ptr;
+if (PG(magic_quotes_gpc)) {
+	zend_alter_ini_entry_ex("magic_quotes_gpc", sizeof("magic_quotes_gpc"), "0", 1, ZEND_INI_SYSTEM, ZEND_INI_STAGE_ACTIVATE, 1 TSRMLS_CC);
+}
+
+/* Server variables */
+	php_register_variable_ex("REQUEST_TIME", &new_entry, array_ptr TSRMLS_CC);
+}
+
+PG(magic_quotes_gpc) = magic_quotes_gpc;
+}
+/* }}} */
+
+/* {{{ php_autoglobal_merge

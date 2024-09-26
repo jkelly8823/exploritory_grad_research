@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code uses a pointer from an user-supplied table (sys_call_table) and calls the function indirectly without proper validation, which can potentially lead to a Use-After-Free or arbitrary call vulnerability.
+
+EXPLANATION:
+The code checks if the value of EAX (containing the system call number) is within the valid range by comparing it to NR_syscalls. However, the critical vulnerability is that the code does not validate if the value at sys_call_table(,%eax,4) is a valid and legitimate function pointer before calling it indirectly using the CALL instruction. This can lead to an arbitrary call vulnerability if the sys_call_table is manipulated or corrupted by an attacker. This issue is exacerbated by the lack of input validation on the system call number and the fact that the table is indexed using the provided value directly.
+
+RECOMMENDATIONS:
+To fix this vulnerability, proper validation of the sys_call_table index should be performed. The following mitigations are recommended:
+
+* Verify that the sys_call_table index is within a valid range before using it to access the table.
+* Use a more secure method to access the sys_call_table, considering using a bounded array access or ensuring the address of the function being called is within a specific range of addresses.
+* Implement additional checks to prevent exploitation through manipulation of the sys_call_table.
+
+ORIGINAL CODE:
+	jnz sysenter_audit
+sysenter_do_call:
+	cmpl $(NR_syscalls), %eax
+	jae syscall_badsys
+	call *sys_call_table(,%eax,4)
+	movl %eax,PT_EAX(%esp)
+	LOCKDEP_SYS_EXIT
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
+	movl TI_flags(%ebp), %ecx
+
+syscall_badsys:
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp resume_userspace
+END(syscall_badsys)
+	CFI_ENDPROC
+
+.macro FIXUP_ESPFIX_STACK

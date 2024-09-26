@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 8-9, 19-22
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a null pointer dereference error.
+
+EXPLANATION:
+The code checks for null pointer errors, but in two instances, it attempts to use the `ctx` pointer before checking if it is null. In the first instance, the code checks if `ctx` is null after calling `EVP_PKEY_print_params(out, pkey, 4, NULL)`. However, this check is not necessary because the function does not use the `ctx` pointer. 
+
+In the second instance, the code calls `goto err` after checking if `ctx` is null, but the label "err" is not shown in the code snippet. This may indicate that the function cleans up after itself and handles the null pointer, but without the label, it is unclear.
+
+However, in the third instance, the code checks if `ctx` is null and if `EVP_PKEY_fromdata_init(ctx)` or `EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_KEY_PARAMETERS, params)` returns a non-positive value. If these conditions are met, it prints an error message but does not handle the null pointer. This is problematic because if `ctx` becomes null after the error message is printed (for example, if `EVP_PKEY_CTX_free` is called on it later), a null pointer dereference error could occur.
+
+Additionally, the code does not check the return values of `EVP_PKEY_print_params` or `BIO_printf`. If these functions return an error, it could indicate a problem with the application's state.
+
+RECOMMENDATIONS:
+1. Verify the return values of `EVP_PKEY_print_params` and `BIO_printf` to handle potential errors.
+2. Handle the null pointer after checking the return value of `EVP_PKEY_CTX_new_from_pkey` in the second instance.
+3. Ensure that the null pointer is handled after checking the return values of `EVP_PKEY_FROMDATA_init` and `EVP_PKEY_fromdata` in the third instance.
+
+ORIGINAL CODE:
+            BIO_printf(bio_err, "Warning, input file %s ignored\n", infile);
+        }
+
+        ctx = EVP_PKEY_CTX_new_from_name(app_get0_libctx(), alg, app_get0_propq());
+        if (ctx == NULL) {
+            BIO_printf(bio_err,
+                        "Error, %s param generation context allocation failed\n",
+                        alg);
+        EVP_PKEY_print_params(out, pkey, 4, NULL);
+
+    if (check) {
+        ctx = EVP_PKEY_CTX_new_from_pkey(app_get0_libctx(), pkey, app_get0_propq());
+        if (ctx == NULL) {
+            BIO_printf(bio_err, "Error, failed to check DH parameters\n");
+            goto end;
+        }
+        goto err;
+    }
+
+    ctx = EVP_PKEY_CTX_new_from_name(app_get0_libctx(), "DHX", app_get0_propq());
+    if (ctx == NULL
+            || EVP_PKEY_fromdata_init(ctx) <= 0
+            || EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_KEY_PARAMETERS, params) <= 0) {
+        BIO_printf(bio_err, "Error, failed to set DH parameters\n");

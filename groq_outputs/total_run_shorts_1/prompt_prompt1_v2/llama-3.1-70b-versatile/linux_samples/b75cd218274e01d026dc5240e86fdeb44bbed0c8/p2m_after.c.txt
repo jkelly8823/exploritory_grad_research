@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13, 17-19
+VULNERABILITY_DESCRIPTION:
+ Deadlock vulnerability due to nested lock acquisition without proper ordering.
+
+EXPLANATION:
+ The code snippet attempts to acquire the `p2m_lock` with `read_lock_irqsave` and then `write_lock_irqsave` within a nested loop. However, the lock acquisition order is not consistent throughout the code. Within the first `while` loop, the code checks for a condition and then attempts to acquire the `write_lock_irqsave` within the same lock scope (`p2m_lock`). This inconsistent locking order can lead to a deadlock when this code is executed concurrently with other code that acquires the locks in a different order.
+
+RECOMMENDATIONS:
+ To fix this vulnerability, ensure that the locks are always acquired in a consistent order. One possible solution is to move the nested lock acquisition outside the `while` loops and maintain the same lock acquisition order throughout the code. Additionally, consider using `lockdep` or similar debugging tools to verify the correctness of the lock ordering.
+
+ ORIGINAL CODE:
+
+
+ unsigned long __pfn_to_mfn(unsigned long pfn)
+{
+	struct rb_node *n;
+	struct xen_p2m_entry *entry;
+	unsigned long irqflags;
+
+	read_lock_irqsave(&p2m_lock, irqflags);
+	n = phys_to_mach.rb_node;
+	while (n) {
+		entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+		if (entry->pfn <= pfn &&
+				entry->pfn + entry->nr_pages > pfn) {
+	int rc;
+	unsigned long irqflags;
+	struct xen_p2m_entry *p2m_entry;
+	struct rb_node *n;
+
+	if (mfn == INVALID_P2M_ENTRY) {
+		write_lock_irqsave(&p2m_lock, irqflags);
+		n = phys_to_mach.rb_node;
+		while (n) {
+			p2m_entry = rb_entry(n, struct xen_p2m_entry, rbnode_phys);
+			if (p2m_entry->pfn <= pfn &&
+					p2m_entry->pfn + p2m_entry->nr_pages > pfn)

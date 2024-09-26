@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+Insecure Data Handling - Potential AbortSignal Exception Exposure.
+EXPLANATION:
+The issue arises from the `abortSignal.throwIfAborted()` method: when called and `abortSignal.aborted` is `true`, it throws `abortSignal.reason`. However, it's essential to consider the impact of exposing `abortSignal.reason` when throwing the exception. An attacker might infer information from the exposed reason. Potential information leaks and other vulnerabilities associated with disclosing unnecessary data can arise from this action.
+RECOMMENDATIONS:
+To mitigate the potential data exposure, exceptions should be handled and potentially sanitized before they are thrown:
+```javascript
+if (abortSignal.aborted) {
+    throw new Error("Operation was aborted.");
+}
+```
+Instead of exposing the reason behind the abortion of the signal:
+```javascript
+abortSignal.throwIfAborted = function() {
+    if (this.aborted) {
+        throw new Error("Operation was aborted due to a timeout.");
+    }
+}
+```
+If detailed exception messages containing the reason are impossible to avoid, implement an action to discern error origins without propagating unnecessary sensitive data into the error messages:
+```javascript
+abortSignal.throwIfAborted = function() {
+    if (this.aborted) {
+        if (this.reason.source === "user") {
+            throw new Error("Abort operation requested.");
+        } else {
+            throw new Error("Abort operation occurred due to external request.");
+        }
+    }
+}
+```
+ORIGINAL CODE:
+
+#### Static method: `AbortSignal.timeout(delay)`
+
+<!-- YAML
+added: REPLACEME
+-->
+
+* `delay` {number} The number of milliseconds to wait before triggering
+  the AbortSignal.
+#### `abortSignal.throwIfAborted()`
+
+<!-- YAML
+added: REPLACEME
+-->
+
+If `abortSignal.aborted` is `true`, throws `abortSignal.reason`.

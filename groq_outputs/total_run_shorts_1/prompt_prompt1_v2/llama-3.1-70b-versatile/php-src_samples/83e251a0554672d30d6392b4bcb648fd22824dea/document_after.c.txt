@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow vulnerability.
+
+EXPLANATION:
+The given code snippet demonstrates a potential buffer overflow vulnerability due to the fact that there is no bounds checking performed on the provided path when storing it in the 'resolved_path' array. This array is declared with a fixed size of MAXPATHLEN + 1.
+
+Although in this specific case 'resolved_path' is not being directly written to in this snippet, this vulnerability might be in the part of the code that precedes it. We must assume that this is part of a larger code base where any resolved path before reaching this point could have exceeded the boundary of the buffer.
+
+This represents a vulnerability since if there is a write operation on 'resolved_path' that is not properly bounded (for example with snprintf), it can result in extra bytes beyond the buffer's size. This may lead to undefined behavior and can possibly cause a segmentation fault or even execute arbitrary code.
+
+RECOMMENDATIONS:
+If writing directly to 'resolved_path', utilize snprintf or similar safer alternatives that explicitly prevent overflowing the buffer by limiting how many bytes can be written.
+
+The operation must look something like this:
+snprintf(resolved_path, sizeof(resolved_path), "%s", source);
+
+Or better yet, use something like realpath or other more advanced path resolution algorithms that can also handle errors and boundary conditions.
+
+If the code is calling functions like strcpy or sprintf to put a path into 'resolved_path', these should be replaced by safer functions as described above.
+
+Additionally, while examining the code in this function, consider that lack of parameter validation might contribute to related errors. Even if the buffer overflow is present before reaching this snippet, that does not mean we are in the clear. Keep an eye out for areas where input parameters (like 'source' in this case), might not be properly bounded.
+
+ORIGINAL CODE:
+```c
+xmlDoc *docp;
+	dom_object *intern;
+	char *source = NULL, *valid_file = NULL;
+	int source_len = 0, valid_opts = 0;
+	long flags = 0;
+	xmlSchemaParserCtxtPtr  parser;
+	xmlSchemaPtr            sptr;
+	xmlSchemaValidCtxtPtr   vptr;
+	int                     is_valid;
+	char resolved_path[MAXPATHLEN + 1];
+
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Op|l", &id, dom_document_class_entry, &source, &source_len, &flags) == FAILURE) {
+		return;
+	}
+
+	if (source_len == 0) {
+		RETURN_FALSE;
+	}
+
+#if LIBXML_VERSION >= 20614
+	if (flags & XML_SCHEMA_VAL_VC_I_CREATE) {
+		valid_opts |= XML_SCHEMA_VAL_VC_I_CREATE;
+	}
+#endif
+
+	xmlSchemaSetValidOptions(vptr, valid_opts);
+	xmlSchemaSetValidErrors(vptr, php_libxml_error_handler, php_libxml_error_handler, vptr);
+	is_valid = xmlSchemaValidateDoc(vptr, docp);
+	xmlSchemaFree(sptr);
+	xmlSchemaFreeValidCtxt(vptr);
+}
+/* }}} */
+
+/* {{{ proto boolean dom_document_schema_validate_file(string filename, int flags); */
+PHP_FUNCTION(dom_document_schema_validate_file)
+{
+	_dom_document_schema_validate(INTERNAL_FUNCTION_PARAM_PASSTHRU, DOM_LOAD_FILE);
+}
+/* }}} end dom_document_schema_validate_file */
+
+/* {{{ proto boolean dom_document_schema_validate(string source, int flags); */
+PHP_FUNCTION(dom_document_schema_validate_xml)
+{
+	_dom_document_schema_validate(INTERNAL_FUNCTION_PARAM_PASSTHRU, DOM_LOAD_STRING);
+}
+```
+
+Note: This assumes the issue happens before or in this code and that 'resolved_path' could be used elsewhere which could overflow the buffer.

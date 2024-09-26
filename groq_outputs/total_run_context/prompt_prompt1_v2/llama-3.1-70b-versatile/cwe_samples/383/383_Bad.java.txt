@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 11-13
+VULNERABILITY_DESCRIPTION:
+Insecure Usage of Multithreading: Creation of Unmanaged Thread
+
+EXPLANATION:
+The vulnerable segment of code creates a new, unmanaged thread to handle background processing. The creation of this new thread introduces a potential security risk. Specifically, the thread is started without any error handling or cancellation mechanism. In the event of a catastrophic failure or prolonged operation, this thread may continue to execute indefinitely, potentially leading to system instability or resource exhaustion.
+
+Additionally, the use of an anonymous inner class as a `Runnable` instance prevents proper exception handling and thread state management. Furthermore, the use of raw threads is generally discouraged in favor of higher-level concurrency utilities (e.g., the `ExecutorService` framework) that provide better thread management and exception handling capabilities.
+
+RECOMMENDATIONS:
+1. Use a thread pool or an `ExecutorService` to manage threads instead of creating raw threads. This will allow for more efficient resource use and improved exception handling.
+2. Implement error handling for threads, such as using a `ThreadFactory` to create and manage threads.
+3. Use a try-catch-finally block to capture and respond to exceptions in the `run()` method.
+
+Here is an example of how the problematic code could be refactored using an `ExecutorService`:
+
+```java
+// Create an ExecutorService instance to manage threads.
+private ExecutorService executorService = Executors.newCachedThreadPool();
+
+...
+
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    // Perform servlet tasks.
+    ...
+    
+    // Submit a task to the executor for background processing.
+   (executorService.execute(new Runnable() {
+        public void run() {
+            try {
+                // Process and store request statistics.
+                ...
+            } catch (Exception e) {
+                // Handle exceptions properly
+                ...
+            } finally {
+                // Clean up resources as necessary
+                ...
+            }
+        }
+    });
+}
+```
+
+ORIGINAL CODE:
+```
+public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        
+    // Perform servlet tasks.
+    ...
+    
+    // Create a new thread to handle background processing.
+    Runnable r = new Runnable() {
+        public void run() {
+            // Process and store request statistics.
+            ...
+        }
+    };
+    new Thread(r).start();
+}
+```

@@ -1,0 +1,70 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 19, 27-30
+VULNERABILITY_DESCRIPTION:
+The code contains an infinite recursion vulnerability. If the function x86_decode_emulated_instruction is called with the emulation type not having the EMULTYPE_NO_DECODE flag set, it can potentially call itself recursively without terminating.
+
+EXPLANATION:
+The vulnerable code is in the function x86_decode_emulated_instruction. If the emulation type does not have the EMULTYPE_NO_DECODE flag set, the function recursively calls itself on the same instruction. Although the function is designed to re-enter on the same instruction without introducing infinite recursion due to not setting complete_userspace_io, the recursive call with the same emualtion type is still problematic. 
+
+Moreover, if there is an unexpected exception thrown during emulation, there is no guarantee that this will eventually be resolved since errors are recalculated upon re-entrance but not resolved and checked. The recursive call also increases the chance of a stack overflow if an exception occurs multiple times, potentially leading to infinite recursion.
+
+RECOMMENDATIONS:
+- Add a recursion limit check: Implement a simple counter variable to track recursion depth and prevent excessive recursion by breaking the call chain when this limit is met.
+- Check for recursion: Modify the function to check the current emulation type in the function before making the recursive call, ensuring that only a different emulation type can proceed with a new call. 
+
+For instance:
+```cpp
+if (!(emulation_type & EMULTYPE_NO_DECODE) && already_decoded) {
+    return EMULATION_FAILED; // or some meaningful error status
+} 
+kvm_clear_exception_queue(vcpu);
+already_decoded = true; // to detect next recursive execution attempt.
+
+r = x86_decode_emulated_instruction(vcpu, emulation_type, insn, insn_len);
+```
+Since there are not all variables defined in the given code snippet, this recommendation cannot ensure working solution, since it depends on values stored in the variable `emulation_type` and other not-explained cases in the original full file.
+ 
+ORIGINAL CODE:
+```c
+}
+EXPORT_SYMBOL_GPL(kvm_skip_emulated_instruction);
+
+static bool kvm_vcpu_check_breakpoint(struct kvm_vcpu *vcpu, int *r)
+{
+	if (unlikely(vcpu->guest_debug & KVM_GUESTDBG_USE_HW_BP) &&
+	    (vcpu->arch.guest_debug_dr7 & DR7_BP_EN_MASK)) {
+		struct kvm_run *kvm_run = vcpu->run;
+}
+
+/*
+ * Decode to be emulated instruction. Return EMULATION_OK if success.
+ */
+int x86_decode_emulated_instruction(struct kvm_vcpu *vcpu, int emulation_type,
+				    void *insn, int insn_len)
+{
+	int r = EMULATION_OK;
+	struct x86_emulate_ctxt *ctxt = vcpu->arch.emulate_ctxt;
+
+	init_emulate_ctxt(vcpu);
+
+	/*
+	 * We will reenter on the same instruction since we do not set
+	 * complete_userspace_io. This does not handle watchpoints yet,
+	 * those would be handled in the emulate_ops.
+	 */
+	if (!(emulation_type & EMULTYPE_SKIP) &&
+	    kvm_vcpu_check_breakpoint(vcpu, &r))
+		return r;
+
+	r = x86_decode_insn(ctxt, insn, insn_len, emulation_type);
+
+	trace_kvm_emulate_insn_start(vcpu);
+	++vcpu->stat.insn_emulation;
+	if (!(emulation_type & EMULTYPE_NO_DECODE)) {
+		kvm_clear_exception_queue(vcpu);
+
+		r = x86_decode_emulated_instruction(vcpu, emulation_type,
+						    insn, insn_len);
+		if (r != EMULATION_OK)  {
+			if ((emulation_type & EMULTYPE_TRAP_UD) || 
+```

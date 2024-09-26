@@ -1,0 +1,16 @@
+ 
+
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION: A potential race condition exists due to the lack of synchronization between the ext4_lock_group call and the subsequent access to the block_group and desc variables.
+EXPLANATION: The ext4_lock_group call is used to lock the group, but the lock is not held when accessing the block_group and desc variables. This can lead to a race condition if another thread accesses the same group before the lock is released. To fix this, the lock should be held for the duration of the critical section.
+RECOMMENDATIONS: The ext4_lock_group call should be moved to before the if statement, and the lock should be held until after the set_buffer_verified(bh) call. This will ensure that the lock is held for the duration of the critical section, preventing the potential race condition. 
+
+```c
+int ext4_lock_group(struct super_block *sb, struct ext4_group_desc *desc)
+{
+    int err;
+
+    if (desc->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)) {
+        err = ext4_init_block_bitmap(sb, bh, block_group, desc);
+        set_bitmap_uptodate(bh);

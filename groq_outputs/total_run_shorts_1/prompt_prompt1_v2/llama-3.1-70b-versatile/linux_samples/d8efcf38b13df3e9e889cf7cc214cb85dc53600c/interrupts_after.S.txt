@@ -1,0 +1,50 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-8, 12-13
+VULNERABILITY_DESCRIPTION: 
+Insufficient validation of user-provided data and potentially insecure restoration of special purpose registers.
+
+EXPLANATION:
+The code snippet appears to be part of a hypervisor or a kernel component that handles context switching between the host and a guest. The vulnerability lies in the fact that user-provided data in registers r0 and r1 are used without proper validation. Specifically, the 'cmp r0, #-1' instruction checks if the value in r0 is equal to -1, which seems to be a special value for implementing __hyp_get_vectors. However, if the value in r0 is not -1, the control flow proceeds to the 'beq 1f' instruction, which jumps to the eret instruction. 
+
+Moreover, the 'mrs lr, SPSR' and 'msr SPSR_csxf, lr' instructions restore the SPSR (Saved Program Status Register) from the stack without validating its contents. These actions can lead to potential security vulnerabilities if an attacker can control the value of SPSR or provide malicious data in registers r0 and r1. 
+
+Furthermore, the 'load_vcpu' and 'str r1, [vcpu, #VCPU_HSR]' instructions seem to access memory without checking the validity of the 'vcpu' pointer or the data stored in r1.
+
+RECOMMENDATIONS:
+Perform thorough validation on user-provided data, especially on sensitive values such as the function pointer in r0 and SPSR values on the stack.
+Validate the 'vcpu' pointer before accessing memory.
+Enforce access controls and check for overflows when manipulating registers.
+Implement additional checks to prevent potential information leaks due to register interactions.
+
+ORIGINAL CODE:
+* in Hyp mode (see init_hyp_mode in arch/arm/kvm/arm.c).  Return values are
+* passed in r0 and r1.
+*
+* A function pointer with a value of 0xffffffff has a special meaning,
+* and is used to implement __hyp_get_vectors in the same way as in
+* arch/arm/kernel/hyp_stub.S.
+*
+* The calling convention follows the standard AAPCS:
+*   r0 - r3: caller save
+*   r12:     caller save
+*   rest:    callee save
+host_switch_to_hyp:
+  pop	{r0, r1, r2}
+ 
+  /* Check for __hyp_get_vectors */
+  cmp	r0, #-1
+  mrceq	p15, 4, r0, c12, c0, 0	@ get HVBAR
+  beq	1f
+ 
+  push	{lr}
+  mrs	lr, SPSR
+  push	{lr}
+  
+  pop	{lr}
+  msr	SPSR_csxf, lr
+  pop	{lr}
+1:	eret
+ 
+guest_trap:
+  load_vcpu			@ Load VCPU pointer to r0
+  str	r1, [vcpu, #VCPU_HSR]

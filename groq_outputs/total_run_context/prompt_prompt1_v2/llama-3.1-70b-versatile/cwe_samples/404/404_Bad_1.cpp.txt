@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-3
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability and potential double free or deletion of memory allocated on the stack.
+
+EXPLANATION:
+The code snippet has a use-after-free vulnerability and a potential double free or deletion of memory allocated on the stack. In the function `foo`, a pointer `p` is assigned the address of a stack-allocated array `localArray`. If the condition `heap` is true, `p` is reassigned to point to dynamically allocated memory, which is then deleted. However, if `heap` is false, `p` still points to the stack-allocated array. Deleting the memory that `p` points to in this case would result in undefined behavior, because `localArray` is allocated on the stack and should not be manually deleted.
+
+Additionally, the dynamic memory allocation in the `if (heap)` branch introduces a use-after-free vulnerability. If an exception is thrown before the dynamic memory is deleted, it would lead to a memory leak. However, if an exception is not thrown and the function completes successfully, the delete statement will deallocate the memory, and any subsequent access to `p` or the memory it points to would be a use-after-free.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to avoid manually deleting stack-allocated memory. Instead, use smart pointers or containers that handle dynamic memory allocation and deallocation for you.
+
+In this case, if you must manually manage memory, you should set `p` to `nullptr` after deleting it, to prevent any subsequent use-after-free:
+
+```cpp
+void A::foo(bool heap) {
+    int localArray[2] = {11, 22};
+    int *p = localArray;
+    if (heap){
+        p = new int[2];
+        delete[] p;
+        p = nullptr;  // Prevent use-after-free
+    }
+}
+```
+
+However, a better approach would be to use `std::vector` or another container to manage the memory for you:
+
+```cpp
+void A::foo(bool heap) {
+    std::vector<int> vec = {11, 22};
+    if (heap) {
+        vec.resize(2);  // No need to manually allocate or deallocate
+    }
+}
+```
+
+ORIGINAL CODE:
+```cpp
+class A{void foo(bool);};void A::foo(bool heap) {int localArray[2] = {11,22};int *p = localArray;if (heap){p = new int[2];}delete[] p;}
+```

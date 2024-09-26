@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 16, 18
+VULNERABILITY_DESCRIPTION:
+ Potential integer overflow vulnerability due to the use of atoi function.
+
+EXPLANATION:
+The vulnerability lies in the use of the atoi function to convert a string to an integer. If the string contains a value that exceeds the maximum limit of an integer, it can cause an integer overflow. This is because atoi does not check for overflow conditions and returns the converted integer as is. 
+In this case, the code is using atoi to convert the string stored in thestr to an integer and assign it to thetime.tm_sec. If the value in thestr is a large number, it can cause an integer overflow when assigned to thetime.tm_sec.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we can use the strtol or strtoul function instead of atoi. These functions provide error checking and overflow handling. Here's an example of how you can modify the code:
+
+```c
+long result;
+char *endptr;
+
+thestr = strbuf + timestr->length - 3;
+result = strtol(thestr, &endptr, 10);
+if (endptr == thestr || *endptr != '\0' || result < 0 || result > 60) {
+    php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid seconds value");
+    return (time_t)-1;
+}
+thetime.tm_sec = result;
+```
+
+ORIGINAL CODE:
+```c
+char * thestr;
+long gmadjust = 0;
+
+if (timestr->length < 13) {
+    php_error_docref(NULL TSRMLS_CC, E_WARNING, "extension author too lazy to parse %s correctly", timestr->data);
+    return (time_t)-1;
+}
+
+strbuf = estrdup((char *)timestr->data);
+
+memset(&thetime, 0, sizeof(thetime));
+
+/* we work backwards so that we can use atoi more easily */
+
+thestr = strbuf + timestr->length - 3;
+
+thetime.tm_sec = atoi(thestr);
+*thestr = '\0';
+thestr -= 2;
+```

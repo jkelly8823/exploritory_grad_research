@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13-15
+VULNERABILITY_DESCRIPTION:
+Buffer Overflow due to unchecked buffer size.
+
+EXPLANATION:
+The code snippet is vulnerable to a buffer overflow attack. The `new_map.nr_extents` is used as the number of elements to copy from `new_map.extent` to `map->extent` without properly checking if it exceeds the destination buffer size. This can lead to writing beyond the bounds of the `map->extent` array, potentially causing memory corruption and unexpected behavior.
+
+RECOMMENDATIONS:
+To fix this vulnerability, ensure that `new_map.nr_extents` does not exceed the size of the destination buffer. You can achieve this by adding a bounds check before the memcpy call. For example:
+
+```c
+if (new_map.nr_extents <= UID_GID_MAP_MAX_BASE_EXTENTS) {
+    size_t max_copy_size = min(new_map.nr_extents, UID_GID_MAP_MAX_BASE_EXTENTS);
+    memcpy(map->extent, new_map.extent, max_copy_size * sizeof(new_map.extent[0]));
+}
+```
+Alternatively, consider using `memmove` or `memcpy_s` which can handle buffer overflow more safely.
+
+ORIGINAL CODE:
+```c
+if (!new_idmap_permitted(file, ns, cap_setid, &new_map))
+    goto out;
+
+ret = -EPERM;
+/* Map the lower ids from the parent user namespace to the
+ * kernel global id space.
+ */
+    e->lower_first = lower_first;
+}
+
+/*
+ * If we want to use binary search for lookup, this clones the extent
+ * array and sorts both copies.
+ */
+ret = sort_idmaps(&new_map);
+if (ret < 0)
+    goto out;
+
+/* Install the map */
+if (new_map.nr_extents <= UID_GID_MAP_MAX_BASE_EXTENTS) {
+    memcpy(map->extent, new_map.extent,
+           new_map.nr_extents * sizeof(new_map.extent[0]));
+```

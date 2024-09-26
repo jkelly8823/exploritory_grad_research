@@ -1,0 +1,91 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 27-30
+VULNERABILITY_DESCRIPTION:
+Off-by-None Error and Uncontrolled Memory Use in dtls1_reassemble_fragment().
+
+EXPLANATION:
+The function dtls1_reassemble_fragment() is potentially vulnerable to off-by-none error. The variable frag_len, holding the length of a DTLS fragment, is compared to mlen to check whether the current fragment is out of bounds. However, in C, comparing unsigned integers of type size_t can lead to integer underflow, potentially allowing fragments longer than intended to pass this check.
+
+However, upon closer inspection, this issue might not be directly applicable. The code might be trying to prevent an overflow in the `s->init_buf->data` array but that isn't clear due to unclear variable declarations which aren't shown in the snippet.
+
+The function dtls1_reassemble_fragment() might be using data without checking the validity of its pointer first. We cannot be certain as some data is outside of the provided code snippet.
+
+In addition, in the code, we cannot verify that the error codes are properly checked after calling `pitem_free(item)`, `dtls1_hm_fragment_free(frag)`, or `pqueue_pop(s->d1->buffered_messages)`. 
+
+Also, uncontrolled memory use in the code snippet can be detected by the presence of function calls that allocate or deallocate memory without checking their success or without checking the variables that control this memory. This could have catastrophic outcomes if not treated.
+
+RECOMMENDATIONS:
+A recommendation for addressing this issue would be to ensure that mlen isn't set to zero (which in size_t can result in the maximum integer). 
+This can be fixed by ensuring mlen isn't set to zero in all its assignments to ensure code safety.  
+
+Then, we need to add checking on the success of those functions to ensure no memory overflow has happened. Finally, It would also be more secure if the function returned mlen = 0, when there is no fragment; in case this already happens elsewhere.
+
+Regarding `dtls1_reassemble_fragment(s, &msg_hdr)` itself, this should be left on its own code review as error handling and the overall safety and success checks are critical components here.
+
+Lastly, ensure proper error checking to avoid uncontrolled memory allocation.
+
+ORIGINAL CODE:
+```
+    * (2) update s->init_num
+    */
+    pitem *item;
+    hm_fragment *frag;
+    int ret;
+
+    do {
+        item = pqueue_peek(s->d1->buffered_messages);
+        if (item == NULL)
+            return 0;
+
+        frag = (hm_fragment *)item->data;
+
+        if (frag->msg_header.seq < s->d1->handshake_read_seq) {
+            /* This is a stale message that has been buffered so clear it */
+            pqueue_pop(s->d1->buffered_messages);
+            dtls1_hm_fragment_free(frag);
+            pitem_free(item);
+            item = NULL;
+            frag = NULL;
+        }
+    } while (item == NULL);
+
+    /* Don't return if reassembly still in progress */
+    if (frag->reassembly != NULL)
+        return 0;
+
+    if (s->d1->handshake_read_seq == frag->msg_header.seq) {
+        size_t frag_len = frag->msg_header.frag_len;
+        pqueue_pop(s->d1->buffered_messages);
+
+        /* Calls SSLfatal() as required */
+        pitem_free(item);
+
+        if (ret) {
+            *len = frag_len;
+            return 1;
+        }
+
+    int i, ret, recvd_type;
+    struct hm_header_st msg_hdr;
+    size_t readbytes;
+
+    *errtype = 0;
+
+ redo:
+     * although we're still expecting seq 0 (ClientHello)
+     */
+    if (msg_hdr.seq != s->d1->handshake_read_seq) {
+        *errtype = dtls1_process_out_of_seq_message(s, &msg_hdr);
+        return 0;
+    }
+
+    if (frag_len && frag_len < mlen) {
+        *errtype = dtls1_reassemble_fragment(s, &msg_hdr);
+        goto f_err;
+    }
+
+    /*
+     * Note that s->init_num is *not* used as current offset in
+     * s->init_buf->data, but as a counter summing up fragments' lengths: as
+     * soon as they sum up to handshake packet length, we assume we have got
+```

@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a command injection vulnerability due to the concatenation of user-controlled input into a shell command.
+
+EXPLANATION:
+The `do_listing` function creates a shell command by concatenating the `/bin/ls -l` command with the `$fname` argument, which is obtained from the `GetArgument` function. This command is then executed using the `system` function. However, if the `$fname` argument contains malicious input, such as shell metacharacters or escape sequences, it could allow an attacker to inject and execute arbitrary shell commands. The `validate_name` function attempts to validate the filename, but its regular expression is not sufficient to prevent all possible malicious input.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it is recommended to use a safer method of executing the command, such as using the `exec` function with a list of arguments instead of a single string. Additionally, the `validate_name` function should be modified to use a stronger validation mechanism, such as checking for a valid file path or using a whitelist of allowed characters. Here's an example of how the `do_listing` function could be modified:
+
+```perl
+sub do_listing {
+  my($fname) = @_;
+  if (! validate_name($fname)) {
+    print "Error: name is not well-formed!\n";
+    return;
+  }
+  exec('/bin/ls', '-l', $fname);
+}
+```
+
+ORIGINAL CODE:
+
+
+```perl
+my $arg = GetArgument("filename");
+do_listing($arg);
+
+
+sub do_listing {
+
+  my($fname) = @_;
+  if (! validate_name($fname)) {
+
+    print "Error: name is not well-formed!\n";
+    return;
+
+  }
+  # build command
+  my $cmd = "/bin/ls -l $fname";
+  system($cmd);
+
+}
+
+sub validate_name {
+
+  my($name) = @_;
+  if ($name =~ /^[\w\-]+$/) {
+
+    return(1);
+
+  }
+  else {
+
+    return(0);
+
+  }
+
+}
+```

@@ -1,0 +1,74 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14, 15
+VULNERABILITY_DESCRIPTION:
+A potential buffer overflow and use-after-free vulnerability is present in the code.
+
+EXPLANATION:
+In the given code snippet, a buffer overflow and use-after-free vulnerability is present in the lines 14 and 15. The `getenv` function call stores the environment variable value in the `query_string` pointer. However, the code then uses the `strdup` function to create a copy of the query string in the `decoded_query_string` pointer.
+
+The vulnerability arises when the `decoded_query_string` is passed to the `php_url_decode` function without checking its length or allocation. If the decoded query string is larger than the allocated buffer, it can cause a buffer overflow. Additionally, the `decoded_query_string` is freed after use, but the original pointer `query_string` is not checked for NULL or freed.
+
+Furthermore, it appears that `decoded_query_string` is only freed after it is used to set the `skip_getopt` variable. However, `decoded_query_string` is not checked to ensure it is not NULL before it is used to set the `skip_getopt` variable.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability:
+
+1. Check the return value of `getenv` to ensure it is not NULL before using it.
+2. Validate the length of the `decoded_query_string` before passing it to `php_url_decode`.
+3. Ensure that `decoded_query_string` is checked for NULL before it is used.
+4. Use a safe alternative to `strdup` that allows for error handling.
+
+Here is an example of how the code could be updated:
+```c
+if ((query_string = getenv("QUERY_STRING")) != NULL) {
+    decoded_query_string = strdup(query_string);
+    if (decoded_query_string != NULL) {
+        size_t decoded_query_string_len = strlen(decoded_query_string);
+        if (decoded_query_string_len > 0) {
+            php_url_decode(decoded_query_string, decoded_query_string_len);
+            if (*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+                skip_getopt = 1;
+            }
+        }
+        free(decoded_query_string);
+    }
+}
+```
+ORIGINAL CODE:
+```c
+#include "php_main.h"
+#include "fopen_wrappers.h"
+#include "ext/standard/php_standard.h"
+#include "ext/standard/url.h"
+
+#ifdef PHP_WIN32
+# include <io.h>
+# include <fcntl.h>
+#ifndef PHP_WIN32
+	int status = 0;
+#endif
+	char *query_string;
+	char *decoded_query_string;
+	int skip_getopt = 0;
+
+#if 0 && defined(PHP_DEBUG)
+	/* IIS is always making things more difficult.  This allows
+	 * us to stop PHP and attach a debugger before much gets started */
+		}
+	}
+
+	if(query_string = getenv("QUERY_STRING")) {
+		decoded_query_string = strdup(query_string);
+		php_url_decode(decoded_query_string, strlen(decoded_query_string));
+		if(*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+			skip_getopt = 1;
+		}
+		free(decoded_query_string);
+	}
+
+	while (!skip_getopt && (c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2)) != -1) {
+		switch (c) {
+			case 'c':
+				if (cgi_sapi_module.php_ini_path_override) {
+					free(cgi_sapi_module.php_ini_path_override);
+```

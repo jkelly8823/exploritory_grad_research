@@ -1,0 +1,20 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 5, 6
+VULNERABILITY_DESCRIPTION:
+Use-After-Free vulnerability. The code frees memory at 'vmx->nested.vpid02' but does not set the pointer to NULL. Subsequent accesses to 'vmx->nested.vpid02' or its associated structure members 'vmx->nested.posted_intr_nv' may result in use-after-free errors.
+EXPLANATION:
+Freeing memory at 'vmx->nested.vpid02' on line 4 does not set the pointer to NULL. However, subsequent lines (5 and 6) access the associated structure 'vmx->nested', potentially leading to use-after-free errors if the freed memory is overwritten before the current function execution is completed, or if other threads in the program still hold references to the freed memory. While the access in line 6 is a direct assignment of an integer value and not a use of the freed memory, it still has an indirect reference to 'vmx->nested' and its recently freed memory block 'vmx->nested.vpid02'.
+RECOMMENDATIONS:
+To fix this vulnerability, set 'vmx->nested.vpid02' to NULL after freeing the memory to prevent subsequent use-after-free errors. Although 'vmx->nested.posted_intr_nv' assignment on line 6 does not directly access the freed memory, moving it above the free operation is recommended for code readability and safety.
+
+ ORIGINAL CODE:
+```
+if (!vmx->nested.vmxon && !vmx->nested.smm.vmxon)
+	return;
+
+hrtimer_cancel(&vmx->nested.preemption_timer);
+vmx->nested.vmxon = false;
+vmx->nested.smm.vmxon = false;
+free_vpid(vmx->nested.vpid02);
+vmx->nested.posted_intr_nv = -1;
+```

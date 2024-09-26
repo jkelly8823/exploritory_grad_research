@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-16
+VULNERABILITY_DESCRIPTION:
+Side-channel vulnerability through variable timing and power consumption differences.
+
+EXPLANATION:
+This code snippet checks a password and updates a variable `password_ok` with different values depending on whether each digit matches the stored password. The vulnerability lies in the different behavior when a digit matches or does not match: when a digit matches, `password_ok` is set to a value (0x10) that takes more cycles and potentially uses more power, while when a digit does not match, `password_ok` is set to a different value (0x01) with presumably fewer cycles and less power consumption. This creates a timing and power consumption side-channel vulnerability that an attacker could use to recover information about the password.
+
+RECOMMENDATIONS:
+1.  **Remedy timing differential.** Update the code to ensure that the time taken for each password digit comparison is the same, whether the digit matches the stored value or not. This could be achieved by using a constant-time comparison function.
+
+2.  **Prevent power consumption differences.** Modify the code to eliminate any power consumption differences between matching and non-matching digits. This could be done by making sure the byte assignment operations for matching and non-matching digits involve the same number of electrical operations.
+
+3.  **Avoid branching on secrets.** Instead of controlling the control flow with an if/else or if statement that depends on the secrecy, attempt to move the control flow into different branches that depend on static flags.
+
+4.  **Consider using a constant-time library.** Use libraries that are designed to protect sensitive operations (like passwords comparisons) against side-channel attacks through careful implementations and mitigations.
+
+ORIGINAL CODE:
+
+
+           static nonvolatile password_tries = NUM_RETRIES;
+           do
+             while (password_tries == 0) ; // Hang here if no more password tries
+             password_tries--;  // Put retry code here to catch partial retries
+             password_ok = 0;
+             for (i = 0; i < NUM_PW_DIGITS; i++)
+               if (GetPasswordByte() == stored_password([i])
+                 password_ok |= 0x10; // Power consumption here
+               else
+                 password_ok |= 0x01; // is now the same here
+             end
+             if ((password_ok & 1) == 0)
+               password_tries = NUM_RETRIES;
+               break_to_Ok_to_proceed
+           while (true)
+           // Password OK

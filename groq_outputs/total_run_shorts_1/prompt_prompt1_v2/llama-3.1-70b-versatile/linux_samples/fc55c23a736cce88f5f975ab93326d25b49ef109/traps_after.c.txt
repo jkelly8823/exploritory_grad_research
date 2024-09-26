@@ -1,0 +1,132 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 94-104
+VULNERABILITY_DESCRIPTION:
+The input to the `copy_from_lma`, `flush_vectors`, and `kuser_init` functions is not validated or sanitized, which may lead to a buffer overflow vulnerability.
+
+EXPLANATION:
+The functions `copy_from_lma`, `flush_vectors`, and `kuser_init` are used to copy data from one location to another and to initialize system resources. However, the input parameters to these functions, such as `vectors_base`, `lma_start`, `lma_end`, `vec_start`, `vec_end`, are not validated or sanitized. This lack of validation can lead to a buffer overflow vulnerability if an attacker is able to manipulate the input parameters to point to a location that is outside the intended buffer.
+
+In the `early_trap_init` function, the `copy_from_lma` function is called with a hardcoded offset of `0x1000` to copy the stubs to the vector page. This hardcoded offset is not validated, and if the underlying architecture changes, this offset may no longer be valid, leading to a buffer overflow vulnerability.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the input parameters to the `copy_from_lma`, `flush_vectors`, and `kuser_init` functions should be validated and sanitized to ensure that they point to valid locations within the intended buffers. Additionally, the hardcoded offset of `0x1000` should be replaced with a dynamically calculated offset that takes into account the underlying architecture.
+
+Here is an example of how the `early_trap_init` function can be modified to include input validation:
+```c
+void __init early_trap_init(void *vectors_base)
+{
+    extern char __stubs_start[], __stubs_end[];
+    extern char __vectors_start[], __vectors_end[];
+    unsigned i;
+
+    if (!vectors_base) {
+        pr_err("Invalid vectors_base parameter\n");
+        return;
+    }
+
+    if ((unsigned long)vectors_base % PAGE_SIZE != 0) {
+        pr_err("Vectors_base is not page-aligned\n");
+        return;
+    }
+
+    copy_from_lma(vectors_base, __vectors_start, __vectors_end);
+    copy_from_lma(vectors_base + PAGE_SIZE, __stubs_start, __stubs_end);
+
+    kuser_init(vectors_base);
+
+    flush_vectors(vectors_base, 0, PAGE_SIZE * 2);
+}
+```
+In this modified version of the `early_trap_init` function, input validation is added to ensure that the `vectors_base` parameter is not null and is page-aligned.
+
+ORIGINAL CODE:
+```c
+#include <linux/atomic.h>
+#include <asm/cacheflush.h>
+#include <asm/exception.h>
+#include <asm/spectre.h>
+#include <asm/unistd.h>
+#include <asm/traps.h>
+#include <asm/ptrace.h>
+#include <asm/unwind.h>
+}
+#endif
+
+#ifndef CONFIG_CPU_V7M
+static void copy_from_lma(void *vma, void *lma_start, void *lma_end)
+{
+    memcpy(vma, lma_start, lma_end - lma_start);
+}
+
+static void flush_vectors(void *vma, size_t offset, size_t size)
+{
+    unsigned long start = (unsigned long)vma + offset;
+    unsigned long end = start + size;
+
+    flush_icache_range(start, end);
+}
+
+#ifdef CONFIG_HARDEN_BRANCH_HISTORY
+int spectre_bhb_update_vectors(unsigned int method)
+{
+    extern char __vectors_bhb_bpiall_start[], __vectors_bhb_bpiall_end[];
+    extern char __vectors_bhb_loop8_start[], __vectors_bhb_loop8_end[];
+    void *vec_start, *vec_end;
+
+    if (system_state >= SYSTEM_FREEING_INITMEM) {
+        pr_err("CPU%u: Spectre BHB workaround too late - system vulnerable\n",
+               smp_processor_id());
+        return SPECTRE_VULNERABLE;
+    }
+
+    switch (method) {
+    case SPECTRE_V2_METHOD_LOOP8:
+        vec_start = __vectors_bhb_loop8_start;
+        vec_end = __vectors_bhb_loop8_end;
+        break;
+
+    case SPECTRE_V2_METHOD_BPIALL:
+        vec_start = __vectors_bhb_bpiall_start;
+        vec_end = __vectors_bhb_bpiall_end;
+        break;
+
+    default:
+        pr_err("CPU%u: unknown Spectre BHB state %d\n",
+               smp_processor_id(), method);
+        return SPECTRE_VULNERABLE;
+    }
+
+    copy_from_lma(vectors_page, vec_start, vec_end);
+    flush_vectors(vectors_page, 0, vec_end - vec_start);
+
+    return SPECTRE_MITIGATED;
+}
+#endif
+
+void __init early_trap_init(void *vectors_base)
+{
+    extern char __stubs_start[], __stubs_end[];
+    extern char __vectors_start[], __vectors_end[];
+    unsigned i;
+
+         * into the vector page, mapped at 0xffff0000, and ensure these
+         * are visible to the instruction stream.
+         */
+    copy_from_lma(vectors_base, __vectors_start, __vectors_end);
+    copy_from_lma(vectors_base + 0x1000, __stubs_start, __stubs_end);
+
+    kuser_init(vectors_base);
+
+    flush_vectors(vectors_base, 0, PAGE_SIZE * 2);
+}
+#else /* ifndef CONFIG_CPU_V7M */
+void __init early_trap_init(void *vectors_base)
+{
+    /*
+     * on V7-M there is no need to copy the vector table to a dedicated
+     * memory area. The address is configurable and so a table in the kernel
+     * image can be used.
+     */
+}
+#endif
+```

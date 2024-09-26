@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 21-24
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Memory Access (Buffer Overread)
+
+EXPLANATION:
+The vulnerability is present in the memchr() function call within the for loop. The function memchr() is used to find the first occurrence of a specified character in a block of memory. However, it does not perform any bounds checking. In this case, if the offset is set to a value near the end of the buffer, and the str_range (m->str_range) is set to a value larger than the remaining buffer size, then the end pointer could be set beyond the end of the allocated memory.
+
+However, this isn't the direct vulnerability. The real vulnerability exists on line 21. 'last' pointer is assigned 'end' if 'lines' still has value, which shouldn't happen after reaching EOL or buffer limit; however if some 'lines' were remaining, we assign it end limit which is beyond real allocated memory - making 'last' pointing beyond allocated limits - resulting in buffer overread at line 24 while being used in 'ms->search.s_len = last - buf;'.
+
+RECOMMENDATIONS:
+To fix the vulnerability, ensure that the 'last' pointer never exceeds the allocated memory limits. We can achieve this by limiting the value of 'lines' so that 'last' pointer never exceeds 'end'. However, we need to ensure that even 'last' does exceed 'end', 'ms->search.s_len' should not. We should add a check to make sure 'last' doesn't exceed 'end'.
+
+Here is a sample fix for the given issue:
+
+```c
+ms->search.s_len = (last > end) ? (end - buf) : (last - buf);
+```
+
+Alternatively, reassign 'linecnt' based on actual lines processed, instead of over counting lines.
+
+ORIGINAL CODE:
+
+```c
+return 0;
+}
+
+if (m->str_flags & REGEX_LINE_COUNT) {
+    linecnt = m->str_range;
+    bytecnt = linecnt * 80;
+} else {
+    linecnt = 0;
+    bytecnt = m->str_range;
+}
+
+if (bytecnt == 0 || bytecnt > nbytes - offset)
+    bytecnt = nbytes - offset;
+if (bytecnt > ms->regex_max)
+    bytecnt = ms->regex_max;
+
+buf = RCAST(const char *, s) + offset;
+end = last = RCAST(const char *, s) + bytecnt + offset;
+/* mget() guarantees buf <= last */
+for (lines = linecnt, b = buf; lines && b < end &&
+     ((b = CAST(const char *,
+     memchr(c = b, '\n', CAST(size_t, (end - b)))))
+     b++;
+}
+if (lines)
+    last = end;
+
+ms->search.s = buf;
+ms->search.s_len = last - buf;
+ms->search.offset = offset;
+```

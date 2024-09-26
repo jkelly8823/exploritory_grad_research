@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8, 9
+VULNERABILITY_DESCRIPTION:
+Use of potentially misleading system calls, potentially vulnerable to Time-of-Check-To-Time-of-Use (TOCTOU) attacks, and non-reentrant system calls.
+
+EXPLANATION:
+This function contains potentially misleading system calls. The lines `sigaction(SIGILL, &ill_oact, NULL);` and `sigprocmask(SIG_SETMASK, &oset, NULL);` are involved in modifying signal behavior. Although there is no immediately visible vulnerability, these calls can still introduce issues.
+
+1. `sigaction(SIGILL, &ill_oact, NULL);` On POSIX systems, it is generally recommended to restore previous signal handling after using `sigaction`. However, since there is a lack of information in this snippet, the risks associated with the handling are still present and related to a potential TOCTOU attack.
+
+2. `sigprocmask(SIG_SETMASK, &oset, NULL);` Similarly, with `sigprocmask()`, a TOCTOU condition could arise where the context changes after the check (getting the current signal mask) and before the set. Given that `SIG_SETMASK` replaces the set instead of adding the signals from `&oset`, an attacker with right environment can create and exploit critical conditions.
+
+Additionally, the functions `sigaction` and `sigprocmask` are not typically reentrant and any failure may suggest the inability to undo the locks appropriately.
+
+RECOMMENDATIONS:
+1. Verify or restore previous signal handling after calls to functions with non-reentrant behavior (`sigaction()`, `sigprocmask()`), whenever practical, to decrease dependencies and interactions between these calls.
+
+2. Eliminate potential TOCTOU conditions by either locking or finding alternative methods for verification and doing modifications in critical segments to protect shared resources reliably.
+
+3. Investigate into setting parameters to work across several distinct scenarios, for reusability.
+
+4. Usage of calls towards either functions in a multi-threaded application may exacerbate errors; and steps should also be taken against concurrent modifications and potential issues brought about.
+
+ORIGINAL CODE:
+/*
+ * Copyright 2011-2021 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+    }
+# endif
+
+    /* Things that getauxval didn't tell us */
+    if (sigsetjmp(ill_jmp, 1) == 0) {
+        _armv7_tick();
+        OPENSSL_armcap_P |= ARMV7_TICK;
+    }
+
+    sigaction(SIGILL, &ill_oact, NULL);
+    sigprocmask(SIG_SETMASK, &oset, NULL);

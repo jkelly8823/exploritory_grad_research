@@ -1,0 +1,60 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 45
+VULNERABILITY_DESCRIPTION:
+Weak Entropy Generation
+EXPLANATION:
+The function ossl_pool_add_nonce_data intends to add unique and unpredictable data to a random pool. However, the implementation may not provide sufficient entropy, particularly in scenarios where the system clock resolution is low. The function relies on sys$gettim() to obtain the current time, which may have a coarse granularity. Although a sequence number is used as a fallback in case the time stamp repeats, this may not be enough to ensure adequate entropy.
+
+Furthermore, the entire data structure is initialized with zeros using memset, which may not be the most secure practice. Although the code appears to overwrite these initialized values later, it still presents a potential vulnerability if the initialization fails or is interrupted.
+
+RECOMMENDATIONS:
+1. Consider using a high-resolution timer or a more reliable source of entropy.
+2. Avoid initializing sensitive data structures with memset. Instead, initialize them with random or unpredictable values.
+3. Verify that the sequence number is properly incremented and handled in case of concurrent access.
+4. Ensure that the code using this function is properly synchronized to prevent concurrent access to the random pool.
+5. Consider using a more secure random number generator that is designed to generate cryptographically secure random numbers.
+
+ORIGINAL CODE:
+/* 
+ * ...
+ * other code above...
+ */
+int ossl_pool_add_nonce_data(RAND_POOL *pool)
+{
+    /*
+     * Two variables to ensure that two nonces won't ever be the same
+     */
+    static unsigned __int64 last_time = 0;
+    static unsigned __int32 last_seq = 0;
+
+    struct {
+        pid_t pid;
+        CRYPTO_THREAD_ID tid;
+        unsigned __int64 time;
+        unsigned __int32 seq;
+    } data;
+
+    /* Erase the entire structure including any padding */
+    memset(&data, 0, sizeof(data));
+
+    /*
+     * Add process id, thread id, a timestamp, and a sequence number in case
+     * the same time stamp is repeated, to ensure that the nonce is unique
+     * with high probability for different process instances.
+     *
+     * ... other comments and code ...
+     */
+    data.pid = getpid();
+    data.tid = CRYPTO_THREAD_get_current_id();
+    data.seq = 0;
+    sys$gettim((void*)&data.time);
+
+    if (data.time == last_time) {
+        data.seq = ++last_seq;
+    } else {
+        last_time = data.time;
+        last_seq = 0;
+    }
+
+    return ossl_rand_pool_add(pool, (unsigned char *)&data, sizeof(data), 0);
+}

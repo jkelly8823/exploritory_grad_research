@@ -1,0 +1,32 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9-12
+VULNERABILITY_DESCRIPTION:
+Use after free vulnerability due to incorrect destruction of a zval object and consequent access after freeing memory.
+
+EXPLANATION:
+The code provided contains a potential use after free vulnerability. After setting `EG(user_error_handler)` and `EG(user_exception_handler)` to NULL, it calls `zval_dtor(zeh)` and `FREE_ZVAL(zeh)` to destroy and free the memory occupied by `zeh`. However, it's crucial to consider what happens to `zeh` after these operations. If anywhere in the code makes use of the previously freed `zeh`, a dangling pointer is created. Although `zeh` is not directly used after `FREE_ZVAL(zeh)`, analyzing the snippet might not be sufficient to deduce whether other variables or function calls involve this memory address, hence the vulnerability.
+
+RECOMMENDATIONS:
+Before returning from this function or continuing execution, ensure no variables or future function calls rely on `zeh`. Assign `NULL` to `zeh` after freeing it as an additional safety measure, although this does not eliminate the vulnerability on its own. Wherever the code that has assigned a value to `zeh` does so, test for whether `zeh` is `NULL` or an invalid pointer value after that point. Moreover, re-consider whether the code in the snippet should be within a separate function; in some contexts it could make sense and impose restrictions that prevent further bugs.
+
+
+ORIGINAL CODE:
+
+		if (EG(user_error_handler)) {
+			zeh = EG(user_error_handler);
+			EG(user_error_handler) = NULL;
+			zval_dtor(zeh);
+			FREE_ZVAL(zeh);
+			zeh = NULL; // Additional safety measure
+		}
+
+		if (EG(user_exception_handler)) {
+			zeh = EG(user_exception_handler);
+			EG(user_exception_handler) = NULL;
+			zval_dtor(zeh);
+			FREE_ZVAL(zeh);
+			zeh = NULL; // Additional safety measure
+		}
+
+		zend_stack_destroy(&EG(user_error_handlers_error_reporting));
+		zend_stack_init(&EG(user_error_handlers_error_reporting));

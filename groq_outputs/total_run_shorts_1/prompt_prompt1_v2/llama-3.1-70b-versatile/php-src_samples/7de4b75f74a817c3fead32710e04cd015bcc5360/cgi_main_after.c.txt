@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11
+VULNERABILITY_DESCRIPTION:
+ Unvalidated or un-sanitized query string input is used as a command-line argument and then passed to functions such as atoi.
+
+EXPLANATION:
+ The given code snippet processes a query string input from an environment variable and then uses it as a command-line argument. Although it does perform a sanity check for the '=' character, it does not properly validate the input data. Furthermore, it passes the decoded query string directly to the atoi function without proper validation or bounds checking. This could potentially lead to an arbitrary code execution vulnerability, especially if the input data can be controlled by an attacker. Additionally, there is also a lack of proper error handling for potential errors resulting from strdup, php_url_decode, and atoi.
+
+RECOMMENDATIONS:
+ To prevent potential code execution vulnerabilities:
+ - Always validate and sanitize user input data.
+ - Use more robust input parsing functions, such as those provided by the strtol family, which allows for error checking and out-of-bounds value detection.
+ - Implement proper error handling to catch potential errors resulting from memory allocation and string manipulation functions.
+
+ORIGINAL CODE:
+```
+if((query_string = getenv("QUERY_STRING")) != NULL && strchr(query_string, '=') == NULL) {
+    /* we've got query string that has no = - apache CGI will pass it to command line */
+    unsigned char *p;
+    decoded_query_string = strdup(query_string);
+    php_url_decode(decoded_query_string, strlen(decoded_query_string));
+    for (p = decoded_query_string; *p &&  *p <= ' '; p++) {
+        /* skip all leading spaces */
+    }
+    if(*p == '-') {
+        skip_getopt = 1;
+    }
+    free(decoded_query_string);
+}
+}
+
+zend_first_try {
+    while (!skip_getopt && (c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 1, 2)) != -1) {
+        switch (c) {
+            case 'T':
+                benchmark = 1;
+                repeats = atoi(php_optarg);
+```

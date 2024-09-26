@@ -1,0 +1,65 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-20, 27-30
+VULNERABILITY_DESCRIPTION:
+Use After Free and Double-Free Vulnerabilities
+EXPLANATION:
+This code is vulnerable to use-after-free and double-free vulnerabilities. The issues arise when the function `php_register_variable_ex` attempts to free variables multiple times. 
+
+In the code, `zval_ptr_dtor_nogc(val)` is used to free `val` in multiple if conditions. However, `zval_ptr_dtor_nogc` does not decrement the reference count, and if `val` has only one reference count remaining, it can cause a double-free when another function attempts to free it. 
+
+Additionally, if `zval_ptr_dtor_nogc(val)` is called and `val` is part of an array or another zval container, the memory is freed, but the container is not updated, leading to use-after-free vulnerabilities when the program tries to access `val` again.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, ensure that `val` is only freed once when it's no longer in use. This can be achieved by checking the reference count of `val` before freeing it, and decrementing the count accordingly. Here is a possible mitigation:
+
+Instead of using `zval_ptr_dtor_nogc(val)`, use `zval_ptr_dtor(val)` which decrements the reference count and frees the memory when the count reaches 0. This way, you ensure that `val` is only freed when its reference count is 0.
+
+Make sure to remove any duplicate `free_alloca(var_orig, use_heap)` calls as they can also cause double-free issues.
+
+Additionally, make sure that `val` is removed from any arrays or containers before calling `zval_ptr_dtor(val)`.
+
+ORIGINAL CODE:
+```c
+zend_string_release_ex(key, 0);
+}
+
+PHPAPI void php_register_variable_ex(const char *var_name, zval *val, zval *track_vars_array)
+{
+	char *p = NULL;
+	char *ip = NULL;		/* index pointer */
+	}
+	var_len = p - var;
+
+	/* Discard variable if mangling made it start with __Host-, where pre-mangling it did not start with __Host- */
+	if (strncmp(var, "__Host-", sizeof("__Host-")-1) == 0 && strncmp(var_name, "__Host-", sizeof("__Host-")-1) != 0) {
+		zval_ptr_dtor_nogc(val);
+		free_alloca(var_orig, use_heap);
+		return;
+	}
+
+	/* Discard variable if mangling made it start with __Secure-, where pre-mangling it did not start with __Secure- */
+	if (strncmp(var, "__Secure-", sizeof("__Secure-")-1) == 0 && strncmp(var_name, "__Secure-", sizeof("__Secure-")-1) != 0) {
+		zval_ptr_dtor_nogc(val);
+		free_alloca(var_orig, use_heap);
+		return;
+	}
+
+	if (var_len==0) { /* empty variable name, or variable name with a space in it */
+		zval_ptr_dtor_nogc(val);
+		free_alloca(var_orig, use_heap);
+		return;
+					return;
+				}
+			} else {
+				gpc_element_p = zend_symtable_str_find(symtable1, index, index_len);
+				if (!gpc_element_p) {
+					zval tmp;
+					array_init(&tmp);
+			zval_ptr_dtor_nogc(val);
+			}
+		} else {
+			zend_ulong idx;
+
+			/*
+			 * According to rfc2965, more specific paths are listed above the less specific ones.
+```

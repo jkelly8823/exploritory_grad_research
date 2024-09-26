@@ -1,0 +1,81 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14-31
+VULNERABILITY_DESCRIPTION:
+Insecure function usage and missing error handling
+
+EXPLANATION:
+The provided code snippet is vulnerable due to its usage of potential insecure functions (`of_fwnode_handle`, `of_node_put`, and `v4l2_fwnode_endpoint_parse`) that may lead to unexpected behavior if not handled correctly. Specifically, if `of_fwnode_handle` fails to provide a valid fwnode handle, or if `of_node_put` is called with an invalid of_node pointer, it could potentially lead to use-after-free or null pointer dereferences. Furthermore, the code handles some potential errors returned by `v4l2_fwnode_endpoint_parse`, but some paths where an error might occur remain unchecked.
+
+Moreover, in the function `ov5645_set_format`, it is observed that pointer `__crop` is used without being checked against null after the call to `__ov5645_get_pad_crop`. This can also lead to a null pointer dereference.
+
+RECOMMENDATIONS:
+
+1. Always check the return values of `of_fwnode_handle` and `__ov5645_get_pad_crop` and handle the potential errors.
+2. Check if the fwnode handle and of_node pointers are valid before passing them to other functions.
+3. Verify that the subdevice format and subdevice configuration are valid before using them in function calls.
+
+ORIGINAL CODE:
+```c
+}
+}
+
+static const struct ov5645_mode_info *
+ov5645_find_nearest_mode(unsigned int width, unsigned int height)
+{
+	int i;
+
+	for (i = ARRAY_SIZE(ov5645_mode_info_data) - 1; i >= 0; i--) {
+		if (ov5645_mode_info_data[i].width <= width &&
+		    ov5645_mode_info_data[i].height <= height)
+			break;
+	}
+
+	if (i < 0)
+		i = 0;
+
+	return &ov5645_mode_info_data[i];
+}
+
+static int ov5645_set_format(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_pad_config *cfg,
+			     struct v4l2_subdev_format *format)
+{
+	__crop = __ov5645_get_pad_crop(ov5645, cfg, format->pad,
+			format->which);
+
+	if (!__crop) {
+		// handle null pointer
+		return -EINVAL;
+	}
+
+	new_mode = ov5645_find_nearest_mode(format->format.width,
+					    format->format.height);
+	__crop->width = new_mode->width;
+	__crop->height = new_mode->height;
+
+	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
+
+	ret = v4l2_fwnode_endpoint_parse(of_fwnode_handle(endpoint),
+					 &ov5645->ep);
+	if (!endpoint) {
+		// handle null pointer
+		ret = -ENODEV;
+	}
+
+	if (ret < 0) {
+		dev_err(dev, "parsing endpoint node failed\n");
+		return ret;
+	}
+
+	of_node_put(endpoint);
+	// Ensure that of_node_put is called after endpoint handle has been resolved
+	if (!ov5645->ep) {
+		// handle invalid fwnode handle
+		ret = -EINVAL;
+	}
+
+	if (ov5645->ep.bus_type != V4L2_MBUS_CSI2) {
+		dev_err(dev, "invalid bus type, must be CSI2\n");
+		return -EINVAL;
+	}
+```

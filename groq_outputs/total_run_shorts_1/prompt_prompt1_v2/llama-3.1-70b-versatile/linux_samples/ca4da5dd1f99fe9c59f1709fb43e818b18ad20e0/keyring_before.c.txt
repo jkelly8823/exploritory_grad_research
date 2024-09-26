@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4
+VULNERABILITY_DESCRIPTION:
+ Potential Use-After-Free vulnerability in key payload reservation.
+
+EXPLANATION:
+ The code first checks if an edit is in progress and the edit is not marked as dead. If this condition is true, it then attempts to reserve space for a key payload. However, there is no check to see if the edit was successfully canceled after the reservation is made. This means that if an error occurs between the reservation and the cancel edit line, the code will continue to execute and possibly use the edit object even though it may have been freed elsewhere in the program. This can potentially lead to a use-after-free error.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, you should introduce additional error checking after reserving space for the key payload. If the reservation fails, check the error code and take necessary actions based on the error type. Additionally, verify that the edit object is still in a valid state before attempting to cancel it.
+
+ORIGINAL CODE:
+
+	if (index_key->type == &key_type_keyring)
+		up_write(&keyring_serialise_link_sem);
+
+	if (edit && !edit->dead_leaf) {
+		int ret = key_payload_reserve(keyring,
+				    keyring->datalen - KEYQUOTA_LINK_BYTES);
+		if (ret) {
+			// Handle reservation error
+			// ...
+		} else {
+			assoc_array_cancel_edit(edit);
+		}
+	}
+	up_write(&keyring->sem);
+}

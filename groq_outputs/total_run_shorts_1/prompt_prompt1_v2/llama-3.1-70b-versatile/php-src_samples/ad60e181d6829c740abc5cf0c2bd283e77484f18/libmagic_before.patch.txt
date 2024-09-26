@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Lines 1653-1857 in +softmagic.c
+VULNERABILITY_DESCRIPTION:
+The provided code snippet is vulnerable to command injection attacks through the use of the 'regcomp' function with user-controlled data.
+
+EXPLANATION:
+In the function 'magiccheck', a regular expression is compiled and matched against user-controlled data. This can lead to attacks where an attacker can craft their input to match the regular expression in a way that causes unexpected behavior. However, the snippet provided is incomplete and doesn't explicitly show the parsing of malicious data, but in a complex code, it's common to pass user inputs to these functions.
+
+RECOMMENDATIONS:
+Use safe and validated input when using regular expressions to prevent command injection attacks. Ensure that user-controlled data is sanitized and validated before passing it to sensitive functions. Also, use prepared statements and parameterized queries in databases to prevent SQL injection attacks.
+
+Consider using alternative pattern matching libraries that are designed to prevent code injection attacks, such as a regex library that uses a parser and a recursive pattern matcher.
+
+ORIGINAL CODE:
+```c
++public void
++		for (i=0; i<Z_STRLEN_P(pattern); i++, j++) {
++			switch (Z_STRVAL_P(pattern)[i]) {
++				case '?':
++					t[j] = '.';
++					break;
++				case '*':
++					t[j++] = '.';
++					t[j] = '*';
++					break;
++				case '.':
++					t[j++] = '\\';
++					t[j] = '.';
++					break;
++				case '\\':
++					t[j++] = '\\';
++					t[j] = '\\';
++					break;
++				case '(':
++					t[j++] = '\\';
++					t[j] = '(';
++					break;
++				case ')':
++					t[j++] = '\\';
++					t[j] = ')';
++					break;
++				case '~':
++					t[j++] = '\\';
++					t[j] = '~';
++					break;
+private int
+magiccheck(struct magic_set *ms, struct magic *m)
+{
+@@ -1825,67 +1857,163 @@
+		break;
+	}
+	case FILE_REGEX: {
+-		int rc;
+-		if (ms->search.s == NULL)
+-			return 0;
+-
++		zval *pattern;
++		int options = 0;
++		pcre_cache_entry *pce;
++		TSRMLS_FETCH();
++		
++		MAKE_STD_ZVAL(pattern);
++		ZVAL_STRINGL(pattern, (char *)m->value.s, m->vallen, 0);
++	
++		options |= PCRE_MULTILINE;
++		
++		if (m->str_flags & STRING_IGNORE_CASE) {
++			options |= PCRE_CASELESS;
++		}
++		
++		convert_libmagic_pattern(pattern, options);
++		
+ 		l = 0;
+-		rc = regcomp(&rx, m->value.s,
+-		    REG_EXTENDED|REG_NEWLINE|
+-		    ((m->str_flags & STRING_IGNORE_CASE) ? REG_ICASE : 0));
+-		if (rc) {
+-			size_t l = ms->search.s_len - 1;
+-			char c = ms->search.s[l];
+-			((char *)(intptr_t)ms->search.s)[l] = '\0';
++#if (PHP_MAJOR_VERSION < 6)
++		if ((pce = pcre_get_compiled_regex_cache(Z_STRVAL_P(pattern), Z_STRLEN_P(pattern) TSRMLS_CC)) == NULL) {
+```

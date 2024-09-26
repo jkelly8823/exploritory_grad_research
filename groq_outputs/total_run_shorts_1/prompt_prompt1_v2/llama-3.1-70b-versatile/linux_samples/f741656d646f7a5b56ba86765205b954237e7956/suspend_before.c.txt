@@ -1,0 +1,28 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a concurrency issue through iteration over online CPUs without proper synchronization.
+
+EXPLANATION:
+The issue stems from the iteration over online CPUs using `for_each_online_cpu` macro without proper synchronization. This can lead to unexpected behavior or crashes if the online CPU set is modified concurrently by another thread or task.
+
+The `for_each_online_cpu` macro likely uses an iterator under the hood. However, online CPU sets in Linux are not static and can be modified dynamically by various kernel operations. If the set is modified while iterating, this can result in the iterator pointing to an invalid CPU, leading to incorrect or undefined behavior.
+
+RECOMMENDATIONS:
+To mitigate this vulnerability, the code should ensure proper synchronization when iterating over the online CPU set. This can be achieved by using `for_each_cpu.online_mask` along with a spinlock or mutex protection to prevent concurrent modifications while iterating.
+
+Alternatively, `for_each_possible_cpu` or `for_each_present_cpu` could be used if they suit the specific requirements of the code. However, without further context about the code's intentions, it's difficult to recommend the best approach.
+
+Additionally, reviewing the API documentation of the `xen_feature` function and ensuring that it's safe to be called within the loop is also recommended.
+
+ORIGINAL CODE:
+```c
+{
+#ifdef CONFIG_XEN_PVHVM
+	int cpu;
+	xen_hvm_resume_shared_info();
+	xen_callback_vector();
+	xen_unplug_emulated_devices();
+	if (xen_feature(XENFEAT_hvm_safe_pvclock)) {
+		for_each_online_cpu(cpu) {
+```

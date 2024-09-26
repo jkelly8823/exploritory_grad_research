@@ -1,0 +1,51 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 13-15
+VULNERABILITY_DESCRIPTION:
+The code contains multiple potential buffer overflow vulnerabilities due to the use of `spprintf()` without bounds checking and `php_stream_read()` without bounds checking of the returned value.
+
+EXPLANATION:
+The `spprintf()` function is used without bounds checking, which can lead to a buffer overflow if the input string is longer than the buffer size (4096). Although `spprintf()` will allocate a new buffer to accommodate the input string, using it without bounds checking can still cause issues if the allocated buffer is too large or the input string is malformed.
+
+Additionally, `php_stream_read()` is used without bounds checking of the returned value. This can lead to a buffer overflow if the number of bytes read is larger than the allocated buffer size.
+
+RECOMMENDATIONS:
+1. Use `snprintf()` instead of `spprintf()` with bounds checking to prevent buffer overflows. Specify the maximum buffer size as the second argument.
+```c
+snprintf(error, 4096, "phar error: \"%s\" is a corrupted tar file (truncated)", fname);
+```
+2. Always check the return value of `php_stream_read()` to ensure it does not exceed the allocated buffer size.
+```c
+read = php_stream_read(fp, metadata, entry->uncompressed_filesize);
+if (read < 0 || read > entry->uncompressed_filesize) {
+    // Handle error or overflow
+}
+```
+3. Validate the `entry->uncompressed_filesize` value before using it in `php_stream_read()` to prevent buffer overflows.
+
+ORIGINAL CODE:
+```c
+/* }}} */
+
+/* adapted from format_octal() in libarchive
+ * 
+ * Copyright (c) 2003-2009 Tim Kientzle
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+	size_t save = php_stream_tell(fp), read;
+	phar_entry_info *mentry;
+
+	metadata = (char *) emalloc(entry->uncompressed_filesize + 1);
+
+	read = php_stream_read(fp, metadata, entry->uncompressed_filesize);
+	if (read != entry->uncompressed_filesize) {
+		efree(metadata);
+			}
+
+			read = php_stream_read(fp, buf, sizeof(buf));
+	
+			if (read != sizeof(buf)) {
+				efree(entry.filename);
+				if (error) {
+					spprintf(error, 4096, "phar error: \"%s\" is a corrupted tar file (truncated)", fname);
+```

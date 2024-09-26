@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-14
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Memory Allocation: Potential buffer overflow vulnerability in XMLRPC_RequestGetMethodName() function.
+
+EXPLANATION:
+The function XMLRPC_RequestGetMethodName() returns a string that is then assigned to the Z_STRVAL_P(method_name_out) using estrdup. Estrdup copies the string and returns a pointer to the new copy. However, the code does not check the length of the string returned by XMLRPC_RequestGetMethodName() before duplicating and storing it in method_name_out, potentially leading to uncontrolled memory allocation. This can result in buffer overflow conditions if the returned string's length exceeds the allocated memory for method_name_out.
+
+Additionally, a failure to properly allocate memory (due to lack of bounds checking) might allow an attacker to inject malicious data into the memory stream of the application. To protect against this, proper bounds checking should be implemented on string/character inputs from unknown sources.
+
+RECOMMENDATIONS:
+
+* Perform bounds checking on string/character inputs from unknown sources.
+* Review and validate the input from the XMLRPC_RequestGetMethodName() function before assigning it to method_name_out.
+* Validate the return value from XMLRPC_RequestGetMethodName() before using it to prevent potential security vulnerabilities.
+
+ORIGINAL CODE:
+```c
+zval* retval = NULL;
+XMLRPC_REQUEST response;
+STRUCT_XMLRPC_REQUEST_INPUT_OPTIONS opts = {{0}};
+const char *method_name;
+opts.xml_elem_opts.encoding = encoding_in ? utf8_get_encoding_id_from_string(Z_STRVAL_P(encoding_in)) : ENCODING_DEFAULT;
+
+/* generate XMLRPC_REQUEST from raw xml */
+response = XMLRPC_REQUEST_FromXML(Z_STRVAL_P(xml_in), Z_STRLEN_P(xml_in), &opts);
+
+// potential issue starts here
+if(XMLRPC_RequestGetRequestType(response) == xmlrpc_request_call) {
+    if(method_name_out) {
+        method_name = XMLRPC_RequestGetMethodName(response);
+        if (method_name) {
+            zval_dtor(method_name_out);
+            Z_TYPE_P(method_name_out) = IS_STRING;
+            Z_STRVAL_P(method_name_out) = estrdup(method_name);
+            Z_STRLEN_P(method_name_out) = strlen(Z_STRVAL_P(method_name_out));
+        } else {
+            retval = NULL;
+        }
+    }
+}
+
+/* dust, sweep, and mop */
+```

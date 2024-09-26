@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-6, 9-10
+VULNERABILITY_DESCRIPTION:
+The code contains a use-after-free vulnerability. This occurs when the `logMessage` pointer is freed within the `handler` function, but then the program potentially continues to execute the signal-handling code path due to the presence of a `sleep` call.
+
+EXPLANATION:
+The `handler` function is registered to handle two signals, `SIGHUP` and `SIGTERM`. When either of these signals is received, the `handler` function is executed. Within the `handler` function, the code frees the `logMessage` memory and then calls `sleep(10)`, which artificially increases the size of the timing window. If either signal is received during this time, the program may attempt to access the `logMessage` pointer even though it has been freed, leading to undefined behavior. This vulnerability can be exploited by an attacker to execute arbitrary code or crash the program.
+
+RECOMMENDATIONS:
+To fix this vulnerability, avoid freeing the `logMessage` pointer within the signal handler. Instead, use a flag to signal that the program should exit and then free the memory from the main thread before exiting.
+
+```
+int stopFlag = 0;
+
+void handler (int sigNum) {
+    stopFlag = 1;
+}
+
+int main (int argc, char* argv[]) {
+    logMessage = strdup(argv[1]);
+    /* Register signal handlers. */
+    signal(SIGHUP, handler);
+    signal(SIGTERM, handler);
+    while (!stopFlag) {
+        sleep(10);
+    }
+    free(logMessage);
+    exit(0);
+}
+```
+
+Alternatively, use `syslog` with a synchronous mode (`openlog` function) to ensure the syslog message is fully sent before handling the signal.
+
+ORIGINAL CODE:
+```c
+char *logMessage;
+void handler (int sigNum) {
+    syslog(LOG_NOTICE, "%s\n", logMessage);free(logMessage);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    sleep(10);exit(0);
+}
+int main (int argc, char* argv[]) {
+    logMessage = strdup(argv[1]);
+    /* Register signal handlers. */
+    signal(SIGHUP, handler);signal(SIGTERM, handler);
+    /* artificially increase the size of the timing window to make demonstration of this weakness easier. */
+    sleep(10);
+}
+```

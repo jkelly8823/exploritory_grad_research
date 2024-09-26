@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential null pointer dereference when calling the `s390x_x25519_mul` or `s390x_x448_mul` functions.
+
+EXPLANATION:
+In the provided code, we see that the functions `s390x_x25519_mul` and `s390x_x448_mul` are called with `pubkey`, `privkey`, and `key` as arguments. However, the function does not check if `pubkey`, `privkey`, or `key` are null before calling these functions. If `pubkey`, `privkey`, or `key` are null, it would cause a null pointer dereference, leading to undefined behavior.
+
+Additionally, in the second block of code, the check for the `privkey` valid pointer is not made when `key` is not null. The only check that is being done for `privkey` and `pubkey` is in the `validate_ecx_derive` function. However, it does not check the individual pointers. In such cases, we only know if both pointers `privkey` and `pubkey` are valid together.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we should add explicit null checks for `pubkey`, `privkey`, and `key` before calling the `s390x_x25519_mul` or `s390x_x448_mul` functions. Here's an example of how to add the checks:
+
+```c
+if (pubkey == NULL || privkey == NULL || key == NULL)
+    return 0;
+
+if (key != NULL)
+    return s390x_x25519_mul(key, pubkey, privkey);
+```
+
+Original code block should be present with the validation done as shown above.
+
+ORIGINAL CODE:
+{
+    const unsigned char *privkey, *pubkey;
+
+    if (!validate_ecx_derive(ctx, key, keylen, &privkey, &pubkey))
+        return 0;
+
+    if (key != NULL)
+        return s390x_x25519_mul(key, pubkey, privkey);
+
+    *keylen = X25519_KEYLEN;
+    return 1;
+}
+
+{
+    const unsigned char *privkey, *pubkey;
+
+    if (!validate_ecx_derive(ctx, key, keylen, &privkey, &pubkey))
+        return 0;
+
+    if (key != NULL)
+        return s390x_x448_mul(key, pubkey, privkey);
+
+    *keylen = X448_KEYLEN;
+    return 1;
+}

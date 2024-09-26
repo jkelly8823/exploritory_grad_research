@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 31-33
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential buffer overflow when calling `atoi` to parse the time string. 
+
+EXPLANATION:
+The `thestr` pointer is set to `strbuf + ASN1_STRING_length(timestr) - 3`, and then `atoi` is called with this value. However, `atoi` does not perform any bounds checking on the input string, and if the string is not a valid number, `atoi` may read past the end of the string, causing undefined behavior. Additionally, `thestr` is then modified with `*thestr = '\0';`, which could potentially corrupt the input string.
+
+Moreover, the code does not check for error conditions when parsing the time string. If `atoi` fails to parse the string, it will return 0 (which is also a valid time value), causing incorrect results.
+
+RECOMMENDATIONS:
+Use `strtol` instead of `atoi` to parse the time string, which allows for error checking and bounds checking. Additionally, check the return value of `strtol` to ensure that the parse was successful.
+
+Original code modifications would also include bounds checking on `thestr` before and after null-termination to ensure that it does not exceed the valid input string. The `strbuf` should be null-terminated to prevent `atoi` from reading past its bounds.
+
+Alternatively, consider using a safer parsing library or function, such as `sscanf`, that supports parsing dates and times in a safer and more flexible way.
+
+ORIGINAL CODE:
+```
+	char * thestr;
+	long gmadjust = 0;
+
+	if (ASN1_STRING_type(timestr) != V_ASN1_UTCTIME) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "illegal ASN1 data type for timestamp");
+		return (time_t)-1;
+	}
+
+	if (ASN1_STRING_length(timestr) != strlen(ASN1_STRING_data(timestr))) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "illegal length in timestamp");
+		return (time_t)-1;
+	}
+
+	if (ASN1_STRING_length(timestr) < 13) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to parse time string %s correctly", timestr->data);
+		return (time_t)-1;
+	}
+
+	strbuf = estrdup((char *)ASN1_STRING_data(timestr));
+
+	memset(&thetime, 0, sizeof(thetime));
+
+	/* we work backwards so that we can use atoi more easily */
+
+	thestr = strbuf + ASN1_STRING_length(timestr) - 3;
+
+	thetime.tm_sec = atoi(thestr);
+	*thestr = '\0';
+	thestr -= 2;
+```

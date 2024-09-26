@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5-12
+VULNERABILITY_DESCRIPTION:
+Unvalidated use of user-input data in a regular expression.
+EXPLANATION:
+The code snippet converts a magic pattern to a regular expression using the `convert_libmagic_pattern` function and obtains a compiled PCRE pattern from the cache using `pcre_get_compiled_regex_cache`. However, there is no validation of the user-input data `m->value.s` before passing it to `convert_libmagic_pattern`. This can lead to a denial-of-service (DoS) attack or even arbitrary code execution if the user-input data is crafted to cause a catastrophic backtracking or a stack overflow in the PCRE engine.
+
+RECOMMENDATIONS:
+To fix this vulnerability, validate the user-input data `m->value.s` before passing it to `convert_libmagic_pattern`. This can be done by checking the syntax of the pattern or whitelisting specific patterns. Additionally, use a secure way to handle the case where `pce` is NULL, such as logging the error and returning an error code instead of just returning -1. It's also recommended to use a safer function like `preg_match` instead of using PCRE cache.
+
+ORIGINAL CODE:
+```c
+			return -1;
+		}
+		if (m->type == FILE_REGEX) {
+			zval pattern;
+			int options = 0;
+			pcre_cache_entry *pce;
+
+			convert_libmagic_pattern(&pattern, m->value.s, strlen(m->value.s), options);
+
+			if ((pce = pcre_get_compiled_regex_cache(Z_STR(pattern))) == NULL) {
+				zval_dtor(&pattern);
+				return -1;
+			}
+			zval_dtor(&pattern);
+
+			return 0;
+		}
+		return 0;
+	default:
+		if (m->reln == 'x')
+```
+
+Note: More context or information about the functions used in the code snippet would be helpful for a more detailed analysis.

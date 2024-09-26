@@ -1,0 +1,45 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 12-13
+VULNERABILITY_DESCRIPTION:
+Unvalidated Memory Allocation with Potential Buffer Overflow.
+
+EXPLANATION:
+The code allocates memory for a string with a length calculated from the lengths of `prefix`, `entry`, and `postfix` variables. However, there is no validation on the lengths of these variables. This can lead to a buffer overflow if the lengths are not correctly calculated or if an attacker can manipulate these lengths. A buffer overflow could cause the program to crash, leading to a denial of service attack, or it could allow for the execution of arbitrary code.
+
+RECOMMENDATIONS:
+- Validate the lengths of `prefix`, `entry`, and `postfix` before using them in the memory allocation calculation.
+- Use a safer function like `strdup` or `ZendString` instead of manual memory allocation with `emalloc`.
+- Check the return value of `emalloc` to handle memory allocation failure.
+
+ORIGINAL CODE:
+```c
+zend_replace_error_handling(EH_THROW, spl_ce_UnexpectedValueException, &error_handling TSRMLS_CC);
+if (data && *data) {
+	RETVAL_ZVAL(*data, 1, 0);
+	if (Z_TYPE_P(return_value) == IS_ARRAY) {
+		zval_dtor(return_value);
+		ZVAL_STRINGL(return_value, "Array", sizeof("Array")-1, 1);
+	} else {
+		convert_to_string(return_value);
+	}
+}
+zend_restore_error_handling(&error_handling TSRMLS_CC);
+}
+
+		}
+	}
+
+	INIT_ZVAL(prefix);
+	INIT_ZVAL(entry);
+	spl_recursive_tree_iterator_get_prefix(object, &prefix TSRMLS_CC);
+	spl_recursive_tree_iterator_get_entry(object, &entry TSRMLS_CC);
+	if (Z_TYPE(entry) != IS_STRING) {
+		zval_dtor(&prefix);
+		zval_dtor(&entry);
+		RETURN_NULL();
+	}
+	spl_recursive_tree_iterator_get_postfix(object, &postfix TSRMLS_CC);
+
+	str_len = Z_STRLEN(prefix) + Z_STRLEN(entry) + Z_STRLEN(postfix);
+	str = (char *) emalloc(str_len + 1U);
+```

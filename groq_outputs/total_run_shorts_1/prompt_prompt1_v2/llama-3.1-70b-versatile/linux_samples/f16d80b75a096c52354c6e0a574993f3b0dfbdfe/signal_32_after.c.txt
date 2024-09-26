@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-5
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a potential unwindable infinite loop or path explosion due to the use of a goto statement with an undefined label exit strategy, in addition to a potential null pointer dereference and undefined behavior in cases where the MSR_TM_ACTIVE function pointer is not properly checked.
+
+EXPLANATION:
+While goto statements are not inherently vulnerable, their use without clear exit strategies can lead to confusing code flow and potentially unwindable infinite loops. The use of "bad" as the goto target implies that an error is handled later in the code, but it is unclear if the error is actually handled correctly. Furthermore, the MSR_TM_ACTIVE function call may dereference a null pointer if it is not properly checked for nullity. Finally, there is potential for undefined behavior if the MSR_TM_ACTIVE function is not properly designed to be called in the current context.
+
+RECOMMENDATIONS:
+Instead of using a goto statement, it would be better to refactor the code to use more structured control flow. It is also important to ensure that MSR_TM_ACTIVE function pointer is properly checked for nullity before calling it. Additionally, the MSR_TM_ACTIVE function should be designed with the current context in mind. Here is an example of how the code could be refactored to be less vulnerable:
+
+```c
+if (MSR_TM_ACTIVE(msr_hi<<32)) {
+    if (!cpu_has_feature(CPU_FTR_TM)) {
+        // Handle error instead of going to a goto target
+        return -EINVAL;
+    } else {
+        // Recheckpoint on return if transaction
+        tm_restore = 1;
+    }
+}
+```
+
+ORIGINAL CODE:
+			goto bad;
+
+		if (MSR_TM_ACTIVE(msr_hi<<32)) {
+			/* Trying to start TM on non TM system */
+			if (!cpu_has_feature(CPU_FTR_TM))
+				goto bad;
+			/* We only recheckpoint on return if we're
+			 * transaction.
+			 */
+			tm_restore = 1;

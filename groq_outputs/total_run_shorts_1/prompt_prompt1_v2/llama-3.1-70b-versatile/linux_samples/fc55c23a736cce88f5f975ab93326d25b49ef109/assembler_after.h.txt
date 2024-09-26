@@ -1,0 +1,42 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 14
+VULNERABILITY_DESCRIPTION:
+Stack-based buffer overflow vulnerability.
+
+EXPLANATION:
+This vulnerability arises from an unbounded or privileged instruction ("stmdb") that is capable of storing registers into memory. Without safe bounds checking or privledge separation, adversary-provided input has the potential to cause an unchecked write past a stack-allocated buffer's intended boundaries. Since the stack register ("sp") is directly involved, there is potential for attacker control of the function return and other registers, leading to arbitrary code execution.
+
+
+RECOMMENDATIONS:
+
+To mitigate this issue, use of securely-checked non-privileged stack storage instructions ("stmd") are suggested for protecting r0 through lr from potentially-exploitable privilege escalation. Here is an over-simplified mitigation of the introduced vulnerability code as follows:
+
+```C
+	// ...rest of macro or source as is ...
+	macro asm_trace_hardirqs_off, save=1
+	// ... rest of macros or source as is...
+	.if \save
+	stmd   sp!, {r0-r3, ip, lr}
+	// ... rest of macros or source as is...
+```
+
+ 
+ORIGINAL CODE:
+
+	.endm
+#endif
+
+#if __LINUX_ARM_ARCH__ < 7
+	.macro	dsb, args
+	mcr	p15, 0, r0, c7, c10, 4
+	.endm
+
+	.macro	isb, args
+	mcr	p15, 0, r0, c7, r5, 4
+	.endm
+#endif
+
+	.macro asm_trace_hardirqs_off, save=1
+#if defined(CONFIG_TRACE_IRQFLAGS)
+	.if \save
+	stmdb   sp!, {r0-r3, ip, lr}

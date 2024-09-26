@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1-11
+VULNERABILITY_DESCRIPTION:
+The code contains a use-after-free vulnerability, where it attempts to access memory that has already been freed.
+
+EXPLANATION:
+In the given code snippet, we see that `free_pages` is called on `map->active.data.in` and `free_page` is called on `map->active.ring`. However, after freeing this memory, we also see that `map->active.data.in` is assigned a new value and `map->active.ring->ring_order` is accessed. 
+
+This suggests that there is another path of execution that tries to access and use the already freed memory. 
+
+Another issue here is that we cannot see how the 'goto out;' statement affects the freeing of the map, because to determine that I would have to know what is in the label 'out:' which I do not see here.
+
+RECOMMENDATIONS:
+The recommended fix is to ensure that the memory is not accessed after it has been freed. This can be achieved by rearranging the code to free the memory only when it is no longer needed. 
+
+Also, the 'goto out;' statement should be looked at to ensure that the memory is always freed, even when this label is jumped to.
+
+Here is an example of how the code could be fixed:
+
+```cpp
+if (!map->active.ring)
+    return;
+
+if (!map->active.data.in)  // First check if this has been set
+    allocate_data_in();
+
+free_pages((unsigned long)map->active.data.in, map->active.ring->ring_order);
+free_page((unsigned long)map->active.ring);
+
+// Ensure that the goto out does not prevent free
+static int alloc_active_ring(struct sock_mapping *map)
+    // make sure map->active.data.in and map->active.ring are not set here if out is jumped to
+```
+
+ORIGINAL CODE:
+```cpp
+if (!map->active.ring)
+    return;
+
+free_pages((unsigned long)map->active.data.in, map->active.ring->ring_order);
+free_page((unsigned long)map->active.ring);
+}
+
+static int alloc_active_ring(struct sock_mapping *map)
+    goto out;
+
+map->active.ring->ring_order = PVCALLS_RING_ORDER;
+bytes = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
+                PVCALLS_RING_ORDER);
+if (!bytes)
+    goto out;
+
+map->active.data.in = bytes;
+```

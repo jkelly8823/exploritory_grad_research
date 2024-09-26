@@ -1,0 +1,20 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4
+VULNERABILITY_DESCRIPTION:
+The code is vulnerable to a use-after-free (UAF) bug.
+
+EXPLANATION:
+The code uses the `put_user_ex` function to copy the `restorer` value to the `frame->pretcode` location in userspace. However, the `frame->pretcode` pointer is not checked for validity or ownership before the copy operation. This can lead to a use-after-free (UAF) bug if the memory location pointed to by `frame->pretcode` has already been freed or reused.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add checks to ensure that the `frame->pretcode` pointer is valid and owned by the current process before the copy operation. This can be done by checking the pointer against the process's memory boundaries and verifying its type and ownership.
+
+Additionally, consider using functions that provide bounds checking, such as `copy_to_user`, instead of `put_user_ex` to prevent similar issues.
+
+ORIGINAL CODE:
+    /* Set up to return from userspace.  */
+    restorer = current->mm->context.vdso +
+        selected_vdso32->sym___kernel_rt_sigreturn;
+    if (ksig->ka.sa.sa_flags & SA_RESTORER)
+        restorer = ksig->ka.sa.sa_restorer;
+    put_user_ex(restorer, &frame->pretcode);

@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3, 12
+VULNERABILITY_DESCRIPTION:
+Uncontrolled Memory Allocation and Use of Insecure String Tokanization Function
+
+EXPLANATION:
+The code snippet uses `malloc` to dynamically allocate memory for the input string. If the user input exceeds the predefined buffer size (40), a buffer overflow will occur, potentially leading to memory corruption, crashes, or even code injection attacks. 
+
+Furthermore, the code uses `strtok` to tokenize the input string. However, `strtok` includes `NULL` character in its search for the next token. This is problematic because if `isMalformed` function (or `add_to_command_queue`) does not handle `NULL` characters correctly, it could result in a segmentation fault. Additionally, the repeated calls to `free` on the same pointer, previously freed by strtok is incorrect as `strtok` itself is the one who processes and modifies (it replaces the delimiter character with '\0') the input string and user shouldn't try to free this.
+
+Moreover, there is no validation to ensure that the user input does not exceed the allocated memory, potentially leading to a memory corruption.
+
+RECOMMENDATIONS:
+1. Limit the amount of memory allocated dynamically when receiving user input.
+2. Validate user input to ensure it doesn't exceed the allocated memory.
+3. Avoid using `strtok` in favor of a safer string tokenization function, such as `strsep`, which separates the string into tokens based on provided delimiter, without the overhead and ambiguity associated with strsep.
+4. Remove `free(tok)` calls to prevent double-free errors.
+
+ORIGINAL CODE:
+```c
+//hardcode input length for simplicity
+char* input = (char*) malloc(40*sizeof(char));char *tok;char* sep = " \t";
+get_user_input( input );
+/* The following loop will parse and process each token in the input string */
+tok = strtok( input, sep);while( NULL != tok ){
+    if( isMalformed( tok ) ){
+        /* ignore and discard bad data */
+        free( tok );
+    }else{add_to_command_queue( tok );}tok = strtok( NULL, sep));
+}
+```

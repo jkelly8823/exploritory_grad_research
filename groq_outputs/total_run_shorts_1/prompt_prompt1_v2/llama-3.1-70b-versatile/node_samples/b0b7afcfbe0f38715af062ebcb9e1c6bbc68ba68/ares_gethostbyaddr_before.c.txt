@@ -1,0 +1,36 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10
+VULNERABILITY_DESCRIPTION:
+Buffer overflow vulnerability in string concatenation.
+
+EXPLANATION:
+The code snippet uses the strcat function to concatenate the string PATH_HOSTS with WIN_PATH_HOSTS. However, the buffer size of PATH_HOSTS is not checked before the concatenation, which can lead to a buffer overflow if the combined string exceeds the buffer's capacity. This can result in potential memory corruption and security vulnerabilities.
+
+In addition, the RegQueryValueEx function returns the length of the value in dwLength, which is initially set to MAX_PATH. However, this value is not checked against the buffer size before being passed to ExpandEnvironmentStrings and eventually concatenated to PATH_HOSTS. This can also lead to a buffer overflow if the length of the value exceeds the buffer size.
+
+RECOMMENDATIONS:
+- Use a safer string concatenation function such as strncat, which allows you to specify the maximum number of characters to append.
+- Check the length of the string before concatenation to ensure it does not exceed the buffer size.
+- Consider using a dynamic allocation for PATH_HOSTS instead of a fixed-size buffer.
+
+ORIGINAL CODE:
+
+    char tmp[MAX_PATH];
+    HKEY hkeyHosts;
+
+    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, WIN_NS_NT_KEY, 0, KEY_READ,
+                     &hkeyHosts) == ERROR_SUCCESS)
+    {
+      DWORD dwLength = MAX_PATH;
+      RegQueryValueEx(hkeyHosts, DATABASEPATH, NULL, NULL, (LPBYTE)tmp,
+                      &dwLength);
+      ExpandEnvironmentStrings(tmp, PATH_HOSTS, MAX_PATH);
+      RegCloseKey(hkeyHosts);
+    }
+  }
+  else if (platform == WIN_9X)
+    GetWindowsDirectory(PATH_HOSTS, MAX_PATH);
+  else
+    return ARES_ENOTFOUND;
+
+  strcat(PATH_HOSTS, WIN_PATH_HOSTS);

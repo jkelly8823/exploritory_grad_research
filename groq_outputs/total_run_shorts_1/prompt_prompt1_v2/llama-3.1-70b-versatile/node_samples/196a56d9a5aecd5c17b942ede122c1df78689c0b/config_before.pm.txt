@@ -1,0 +1,108 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-11 (specifically line 10 and 11 of the file it is located in), 70-71
+VULNERABILITY_DESCRIPTION:
+This code snippet is vulnerable to Command Injection and Cross-Site Scripting (XSS) due to the use of backticks (`) and unvalidated input in several lines.
+
+EXPLANATION:
+The code uses backticks to execute shell commands, which is vulnerable to Command Injection attacks. The variables `$CROSS_COMPILE` and `$CC` are used to construct the command, but there is no validation or sanitization of these variables. 
+
+Additionally, the code uses regular expressions to parse the output of these commands. While this is not directly vulnerable, it's a potential attack vector for Cross-Site Scripting (XSS) if the output is not properly sanitized before being displayed.
+
+RECOMMENDATIONS:
+To fix this vulnerability, the use of backticks should be replaced with safer alternatives such as `system` or `exec` with proper validation and sanitization of the input variables. Additionally, the output of these commands should be properly sanitized before being displayed.
+
+It is also recommended to use the ` IPC::Run` module to safely execute system commands.
+
+```perl
+use IPC::Run qw/ start finish /;
+
+my $cmd = "$CROSS_COMPILE$CC -v 2>&1";
+my ($stdin, $stdout, $stderr) = ( undef, '', undef );
+my $h = start [$cmd], \$stdin, \$stdout, \$stderr;
+finish $h or die $!;
+```
+The variables should be validated and sanitized before being used in the command. This can be done using the `Data::Validate::Domain` module for validating domain names, `Regexp::Common` for validating regular expressions, and `Text::Scan` for validating strings.
+
+```perl
+use Data::Validate::Domain qw/ is_domain /;
+use Regexp::Common qw/ URI /;
+use Text::Scan qw/ scan_pattern /;
+
+my $CC = validate_cc();
+$CC =~ m/$Regexp::Common::URI/ or die "Invalid URL";
+my @valid_chars = qw/ ^ a-zA-Z0-9_- $ /;
+my $CROSS_COMPILE = scan_pattern $CROSS_COMPILE, join( '|', @valid_chars );
+$CROSS_COMPILE =~ m/$valid_chars/ or die "Invalid CROSS_COMPILE";
+
+my $CCVER = `$CROSS_COMPILE$CC -dumpversion 2>/dev/null`;
+```
+ORIGINAL CODE:
+The original code has been modified in the recommendations section. The original code is:
+
+```perl
+use warnings;
+use Getopt::Std;
+use File::Basename;
+use IPC::Cmd;
+use POSIX;
+use Carp;
+
+# These control our behavior.
+my $DRYRUN;
+my $VERSION;
+my $CCVENDOR;
+my $CCVER;
+my $GCC_BITS;
+my $GCC_ARCH;
+
+# Some environment variables; they will affect Configure
+my @cc_version =
+    (
+     clang => sub {
+         my $v = `$CROSS_COMPILE$CC -v 2>&1`;
+         $v =~ m/(?:(?:clang|LLVM) version|.*based on LLVM)\s+([0-9]+\.[0-9]+)/;
+         return $1;
+     },
+     gnu => sub {
+         my $v = `$CROSS_COMPILE$CC -dumpversion 2>/dev/null`;
+         # Strip off whatever prefix egcs prepends the number with.
+         # Hopefully, this will work for any future prefixes as well.
+         $v =~ s/^[a-zA-Z]*\-//;
+         return $v;
+    [ 'CYGWIN.*',                   '${MACHINE}-pc-cygwin' ],
+    [ 'vxworks.*',                  '${MACHINE}-whatever-vxworks' ],
+
+    # Note: there's also NEO and NSR, but they are old and unsupported
+    [ 'NONSTOP_KERNEL:.*:NSE-.*?',  'nse-tandem-nsk${RELEASE}' ],
+    [ 'NONSTOP_KERNEL:.*:NSV-.*?',  'nsv-tandem-nsk${RELEASE}' ],
+    [ 'NONSTOP_KERNEL:.*:NSX-.*?',  'nsx-tandem-nsk${RELEASE}' ],
+                $CCVER = $v;
+            }
+        }
+    }
+
+    # If no C compiler has been determined at this point, we die.  Hard.
+    die <<_____
+            } else {
+                $config{disable} = [ 'asm' ];
+            }
+            return %config;
+        }
+      ],
+
+      # Windows values found by looking at Perl 5's win32/win32.c
+      [ 'amd64-.*?-Windows NT',   { target => 'VC-WIN64A' } ],
+      [ 'ia64-.*?-Windows NT',    { target => 'VC-WIN64I' } ],
+      [ 'x86-.*?-Windows NT',     { target => 'VC-WIN32'  } ],
+
+      # VMS values found by observation on existing machinery.
+      # Unfortunately, the machine part is a bit...  overdone.  It seems,
+      # though, that 'Alpha' exists in that part for Alphas, making it
+      # distinguishable from Itanium.  It will be interesting to see what
+      # we'll get in the upcoming x86_64 port...
+      [ '.*Alpha.*?-.*?-OpenVMS', { target => 'vms-alpha' } ],
+      [ '.*?-.*?-OpenVMS',        { target => 'vms-ia64'  } ],
+
+      # TODO: There are a few more choices among OpenSSL config targets, but
+      # reaching them involves a bit more than just a host tripet.  Select
+      # environment variables could do the job to cover for more granular

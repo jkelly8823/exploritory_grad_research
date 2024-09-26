@@ -1,0 +1,43 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-9, 10-11
+VULNERABILITY_DESCRIPTION:
+The code uses `kzalloc` to dynamically allocate memory for the `elems` structure and its scratch buffer. However, it does not check for buffer overflows when copying data into the scratch buffer. Additionally, the code uses `elems->scratch_len -= nontransmitted_profile_len` to update the scratch buffer length after copying data, but it does not check for underflows. Furthermore, the function uses `nontransmitted_profile = elems->scratch_pos` which can lead to a tainted data pointer.
+ 
+EXPLANATION:
+The code does not perform bounds checking on the `scratch_len` variable when copying data into the scratch buffer. This can lead to buffer overflows if the `nontransmitted_profile_len` is larger than the `scratch_len`. Additionally, the code uses `elems->scratch_len -= nontransmitted_profile_len` to update the scratch buffer length after copying data, but it does not check for underflows. This can lead to unsigned integer underflow and potentially allow an attacker to write data outside the bounds of the scratch buffer.
+
+The tainted data pointer occurs when assigning a tainted value to a pointer. In this code snippet, the `nontransmitted_profile` pointer is assigned the value of `elems->scratch_pos` which is a tainted value since it is derived from user-controllable data (`params->len`).
+
+RECOMMENDATIONS:
+* Add bounds checking for buffer overflows when copying data into the scratch buffer.
+* Check for unsigned integer underflow when updating the scratch buffer length.
+* Avoid assigning tainted values to pointers.
+* Validate the `params->len` value before using it to allocate memory.
+* Consider using a safer allocation function that provides overflow protection.
+
+ORIGINAL CODE (partial):
+const struct element *non_inherit = NULL;
+u8 *nontransmitted_profile;
+int nontransmitted_profile_len = 0;
+size_t scratch_len = params->len;
+
+elems = kzalloc(sizeof(*elems) + scratch_len, GFP_ATOMIC);
+if (!elems)
+    return NULL;
+elems->ie_start = params->start;
+elems->total_len = params->len;
+elems->scratch_len = scratch_len;
+elems->scratch_pos = elems->scratch;
+
+nontransmitted_profile = elems->scratch_pos;
+nontransmitted_profile_len =
+    ieee802_11_find_bssid_profile(params->start, params->len,
+                    elems, params->bss,
+                    nontransmitted_profile);
+elems->scratch_pos += nontransmitted_profile_len;
+elems->scratch_len -= nontransmitted_profile_len;
+non_inherit = cfg80211_find_ext_elem(WLAN_EID_EXT_NON_INHERITANCE,
+                    nontransmitted_profile,
+                    nontransmitted_profile_len);
+
+...

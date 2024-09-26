@@ -1,0 +1,35 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 6
+VULNERABILITY_DESCRIPTION:
+The code uses `__get_user()` function to copy data from user space to kernel space, but it does not check the bounds of the `uc` structure before accessing its members.
+
+EXPLANATION:
+The `__get_user()` function is used to safely copy data from user space to kernel space, but it does not provide any guarantees about the validity of the data. In this case, the `uc` structure is accessed without checking its bounds, which could potentially lead to a buffer overflow or access to an invalid memory location.
+
+Additionally, the code does not validate the `uc->uc_link` and `uc->uc_mcontext` members before passing them as arguments to the `__get_user()` and `restore_tm_sigcontexts()` functions, respectively. This could lead to invalid memory accesses or crashes.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should add bounds checking and validation for the `uc` structure and its members before accessing them. You should also ensure that the `uc->uc_link` and `uc->uc_mcontext` members are valid and properly initialized before passing them as arguments to the `__get_user()` and `restore_tm_sigcontexts()` functions, respectively.
+
+Here's an example of how you can add bounds checking and validation:
+```c
+if (MSR_TM_ACTIVE(msr)) {
+    /* We recheckpoint on return. */
+    struct ucontext __user *uc_transact;
+    if (!access_ok(uc, sizeof(struct ucontext)) || __get_user(uc_transact, &uc->uc_link))
+        goto badframe;
+    if (!access_ok(&uc->uc_mcontext, sizeof(uc->uc_mcontext)) || !access_ok(&uc_transact->uc_mcontext, sizeof(uc_transact->uc_mcontext)) ||
+        restore_tm_sigcontexts(current, &uc->uc_mcontext, &uc_transact->uc_mcontext))
+        goto badframe;
+}
+```
+ORIGINAL CODE:
+```c
+if (MSR_TM_ACTIVE(msr)) {
+    /* We recheckpoint on return. */
+    struct ucontext __user *uc_transact;
+    if (__get_user(uc_transact, &uc->uc_link))
+        goto badframe;
+    if (restore_tm_sigcontexts(current, &uc->uc_mcontext,
+                   &uc_transact->uc_mcontext))
+```

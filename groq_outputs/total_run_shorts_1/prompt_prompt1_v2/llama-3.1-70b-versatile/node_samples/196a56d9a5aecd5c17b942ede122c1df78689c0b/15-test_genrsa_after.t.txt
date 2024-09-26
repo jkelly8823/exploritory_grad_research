@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 9
+VULNERABILITY_DESCRIPTION:
+The code uses potentially insecure hard-coded values for RSA key generation. Specifically, the code generates an RSA key with 3072 bits and 512 bits.
+
+EXPLANATION:
+The RSA key sizes of 3072 bits and 512 bits are used directly in the code. While 3072 bits is generally considered secure for RSA keys, 512 bits is an insecure key size. 512-bit RSA keys are vulnerable to factorization attacks and can be easily broken by modern computers. It is also concerning that the code intentionally tries to generate an RSA key with 512 bits and checks if it fails in a FIPS provider. Using hard-coded key sizes can also limit the flexibility of the code if key sizes need to be updated in the future.
+
+RECOMMENDATIONS:
+To address this vulnerability, consider the following recommendations:
+
+1. Use secure key sizes: Instead of using hard-coded values, consider using secure key sizes based on current cryptographic standards and best practices. For example, use a minimum key size of 2048 bits for RSA keys.
+2. Use a secure random number generator: To generate secure keys, use a cryptographically secure pseudorandom number generator (CSPRNG) to ensure the keys are generated randomly and securely.
+3. Do not intentionally use insecure key sizes: Avoid intentionally using insecure key sizes like 512 bits, even if it's for testing purposes.
+
+ORIGINAL CODE:
+```perl
+my $no_fips = disabled('fips') || ($ENV{NO_FIPS} // 0);
+
+plan tests =>
+    ($no_fips ? 0 : 5)          # Extra FIPS related tests
+    + 15;
+
+# We want to know that an absurdly small number of bits isn't support
+is(run(app([ 'openssl', 'genpkey', '-out', 'genrsatest.pem',
+                '-out', 'genrsatest3072.pem'])),
+       "Generating RSA key with 3072 bits");
+
+   ok(!run(app(['openssl', 'genrsa', @prov, '512'])),
+       "Generating RSA key with 512 bits should fail in FIPS provider");
+
+   ok(!run(app(['openssl', 'genrsa',
+                @prov,
+                '-provider', 'default',
+                '-propquery', '?fips!=yes',
+                '512'])),
+       "Generating RSA key with 512 bits should succeed with FIPS provider as".
+       " default with a non-FIPS property query");
+
+    # We want to know that an absurdly large number of bits fails the RNG check
+    is(run(app([ 'openssl', 'genpkey',
+                 @prov,
+                 '-algorithm', 'RSA',
+```

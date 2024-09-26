@@ -1,0 +1,55 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 15-16, 19-20
+VULNERABILITY_DESCRIPTION:
+The provided code snippet does not properly check for certificate validation. It only checks if the host is present in the certificate's SubjectAltName or Subject fields. However, it does not verify that the certificate is properly issued for the domain, not expired, or revoked. Additionally, the code only checks for DNS names and IP addresses but does not handle other types of SubjectAltName fields.
+
+EXPLANATION:
+The code checks if the host matches the values specified in the certificate's SubjectAltName or Subject fields. However, it does not perform more advanced certificate validation. Certificate validation includes verifying that the certificate is issued by a trusted Certificate Authority, is not expired, and has not been revoked. Without this validation, a client might trust an invalid certificate, potentially allowing for man-in-the-middle attacks. Furthermore, it does not handle cases where the SubjectAltName field contains other types of values, such as email addresses or directory names.
+
+RECOMMENDATIONS:
+- Use a library or function that performs full certificate validation, such as verification against a Certificate Authority's revocation list and verification that the certificate has not expired.
+- Add additional checks for handling different types of SubjectAltName fields.
+- If only specific types of SubjectAltName fields are expected, add explicit checks for those types.
+
+ORIGINAL CODE:
+  {
+    host: 'a.com',
+    cert: { },
+    error: 'Cert is empty'
+  },
+
+  // Empty Subject w/DNS name
+  {
+  {
+    host: 'a.b.a.com', cert: {
+      subjectaltname: 'URI:http://a.b.a.com/',
+    }
+  },
+
+  // Multiple CN fields
+  {
+    host: 'a.b.a.com', cert: {
+      subjectaltname: 'URI:http://a.b.a.com/',
+      subject: {}
+    }
+  },
+  {
+    host: 'a.b.a.com', cert: {
+      subjectaltname: 'URI:http://*.b.a.com/',
+      subject: {}
+    },
+    error: 'Host: a.b.a.com. is not in the cert\'s altnames: ' +
+           'URI:http://*.b.a.com/'
+  },
+  // IP addresses
+  {
+    host: 'a.b.a.com', cert: {
+      subjectaltname: 'IP Address:127.0.0.1',
+      subject: {}
+    },
+    error: 'Host: a.b.a.com. is not in the cert\'s altnames: ' +
+           'IP Address:127.0.0.1'
+  },
+  {
+    host: '127.0.0.1', cert: {
+      subjectaltname: 'IP Address:127.0.0.1',

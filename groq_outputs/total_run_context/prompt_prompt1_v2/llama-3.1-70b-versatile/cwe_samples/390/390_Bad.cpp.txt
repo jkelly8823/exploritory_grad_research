@@ -1,0 +1,44 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7, 14
+VULNERABILITY_DESCRIPTION: 
+The code is vulnerable to a memory leak and an unhandled exception. If an exception occurs during file operations, the catch block does not handle it properly, potentially leaving the file object in an undefined state and causing memory leaks.
+
+EXPLANATION:
+The catch block in the code contains a comment suggesting that exception handling code should be inserted later, but as it stands, it does not do anything with the caught exception. This can lead to several issues. First, if an exception occurs in the try block, the memory allocated by the 'new' operator will not be freed, resulting in a memory leak. Second, the file object 'infile' may not be properly closed, potentially leading to file descriptor leaks.
+
+Additionally, in C++, it's generally considered better to use RAII (Resource Acquisition Is Initialization) idiom, where resources such as file descriptors or allocated memory are tied to the lifetime of an object, which automatically releases the resource when it is no longer needed. This approach avoids the need to manually close files or free memory, reducing the chance of resource leaks.
+
+RECOMMENDATIONS:
+1. Implement proper exception handling in the catch block. This should include freeing any allocated memory and closing any open file objects.
+2. Use a smart pointer, such as 'std::unique_ptr', to automatically manage the allocated memory.
+3. Use the RAII idiom for file operations, such as using 'std::ifstream' objects that automatically close the file when they go out of scope.
+4. In the catch block, log or report the exception for debugging and error tracking purposes.
+
+ORIGINAL CODE:
+```
+char* readfile (char *filename) {
+    try {
+        // open input file
+        ifstream infile;
+        infile.open(filename);
+        if (!infile.is_open()) {
+            throw "Unable to open file " + filename;
+        }
+        // get length of file
+        infile.seekg (0, ios::end);
+        int length = infile.tellg();
+        infile.seekg (0, ios::beg);
+        // allocate memory
+        char *buffer = new char [length];
+        // read data from file
+        infile.read (buffer,length);
+        if (!infile.good()) {
+            throw "Unable to read from file " + filename;
+        }
+        infile.close();
+        return buffer;
+    } catch (...) {
+        /* bug: insert code to handle this later */
+    }
+}
+```

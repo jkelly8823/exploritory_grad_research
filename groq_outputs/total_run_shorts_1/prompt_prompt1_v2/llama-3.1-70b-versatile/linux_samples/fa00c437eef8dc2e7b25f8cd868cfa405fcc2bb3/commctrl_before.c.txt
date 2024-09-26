@@ -1,0 +1,12 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None ( explicit line vulnerability not found), however, a GOTO statement is present which can lead to different execution paths on line 'if (size > dev->max_fib_size)' as the associated GOTOSTATEMENT with 'name' 'cleanup' must execute with caution as 'cleanup' labels are typical for handling resources and memory 
+VULNERABILITY_DESCRIPTION: 
+Resource leak.
+
+EXPLANATION: 
+There is a resource leak risk as there is an error condition which jumps to 'cleanup'. 'cleanup' labels often clean resources such as memory. When size is greater than max_fib size, function returns early to cleanup without properly managing a previously allocated struct pointer (or 'fib' type data) named as 'fibptr' , which will go out of scope but may not actually deallocate the memory 'fib' has allocated for itself  (depending on whatever 'struct fib'  represents). However, in absence of knowing how fib resources are managed and how the overall deallocation should occur (the original 'close' as in socket operations have to be actually executed such as if fibptr had needed to be freed prior to returning after all deallocation steps have been done), the 'goto' is viewed with skepticism on this vulnerability.
+
+RECOMMENDATIONS:
+1. Move 'fib' pointer null checks and or its freeing to areas in the cleanup such as 'free (fibptr);' before a procedure exit.
+2. Ensure all paths take into account open procedure close statements.
+3. Ensure function executing to cleanup returns execution back and then exit, this ensures we don't lose any cleanup opportunity to re-write. Without this deallocation, when procedures return they always will have a memory leak based resource.

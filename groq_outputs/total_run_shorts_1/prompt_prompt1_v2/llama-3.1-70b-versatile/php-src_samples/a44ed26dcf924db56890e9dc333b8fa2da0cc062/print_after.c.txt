@@ -1,0 +1,64 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 18-21, 23-25
+VULNERABILITY_DESCRIPTION:
+The vulnerability is an off-by-one error in the input buffer for the asctime_r() and ctime_r() functions, potentially leading to a buffer overflow. This could allow an attacker to cause a denial of service or potentially arbitrary code execution.
+
+EXPLANATION:
+The strcspn() function is used to calculate the length of the string returned by asctime_r() or ctime_r(), and the last character of the string (which is a newline character) is overwritten with a null character. However, this does not guarantee that the string returned by asctime_r() or ctime_r() will be null-terminated within the buffer.
+
+When the asctime_r() or ctime_r() function is called, it will write the formatted time string to the input buffer. However, the return value of these functions is a pointer to the beginning of the buffer, not the null-terminated string. This means that the caller of these functions is responsible for ensuring that the input buffer is large enough to hold the result.
+
+If the input buffer is not large enough to hold the result, the asctime_r() or ctime_r() function will write past the end of the buffer, causing undefined behavior and potentially a buffer overflow. When this buffer overflow occurs, the strcspn() function will also be called with an invalid string pointer, potentially causing another off-by-one error or buffer overflow.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend the following changes:
+
+1. Check the size of the input buffer before calling asctime_r() or ctime_r(). This can be done by passing the size of the buffer as the third argument to these functions.
+
+```c
+pp = asctime_r(tm, buf, sizeof(buf));
+```
+or
+```c
+pp = ctime_r(&t, buf, sizeof(buf));
+```
+
+However, this would likely break the standard behavior of these functions.
+
+2. Alternatively, ensure that the input buffer is large enough to hold the largest possible string returned by asctime_r() or ctime_r(). The length of the longest possible string returned by asctime_r() or ctime_r() is not specified in the standards, but in most implementations, it is 26 or 30 characters.
+
+```c
+char buf[26]; // or char buf[30];
+```
+Original code:
+```c
+#include "cdf.h"
+
+#ifndef lint
+FILE_RCSID("@(#)$File: print.c,v 1.78 2015/01/06 02:04:10 christos Exp $")
+#endif  /* lint */
+
+#include <stdio.h>
+#include <string.h>
+        struct timeval ts;
+        cdf_timestamp_to_timespec(&ts, t);
+        t = ts.tv_sec;
+        } else {
+        // XXX: perhaps detect and print something if overflow
+        // on 32 bit time_t?
+        t = (time_t)v;
+        }
+
+        if (flags & FILE_T_LOCAL) {
+        pp = ctime_r(&t, buf);
+            goto out;
+        pp = asctime_r(tm, buf);
+        }
+        if (tm == NULL)
+        goto out;
+        pp = asctime_r(tm, buf);
+
+        if (pp == NULL)
+        goto out;
+        pp[strcspn(pp, "\n")] = '\0';
+```

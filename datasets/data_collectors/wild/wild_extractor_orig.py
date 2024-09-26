@@ -204,7 +204,7 @@ def main():
             extract_and_save_changes(row.repo_owner, row.repo_name, commit_data, f'samples/{row.repo_name}_samples', token)
 
             count += 1
-            if count >= limit and limit != 0:
+            if count >= limit:
                 break
 
     with open("samples/fail_log.txt", 'w+') as file:

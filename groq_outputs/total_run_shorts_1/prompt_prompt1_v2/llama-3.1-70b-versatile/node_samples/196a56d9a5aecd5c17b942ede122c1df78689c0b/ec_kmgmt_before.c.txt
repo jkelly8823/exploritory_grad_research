@@ -1,0 +1,34 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13
+VULNERABILITY_DESCRIPTION:
+Use of Uninitialized Variable with Potential for Buffer Overflow
+
+EXPLANATION:
+The code snippet uses `bnctx` which is initialized as NULL. Later, it is passed as an argument to the `EC_POINT_point2oct` function. This function is used to serialize an elliptic curve point into a byte array. The `bnctx` argument is used for managing memory allocation. However, in this case, `bnctx` is not initialized with a valid `BN_CTX` object. This may cause the `EC_POINT_point2oct` function to fail, potentially leading to unexpected behavior, including buffer overflow.
+
+RECOMMENDATIONS:
+1. Initialize `bnctx` with a valid `BN_CTX` object using the `BN_CTX_new` function.
+2. Check for memory allocation errors after calling `BN_CTX_new`.
+3. After the usage, free the memory allocated by `BN_CTX_new` using `BN_CTX_free` to prevent memory leak.
+
+ORIGINAL CODE:
+```
+    BN_CTX *bnctx = NULL;
+
+    ecg = EC_KEY_get0_group(eck);
+    if (ecg == NULL)
+        return 0;
+
+    libctx = ossl_ec_key_get_libctx(eck);
+    propq = ossl_ec_key_get0_propq(eck);
+
+    }
+    if ((p = OSSL_PARAM_locate(params,
+                               OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY)) != NULL) {
+        p->return_size = EC_POINT_point2oct(EC_KEY_get0_group(key),
+                                            EC_KEY_get0_public_key(key),
+                                            POINT_CONVERSION_UNCOMPRESSED,
+                                            p->data, p->return_size, bnctx);
+        if (p->return_size == 0)
+            goto err;
+```

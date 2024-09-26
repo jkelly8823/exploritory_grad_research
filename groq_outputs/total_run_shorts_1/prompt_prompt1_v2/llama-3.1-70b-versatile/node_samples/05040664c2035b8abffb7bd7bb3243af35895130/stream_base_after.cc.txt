@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: Line 4
+VULNERABILITY_DESCRIPTION:
+Use of unchecked pointer arithmetic and a lack of bounds checking.
+EXPLANATION:
+The code snippet presents a vulnerability in the form of a potential buffer overflow. Specifically, the code uses a pointer arithmetic operation (`str_storage`) with an unchecked offset variable. Furthermore, it does not perform bounds checking on the storage buffer after calculating the `str_size` variable. Although `CHECK_LE(offset, storage_size)` checks if `offset` is within bounds, it does not guarantee that `str_storage` won't overflow the buffer since `str_size` could still exceed the available space.
+
+Additionally, there is no check for a null pointer before dereferencing `req_wrap`.
+
+RECOMMENDATIONS:
+Prior to using `str_storage` and calculating `str_size`, a bounds check should be performed to ensure that `str_size` will not exceed the remaining available space in the storage buffer.
+
+It is also recommended to check if `req_wrap` is null before accessing it to prevent null pointer dereference.
+
+```cpp
+// ...
+offset = ROUND_UP(offset, WriteWrap::kAlignSize);
+CHECK_LE(offset, storage_size);
+if (offset + WriteWrap::kAlignSize > storage_size) {
+  // Handle error: Insufficient space to store string.
+}
+char* str_storage = req_wrap ? req_wrap->Extra(offset) : nullptr;
+if (str_storage == nullptr) {
+  // Handle error: Pointer is null.
+}
+size_t str_size = storage_size - offset;
+
+Local<String> string = chunk->ToString(env->isolate());
+```
+ORIGINAL CODE:
+```java
+    // Write string
+    offset = ROUND_UP(offset, WriteWrap::kAlignSize);
+    CHECK_LE(offset, storage_size);
+    char* str_storage = req_wrap->Extra(offset);
+    size_t str_size = storage_size - offset;
+
+    Local<String> string = chunk->ToString(env->isolate());
+```

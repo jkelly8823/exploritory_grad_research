@@ -1,0 +1,58 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 37-40, 44
+VULNERABILITY_DESCRIPTION:
+The code contains potential vulnerabilities related to handling HTTP requests and parsing incoming data. Specifically, the code uses `parsers.alloc()` without validation, and the `parserOnIncoming` function does not validate or sanitize incoming `req` data. This can lead to potential attacks such as HTTP request smuggling or header splitting.
+
+EXPLANATION:
+The `parsers.alloc()` function is used to allocate a new parser, but it does not validate if the allocation was successful or if the parser is properly initialized. This can lead to potential issues if the parser is not properly configured.
+
+Furthermore, the `parserOnIncoming` function does not validate or sanitize incoming `req` data. While there is a check for `req.upgrade`, it does not validate the contents of `req`. This can lead to potential attacks such as HTTP request smuggling or header splitting.
+
+Additionally, the `resetSocketTimeout` function is called without validation, which can lead to potential denial-of-service (DoS) attacks if an attacker sends a large number of requests with modifications that cause the socket timeout to be reset.
+
+RECOMMENDATIONS:
+1. Validate the allocation of the parser in `parsers.alloc()` and ensure it is properly initialized.
+2. Validate and sanitize incoming `req` data in `parserOnIncoming` to prevent potential attacks such as HTTP request smuggling or header splitting.
+3. Validate the input to `resetSocketTimeout` to prevent potential DoS attacks.
+
+ORIGINAL CODE:
+
+```
+  _checkInvalidHeaderChar: checkInvalidHeaderChar
+} = require('_http_common');
+const { OutgoingMessage } = require('_http_outgoing');
+const { outHeadersKey, ondrain } = require('internal/http');
+const {
+  defaultTriggerAsyncIdScope,
+  getOrSetAsyncId
+} = require('internal/async_hooks');
+  this.keepAliveTimeout = 5000;
+  this._pendingResponseData = 0;
+  this.maxHeadersCount = null;
+}
+util.inherits(Server, net.Server);
+
+
+  var parser = parsers.alloc();
+  parser.reinitialize(HTTPParser.REQUEST, parser[is_reused_symbol]);
+  parser.socket = socket;
+  socket.parser = parser;
+
+  // Propagate headers limit from server instance to parser
+  if (typeof server.maxHeadersCount === 'number') {
+
+function onParserExecute(server, socket, parser, state, ret) {
+  socket._unrefTimer();
+  debug('SERVER socketOnParserExecute %d', ret);
+  onParserExecuteCommon(server, socket, parser, state, ret, undefined);
+}
+
+const badRequestResponse = Buffer.from(
+function parserOnIncoming(server, socket, state, req, keepAlive) {
+  resetSocketTimeout(server, socket, state);
+
+  if (req.upgrade) {
+    req.upgrade = req.method === 'CONNECT' ||
+                  server.listenerCount('upgrade') > 0;
+    if (req.upgrade)
+```

@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5
+VULNERABILITY_DESCRIPTION:
+ Potential integer overflow vulnerability and lack of bounds checking when using the BUILD_BUG_ON macro.
+
+EXPLANATION:
+ The BUILD_BUG_ON macro is used to check for the size of certain fields within the structure. However, this macro will trigger a compilation error if the sizes do not match the expected values. While this can prevent a potential runtime error, it does not explicitly validate the sizes at runtime and instead relies on a compile-time check.
+
+ Furthermore, there are no explicit checks on the bounds of the 'width' and 'height' parameters. An out-of-bounds value for these parameters could potentially lead to an overflow in the __v4l2_find_nearest_size function, especially considering that it relies on the values passed in by the 'width' and 'height' parameters.
+
+ While it might be difficult to mitigate these potential issues directly in the provided code snippet, some form of bounds checking or input validation for the 'width' and 'height' parameters should be considered to prevent potential overflows.
+
+RECOMMENDATIONS:
+ 1. Implement explicit input validation for the 'width' and 'height' parameters to prevent out-of-bounds values.
+ 2. Ensure that the __v4l2_find_nearest_size function handles the 'width' and 'height' parameters safely to prevent potential integer overflows.
+ 3. Consider using a safer alternative to the BUILD_BUG_ON macro, such as a runtime check, to handle potential size mismatch issues.
+
+ORIGINAL CODE:
+```c
+ *	set of resolutions contained in an array of a driver specific struct.
+ *
+ * @array: a driver specific array of image sizes
+ * @width_field: the name of the width field in the driver specific struct
+ * @height_field: the name of the height field in the driver specific struct
+ * @width: desired width.
+ * @height: desired height.
+ *
+ * Returns the best match or NULL if the length of the array is zero.
+ */
+#define v4l2_find_nearest_size(array, width_field, height_field, \
+			       width, height)				\
+	({								\
+		BUILD_BUG_ON(sizeof((array)->width_field) != sizeof(u32) || \
+			     sizeof((array)->height_field) != sizeof(u32)); \
+		(typeof(&(*(array))))__v4l2_find_nearest_size(		\
+			(array), ARRAY_SIZE(array), sizeof(*(array)),	\
+			offsetof(typeof(*(array)), width_field),	\
+			offsetof(typeof(*(array)), height_field),	\
+			width, height);					\
+	})
+```

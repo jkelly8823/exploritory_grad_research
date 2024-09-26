@@ -1,0 +1,41 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 5, 14-15
+VULNERABILITY_DESCRIPTION:
+A potential double-free vulnerability may exist if `kvm_alloc_hpt` fails after successfully allocating `page` but before it returns. Additionally, the `kvm_release_hpt` function may be vulnerable to a use-after-free error if `page` is freed prematurely.
+
+EXPLANATION:
+The code appears to handle memory allocation and deallocation for KVM (Kernel-based Virtual Machine). When analyzing the `kvm_alloc_hpt` function, it is observed that it allocates memory using `cma_alloc` for `page`. However, it does not check if `kvm_alloc_hpt` has successfully completed before returning. If an error occurs later in the function, the `err_out` label is jumped to, but in this snippet, there is no code at the `err_out` label to handle the allocated `page`. This could result in a memory leak or a double-free error if the code is not properly cleaned up.
+
+Furthermore, the `kvm_release_hpt` function is not paired with the `kvm_alloc_hpt` function in this snippet. However, if it is intended to be used to release the memory allocated by `kvm_alloc_hpt` for `page`, then it could potentially be vulnerable to a use-after-free error. This may occur if the page is prematurely freed or the reference count is not properly managed.
+
+RECOMMENDATIONS:
+To avoid a potential double-free vulnerability or use-after-free error:
+
+1. Ensure that the `err_out` label properly handles the allocated `page` by freeing it if an error occurs.
+2. Verify that the `kvm_release_hpt` function is correctly paired with the `kvm_alloc_hpt` function to manage the memory allocated for `page`.
+3. Properly manage the reference count for `page` to prevent premature freeing.
+
+ORIGINAL CODE:
+```c
+ri = kmalloc(sizeof(struct kvm_rma_info), GFP_KERNEL);
+if (!ri)
+	return NULL;
+page = cma_alloc(kvm_cma, kvm_rma_pages, order_base_2(kvm_rma_pages));
+if (!page)
+	goto err_out;
+atomic_set(&ri->use_count, 1);
+ri->base_pfn = page_to_pfn(page);
+{
+	unsigned long align_pages = HPT_ALIGN_PAGES;
+
+	VM_BUG_ON(order_base_2(nr_pages) < KVM_CMA_CHUNK_ORDER - PAGE_SHIFT);
+
+	/* Old CPUs require HPT aligned on a multiple of its size */
+	if (!cpu_has_feature(CPU_FTR_ARCH_206))
+		align_pages = nr_pages;
+	return cma_alloc(kvm_cma, nr_pages, order_base_2(align_pages));
+}
+EXPORT_SYMBOL_GPL(kvm_alloc_hpt);
+
+void kvm_release_hpt(struct page *page, unsigned long nr_pages)
+```

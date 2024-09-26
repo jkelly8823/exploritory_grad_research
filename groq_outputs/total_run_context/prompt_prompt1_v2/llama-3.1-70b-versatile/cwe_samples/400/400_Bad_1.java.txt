@@ -1,0 +1,56 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-8
+VULNERABILITY_DESCRIPTION:
+Unproper Thread Management.
+EXPLANATION:
+In the provided code snippet, a new thread is created for each client connection. However, there is no proper mechanism in place to manage these threads, which can lead to potential issues. If the server receives a large number of connections, this can result in a significant increase in system resources consumption, potentially leading to a denial-of-service (DoS) attack.
+
+Moreover, the absence of a thread pool or limit on the number of threads can cause the system to become overwhelmed and crash. This vulnerability can also lead to the exhaustion of system resources, making it vulnerable to a DoS attack.
+
+Additionally, there is no proper synchronization mechanism in place to ensure thread safety.
+
+RECOMMENDATIONS:
+To address this vulnerability, it is recommended to:
+
+- Implement a thread pooling mechanism to limit the number of threads created.
+- Use an ExecutorService instead of manually creating threads.
+- Set a reasonable limit on the number of threads in the pool to prevent excessive resource consumption.
+- Implement proper synchronization mechanisms using locks or semaphores to ensure thread safety.
+- Monitor system resource consumption to detect potential DoS attacks.
+
+ORIGINAL CODE:
+```java
+public void acceptConnections() {
+    try { 
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Thread t = new Thread(new ClientSocketThread(client));
+            t.setName(client.getInetAddress().getHostName() + ":" + counter++);
+            t.start();
+        }
+        serverSocket.close();
+    } catch (IOException ex) {...}
+}
+```
+
+Example of how the code could be fixed using ExecutorService:
+```java
+public void acceptConnections() {
+    try { 
+        ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
+        ExecutorService executor = Executors.newFixedThreadPool(10); // Limit to 10 threads
+        int counter = 0;
+        boolean hasConnections = true;
+        while (hasConnections) {
+            Socket client = serverSocket.accept();
+            Runnable task = new ClientSocketThread(client);
+            executor.execute(task);
+        }
+        serverSocket.close();
+        executor.shutdown();
+    } catch (IOException ex) {...}
+}
+```

@@ -1,0 +1,62 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-4, 7-8
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains a dangling pointer vulnerability and potential null pointer dereference vulnerability. In the `save_config_state` and `restore_config_state` functions, the `cfg` pointer is assigned the return value of `get_config_state` and `get_config_file` respectively, but it is not checked for null before being passed to `save_config_state`, `load_config_file`, and utilized in a recursive call.
+
+EXPLANATION:
+In the `save_config_state` function, if `get_config_state` returns a null pointer, it will be passed to the recursive call of `save_config_state`, which may lead to a null pointer dereference and undefined behavior. Similarly, in the `restore_config_state` function, if `get_config_file` returns a null pointer, it will be passed to `load_config_file`, which may also lead to a null pointer dereference. Furthermore, the recursive call of `save_config_state` with the `cfg` pointer may lead to a dangling pointer issue if `get_config_state` allocates memory and stores it in the `cfg` pointer. The pointer `cfg` will become dangling as soon as it goes out of scope after the function returns, and its recursive call may still be referencing it.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, you should add null pointer checks before passing the `cfg` pointer to the `save_config_state` and `load_config_file` functions. You should also ensure that the `get_config_state` function does not allocate new memory that may be used after the pointer goes out of scope. 
+
+```c
+void save_config_state(void* cfg)
+{
+    if (cfg != NULL) {
+        save_config_state(cfg);
+    } else {
+        // Handle the error
+    }
+}
+
+void save_config_state()
+{
+    void* cfg;
+    cfg = get_config_state();
+    if (cfg != NULL) {
+        save_config_state(cfg);
+    } else {
+        // Handle the error
+    }
+    go_to_sleep();
+}
+
+void restore_config_state()
+{
+    void* cfg;
+    cfg = get_config_file();
+    if (cfg != NULL) {
+        load_config_file(cfg);
+    } else {
+        // Handle the error
+    }
+}
+```
+
+ORIGINAL CODE:
+```c
+void save_config_state()
+{
+    void* cfg;
+    cfg = get_config_state();
+    save_config_state(cfg);
+    go_to_sleep();
+}
+
+void restore_config_state()
+{
+    void* cfg;
+    cfg = get_config_file();
+    load_config_file(cfg);
+}
+```

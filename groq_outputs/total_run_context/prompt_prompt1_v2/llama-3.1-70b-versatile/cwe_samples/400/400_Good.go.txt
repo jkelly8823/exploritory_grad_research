@@ -1,0 +1,68 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 9
+VULNERABILITY_DESCRIPTION: 
+The code does not handle potential HTTP request body errors properly.
+
+EXPLANATION:
+The function attempts to read the HTTP request body with `io.ReadAll(r.Body)` without checking if the input stream is not closed but has reached its EOF, or has been closed earlier with an error, or its underlying resource has been freed. However, the more prominent issue is that after the Body is read into the variable `body`, the program returns without any error handling if the ReadAll operation is successful but doesn't verify the bytes read are indeed with in boundaries defined by `MaxBytesReader`.
+
+However, the key vulnerability arises after setting up `http.MaxBytesReader(w, r.Body, MaxRespBodyLength)`. The subsequent `if err := io.ReadAll(r.Body); err == nil` code doesn't take into consideration instances where a partial read is initiated, even though the overall `r.Body` may contain more than `MaxRespBodyLength` bytes.
+
+RECOMMENDATIONS:
+To prevent the vulnerability, use `(r.Body).Close()` before any return statement that would let go of `r.Body` and also introduce suitable checks that result after return error instances are correctly propagated upwards.
+
+To rectify the problem and better handle cases with request-size exceeding boundaries, use code such as below.
+
+```go
+func serve(w http.ResponseWriter, r *http.Request) {
+    var body []byte
+    var err error
+    const MaxRespBodyLength = 1e6
+
+    // Using an if let block to initiate 'http.MaxBytesReader' without errors
+    if r.Body != nil {
+
+        r.Body = http.MaxBytesReader(w, r.Body, MaxRespBodyLength)
+
+        // Allowing only a non-nil bytes value for body that is also error free
+        if body, err = io.ReadAll(r.Body); err == nil {
+            // check body length for safety. `body` is `[]byte`, but we are assuming in-order comparison
+            log.DefaultLogger.Printf("Body contents, size of body: %v \n", len(body))
+        } else {
+            // A part/whole, of contents returned Error State - Handle accordingly.
+            
+            if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+                errStr := err.Error()
+                w.WriteHeader(http.StatusRequestEntityTooLarge)
+                w.Write([]byte(errStr))
+            } else {
+                // use appropriate http header response here, based on needs.
+                w.WriteHeader(http.StatusInternalServerError)
+                w.Write([]byte(err.Error()))
+            }
+
+        }
+
+        defer (r.Body).(io.Closer).Close()
+
+    }
+}
+```
+
+ORIGINAL CODE:
+```go
+    func serve(w http.ResponseWriter, r *http.Request) {
+        
+        var body []byte
+        const MaxRespBodyLength = 1e6
+        if r.Body != nil {
+        
+           r.Body = http.MaxBytesReader(w, r.Body, MaxRespBodyLength)
+           if data, err := io.ReadAll(r.Body); err == nil {
+           
+              body = data
+           
+           }
+        }
+    }
+```

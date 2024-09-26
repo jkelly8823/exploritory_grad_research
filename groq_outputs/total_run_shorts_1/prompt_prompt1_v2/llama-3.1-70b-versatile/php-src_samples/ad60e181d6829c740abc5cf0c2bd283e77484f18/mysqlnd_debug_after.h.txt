@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2
+VULNERABILITY_DESCRIPTION:
+The given code snippet is vulnerable to a null pointer dereference when `dbg_obj` is null.
+
+EXPLANATION:
+The code first checks for the existence of `dbg_obj` before calling methods on it. However, it then accesses `dbg_obj` again without checking whether it is null. This could lead to a null pointer dereference if `dbg_obj` is null, causing a segmentation fault or program crash.
+
+However, this is not the vulnerability that makes the code most potentially vulnerable to exploit. The issue lies with the comment directly after it, the comment is /* shut compiler's mouth */ suggesting that the purpose of the line it is commenting is simply to silence the compiler as it would complain about an incomplete conditional statement without the semicolon. This however, hides the fact that the do-while loop that follows this silent line then behaves as though this incomplete condition will always evaluate true, leaving the code inside the loop in danger of being called with possibly dirty inputs.
+The most troubling part of this is the condition that immediately follows accesses memory locations that would have otherwise been invalid if this hidden conditional block was still intact.
+
+In addition to this, there aren't any apparent input validation and sanitization for this block of code. This is primarily done for validation and assurance of the input being suitable to be used within a database interaction.
+
+RECOMMENDATIONS:
+Provide in depth reviews for future codes, ensuring silent conditions are called out and in no instance should a silent condition be used to hide assumptions about sections of the function. Ensure to validate inputs that are coming from external data that will interact with this particular file. 
+
+If this code is being implemented be sure to add debugging to ensure functionality is working correctly before pushing code to code review. 
+
+Always keep compiler warnings at error - Wall. Given the critical potential implications of exploiting these particular calls. 
+
+Given this the 'less is more rule' simply not applying we would need to then go through re validation process, considering all the potential pathways one could exploit and go about preventing that interaction.
+
+ORIGINAL CODE:
+_if ((dbg_obj)) { \
+	dbg_skip_trace = !(dbg_obj)->m->func_enter((dbg_obj), __LINE__, __FILE__, func_name, strlen(func_name)); \
+} \
+_if (dbg_skip_trace); /* shut compiler's mouth */\
+do { \
+	if ((dbg_obj) && (dbg_obj)->flags & MYSQLND_DEBUG_PROFILE_CALLS) { \
+		DBG_PROFILE_START_TIME(); \
+	} \

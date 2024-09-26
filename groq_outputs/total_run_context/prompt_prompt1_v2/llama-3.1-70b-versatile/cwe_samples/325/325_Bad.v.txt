@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 9
+VULNERABILITY_DESCRIPTION:
+This code snippet appears to be vulnerable to a timing attack due to the use of a variable directly tied to a user-input or untrusted value (`startHash`) for initializing the HMAC module.
+
+EXPLANATION:
+In the code snippet provided, the `startHash` variable is used to initialize the HMAC module. This is concerning as the HMAC module's initialization should ideally occur in a manner that is not directly tied to external inputs. The variable's value being used for HMAC initialization could potentially allow attackers to influence the HMAC's initialization timeframe and abuse this to deduce the hash value, bypassing security guarantees of the HMAC.
+
+Additionally, data from `bigData` is being used as input to the HMAC module. If `bigData` is insufficiently sanitized or originates from an untrusted source, this could pose additional security risks as it would directly influence the HMAC module's output.
+
+RECOMMENDATIONS:
+To fix this vulnerability, it's recommended that the HMAC module's initialization should occur under a fixed or a non-user-influenced condition. One feasible solution is to implement a pre-defined or default HMAC initialization sequence (e.g., as a result of a self-generated signal), reducing the direct influence of user-dependent signals such as `startHash`. Furthermore, the HMAC module should ideally use a secure initialization vector (`IV` or `Nonce`).
+
+Another essential step is to ensure that data fed into the HMAC module has been properly sanitized, either through checking its origin or applying additional validation to ensure it adheres to expected values and patterns.
+
+```cpp
+logic [511:0] bigData;
+...
+// Introduce a secure HMAC initialization mechanism
+logic hmacInit;
+always_ff @(posedge clk_i) begin
+    // Implement HMAC initialization conditions here
+    hmacInit <= secureInitializationSequence;
+end
+hmac hmac(
+    .clk_i(clk_i),
+    .rst_ni(rst_ni && ~rst_4),
+    .init_i(hmacInit), // Secure HMAC initialization
+    .key_i(key),
+    .ikey_hash_i(ikey_hash), 
+    .okey_hash_i(okey_hash), 
+    .key_hash_bypass_i(key_hash_bypass),
+    .message_i(bigData),
+    .hash_o(hash),
+    .ready_o(ready),
+    .hash_valid_o(hashValid)
+);
+```

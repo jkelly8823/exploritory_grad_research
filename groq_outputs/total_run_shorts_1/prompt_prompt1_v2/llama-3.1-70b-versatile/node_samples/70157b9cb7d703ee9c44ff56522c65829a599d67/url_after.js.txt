@@ -1,0 +1,83 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 39
+VULNERABILITY_DESCRIPTION: Potential URL Spoofing Vulnerability
+EXPLANATION:
+In this code snippet, there is a potential URL spoofing vulnerability present in the line where the `ERR_INVALID_URL` exception is thrown. Although the code checks for `forbiddenHostChars` in the hostname after applying the `toASCII` function, it does not account for cases where the ASCII representation of the hostname is not correctly validated.
+
+The issue arises from the fact that the `forbiddenHostChars` check is only performed after the `toASCII` function has been applied, which can result in a hostname that is not correctly sanitized. An attacker can potentially exploit this by crafting a URL with a hostname that, after applying the `toASCII` function, results in a string containing forbidden characters.
+
+RECOMMENDATIONS:
+To fix this vulnerability, we recommend validating the hostname before and after applying the `toASCII` function. This will ensure that the hostname is correctly sanitized and does not contain any forbidden characters. Additionally, it would be beneficial to validate the hostname using a more comprehensive set of rules to prevent other potential spoofing attacks.
+
+Here is an example of how the validation can be improved:
+
+```javascript
+const cleanedHostname = toASCII(this.hostname, true);
+if (forbiddenHostChars.test(cleanedHostname) || !isValidHostname(cleanedHostname)) {
+  throw new ERR_INVALID_URL(url);
+}
+```
+
+In the above code, `isValidHostname` is a function that performs additional validation on the hostname to ensure it meets the expected format.
+
+ORIGINAL CODE:
+```javascript
+const { encodeStr, hexTable } = require('internal/querystring');
+
+const {
+  ERR_INVALID_ARG_TYPE,
+  ERR_INVALID_URL,
+} = require('internal/errors').codes;
+const { validateString } = require('internal/validators');
+
+// This ensures setURLConstructor() is called before the native
+  );
+}
+
+// This prevents some common spoofing bugs due to our use of IDNA toASCII. For
+// compatibility, the set of characters we use here is the *intersection* of
+// "forbidden host code point" in the WHATWG URL Standard [1] and the
+// characters in the host parsing loop in Url.prototype.parse, with the
+// following additions:
+//
+// - ':' since this could cause a "protocol spoofing" bug
+// - '@' since this could cause parts of the hostname to be confused with auth
+// - '[' and ']' since this could cause a non-IPv6 hostname to be interpreted
+//   as IPv6 by isIpv6Hostname above
+//
+// [1]: https://url.spec.whatwg.org/#forbidden-host-code-point
+const forbiddenHostChars = /[\t\n\r #%/:<>?@[\\\]^|]/;
+
+Url.prototype.parse = function parse(url, parseQueryString, slashesDenoteHost) {
+  validateString(url, 'url');
+
+  // Copy chrome, IE, opera backslash-handling behavior.
+      this.hostname = this.hostname.toLowerCase();
+    }
+
+    if (!ipv6Hostname && this.hostname !== '') {
+      // IDNA Support: Returns a punycoded representation of "domain".
+      // It only converts parts of the domain name that
+      // have non-ASCII characters, i.e. it doesn't matter if
+      // you call it with a domain that already is ASCII-only.
+      // Use lenient mode (`true`) to try to support even non-compliant
+      // URLs.
+      this.hostname = toASCII(this.hostname, true);
+
+      // Prevent two potential routes of hostname spoofing.
+      // 1. If this.hostname is empty, it must have become empty due to toASCII
+      //    since we checked this.hostname above.
+      // 2. If any of forbiddenHostChars appears in this.hostname, it must have
+      //    also gotten in due to toASCII. This is since getHostname would have
+      //    filtered them out otherwise.
+      // Rather than trying to correct this by moving the non-host part into
+      // the pathname as we've done in getHostname, throw an exception to
+      // convey the severity of this issue.
+      if (this.hostname === '' || forbiddenHostChars.test(this.hostname)) {
+        throw new ERR_INVALID_URL(url);
+      }
+    }
+
+    const p = this.port ? ':' + this.port : '';
+    const h = this.hostname || '';
+```

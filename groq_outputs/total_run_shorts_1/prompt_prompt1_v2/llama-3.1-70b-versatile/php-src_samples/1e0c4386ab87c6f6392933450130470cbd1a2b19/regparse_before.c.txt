@@ -1,0 +1,46 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+The vulnerable line does not appear to be the issue here. There is however, integer overflows/underflows concern in this function
+
+EXPLANATION:
+The `scan_unsigned_octal_number` function can return a negative value if the number is too big. However, this function returns an error code if this occurs, and stops execution. Thats good. However there is however a deeper issue. We do not have the information on `num` but if it where to cause a integer overflow, this if check would be eliminated and return later, allowing an attacker to overflow this variable `num`. Additionally, `scan_unsigned_octal_number` also is vulnerable if p has no null termination.
+ 
+Similarly, when calling the `add_code_range` function with a range of `*vs` to `*vs`, it could lead to integer underflows/overflows issues even though its checking is handled.
+
+
+RECOMMENDATIONS:
+It's recommended to:
+*   Check if the passed octal numbers can cause an integer overflow/underflow in the `num` variable before these scans.
+*   Ensure the `p` has a null termination before passing it to `scan_unsigned_octal_number`
+*   Consider using a safer way to represent numbers to handle overflow situations better.
+*   Validate and handle values of `*vs` being passed to `add_code_range` function to ensure they are within the valid range.
+
+ORIGINAL CODE:
+```c
+PUNFETCH;
+prev = p;
+num = scan_unsigned_octal_number(&p, end, 3, enc);
+if (num < 0) return ONIGERR_TOO_BIG_NUMBER;
+if (p == prev) {  /* can't read nothing. */
+  num = 0; /* but, it's not error */
+}
+tok->type = TK_RAW_BYTE;
+if (IS_SYNTAX_OP(syn, ONIG_SYN_OP_ESC_OCTAL3)) {
+  prev = p;
+  num = scan_unsigned_octal_number(&p, end, (c == '0' ? 2:3), enc);
+  if (num < 0) return ONIGERR_TOO_BIG_NUMBER;
+  if (p == prev) {  /* can't read nothing. */
+    num = 0; /* but, it's not error */
+  }
+  tok->type = TK_RAW_BYTE;
+  switch (*state) {
+  case CCS_VALUE:
+    if (*type == CCV_SB)
+      BITSET_SET_BIT(cc->bs, (int )(*vs));
+    else if (*type == CCV_CODE_POINT) {
+      r = add_code_range(&(cc->mbuf), env, *vs, *vs);
+      if (r < 0) return r;
+```
+
+(Note this the `0` is noted in Vul Line - should really capture the whole of that c source, but vul is not explicitly defined here.

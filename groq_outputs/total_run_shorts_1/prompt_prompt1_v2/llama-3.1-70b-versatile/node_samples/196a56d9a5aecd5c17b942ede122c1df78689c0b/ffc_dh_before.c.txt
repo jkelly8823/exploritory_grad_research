@@ -1,0 +1,99 @@
+VULNERABLE: NO
+VULNERABLE_LINES: None
+VULNERABILITY_DESCRIPTION:
+None
+EXPLANATION:
+This code appears to be a part of the OpenSSL library, specifically dealing with Diffie-Hellman named groups and finite field parameters. After analyzing the code snippet, I did not find any obvious vulnerabilities. The code handles NULL pointer checks properly, and it does not seem to have any buffer overflow or integer overflow issues.
+
+However, there are some potential issues that could be considered as information disclosure bugs. The `ossl_ffc_named_group_get_q` and `ossl_ffc_named_group_set_pqg` functions access the `q` and `p`, `q`, `g` members of the `DH_NAMED_GROUP` struct directly. While this is not necessarily an issue in this specific code, it is generally good practice to keep this information private to prevent potential information disclosure attacks.
+
+Additionally, the fact that the `ossl_ffc_named_group_set_pqg` function casts the `const BIGNUM *` pointers to `(BIGNUM *)` is not necessarily an issue, but it should be done with caution as it could potentially bypass const-correctness checks.
+
+RECOMMENDATIONS:
+It is recommended to consider using safer ways to access the struct members to prevent potential information disclosure attacks.
+
+It is also recommended to review the casting of `const BIGNUM *` to `(BIGNUM *)` to ensure it is done safely and correctly.
+
+ORIGINAL CODE:
+
+```c
+#ifndef OPENSSL_NO_DH
+
+# define FFDHE(sz) {                                                        \
+        SN_ffdhe##sz, NID_ffdhe##sz,                                        \
+        sz,                                                                 \
+        &ossl_bignum_ffdhe##sz##_p, &ossl_bignum_ffdhe##sz##_q,             \
+        &ossl_bignum_const_2,                                               \
+    }
+
+# define MODP(sz)  {                                                        \
+        SN_modp_##sz, NID_modp_##sz,                                        \
+        sz,                                                                 \
+        &ossl_bignum_modp_##sz##_p, &ossl_bignum_modp_##sz##_q,             \
+        &ossl_bignum_const_2                                                \
+    }
+
+# define RFC5114(name, uid, sz, tag) {                                      \
+        name, uid,                                                          \
+        sz,                                                                 \
+        &ossl_bignum_dh##tag##_p, &ossl_bignum_dh##tag##_q,                 \
+        &ossl_bignum_dh##tag##_g                                            \
+    }
+
+#else
+
+# define FFDHE(sz)                      { SN_ffdhe##sz, NID_ffdhe##sz }
+# define MODP(sz)                       { SN_modp_##sz, NID_modp_##sz }
+# define RFC5114(name, uid, sz, tag)    { name, uid }
+
+#endif
+
+    int uid;
+#ifndef OPENSSL_NO_DH
+    int32_t nbits;
+    const BIGNUM *p;
+    const BIGNUM *q;
+    const BIGNUM *g;
+#endif
+};
+
+static const DH_NAMED_GROUP dh_named_groups[] = {
+    FFDHE(2048),
+    FFDHE(3072),
+    FFDHE(4096),
+    FFDHE(6144),
+    FFDHE(8192),
+#ifndef FIPS_MODULE
+    MODP(1536),
+#endif
+    MODP(2048),
+    MODP(3072),
+    MODP(4096),
+    MODP(6144),
+    MODP(8192),
+    /*
+     * Additional dh named groups from RFC 5114 that have a different g.
+     * The uid can be any unique identifier.
+     */
+}
+
+#ifndef OPENSSL_NO_DH
+const BIGNUM *ossl_ffc_named_group_get_q(const DH_NAMED_GROUP *group)
+{
+    if (group == NULL)
+        return NULL;
+    return group->q;
+}
+
+int ossl_ffc_named_group_set_pqg(FFC_PARAMS *ffc, const DH_NAMED_GROUP *group)
+{
+    if (ffc == NULL || group == NULL)
+        return 0;
+
+    ossl_ffc_params_set0_pqg(ffc, (BIGNUM *)group->p, (BIGNUM *)group->q,
+                             (BIGNUM *)group->g);
+
+    /* flush the cached nid, The DH layer is responsible for caching */
+    ffc->nid = NID_undef;
+    return 1;
+```

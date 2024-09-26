@@ -1,0 +1,54 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4-5, 8, 12-13
+VULNERABILITY_DESCRIPTION:
+Uncaught exceptions, resource leak vulnerabilities, and string concatenation with sensitive information disclosure.
+
+EXPLANATION:
+The `readFile` function has several security vulnerabilities. 
+
+- The function throws an exception with a string that includes the filename. This exception may traverse multiple layers of the application and be printed or logged in a location where an attacker can see it, potentially revealing sensitive information. This is a sensitive information disclosure vulnerability.
+
+- There is no validation of the filename before attempting to open the file. This could enable a directory traversal attack, where an attacker could access files that they should not be able to access.
+
+- When opening a file, if it fails, the code will throw an exception and close the file. If an exception occurs later in the function, the file will close normally since it's placed after the file operations, but it's always better to check and close the file even when seeking a specific exception.
+
+- However, the given snippet still disposes of the newly allocated `buffer` to not exist in the exceptions catches, if the exceptions thrown will introduce memory leaks, since exceptions catch does not appear to be utilizing its dynamically allocated memory.
+
+- Resource leaks can occur when new memory is allocated for the `buffer` but is not freed. However, `buffer` will go out of scope only after its used and returned in the function `readFile` within the context of this code. Nonetheless, general rules of returning this from `new` char buffer and error recovery states also should address memory deallocation safely.
+
+
+RECOMMENDATIONS:
+
+- When throwing exceptions with file names, include minimal details and file paths.
+
+- Use stack allocated or use `std::string` instead of `new` and raw char string pointer with the string class from standard library to easily perform string operations.
+
+- Prevent directory traversal by validating the file name.
+
+- Use stack allocated buffer for better error handling or properly deallocate the buffer on all error paths.
+
+- To handle memory leaks for catching certain exceptions for `std::bad_alloc` when utilizing the exception `new` operator and apply deallocation using `delete` for `buffer`. Doing so only then ensures complete heap error prevention in memory deallocation.
+
+
+ORIGINAL CODE:
+```c
+char* readFile (char *filename) {
+    try {
+          // open input file
+        ifstream infile;
+        infile.open(filename);
+        if (!infile.is_open()) {throw "Unable to open file " + filename;}
+        // get length of file
+        infile.seekg (0, ios::end);
+        int length = infile.tellg();
+        infile.seekg (0, ios::beg);
+        // allocate memory
+        char *buffer = new char [length];
+        // read data from file
+        infile.read (buffer,length);
+        if (!infile.good()) {throw "Unable to read from file " + filename;}
+        infile.close();
+        return buffer;
+    }catch (char *str) {printf("Error: %s \n", str);infile.close();throw str;}catch (...) {printf("Error occurred trying to read from file \n");infile.close();throw;}
+}
+```

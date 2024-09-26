@@ -1,0 +1,61 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8-10, 14
+VULNERABILITY_DESCRIPTION:
+Resource leaks and potential null pointer dereferences due to improper error handling and object disposal.
+EXPLANATION:
+In the given code snippet, the shutdown process is not handled properly. The `DoShutdown` function call returns an error code, but the error is not checked immediately. The `req_wrap` object is disposed of only if the error code is non-zero, but the `req_wrap_ptr` object is not reset to null in this case. This can lead to potential null pointer dereferences.
+
+Additionally, the `WriteWrap` object creation is inside the error handling block for `DoShutdown`, which can cause resource leaks if an error occurs during `WriteWrap` creation.
+
+RECOMMENDATIONS:
+1. Check the error code immediately after the `DoShutdown` function call and handle it accordingly. 
+2. Reset the `req_wrap_ptr` object to null if the `req_wrap` object is disposed of.
+3. Move the `WriteWrap` object creation outside the error handling block for `DoShutdown`.
+
+ORIGINAL CODE:
+```cpp
+StreamReq::ResetObject(req_wrap_obj);
+}
+
+BaseObjectPtr<AsyncWrap> req_wrap_ptr;
+AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(GetAsyncWrap());
+ShutdownWrap* req_wrap = CreateShutdownWrap(req_wrap_obj);
+if (req_wrap != nullptr)
+req_wrap_ptr.reset(req_wrap->GetAsyncWrap());
+int err = DoShutdown(req_wrap);
+
+if (err != 0 && req_wrap != nullptr) {
+req_wrap->Dispose();
+if (send_handle == nullptr) {
+err = DoTryWrite(&bufs, &count);
+if (err != 0 || count == 0) {
+return StreamWriteResult { false, err, nullptr, total_bytes, {} };
+}
+}
+
+v8::HandleScope handle_scope(env->isolate());
+if (!env->write_wrap_template()
+->NewInstance(env->context())
+.ToLocal(&req_wrap_obj)) {
+return StreamWriteResult { false, UV_EBUSY, nullptr, 0, {} };
+}
+StreamReq::ResetObject(req_wrap_obj);
+}
+
+AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(GetAsyncWrap());
+WriteWrap* req_wrap = CreateWriteWrap(req_wrap_obj);
+BaseObjectPtr<AsyncWrap> req_wrap_ptr(req_wrap->GetAsyncWrap());
+
+err = DoWrite(req_wrap, bufs, count, send_handle);
+bool async = err == 0;
+
+ClearError();
+}
+
+return StreamWriteResult {
+async, err, req_wrap, total_bytes, std::move(req_wrap_ptr) };
+}
+
+template <typename OtherBase>
+SimpleShutdownWrap<OtherBase>::SimpleShutdownWrap(
+```

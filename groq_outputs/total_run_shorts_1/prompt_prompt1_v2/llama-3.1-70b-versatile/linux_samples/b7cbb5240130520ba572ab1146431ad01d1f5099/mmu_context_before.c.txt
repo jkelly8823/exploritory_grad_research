@@ -1,0 +1,86 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10-19, 21-22
+VULNERABILITY_DESCRIPTION:
+Use After Free and Memory Leak Vulnerability
+EXPLANATION:
+In the provided code snippet, two potential vulnerabilities have been identified. 
+
+The first vulnerability is a potential Use After Free vulnerability. This occurs when a pointer is accessed after the memory it points to has been deallocated. In the given code, if `kmalloc(sizeof(struct subpage_prot_table), GFP_KERNEL)` fails, `mm->context.hash_context` is freed using `kfree(mm->context.hash_context)`, but `mm->context` is not reset to NULL. Later in the code, `mm->context.hash_context` might still be used when `pkey_mm_init(mm)` is called. However, since the context information is initialized at the next call to `hash__init_new_context`, no further vulnerabilities are introduced.
+
+The second vulnerability is a Memory Leak vulnerability. In the provided code, if `kmalloc(sizeof(struct hash_mm_context), GFP_KERNEL)` fails, the allocated index is freed using `ida_free(&mmu_context_ida, index)`, which prevents a resource leak. However, if `kmalloc(sizeof(struct subpage_prot_table), GFP_KERNEL)` fails, and the context was properly allocated but the subpage protection table was not, the allocated context is freed but the index allocated by `id` is not. This could lead to resource exhaustion, a type of denial-of-service attack.
+
+RECOMMENDATIONS:
+To fix these vulnerabilities, the index should be freed when an allocation fails in the inner block, and a check should be added after `kmalloc` for `mm->context.hash_context` to ensure the pointer wasn't freed:
+
+*   Add `ida_free(&mmu_context_ida, index);` before returning -ENOMEM in the inner if block to prevent index exhaustion.
+*   After checking if `mm->context.hash_context` is NULL, add `if (!mm->context.hash_context) return -EINVAL;` before using `mm->context.hash_context`.
+
+Here's an updated code snippet to address these issues:
+
+```c
+void slb_setup_new_exec(void);
+
+static int hash__init_new_context(struct mm_struct *mm)
+{
+    int index;
+
+    index = hash__alloc_context_id();
+    if (index < 0)
+        return index;
+
+    mm->context.hash_context = kmalloc(sizeof(struct hash_mm_context), GFP_KERNEL);
+    if (!mm->context.hash_context) {
+        ida_free(&mmu_context_ida, index);
+        return -ENOMEM;
+    }
+
+    mm->context.hash_context->spt = kmalloc(sizeof(struct subpage_prot_table), GFP_KERNEL);
+    if (!mm->context.hash_context->spt) {
+        kfree(mm->context.hash_context);
+        ida_free(&mmu_context_ida, index);
+        return -ENOMEM;
+    }
+
+    pkey_mm_init(mm);
+    return index;
+}
+```
+
+ORIGINAL CODE:
+```c
+void slb_setup_new_exec(void);
+
+static int hash__init_new_context(struct mm_struct *mm)
+{
+    int index;
+
+    index = hash__alloc_context_id();
+    if (index < 0)
+        return index;
+
+    mm->context.hash_context = kmalloc(sizeof(struct hash_mm_context),
+                       GFP_KERNEL);
+    if (!mm->context.hash_context) {
+        ida_free(&mmu_context_ida, index);
+        return -ENOMEM;
+    }
+
+    /*
+     * The old code would re-promote on fork, we don't do that when using
+     * slices as it could cause problem promoting slices that have been
+         mm->context.hash_context->spt = kmalloc(sizeof(struct subpage_prot_table),
+                             GFP_KERNEL);
+         if (!mm->context.hash_context->spt) {
+             ida_free(&mmu_context_ida, index);
+             kfree(mm->context.hash_context);
+             return -ENOMEM;
+         }
+     }
+#endif
+
+    }
+
+    pkey_mm_init(mm);
+    return index;
+}
+```

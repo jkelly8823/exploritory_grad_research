@@ -1,0 +1,100 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 72-74
+VULNERABILITY_DESCRIPTION:
+Potential Null Pointer Dereference vulnerability.
+EXPLANATION:
+In the function `ia_css_inputfifo_send_embedded_line`, the variable `s2mi` is assigned the return value of `inputfifo_get_inst(ch_id)`. However, it is not checked if `s2mi` is a null pointer before it is used. If `inputfifo_get_inst(ch_id)` returns null, `s2mi` will be null, and attempting to use it may result in a null pointer dereference.
+Similarly, the same issue is present in the function `ia_css_inputfifo_start_frame`.
+RECOMMENDATIONS:
+To fix this vulnerability, add a null check before using the `s2mi` pointer. Here is an example of how to do it:
+
+```c
+void ia_css_inputfifo_send_embedded_line(
+	unsigned int	ch_id,
+	enum atomisp_input_format	data_type,
+	const unsigned short	*data,
+	unsigned int	width)
+{
+	struct inputfifo_instance *s2mi;
+	s2mi = inputfifo_get_inst(ch_id);
+	if (s2mi == NULL) {
+		// Handle the case where s2mi is null
+		// For example, return an error or print a message
+		return;
+	}
+	// Use s2mi
+}
+
+void ia_css_inputfifo_start_frame(
+	unsigned int ch_id,
+	enum atomisp_input_format input_format,
+	bool two_ppc)
+{
+	struct inputfifo_instance *s2mi;
+	s2mi = inputfifo_get_inst(ch_id);
+	if (s2mi == NULL) {
+		// Handle the case where s2mi is null
+		// For example, return an error or print a message
+		return;
+	}
+	// Use s2mi
+}
+```
+
+ORIGINAL CODE:
+```c
+#endif
+struct inputfifo_instance {
+	unsigned int				ch_id;
+	enum atomisp_input_format	input_format;
+	bool						two_ppc;
+	bool						streaming;
+	unsigned int				hblank_cycles;
+	unsigned int				marker_cycles;
+
+
+static enum inputfifo_mipi_data_type inputfifo_determine_type(
+	enum atomisp_input_format input_format)
+{
+	enum inputfifo_mipi_data_type type;
+
+	type = inputfifo_mipi_data_type_regular;
+	if (input_format == ATOMISP_INPUT_FORMAT_YUV420_8_LEGACY) {
+		type =
+			inputfifo_mipi_data_type_yuv420_legacy;
+	} else if (input_format == ATOMISP_INPUT_FORMAT_YUV420_8  ||
+		   input_format == ATOMISP_INPUT_FORMAT_YUV420_10 ||
+		   input_format == ATOMISP_INPUT_FORMAT_YUV420_16) {
+		type =
+			inputfifo_mipi_data_type_yuv420;
+	} else if (input_format >= ATOMISP_INPUT_FORMAT_RGB_444 &&
+		   input_format <= ATOMISP_INPUT_FORMAT_RGB_888) {
+		type =
+			inputfifo_mipi_data_type_rgb;
+	}
+	return type;
+	unsigned int width,
+	unsigned int height,
+	unsigned int ch_id,
+	enum atomisp_input_format input_format,
+	bool two_ppc)
+{
+	unsigned int fmt_type, hblank_cycles, marker_cycles;
+	enum inputfifo_mipi_data_type type;
+
+void ia_css_inputfifo_start_frame(
+	unsigned int ch_id,
+	enum atomisp_input_format input_format,
+	bool two_ppc)
+{
+	struct inputfifo_instance *s2mi;
+	s2mi = inputfifo_get_inst(ch_id);
+
+void ia_css_inputfifo_send_embedded_line(
+	unsigned int	ch_id,
+	enum atomisp_input_format	data_type,
+	const unsigned short	*data,
+	unsigned int	width)
+{
+	struct inputfifo_instance *s2mi;
+```

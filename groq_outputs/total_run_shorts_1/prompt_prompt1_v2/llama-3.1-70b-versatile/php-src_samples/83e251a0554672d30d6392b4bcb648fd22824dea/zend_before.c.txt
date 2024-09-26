@@ -1,0 +1,31 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3
+VULNERABILITY_DESCRIPTION:
+The vulnerability identified is a potential buffer overflow vulnerability. 
+
+EXPLANATION:
+The zend_vspprintf function is used to format a string and store it in the dtrace_error_buffer. However, the function can potentially overflow the buffer if the formatted string is longer than the buffer can hold. This can lead to undefined behavior and potentially a security vulnerability, such as code injection or data corruption.
+
+The vulnerability arises from the use of the zend_vspprintf function with an initial buffer length of 0. If the formatted string is longer than the initial buffer length, zend_vspprintf will reallocate the buffer to accommodate the new length. However, if the new length is still insufficient, zend_vspprintf will truncate the string to fit the buffer. This can lead to unexpected behavior and potential security issues.
+
+RECOMMENDATIONS:
+To fix this vulnerability, you should consider one or more of the following options:
+- Always initialize the buffer with a large enough size to handle the expected maximum length of the formatted string.
+- Use a safer string formatting function that does not have the potential to overflow the buffer, such as zend_vspnprintf with a fixed buffer length.
+- Use a smart string class that can handle buffer management automatically.
+- Check the return value of zend_vspprintf to ensure that it did not truncate the string.
+
+Here is an example of how to modify the code to use a safer string formatting function:
+
+	char dtrace_error_buffer[1024]; // initialize with a fixed buffer length
+	zend_vspnprintf(dtrace_error_buffer, sizeof(dtrace_error_buffer), 1024, format, args);
+	DTRACE_ERROR(dtrace_error_buffer, error_filename, error_lineno);
+
+ORIGINAL CODE:
+	if(DTRACE_ERROR_ENABLED()) {
+		char *dtrace_error_buffer;
+		zend_vspprintf(&dtrace_error_buffer, 0, format, args);
+		DTRACE_ERROR(dtrace_error_buffer, error_filename, error_lineno);
+		efree(dtrace_error_buffer);
+	}
+#endif /* HAVE_DTRACE */

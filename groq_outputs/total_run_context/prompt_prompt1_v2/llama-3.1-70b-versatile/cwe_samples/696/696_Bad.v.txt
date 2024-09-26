@@ -1,0 +1,38 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10, 11
+VULNERABILITY_DESCRIPTION: 
+Unintentional information exposure through synchronous reset logic and improper use of blocking assignments.
+
+EXPLANATION: 
+In this module, the `data_out` signal's value is updated both conditionally (using blocking assignment `=`) and unconditionally (using a continuous assignment `assign`). This can lead to unintended information exposure. When the module is reset (`rst_n` goes low), the `data_out` is cleared. However, immediately after reset (`rst_n` goes high), the value of `data_out` is still be driven by its old value until an update from the data bus (data_in). Also, the assignment of `grant_access` using the `=` operator in an always block could potentially cause race conditions if multiple signals drive the signal `grant_access`.
+
+Moreover, by combining the reset logic with a synchronous IF statement and the use of these assignments in an always block, unintended updates or exposure of data can occur due to the handling of clocking logic (`posedge clk or negedge rst_n`). The blocking assignments used here (e.g. `data_out = ...`) could potentially cause unintended information exposure through faulty asynchronous logic if multiple signals drive the signals driving these conditions.
+
+RECOMMENDATIONS: 
+
+- Separate the initial reset condition (`!rst_n`) logic and use non-blocking assignments for combinational logic (`data_out <= data_in`) and for synchronous updates as well. 
+- Ensure the combinational logic updates (`always @ (usr_id, data_in)`) drives  `grant_access` properly. Don't assign both conditionally and unconditionally.
+- Make clear distinctions between resets, updates and holding output through clock pulse (`posedge clk`).
+
+ORIGINAL CODE:
+       			module foo_bar(data_out, usr_id, data_in, clk, rst_n);
+       			output reg [7:0] data_out;
+       			input wire [2:0] usr_id;
+       			input wire [7:0] data_in; 
+       			input wire clk, rst_n;
+       			wire grant_access;
+       			always @ (posedge clk or negedge rst_n)
+       			begin
+       			
+				  if (!rst_n)
+				  
+					data_out = 0;
+				  
+				  else
+				  
+					data_out = (grant_access) ? data_in : data_out;
+					assign grant_access = (usr_id == 3'h4) ? 1'b1 : 1'b0;
+				  
+			    
+			    end
+			    endmodule

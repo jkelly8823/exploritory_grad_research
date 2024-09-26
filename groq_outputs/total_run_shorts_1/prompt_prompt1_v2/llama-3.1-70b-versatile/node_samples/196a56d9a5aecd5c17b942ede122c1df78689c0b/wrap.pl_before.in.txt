@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 1
+VULNERABILITY_DESCRIPTION:
+This code contains a Potential Injection Vulnerability due to the use of an unvalidated variable in a string that is being printed to the user.
+
+EXPLANATION:
+The variable `$!` is being used directly in a string that is being printed to the user. The `$!` variable in Perl contains the current system error message. However, if this variable has been set to a malicious value by an attacker, this could result in the execution of arbitrary code or exposure of sensitive information.
+
+Moreover, the variable `@cmd` is being used directly in a string that is being printed to the user without proper sanitization or escaping. This could result in the execution of arbitrary code or exposure of sensitive information if `@cmd` has been set to a malicious value by an attacker.
+
+RECOMMENDATIONS:
+To sanitize the error message and prevent a potential injection vulnerability, you can use the following steps:
+
+1.  Use a secure method to obtain and display error messages. Instead of directly using `$!`, consider using a function like `Error::system()`.
+2.  Validate and sanitize the `@cmd` array to prevent injection attacks. You can use the `quotemeta` function to escape special characters in the command.
+
+Here is a revised version of the code:
+
+```perl
+use Error qw(system);
+
+# ...
+# Sanitize the command array
+my @sanitized_cmd = map { quotemeta($_) } @cmd;
+
+die "wrap.pl: Failed to execute '", join(' ', @sanitized_cmd), "': ", system($!), "\n"
+    if $waitcode == -1;
+
+# When the subprocess aborted on a signal, mimic what Unix shells do, by
+# converting the signal code to an exit code by setting the high bit.
+# This only happens on Unix flavored operating systems, the others don't
+# have this sort of signaling to date, and simply leave the low byte zero.
+exit(($? & 255) | 128) if ($? & 255) != 0;
+```
+
+ORIGINAL CODE:
+
+```perl
+die "wrap.pl: Failed to execute '", join(' ', @cmd), "': $!\n"
+    if $waitcode == -1;
+
+# When the subprocess aborted on a signal, mimic what Unix shells do, by
+# converting the signal code to an exit code by setting the high bit.
+# This only happens on Unix flavored operating systems, the others don't
+# have this sort of signaling to date, and simply leave the low byte zero.
+exit(($? & 255) | 128) if ($? & 255) != 0;
+```

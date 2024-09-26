@@ -1,0 +1,29 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 4, 7
+VULNERABILITY_DESCRIPTION:
+The provided code snippet contains potential vulnerabilities in the form of unchecked user memory access and tainted values used without validation.
+
+EXPLANATION:
+The `__get_user` function is used to retrieve a value from user space memory at the location pointed to by `uc->uc_link`. This operation does not validate the memory location and may result in accessing memory that is not allocated for use by the program. 
+Additionally, the retrieved value is assigned directly to `uc_transact` without any validation and then used. However, we lack information about where `uc->uc_link` is declared and what kind of memory that variable is using.  
+Furthermore, we see variables being used without checking if the access was successful.
+
+RECOMMENDATIONS:
+To mitigate these vulnerabilities, consider adding additional validation to ensure the memory accessed is valid and allocated. Add checks to ensure that `__get_user` returns 0 before attempting to access the value pointed to by `uc_transact`. The absence of proper null checks and bounds checking may also lead to vulnerabilities.
+We recommend that you have to put some checks before assigning any data from user input.
+
+ORIGINAL CODE:
+```c
+if (MSR_TM_ACTIVE(msr)) {
+    /* We recheckpoint on return. */
+    struct ucontext __user *uc_transact;
+
+    /* Trying to start TM on non TM system */
+    if (!cpu_has_feature(CPU_FTR_TM))
+        goto badframe;
+
+    if (__get_user(uc_transact, &uc->uc_link))
+        goto badframe;
+    if (restore_tm_sigcontexts(current, &uc->uc_mcontext,
+                   &uc_transact->uc_mcontext))
+```

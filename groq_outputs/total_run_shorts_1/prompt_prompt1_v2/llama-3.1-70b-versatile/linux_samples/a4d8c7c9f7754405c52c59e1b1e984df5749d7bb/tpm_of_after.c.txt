@@ -1,0 +1,47 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION: 
+The code does not check for potential overflow in the calculation of `log->bios_event_log_end`. 
+
+EXPLANATION:
+In the given code snippet, `log->bios_event_log_end` is calculated as `log->bios_event_log + *sizep`. This calculation can lead to an integer overflow if `log->bios_event_log` is close to the maximum address limit and `*sizep` is large enough. As a result, the calculated `log->bios_event_log_end` can be smaller than `log->bios_event_log`, leading to incorrect memory access in subsequent operations. 
+
+RECOMMENDATIONS:
+To fix this potential vulnerability, you can add a check to prevent the integer overflow. You can use a simple check to verify that the calculated `log->bios_event_log_end` does not exceed the maximum address limit and that it is greater than `log->bios_event_log`. The corrected code may look like this:
+
+```c
+log->bios_event_log_end = log->bios_event_log + *sizep;
+if (log->bios_event_log_end < log->bios_event_log || log->bios_event_log_end > ULONG_MAX) {
+    kfree(log->bios_event_log);
+    pr_err("%s: ERROR - Integer overflow in bios event log allocation\n",
+           __func__);
+    of_node_put(np);
+    return -EFAULT;
+}
+```
+
+Note that you may need to adjust the check and error handling based on the specific requirements of your code.
+
+ORIGINAL CODE:
+
+```c
+	goto cleanup_eio;
+	}
+
+	log->bios_event_log = kmalloc(*sizep, GFP_KERNEL);
+	if (!log->bios_event_log) {
+		pr_err("%s: ERROR - Not enough memory for BIOS measurements\n",
+		       __func__);
+		of_node_put(np);
+		return -ENOMEM;
+	}
+
+	log->bios_event_log_end = log->bios_event_log + *sizep;
+
+	memcpy(log->bios_event_log, __va(*basep), *sizep);
+	of_node_put(np);
+
+	return 0;
+
+cleanup_eio:
+```

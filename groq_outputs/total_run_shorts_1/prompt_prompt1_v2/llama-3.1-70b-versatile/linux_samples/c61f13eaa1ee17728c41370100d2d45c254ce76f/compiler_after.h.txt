@@ -1,0 +1,33 @@
+VULNERABLE: YES
+VULNERABLE_LINES: None specified (macro definitions), but line with ACCESS_PRIVATE macro definition contains a vulnerability
+VULNERABILITY_DESCRIPTION:
+This code is vulnerable to potential use-after-free or null pointer dereference attacks using the ACCESS_PRIVATE macro definition. The ACCESS_PRIVATE macro uses a pointer dereference without performing any checks.
+
+EXPLANATION:
+The ACCESS_PRIVATE macro uses `*(p)->member` without checking if `p` is a null pointer or if `p` has already been freed. This could lead to a use-after-free vulnerability if the macro is used with a pointer that has already been freed. Furthermore, if `p` is a null pointer, this would result in a null pointer dereference.
+
+Additionally, the use of `__force` attribute in the macro definition can be used to suppress warnings about potential null pointer dereferences, making it more difficult to identify this issue.
+
+This vulnerability can be exploited if an attacker can control the pointer `p` being passed to the macro, or if an attacker can force a use-after-free condition.
+
+RECOMMENDATIONS:
+1. Perform a check to ensure `p` is not null before using the ACCESS_PRIVATE macro.
+2. Verify that `p` has not been freed before using the ACCESS_PRIVATE macro.
+3. Avoid using the `__force` attribute to suppress warnings about potential null pointer dereferences.
+4. Consider using alternative methods to access the `member` field of `p`, such as using C's built-in `.` syntax or writing a custom function to access the field safely.
+
+ORIGINAL CODE:
+```c
+extern void __chk_io_ptr(const volatile void __iomem *);
+# define ACCESS_PRIVATE(p, member) (*((typeof((p)->member) __force *) &(p)->member))
+#else /* __CHECKER__ */
+# ifdef STRUCTLEAK_PLUGIN
+#  define __user __attribute__((user))
+# else
+#  define __user
+# endif
+# define __kernel
+# define __safe
+# define __force
+# define __nocast
+```

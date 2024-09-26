@@ -1,0 +1,30 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 3-7
+VULNERABILITY_DESCRIPTION:
+The code is potentially vulnerable to a use-after-free error. This is because the function `snd_seq_pool_done(client->pool)` is called on a pool object after possibly marking it as closing (`snd_seq_pool_mark_closing(client->pool)`), and it is unclear if this is safe.
+
+EXPLANATION:
+In the given code, there are two indicators of potential use-after-free vulnerability. Firstly, if the pool is marked as closing with `snd_seq_pool_mark_closing(client->pool)`, this may indicate that it is no longer safe to use it. Secondly, `snd_seq_pool_done(client->pool)` is called after this. If this call frees the memory of `client->pool`, then any remaining references to it could be using freed memory.
+
+This is particularly concerning since the code then marks the current pool as closing and leaves the client cells in the queue before freeing it. This might result in a subsequent call to the freed memory.
+
+However, this vulnerability relies on how the `snd_seq_pool_done(client->pool)` and `snd_seq_pool_mark_closing(client->pool)` functions are implemented, which are not shown in this code snippet. 
+
+RECOMMENDATIONS:
+To fix this issue, consider adding a null check for `client->pool` after `snd_seq_pool_done(client->pool)` to ensure it is set to null to avoid using freed memory.
+
+Also, review the implementation of `snd_seq_pool_done(client->pool)` and `snd_seq_pool_mark_closing(client->pool)` to ensure they do not free the memory prematurely or cause any use-after-free errors.
+
+Additionally, consider adding synchronization between the mark of the pool as closing and its actual deallocation to prevent use-after-free.
+
+ORIGINAL CODE:
+    (! snd_seq_write_pool_allocated(client) ||
+     info->output_pool != client->pool->size)) {
+		if (snd_seq_write_pool_allocated(client)) {
+			/* is the pool in use? */
+			if (atomic_read(&client->pool->counter))
+				return -EBUSY;
+			/* remove all existing cells */
+			snd_seq_pool_mark_closing(client->pool);
+			snd_seq_queue_client_leave_cells(client->number);
+			snd_seq_pool_done(client->pool);

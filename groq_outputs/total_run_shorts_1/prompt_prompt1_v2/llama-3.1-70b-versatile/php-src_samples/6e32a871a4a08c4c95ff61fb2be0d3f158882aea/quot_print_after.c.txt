@@ -1,0 +1,27 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 8
+VULNERABILITY_DESCRIPTION:
+The vulnerability is located in the line that handles CR character (Carriage Return - 0x0D or '\015'). It seems like the code is trying to handle the case where CR is followed by LF (Line Feed - 0x0A or '\012'). However, if a CR is encountered without a subsequent LF or when `length` is less than or equal to 0, it may lead to an invalid state, potentially causing undefined behavior.
+
+EXPLANATION:
+Upon closer inspection of the line in question, we see that the CR is skipped and the next character is checked if `length` is greater than 0. The issue arises from the absence of a check for the null-termination when `length` reaches 0. The line `while (length--)` continues the loop until `length` equals 0, but there is no check for `null` or missing data after decrementing `length`. This can cause an off-by-one error or access memory outside the allocated string.
+
+Additionally, the code seems to involve a pointer arithmetic based on `str++`. However, we don't see the declaration of `str`, and if `str` points to a malformed input or not properly initialized, it can lead to an invalid access to memory.
+
+RECOMMENDATIONS:
+1.  Verify `str` pointer before processing.
+2.  Verify that `str` is well-formed, properly initialized, and non-null before entering the loop.
+3.  Ensure that `str` points to a null-terminated string to prevent accessing memory out of bounds.
+4.  Validate the input data before passing it to this function.
+
+ORIGINAL CODE:
+```c
+unsigned char c, *ret, *d;
+char *hex = "0123456789ABCDEF";
+
+ret = safe_emalloc(3, length + (((3 * length)/(PHP_QPRINT_MAXL-9)) + 1), 1);
+d = ret;
+
+while (length--) {
+    if (((c = *str++) == '\015') && (*str == '\012') && length > 0) {
+```

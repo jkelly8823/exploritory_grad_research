@@ -1,0 +1,49 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 2-9, 12-19
+VULNERABILITY_DESCRIPTION:
+Integer Overflows due to casting from double to integer types
+
+EXPLANATION:
+The given code snippet attempts to cast a double value to integer types (int32_t and int64_t) without properly checking for the effects of potential integer overflows. The conditional checks for integer overflows only detect overflows outside the given double's range to integer type range and do not account for possible wrapping behavior if the value is truncated.
+
+In the code, we see that Z_DVAL_PP(elem) is compared with (double)INT32_MAX (or U_INT64_MAX) and then to (double)INT32_MIN (or U_INT64_MIN). However, the casting might lead to unexpected results due to the differences in numerical representations and the loss of precision.
+
+RECOMMENDATIONS:
+Before casting Z_DVAL_PP(elem) to integer types, consider the recommended safer way:
+
+1. Use casting with std::lround() function in C++ (if available) to clearly define the casting behavior. For example:
+
+```cpp
+tInt32 = std::round(Z_DVAL_PP(elem));
+if (tInt32 > INT32_MAX || tInt32 < INT32_MIN) {
+    // Handle the overflow
+}
+```
+
+2. When std::round() is not available, consider defining your own rounding behavior functions.
+
+3. Also, define and check against specific error cases, handling the possibility of undefined behavior that occurs when using arithmetic-overflowing integers.
+
+4. Using the C++17 or later features such std::has_unique_object_representations (in `<compare>`) would give information about a value's object representation. However, there still should be platform-specific defined rules or behaviors regarding these.
+
+5. Use safer functions, such as std::numeric_limits::min(), std::numeric_limits::max(), for getting min and max value of integer types if such are undefined.
+
+ORIGINAL CODE:
+```cpp
+}
+case Formattable::kLong:
+{
+    int32_t tInt32;
+retry_klong:
+    if (Z_TYPE_PP(elem) == IS_DOUBLE) {
+        if (Z_DVAL_PP(elem) > (double)INT32_MAX ||
+                Z_DVAL_PP(elem) < (double)INT32_MIN) {
+    }
+case Formattable::kInt64:
+{
+    int64_t tInt64;
+retry_kint64:
+    if (Z_TYPE_PP(elem) == IS_DOUBLE) {
+        if (Z_DVAL_PP(elem) > (double)U_INT64_MAX ||
+                Z_DVAL_PP(elem) < (double)U_INT64_MIN) {
+```

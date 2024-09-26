@@ -1,0 +1,99 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 85-87
+VULNERABILITY_DESCRIPTION:
+Vulnerable use of dynamic code evaluation via regular calls to `JSONParse` 
+where the input string can be user-supplied.
+
+EXPLANATION:
+The vulnerability is in the `splitEscapedAltNames` function. The input `altNames` is split to create a sequence of escaped strings. The input string passed to `RegExpPrototypeExec` and `JSONParse` functions contains dynamically supplied data. This could result in code injection and execution if an attacker can control the input `altNames`.
+
+RECOMMENDATIONS:
+- Avoid using `JSONParse` to parse untrusted strings, especially when they can be user-supplied or under the control of the attacker. Instead, create the JSON object from a static safe source or by parsing the string using a secure parser.
+- If `altNames` is controlled by the user, ensure proper escaping and sanitizing is applied to the input before splitting it into sub-strings.
+- Use a safer function to validate the format of 'altname', as 'RegExpPrototypeExec' or similar function can lead to false positives as secure strings don't match because harmless characters break the regular expression.
+
+ORIGINAL CODE:
+```javascript
+  ArrayPrototypePush,
+  ArrayPrototypeReduce,
+  ArrayPrototypeSome,
+  JSONParse,
+  ObjectDefineProperty,
+  ObjectFreeze,
+  RegExpPrototypeExec,
+  RegExpPrototypeTest,
+  StringFromCharCode,
+  StringPrototypeCharCodeAt,
+  StringPrototypeEndsWith,
+  StringPrototypeIncludes,
+  StringPrototypeIndexOf,
+  StringPrototypeReplace,
+  StringPrototypeSlice,
+  StringPrototypeSplit,
+  StringPrototypeStartsWith,
+  StringPrototypeSubstring,
+} = primordials;
+
+const {
+  ERR_TLS_CERT_ALTNAME_FORMAT,
+  ERR_TLS_CERT_ALTNAME_INVALID,
+  ERR_OUT_OF_RANGE
+} = require('internal/errors').codes;
+const internalUtil = require('internal/util');
+  return true;
+}
+
+// This pattern is used to determine the length of escaped sequences within
+// the subject alt names string. It allows any valid JSON string literal.
+// This MUST match the JSON specification (ECMA-404 / RFC8259) exactly.
+const jsonStringPattern =
+  // eslint-disable-next-line no-control-regex
+  /^"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"/;
+
+function splitEscapedAltNames(altNames) {
+  const result = [];
+  let currentToken = '';
+  let offset = 0;
+  while (offset !== altNames.length) {
+    const nextSep = StringPrototypeIndexOf(altNames, ', ', offset);
+    const nextQuote = StringPrototypeIndexOf(altNames, '"', offset);
+    if (nextQuote !== -1 && (nextSep === -1 || nextQuote < nextSep)) {
+      // There is a quote character and there is no separator before the quote.
+      currentToken += StringPrototypeSubstring(altNames, offset, nextQuote);
+      const match = RegExpPrototypeExec(
+        jsonStringPattern, StringPrototypeSubstring(altNames, nextQuote));
+      if (!match) {
+        throw new ERR_TLS_CERT_ALTNAME_FORMAT();
+      }
+      currentToken += JSONParse(match[0]);
+      offset = nextQuote + match[0].length;
+    } else if (nextSep !== -1) {
+      // There is a separator and no quote before it.
+      currentToken += StringPrototypeSubstring(altNames, offset, nextSep);
+      ArrayPrototypePush(result, currentToken);
+      currentToken = '';
+      offset = nextSep + 2;
+    } else {
+      currentToken += StringPrototypeSubstring(altNames, offset);
+      offset = altNames.length;
+    }
+  }
+  ArrayPrototypePush(result, currentToken);
+  return result;
+}
+
+exports.checkServerIdentity = function checkServerIdentity(hostname, cert) {
+  const subject = cert.subject;
+  const altNames = cert.subjectaltname;
+  const dnsNames = [];
+  hostname = '' + hostname;
+
+  if (altNames) {
+    const splitAltNames = StringPrototypeIncludes(altNames, '"') ?
+      splitEscapedAltNames(altNames) :
+      StringPrototypeSplit(altNames, ', ');
+    ArrayPrototypeForEach(splitAltNames, (name) => {
+      if (StringPrototypeStartsWith(name, 'DNS:')) {
+        ArrayPrototypePush(dnsNames, StringPrototypeSlice(name, 4));
+      } else if (StringPrototypeStartsWith(name, 'URI:')) {
+```

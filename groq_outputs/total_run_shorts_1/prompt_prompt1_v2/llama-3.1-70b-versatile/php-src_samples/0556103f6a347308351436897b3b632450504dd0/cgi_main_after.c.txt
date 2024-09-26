@@ -1,0 +1,53 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 13, 15-16
+VULNERABILITY_DESCRIPTION:
+The code contains a potential vulnerability in the form of a double-free. This occurs when a pointer is freed twice, potentially leading to a segmentation fault or even arbitrary code execution.
+EXPLANATION:
+The function `php_getopt` is called inside a while loop. However, the external variables `cgi_sapi_module.php_ini_path_override` and `php_optarg` are freed only if the function `php_getopt` returns certain values. However, we see a `free` call for `cgi_sapi_module.php_ini_path_override` in the provided code. This could cause problems if `php_getopt` writes to `cgi_sapi_module.php_ini_path_override` later in the loop, because it could cause a double-free or undefined behavior if a pointer is accessed that has already been freed.
+
+Another vulnerability is at line 15-16. The getenv function returns NULL if the environment variable is not present. The code should check if getenv returns NULL before using the pointer returned by it. A NULL pointer dereference will cause segmentation fault.
+
+Lastly, the strdup and free calls should be checked for NULL, because if they return NULL when there isn't enough memory, it would lead to null pointer dereference.
+
+RECOMMENDATIONS:
+To address these vulnerabilities, you should check for NULL before using pointers returned by `getenv`, `malloc` or `strdup` functions. Furthermore, ensure that any given pointer is only freed once, or you could store pointers that are still in use in your own private variables. You should also validate your usage of `php_getopt` and make sure that it doesn't have a possibility to write to certain variables inside your while loop and before looping. 
+
+ORIGINAL CODE:
+
+```c
+#include "php_main.h"
+#include "fopen_wrappers.h"
+#include "ext/standard/php_standard.h"
+#include "ext/standard/url.h"
+
+#ifdef PHP_WIN32
+# include <io.h>
+# include <fcntl.h>
+#ifndef PHP_WIN32
+	int status = 0;
+#endif
+	char *query_string;
+	char *decoded_query_string;
+	int skip_getopt = 0;
+
+#if 0 && defined(PHP_DEBUG)
+	/* IIS is always making things more difficult.  This allows
+	 * us to stop PHP and attach a debugger before much gets started */
+		}
+	}
+
+	if(query_string = getenv("QUERY_STRING")) {
+		decoded_query_string = strdup(query_string);
+		php_url_decode(decoded_query_string, strlen(decoded_query_string));
+		if(*decoded_query_string == '-' && strchr(decoded_query_string, '=') == NULL) {
+			skip_getopt = 1;
+		}
+		free(decoded_query_string);
+	}
+
+	while (!skip_getopt && (c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2)) != -1) {
+		switch (c) {
+			case 'c':
+				if (cgi_sapi_module.php_ini_path_override) {
+					free(cgi_sapi_module.php_ini_path_override); 
+```

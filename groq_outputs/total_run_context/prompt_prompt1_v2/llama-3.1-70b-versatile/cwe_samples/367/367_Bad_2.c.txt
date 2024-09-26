@@ -1,0 +1,37 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 7-10
+VULNERABILITY_DESCRIPTION:
+The code contains an arbitrary jump vulnerability (constant-time-like behavior) caused by using a sensitive value as a switch statement value.
+
+EXPLANATION:
+The code snippet includes a switch statement using the file's last change time in seconds (`sb->st_ctime`) as its switch value. This is a security vulnerability because an attacker could manipulate the file last change time and influence the program's flow.
+
+However, upon careful analysis, this may not actually be an example of a constant-time-like behavior, where the difference of two branches is greater than a predefined threshold when the input values would result in different branches.
+
+Moreover, `sb->st_ctime` is of type `time_t` which (besides returning seconds since the Unix epoch) might not be represented as usual integers, or in contrast it might take integer form most of the time but it also depends upon which system it runs so this arbitrary jump can take place for different times for different operating systems and each different situation, that being the more accurate case.
+
+
+RECOMMENDATIONS:
+1. The variable `sb->st_ctime` should not be used as a switch statement value as it can lead to potential security vulnerability. 
+2. Validate the file last change time or introduce an additional validation that checks for intended values in `sb->st_ctime`.
+
+The intention behind this code is not too clear here but suppose there is some valid situation, you might use it. In that case validation should be made on values and not put in this sensitive part `sb->st_ctime` this part can introduce vulnerability.
+
+
+
+ORIGINAL CODE:
+```c
+#include <sys/types.h>
+#include <sys/stat.h>
+
+...
+  
+struct stat sb;
+stat("MYFILE.txt",&sb);
+printf("file change time: %d\n",sb->st_ctime);
+switch(sb->st_ctime % 2){
+  case 0: printf("Option 1\n"); break;
+  case 1: printf("Option 2\n"); break;
+  default: printf("this should be unreachable?\n"); break;
+}
+```

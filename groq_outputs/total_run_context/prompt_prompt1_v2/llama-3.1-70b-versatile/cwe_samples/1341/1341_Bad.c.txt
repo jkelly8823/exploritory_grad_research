@@ -1,0 +1,39 @@
+VULNERABLE: YES
+VULNERABLE_LINES: 10
+VULNERABILITY_DESCRIPTION: 
+Double free vulnerability, specifically a double fclose() call on the same file pointer.
+
+EXPLANATION:
+The vulnerability arises from invoking fclose() twice on the same file pointer. This behavior is undefined according to the C standard. It can potentially cause crashes or other undefined behavior when the second fclose() call is made, as the file pointer has already been closed and possibly reused. An attacker may exploit this by providing a carefully crafted input that would lead to a segmentation fault, information leak, or arbitrary code execution.
+
+RECOMMENDATIONS:
+To fix the vulnerability, ensure that fclose() is only called once per fopen() call on a given file pointer. If further verification is needed after an initial close, check whether the file pointer is NULL or not instead of calling fclose() again.
+
+Here's an example of a recommended fix:
+```c
+char b[2000];
+FILE *f = fopen("dbl_cls.c", "r");
+if (f)
+{
+    b[0] = 0;
+    fread(b, 1, sizeof(b) - 1, f);
+    printf("%s\n'", b);
+    int r = fclose(f);
+    printf("\n-----------------\nClose done '%d'\n", r);
+}
+```
+ORIGINAL CODE:
+```c
+char b[2000];
+FILE *f = fopen("dbl_cls.c", "r");
+if (f)
+{
+    b[0] = 0;
+    fread(b, 1, sizeof(b) - 1, f);
+    printf("%s\n'", b);
+    int r1 = fclose(f);
+    printf("\n-----------------\n1 close done '%d'\n", r1);
+    int r2 = fclose(f);    // Double close
+    printf("2 close done '%d'\n", r2);
+}
+```
